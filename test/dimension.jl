@@ -87,6 +87,43 @@
         @test_throws ArgumentError dim_meta(dim, :harmonic)
     end
 
+    @testset "nothing is stored per network index" begin
+        # the index is arithmetic, and a dimension without properties stores its
+        # size rather than a dictionary per coordinate, so a Dimension is the
+        # same handful of bytes however many network indices it spans
+        small = Dimension(:time => 2)
+        big   = Dimension(:time => 100_000)
+
+        @test Base.summarysize(big) == Base.summarysize(small)
+        @test Base.summarysize(big) < 5_000
+        @test dim_length(big) == 100_000
+        @test nw_ids(big; time = 99_999) == [99_999]
+        @test coordinates(big, 12_345) == (time = 12_345,)
+
+        # properties are stored only where they were actually given
+        withprop = Dimension(:scenario => [Dict{Symbol,Any}(:probability => 0.5) for _ in 1:2])
+        @test Base.summarysize(withprop) > Base.summarysize(small)
+        @test dim_prop(withprop, :scenario, 2, :probability) == 0.5
+    end
+
+    @testset "dim_prop falls back to a default" begin
+        plain  = Dimension(:time => 3)
+        scored = Dimension(:time => [Dict{Symbol,Any}(:weight => w) for w in 1:3])
+
+        @test dim_prop(plain, :time, 2, :weight, 1.0) == 1.0
+        @test dim_prop(plain, 2, :time, :weight, 1.0) == 1.0
+        @test dim_prop(plain, :time, 2) == Dict{Symbol,Any}()
+        @test_throws KeyError dim_prop(plain, :time, 2, :weight)
+
+        @test dim_prop(scored, :time, 2, :weight, 99) == 2
+        @test dim_prop(scored, 3, :time, :weight, 99) == 3
+
+        # the dictionary handed back for a bare dimension is nobody else's
+        d = dim_prop(plain, :time, 1)
+        d[:weight] = 7.0
+        @test dim_prop(plain, :time, 1, :weight, 1.0) == 1.0
+    end
+
     @testset "NetworkVector and the generalized getters" begin
         dim = Dimension(:time => 3)
 

@@ -126,15 +126,33 @@ generator are vectors too, and nothing in their type says whether entry two is
 the second terminal or the second hour. Only the network dependent case is
 wrapped.
 
-Because only `status` can change which components exist, network indices that
-agree on what is in service share one `Topology` object. A problem without
-contingencies holds exactly one, however many indices it spans; a contingency is
-nothing more than a `status` that varies:
+Because only `status` can change which components exist, which `Topology` a
+network index has is *derived* from the statuses of the components whose status
+varies — never looked up in a table indexed by `n`. A problem without
+contingencies has one topology and reaches it without doing any work, however
+many indices it spans; a contingency is nothing more than a `status` that
+varies:
 
 ```julia
 Branch(; id = 1, terminals = [1, 2], r = 0.01, x = 0.1,
        status = nw_vector(dim, (n, c) -> c.contingency != 2))
 ```
+
+The result is that **nothing anywhere is stored per network index**. On case14
+with an hourly demand profile:
+
+| indices | build | `Dimension` | whole graph | topologies |
+|--------:|------:|------------:|------------:|-----------:|
+| 1       | —     | 928 B       | 44 kB       | 1          |
+| 24      | 0.1 ms| 928 B       | 48 kB       | 1          |
+| 168     | 0.3 ms| 928 B       | 74 kB       | 1          |
+| 8760    | 12 ms | 928 B       | 1.59 MB     | 1          |
+
+The 1.59 MB at 8760 hours is 1.54 MB of profile — 11 loads × 2 fields × 8760
+× 8 B — plus the 44 kB the same network costs over a single index. The graph is
+the data you asked for plus a constant, and the `Dimension` is flat: its index
+is arithmetic rather than tabulated, and a dimension given as a plain size
+stores that size rather than a dictionary per coordinate.
 
 ## Installation
 

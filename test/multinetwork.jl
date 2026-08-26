@@ -51,6 +51,8 @@ const PROFILE = [0.9, 1.0, 1.1]
 
         # nothing varies, so every network index shares a single topology object
         @test topology(network(mn); nw = 1) === topology(network(mn); nw = 3)
+        @test isempty(switchable(network(mn)))
+        @test length(topologies(network(mn))) == 1
         for n in nw_ids(mn)
             @test ids(network(mn), Node; nw = n) == ids(network(data), Node)
         end
@@ -168,7 +170,9 @@ const PROFILE = [0.9, 1.0, 1.1]
         @test_throws ArgumentError is_active(edges(net)[1])
 
         # the topology follows the status, and the two indices no longer share one
+        @test switchable(net) == [(:edge, 1)]
         @test topology(net; nw = 1) !== topology(net; nw = 2)
+        @test length(topologies(net)) == 2
         @test 1 ∈ ids(net, Branch; nw = 1)
         @test 1 ∉ ids(net, Branch; nw = 2)
         @test length(arcs(net; nw = 2)) == length(arcs(net; nw = 1)) - 2
@@ -208,8 +212,21 @@ const PROFILE = [0.9, 1.0, 1.1]
         @test length(nodes(net)) + length(edges(net)) + length(units(net)) == stored
         @test dim_length(mn) == 1000
 
-        # nothing changed which components are in service, so there is one topology
+        # nothing changed which components are in service, so there is one topology,
+        # derived from the statuses rather than tabulated per network index
         @test length(unique(objectid(topology(net; nw = n)) for n in nw_ids(mn))) == 1
+        @test isempty(switchable(net))
+        @test length(topologies(net)) == 1
+
+        # the dimension holds nothing per network index either
+        @test Base.summarysize(dimension(mn)) < 5_000
+
+        # the whole graph is the profile data plus a constant: take the profiles
+        # away and what is left is what a single network index costs
+        single   = set_dimension(data, Dimension(:time => 1); apply! = scale_loads([1.0]))
+        profiles = 2 * sum(length(units(net)[u].pd) * sizeof(Float64) for u in ids(net, Load))
+        @test Base.summarysize(net) - profiles <
+              Base.summarysize(network(single)) + 4_000
 
         # and the data that does vary is there, indexed by the network index
         ld = units(net)[6]::Load

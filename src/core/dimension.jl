@@ -30,13 +30,19 @@ model.
 # Fields
 - `names::NTuple{N,Symbol}`: the ordered dimension names. The first dimension
   varies fastest, i.e., the network index is column-major in the coordinates.
-- `prop::Dict{Symbol,Vector{Dict{Symbol,Any}}}`: per-coordinate properties, one
-  dictionary per coordinate of each dimension, e.g., the duration of an hour or
-  the probability of a scenario.
+- `prop`: per-coordinate properties, one dictionary per coordinate of each
+  dimension, e.g., the duration of an hour or the probability of a scenario. A
+  dimension given as a plain size stores its size instead, since a dictionary
+  per coordinate of a dimension that has no properties would be the one thing
+  here that grows with the number of network indices.
 - `meta::Dict{Symbol,Dict{Symbol,Any}}`: properties of a dimension as a whole.
-- `li::Array{Int,N}`: the network index of every coordinate tuple.
+- `li::LinearIndices{N}`: the network index of every coordinate tuple, computed
+  arithmetically rather than tabulated. Add `offset` to what it returns.
 - `offset::Int`: the network index of the first coordinate tuple is
   `offset + 1`.
+
+Nothing in a `Dimension` is stored per network index: a `Dimension(:time =>
+8760)` is the same handful of bytes as a `Dimension(:time => 2)`.
 
 # Examples
 ```julia
@@ -55,11 +61,13 @@ julia> coordinates(dim, 25)
 A `Dimension()` without arguments describes a single-network problem whose only
 network index is `1`.
 """
+const _Properties = Union{Int,Vector{Dict{Symbol,Any}}}
+
 struct Dimension{N}
     names ::NTuple{N,Symbol}
-    prop  ::Dict{Symbol,Vector{Dict{Symbol,Any}}}
+    prop  ::Dict{Symbol,_Properties}
     meta  ::Dict{Symbol,Dict{Symbol,Any}}
-    li    ::Array{Int,N}
+    li    ::LinearIndices{N,NTuple{N,Base.OneTo{Int}}}
     offset::Int
 end
 
@@ -82,13 +90,14 @@ function Dimension(pairs::Pair{Symbol,<:Any}...; offset::Int = 0)
     length(unique(names)) == length(names) ||
         throw(ArgumentError("duplicate dimension name in $(names)"))
 
-    prop = Dict{Symbol,Vector{Dict{Symbol,Any}}}()
+    prop = Dict{Symbol,_Properties}()
     for p in pairs
         nm, val = first(p), last(p)
         if val isa Integer
             val > 0 || throw(ArgumentError("dimension `$nm` must have a positive size, got $val"))
-            prop[nm] = [Dict{Symbol,Any}() for _ in 1:val]
+            prop[nm] = Int(val)
         elseif val isa AbstractVector
+            isempty(val) && throw(ArgumentError("dimension `$nm` must have a positive size, got 0"))
             prop[nm] = [Dict{Symbol,Any}(d) for d in val]
         else
             throw(ArgumentError("dimension `$nm` must be given as a size or as a vector of property dictionaries, got a $(typeof(val))"))
@@ -96,14 +105,18 @@ function Dimension(pairs::Pair{Symbol,<:Any}...; offset::Int = 0)
     end
 
     meta = Dict{Symbol,Dict{Symbol,Any}}(nm => Dict{Symbol,Any}() for nm in names)
-    li   = collect(LinearIndices(Tuple(length(prop[nm]) for nm in names))) .+ offset
+    li   = LinearIndices(Tuple(Base.OneTo(_size(prop[nm])) for nm in names))
 
     return Dimension{length(names)}(names, prop, meta, li, offset)
 end
 
-Dimension(; offset::Int = 0) = Dimension{0}((), Dict{Symbol,Vector{Dict{Symbol,Any}}}(),
+Dimension(; offset::Int = 0) = Dimension{0}((), Dict{Symbol,_Properties}(),
                                             Dict{Symbol,Dict{Symbol,Any}}(),
-                                            fill(offset + 1), offset)
+                                            LinearIndices(()), offset)
+
+"the number of coordinates a `prop` entry describes"
+_size(p::Int) = p
+_size(p::Vector{Dict{Symbol,Any}}) = length(p)
 
 """
     add_dimension(dim, name, size; properties, metadata)
@@ -112,14 +125,15 @@ Return a new [`Dimension`](@ref) with `name` appended as the slowest varying
 dimension. `dim` is left untouched.
 """
 function add_dimension(dim::Dimension, name::Symbol, size::Integer;
-                       properties::Vector{Dict{Symbol,Any}} = [Dict{Symbol,Any}() for _ in 1:size],
+                       properties::Union{Nothing,Vector{Dict{Symbol,Any}}} = nothing,
                        metadata::Dict{Symbol,Any} = Dict{Symbol,Any}())
     has_dim(dim, name) && throw(ArgumentError("dimension `$name` is already present"))
-    length(properties) == size ||
+    properties === nothing || length(properties) == size ||
         throw(ArgumentError("`properties` has $(length(properties)) entries but `size` is $size"))
 
     new = Dimension((Pair{Symbol,Any}(nm, dim.prop[nm]) for nm in dim.names)...,
-                    Pair{Symbol,Any}(name, properties); offset = dim.offset)
+                    Pair{Symbol,Any}(name, properties === nothing ? Int(size) : properties);
+                    offset = dim.offset)
     merge!(new.meta, dim.meta)
     new.meta[name] = metadata
 
@@ -139,8 +153,11 @@ has_dim(dim::Dimension, name::Symbol) = name in dim.names
 "the number of network indices spanned by `dim`"
 dim_length(dim::Dimension) = length(dim.li)
 
+"the default network index of `dim`, i.e., its first one"
+nw_id_default(dim::Dimension) = dim.offset + 1
+
 "the number of coordinates along dimension `name`"
-dim_length(dim::Dimension, name::Symbol) = length(_prop(dim, name))
+dim_length(dim::Dimension, name::Symbol) = _size(_prop(dim, name))
 
 "the position of dimension `name` in the coordinate tuple"
 function dim_position(dim::Dimension, name::Symbol)
@@ -156,20 +173,37 @@ function coordinates(dim::Dimension{N}, n::Int) where N
 end
 
 """
-    dim_prop(dim, name, id[, key])
-    dim_prop(dim, n::Int, name[, key])
+    dim_prop(dim, name, id[, key[, default]])
+    dim_prop(dim, n::Int, name[, key[, default]])
 
 Properties of coordinate `id` along dimension `name`, or of the coordinate that
 network index `n` has along dimension `name`.
+
+The three-argument form returns the whole dictionary, and a fresh empty one for
+a dimension that was given as a plain size. Prefer the form with a `key`, and
+with a `default` where the property is optional: neither builds a dictionary.
 """
 function dim_prop end
 
-dim_prop(dim::Dimension, name::Symbol, id::Int) = _prop(dim, name)[id]
-dim_prop(dim::Dimension, name::Symbol, id::Int, key::Symbol) = _prop(dim, name)[id][key]
+dim_prop(dim::Dimension, name::Symbol, id::Int) = _properties(_prop(dim, name), id)
+dim_prop(dim::Dimension, name::Symbol, id::Int, key::Symbol) =
+    _property(_prop(dim, name), id, key)
+dim_prop(dim::Dimension, name::Symbol, id::Int, key::Symbol, default) =
+    _property(_prop(dim, name), id, key, default)
 dim_prop(dim::Dimension, n::Int, name::Symbol) =
     dim_prop(dim, name, coordinates(dim, n)[name])
 dim_prop(dim::Dimension, n::Int, name::Symbol, key::Symbol) =
     dim_prop(dim, name, coordinates(dim, n)[name], key)
+dim_prop(dim::Dimension, n::Int, name::Symbol, key::Symbol, default) =
+    dim_prop(dim, name, coordinates(dim, n)[name], key, default)
+
+_properties(::Int, ::Int) = Dict{Symbol,Any}()
+_properties(p::Vector{Dict{Symbol,Any}}, id::Int) = p[id]
+
+_property(::Int, ::Int, key::Symbol) = throw(KeyError(key))
+_property(p::Vector{Dict{Symbol,Any}}, id::Int, key::Symbol) = p[id][key]
+_property(::Int, ::Int, ::Symbol, default) = default
+_property(p::Vector{Dict{Symbol,Any}}, id::Int, key::Symbol, default) = get(p[id], key, default)
 
 """
     dim_meta(dim, name[, key])
@@ -202,7 +236,7 @@ julia> nw_ids(dim; time = 13:24, contingency = [1, 4])
 function nw_ids(dim::Dimension{N}; kwargs...)::Vector{Int} where N
     _check_kwargs(dim, kwargs)
     idx = ntuple(i -> get(kwargs, dim.names[i], axes(dim.li, i)), N)
-    return _collect_ids(dim.li[idx...])
+    return _collect_ids(_at(dim, idx))
 end
 
 """
@@ -215,7 +249,7 @@ function similar_ids(dim::Dimension{N}, n::Int; kwargs...)::Vector{Int} where N
     _check_kwargs(dim, kwargs)
     ci = CartesianIndices(dim.li)[n - dim.offset]
     idx = ntuple(i -> get(kwargs, dim.names[i], ci[i]), N)
-    return _collect_ids(dim.li[idx...])
+    return _collect_ids(_at(dim, idx))
 end
 
 """
@@ -228,7 +262,7 @@ function similar_id(dim::Dimension{N}, n::Int; kwargs...)::Int where N
     _check_kwargs(dim, kwargs)
     ci = CartesianIndices(dim.li)[n - dim.offset]
     idx = ntuple(i -> get(kwargs, dim.names[i], ci[i])::Int, N)
-    return dim.li[idx...]
+    return _at(dim, idx)
 end
 
 "the first network index along `names`, holding the other coordinates of `n` fixed"
@@ -449,6 +483,9 @@ _check_kwargs(dim::Dimension, kwargs) =
         has_dim(dim, name) || _no_dim(dim, name)
     end
 
+"the network index or indices at the coordinates `idx`, offset included"
+_at(dim::Dimension, idx::Tuple) = dim.li[idx...] .+ dim.offset
+
 _collect_ids(ids::AbstractArray) = sort!(vec(collect(ids)))
 _collect_ids(id::Int) = [id]
 
@@ -458,7 +495,7 @@ function _edge_id(dim::Dimension{N}, n::Int, names::NTuple{<:Any,Symbol}, which)
     end
     ci = CartesianIndices(dim.li)[n - dim.offset]
     idx = ntuple(i -> dim.names[i] in names ? which(axes(dim.li, i)) : ci[i], N)
-    return dim.li[idx...]
+    return _at(dim, idx)
 end
 
 function _step_id(dim::Dimension{N}, n::Int, name::Symbol, step::Int) where N
@@ -467,7 +504,7 @@ function _step_id(dim::Dimension{N}, n::Int, name::Symbol, step::Int) where N
     idx = ntuple(i -> i == pos ? ci[i] + step : ci[i], N)
     checkbounds(Bool, dim.li, idx...) ||
         throw(ArgumentError("network index $n has no $(step < 0 ? "previous" : "next") index along dimension `$name`"))
-    return dim.li[idx...]
+    return _at(dim, idx)
 end
 
 function _range_ids(dim::Dimension{N}, n::Int, name::Symbol, side::Symbol) where N
@@ -475,5 +512,5 @@ function _range_ids(dim::Dimension{N}, n::Int, name::Symbol, side::Symbol) where
     ci  = CartesianIndices(dim.li)[n - dim.offset]
     rng = side === :before ? (1:ci[pos]-1) : (ci[pos]+1:size(dim.li, pos))
     idx = ntuple(i -> i == pos ? rng : ci[i]:ci[i], N)
-    return _collect_ids(dim.li[idx...])
+    return _collect_ids(_at(dim, idx))
 end

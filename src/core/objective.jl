@@ -30,7 +30,7 @@ function network_weight(nm::NetworkModel, n::Int)
     dim = dimension(nm)
     w   = 1.0
     for name in dim_names(dim)
-        w *= get(dim_prop(dim, n, name), :weight, 1.0)
+        w *= dim_prop(dim, n, name, :weight, 1.0)
     end
 
     return w

@@ -79,7 +79,7 @@ module NetworkModelBuilder
     export AbstractComponent, AbstractNode, AbstractEdge, AbstractUnit
     export Arc, Topology, Network, NetworkData
     export set_dimension, replicate
-    export network, dimension, baseMVA, topology, nw_id_default
+    export network, dimension, baseMVA, topology, topologies, switchable, nw_id_default
     export nodes, edges, units, arcs, node, edge, unit
     export node_arcs, node_units, edge_arcs, ids
     export component_id, status, is_active, terminals, nterminals

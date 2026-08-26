@@ -141,9 +141,10 @@ in-service components only.
 - `edge_arc`: the arcs of each in-service edge, in terminal order.
 
 Only the status of a component can change the topology, so network indices that
-agree on which components are in service share a single `Topology` object. A
-problem without contingencies holds exactly one, however many network indices it
-spans.
+agree on which components are in service share a single `Topology` object, and
+nothing about a network index is stored per network index: which topology an
+index has is *derived* from the statuses of the components whose status varies,
+see [`topology`](@ref).
 """
 struct Topology
     node     ::Vector{Int}
@@ -172,8 +173,20 @@ each network index.
   unique within each of the three families, not across them. There is one copy
   of each component, whatever the number of network indices; the data that
   varies lives in its [`NetworkVector`](@ref) fields.
-- `topology`: the [`Topology`](@ref) at each network index.
+- `switchable`: the components whose status varies over the network index, as
+  `(family, id)` pairs. These, and only these, decide which [`Topology`](@ref) a
+  network index has.
+- `topology`: the distinct topologies, keyed by the statuses of the switchable
+  components that produce them, and materialized as they are first asked for.
+- `fixed`: the single topology, when no component's status varies at all; the
+  common case, and the one [`topology`](@ref) answers without doing any work.
 - `ext`: free-form storage for extension packages.
+
+Nothing here is stored per network index. A problem over 8760 hours holds one
+copy of each component, and one topology, exactly as a problem over one hour
+does; a problem over 8760 hours with two switching patterns holds two
+topologies. Both the components and the topology therefore scale with the data
+rather than with the size of the network index.
 
 Out-of-service components are retained in `node`, `edge` and `unit` so that they
 survive a round trip through the data layer; they are absent from the topology at
@@ -181,22 +194,28 @@ the network indices where they are out of service, and are never given variables
 or constraints there.
 """
 struct Network
-    dim     ::Dimension
-    node    ::Dict{Int,AbstractNode}
-    edge    ::Dict{Int,AbstractEdge}
-    unit    ::Dict{Int,AbstractUnit}
-    topology::Dict{Int,Topology}
-    ext     ::Dict{Symbol,Any}
+    dim       ::Dimension
+    node      ::Dict{Int,AbstractNode}
+    edge      ::Dict{Int,AbstractEdge}
+    unit      ::Dict{Int,AbstractUnit}
+    switchable::Vector{Tuple{Symbol,Int}}
+    topology  ::Dict{BitVector,Topology}
+    fixed     ::Union{Nothing,Topology}
+    ext       ::Dict{Symbol,Any}
 end
 
 """
     Network(I, E, U; dim = Dimension(), ext = Dict{Symbol,Any}())
 
 Build a [`Network`](@ref) from the nodes `I`, edges `E` and units `U`, keyed by
-identifier, and derive its topology at every network index of `dim`.
+identifier.
 
 Edges and units connected to an out-of-service node are out of service too; a
 reference to a node that is not part of the network is an error.
+
+The topology is derived, not tabulated. When no component has a status that
+varies over the network index the single topology is built here; otherwise each
+distinct one is built the first time a network index that has it is asked about.
 """
 function Network(I::AbstractDict{Int,<:AbstractNode},
                  E::AbstractDict{Int,<:AbstractEdge},
@@ -221,31 +240,53 @@ function Network(I::AbstractDict{Int,<:AbstractNode},
             throw(ArgumentError("unit $u is connected to node $(node(cmp)), which is not part of the network"))
     end
 
-    # network indices that agree on what is in service share one topology
-    topology = Dict{Int,Topology}()
-    cache    = Dict{NTuple{3,Vector{Int}},Topology}()
-    for n in nw_ids(dim)
-        key = (sort!([i for (i, c) in nodes if is_active(dim, c, n)]),
-               sort!([e for (e, c) in edges if is_active(dim, c, n)]),
-               sort!([u for (u, c) in units if is_active(dim, c, n)]))
-        topology[n] = get!(() -> _topology(nodes, edges, units, key), cache, key)
-    end
+    switchable = _switchable(nodes, edges, units)
+    fixed = isempty(switchable) ?
+            _topology_at(dim, nodes, edges, units, nw_id_default(dim)) : nothing
 
-    return Network(dim, nodes, edges, units, topology, ext)
+    return Network(dim, nodes, edges, units, switchable,
+                   Dict{BitVector,Topology}(), fixed, ext)
 end
 
-function _topology(nodes, edges, units, key)
-    live_node, live_edge, live_unit = key
-    alive = Set(live_node)
+"the components whose status varies over the network index, in a stable order"
+function _switchable(nodes, edges, units)
+    out = Tuple{Symbol,Int}[]
+    for (family, d) in ((:node, nodes), (:edge, edges), (:unit, units))
+        for id in sort!(collect(keys(d)))
+            is_nw_varying(d[id].status) && push!(out, (family, id))
+        end
+    end
+
+    return out
+end
+
+"the stored component behind a `(family, id)` pair"
+_stored(net::Network, family::Symbol, id::Int) =
+    family === :node ? net.node[id] : family === :edge ? net.edge[id] : net.unit[id]
+
+"the statuses of the switchable components at network index `n`, which pick out a topology"
+function _signature(net::Network, n::Int)
+    sig = BitVector(undef, length(net.switchable))
+    for (k, (family, id)) in enumerate(net.switchable)
+        sig[k] = nw_value(net.dim, _stored(net, family, id).status, n)
+    end
+
+    return sig
+end
+
+function _topology_at(dim::Dimension, nodes, edges, units, n::Int)
+    alive     = Set(i for (i, c) in nodes if is_active(dim, c, n))
+    node_ids  = sort!(collect(alive))
 
     arc       = Arc[]
-    node_arc  = Dict{Int,Vector{Arc}}(i => Arc[] for i in live_node)
-    node_unit = Dict{Int,Vector{Int}}(i => Int[] for i in live_node)
+    node_arc  = Dict{Int,Vector{Arc}}(i => Arc[] for i in node_ids)
+    node_unit = Dict{Int,Vector{Int}}(i => Int[] for i in node_ids)
     edge_arc  = Dict{Int,Vector{Arc}}()
     edge_ids  = Int[]
     unit_ids  = Int[]
 
-    for e in live_edge
+    for e in sort!(collect(keys(edges)))
+        is_active(dim, edges[e], n) || continue
         term = terminals(edges[e])
         all(in(alive), term) || continue
         edge_arc[e] = [Arc(e, t, i) for (t, i) in enumerate(term)]
@@ -253,7 +294,8 @@ function _topology(nodes, edges, units, key)
         push!(edge_ids, e)
     end
 
-    for u in live_unit
+    for u in sort!(collect(keys(units)))
+        is_active(dim, units[u], n) || continue
         i = node(units[u])
         i in alive || continue
         push!(node_unit[i], u)
@@ -267,7 +309,7 @@ function _topology(nodes, edges, units, key)
         sort!(v)
     end
 
-    return Topology(live_node, edge_ids, unit_ids, sort!(arc), node_arc, node_unit, edge_arc)
+    return Topology(node_ids, edge_ids, unit_ids, sort!(arc), node_arc, node_unit, edge_arc)
 end
 
 ################################################################################
@@ -451,8 +493,30 @@ node(net::Network, i::Int; nw::Int = nw_id_default(net)) = nw_component(net.dim,
 edge(net::Network, e::Int; nw::Int = nw_id_default(net)) = nw_component(net.dim, net.edge[e], nw)
 unit(net::Network, u::Int; nw::Int = nw_id_default(net)) = nw_component(net.dim, net.unit[u], nw)
 
-"the [`Topology`](@ref) of a network at network index `nw`"
-topology(net::Network; nw::Int = nw_id_default(net)) = net.topology[nw]
+"""
+    topology(net; nw)
+
+The [`Topology`](@ref) of a network at network index `nw`.
+
+Which topology an index has is derived from the statuses of the components whose
+status varies, never looked up in a table indexed by `nw`. When no status varies
+— every problem without contingencies or switching — the answer is a single
+stored topology and this costs nothing. Otherwise the statuses of the switchable
+components at `nw` are read, and the topology they produce is built the first
+time it is asked for and shared by every index that produces the same statuses.
+"""
+function topology(net::Network; nw::Int = nw_id_default(net))
+    net.fixed === nothing || return net.fixed
+
+    return get!(() -> _topology_at(net.dim, net.node, net.edge, net.unit, nw),
+                net.topology, _signature(net, nw))
+end
+
+"the distinct topologies of a network that have been materialized so far"
+topologies(net::Network) = net.fixed === nothing ? collect(values(net.topology)) : [net.fixed]
+
+"the components of a network whose status varies over the network index"
+switchable(net::Network) = net.switchable
 
 "the arcs of a network at network index `nw`"
 arcs(net::Network; nw::Int = nw_id_default(net)) = topology(net; nw).arc

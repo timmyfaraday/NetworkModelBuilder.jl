@@ -1,0 +1,151 @@
+################################################################################
+# NetworkModelBuilder.jl                                                       #
+# A Julia package to build optimization models for power system problems.      #
+# See http://github.com/timmyfaraday/NetworkModelBuilder.jl                    #
+################################################################################
+# Authors: Tom Van Acker                                                       #
+################################################################################
+# Changelog:                                                                   #
+# v0.1.0 - initial implementation                                              #
+################################################################################
+
+################################################################################
+# Problem types                                                                #
+################################################################################
+
+"""
+    AbstractProblemType
+
+Root of the problem type hierarchy. A problem type answers the question *which
+question is being asked of the network*: which components are modelled, which
+degrees of freedom are free, which are fixed by a setpoint, and what is being
+optimized.
+
+Together with an [`AbstractFormulationType`](@ref) it fully determines the
+variables, constraints and objective of the resulting optimization problem
+through multiple dispatch on [`NetworkModel{P,F}`](@ref).
+
+All types in this hierarchy are abstract and are used purely as dispatch tags:
+they are never instantiated. Extension packages specialise a problem by
+subtyping an existing leaf, e.g.,
+
+```julia
+abstract type SecurityConstrainedRedispatchProblem <: RedispatchProblem end
+```
+"""
+abstract type AbstractProblemType end
+
+""
+abstract type AbstractPowerFlowProblem <: AbstractProblemType end
+
+"""
+    LoadFlowProblem <: AbstractPowerFlowProblem
+
+Determine the steady-state operating point of a network with all injections
+fixed by their setpoints. The reference node fixes the complex voltage, PV nodes
+fix the voltage magnitude and the active power of their generators, and PQ nodes
+fix the active and reactive power of their units. The problem is a feasibility
+problem: its objective is identically zero.
+"""
+abstract type LoadFlowProblem <: AbstractPowerFlowProblem end
+
+""
+abstract type AbstractDispatchProblem <: AbstractProblemType end
+
+"""
+    OptimalPowerFlowProblem <: AbstractDispatchProblem
+
+Minimize the total generation cost subject to the network physics, the operating
+limits of the units and the thermal and angular limits of the edges. Generator
+active and reactive power are free within their bounds, node voltage magnitudes
+are bounded, and the reference node fixes the voltage angle only.
+"""
+abstract type OptimalPowerFlowProblem <: AbstractDispatchProblem end
+
+"""
+    RedispatchProblem <: AbstractDispatchProblem
+
+Minimize the cost of deviating from a given market dispatch subject to the
+network physics and the operating limits. Not implemented yet, see
+`src/prob/rd.jl`.
+"""
+abstract type RedispatchProblem <: AbstractDispatchProblem end
+
+################################################################################
+# Formulation types                                                            #
+################################################################################
+
+"""
+    AbstractFormulationType
+
+Root of the formulation type hierarchy. A formulation type answers the question
+*in which variables are the network physics written*: rectangular or polar
+voltage, current or power flow, exact or relaxed.
+
+Together with an [`AbstractProblemType`](@ref) it fully determines the
+variables, constraints and objective of the resulting optimization problem
+through multiple dispatch on [`NetworkModel{P,F}`](@ref).
+
+All types in this hierarchy are abstract and are used purely as dispatch tags:
+they are never instantiated. Extension packages specialise a formulation by
+subtyping an existing leaf, e.g.,
+
+```julia
+abstract type HarmonicIVRFormulation <: IVRFormulation end
+```
+"""
+abstract type AbstractFormulationType end
+
+""
+abstract type AbstractACFormulation <: AbstractFormulationType end
+
+"""
+    AbstractCurrentFormulation <: AbstractACFormulation
+
+Formulations whose edge and unit flow variables are currents.
+"""
+abstract type AbstractCurrentFormulation <: AbstractACFormulation end
+
+"""
+    IVRFormulation <: AbstractCurrentFormulation
+
+Current-voltage formulation in rectangular coordinates. Node voltages are
+represented by their real and imaginary part, and all flows by their real and
+imaginary current. The network physics are quadratic, which keeps the
+nonlinearity of the model low compared to the power based formulations.
+"""
+abstract type IVRFormulation <: AbstractCurrentFormulation end
+
+"""
+    AbstractPowerFormulation <: AbstractACFormulation
+
+Formulations whose edge and unit flow variables are active and reactive power.
+"""
+abstract type AbstractPowerFormulation <: AbstractACFormulation end
+
+"""
+    ACPFormulation <: AbstractPowerFormulation
+
+Power-voltage formulation in polar coordinates. Declared for completeness; no
+variables or constraints are implemented yet.
+"""
+abstract type ACPFormulation <: AbstractPowerFormulation end
+
+"""
+    ACRFormulation <: AbstractPowerFormulation
+
+Power-voltage formulation in rectangular coordinates. Declared for
+completeness; no variables or constraints are implemented yet.
+"""
+abstract type ACRFormulation <: AbstractPowerFormulation end
+
+""
+abstract type AbstractDCFormulation <: AbstractFormulationType end
+
+"""
+    DCPFormulation <: AbstractDCFormulation
+
+Linearized active power only formulation. Declared for completeness; no
+variables or constraints are implemented yet.
+"""
+abstract type DCPFormulation <: AbstractDCFormulation end

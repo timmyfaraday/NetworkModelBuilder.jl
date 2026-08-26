@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.2.0 - network dependent data stored per component                         #
 ################################################################################
 
 ################################################################################
@@ -33,38 +34,42 @@ ideal transformer on the from side.
 - `angmin`, `angmax`: the limits on the voltage angle difference [rad].
 - `status`: whether the branch is in service.
 - `ext`: free-form storage.
+- every field but `id`, `name`, `terminals` and `ext` may be given as a
+  [`NetworkVector`](@ref) to make it vary over the network index; an outage in a
+  contingency is a `status` that does.
 """
 Base.@kwdef struct Branch <: AbstractEdge
     id       ::Int
-    name     ::String           = ""
+    name     ::String                  = ""
     terminals::Vector{Int}
-    r        ::Float64
-    x        ::Float64
-    g_fr     ::Float64          = 0.0
-    b_fr     ::Float64          = 0.0
-    g_to     ::Float64          = 0.0
-    b_to     ::Float64          = 0.0
-    tm       ::Float64          = 1.0
-    ta       ::Float64          = 0.0
-    rate_a   ::Float64          = Inf
-    angmin   ::Float64          = -pi / 3
-    angmax   ::Float64          =  pi / 3
-    status   ::Bool             = true
-    ext      ::Dict{Symbol,Any} = Dict{Symbol,Any}()
+    r        ::NetworkQuantity{Float64}
+    x        ::NetworkQuantity{Float64}
+    g_fr     ::NetworkQuantity{Float64} = 0.0
+    b_fr     ::NetworkQuantity{Float64} = 0.0
+    g_to     ::NetworkQuantity{Float64} = 0.0
+    b_to     ::NetworkQuantity{Float64} = 0.0
+    tm       ::NetworkQuantity{Float64} = 1.0
+    ta       ::NetworkQuantity{Float64} = 0.0
+    rate_a   ::NetworkQuantity{Float64} = Inf
+    angmin   ::NetworkQuantity{Float64} = -pi / 3
+    angmax   ::NetworkQuantity{Float64} =  pi / 3
+    status   ::NetworkQuantity{Bool}    = true
+    ext      ::Dict{Symbol,Any}         = Dict{Symbol,Any}()
 
     function Branch(id, name, terminals, r, x, g_fr, b_fr, g_to, b_to, tm, ta,
                     rate_a, angmin, angmax, status, ext)
         length(terminals) == 2 ||
             throw(ArgumentError("branch $id has $(length(terminals)) terminals, a Branch has exactly two"))
-        tm > 0 || throw(ArgumentError("branch $id has a non-positive tap magnitude $tm"))
-        angmin <= angmax ||
-            throw(ArgumentError("branch $id has angmin = $angmin above angmax = $angmax"))
+        all_nw(>(0), tm) ||
+            throw(ArgumentError("branch $id has a non-positive tap magnitude"))
+        all_nw(<=, angmin, angmax) ||
+            throw(ArgumentError("branch $id has angmin above angmax"))
         return new(id, name, terminals, r, x, g_fr, b_fr, g_to, b_to, tm, ta,
                    rate_a, angmin, angmax, status, ext)
     end
 end
 
-"the real and imaginary part of the tap ratio `T = tm · exp(j·ta)`"
+"the real and imaginary part of the tap ratio `T = tm · exp(j·ta)` of a branch resolved at one network index"
 tap(b::Branch) = (b.tm * cos(b.ta), b.tm * sin(b.ta))
 
 register_edge_type!(Branch)

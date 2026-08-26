@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.2.0 - network dependent data stored per component                         #
 ################################################################################
 
 ################################################################################
@@ -253,6 +254,183 @@ prev_ids(dim::Dimension, n::Int, name::Symbol) = _range_ids(dim, n, name, :befor
 
 "all subsequent network indices along dimension `name`, holding the other coordinates of `n` fixed"
 next_ids(dim::Dimension, n::Int, name::Symbol) = _range_ids(dim, n, name, :after)
+
+################################################################################
+# Network dependent data                                                       #
+################################################################################
+
+"""
+    NetworkVector{T}
+
+A quantity that takes a different value at every network index.
+
+Data that does not change over the network index is stored as a plain value; a
+load whose active power is the same in every hour holds a `Float64`. Data that
+does change is wrapped in a `NetworkVector`, whose `data` has one entry per
+network index, in network index order. That is the whole distinction: a scalar
+is constant, a `NetworkVector` is not.
+
+The wrapper exists because a bare `Vector` is ambiguous. The terminals of an
+edge and the cost coefficients of a generator are vectors too, and nothing about
+their type says whether the second entry means "the second terminal" or "the
+second hour". Wrapping only the network dependent case removes the guess.
+
+Read one with [`nw_value`](@ref), build one with [`nw_vector`](@ref).
+"""
+struct NetworkVector{T}
+    data::Vector{T}
+end
+
+"""
+    NetworkQuantity{T}
+
+The type of a component field that may or may not vary over the network index,
+i.e., `Union{T,NetworkVector{T}}`.
+
+A component declares every field whose value the network index can change as a
+`NetworkQuantity`, and both cases are then read through [`nw_value`](@ref).
+"""
+const NetworkQuantity{T} = Union{T,NetworkVector{T}}
+
+Base.length(x::NetworkVector) = length(x.data)
+Base.eltype(::NetworkVector{T}) where T = T
+Base.getindex(x::NetworkVector, k::Int) = x.data[k]
+Base.iterate(x::NetworkVector, args...) = iterate(x.data, args...)
+Base.show(io::IO, x::NetworkVector{T}) where T =
+    print(io, "NetworkVector{$T}(", length(x), " values)")
+
+"whether `x` varies over the network index"
+is_nw_varying(x) = x isa NetworkVector
+
+"whether any field of the component `c` varies over the network index"
+has_nw_data(c) = any(is_nw_varying(getfield(c, k)) for k in 1:nfields(c))
+
+################################################################################
+# The generalized getters                                                      #
+################################################################################
+
+"""
+    nw_value(dim, x, n)
+
+The value of `x` at network index `n`.
+
+This is the one getter every piece of component data goes through. A constant is
+returned as it is, whatever its type — an `Int`, a `Vector{Float64}` of cost
+coefficients, a `String` — and a [`NetworkVector`](@ref) is indexed at `n`.
+Calling code therefore never has to ask which of the two it is holding.
+
+# Examples
+```julia
+julia> nw_value(dim, 0.4, 7)                       # constant
+0.4
+
+julia> nw_value(dim, nw_vector(dim, :time, p), 7)  # varying
+```
+"""
+function nw_value end
+
+nw_value(::Dimension, x, ::Int) = x
+
+function nw_value(dim::Dimension, x::NetworkVector, n::Int)
+    k = n - dim.offset
+    checkbounds(Bool, x.data, k) ||
+        throw(ArgumentError("network index $n is outside this NetworkVector, which holds $(length(x)) value(s) for the $(dim_length(dim)) network index(es) of the problem"))
+
+    return x.data[k]
+end
+
+"""
+    nw_values(dim, x)
+
+The value of `x` at every network index, as a vector of length
+`dim_length(dim)`. A constant is repeated.
+"""
+nw_values(dim::Dimension, x) = [nw_value(dim, x, n) for n in nw_ids(dim)]
+
+"""
+    nw_component(dim, c, n)
+
+The component `c` with every one of its [`NetworkVector`](@ref) fields replaced
+by its value at network index `n`.
+
+The result is the same concrete type as `c`, so the code that writes variables
+and constraints reads plain fields — `br.r`, `ld.pd` — and never has to know
+that the stored component holds a profile. A component with no network dependent
+field is returned untouched, without allocating.
+
+The component type must accept its fields positionally, in declaration order,
+which is what `Base.@kwdef` generates.
+"""
+function nw_component(dim::Dimension, c::T, n::Int) where T
+    has_nw_data(c) || return c
+
+    return T((nw_value(dim, getfield(c, k), n) for k in 1:fieldcount(T))...)
+end
+
+################################################################################
+# Building network dependent data                                              #
+################################################################################
+
+"""
+    all_nw(f, xs...)
+
+Whether `f` holds for `xs` at every network index.
+
+Constants are broadcast against the [`NetworkVector`](@ref)s, so this is what a
+component constructor uses to validate a field that may or may not vary:
+`all_nw(>(0), tm)` accepts a constant tap ratio and a profile of them alike.
+"""
+function all_nw(f, xs...)
+    lengths = [length(x.data) for x in xs if x isa NetworkVector]
+    isempty(lengths) && return f(xs...)
+    allequal(lengths) ||
+        throw(ArgumentError("NetworkVectors of unequal length, $(join(sort(unique(lengths)), " and ")), cannot describe the same network index"))
+
+    return all(f((x isa NetworkVector ? x.data[k] : x for x in xs)...) for k in 1:first(lengths))
+end
+
+"""
+    nw_vector(dim, values)
+    nw_vector(dim, f)
+    nw_vector(dim, name, values)
+
+Build a [`NetworkVector`](@ref) over the network indices of `dim`.
+
+- `values` is a vector holding one entry per network index, in network index
+  order;
+- `f` is called as `f(n, coordinates)` for every network index `n`, with
+  `coordinates` the `NamedTuple` returned by [`coordinates`](@ref);
+- `name, values` spreads a vector given along the single dimension `name` over
+  every network index, which is what a daily profile in a problem that also has
+  contingencies needs.
+
+# Examples
+```julia
+julia> dim = Dimension(:time => 24, :contingency => 3);
+
+julia> nw_vector(dim, :time, profile)                       # 24 values, spread over 72
+julia> nw_vector(dim, (n, c) -> base * profile[c.time])     # the same, written out
+```
+"""
+function nw_vector end
+
+function nw_vector(dim::Dimension, values::AbstractVector)
+    length(values) == dim_length(dim) ||
+        throw(ArgumentError("`values` holds $(length(values)) entries but this problem has $(dim_length(dim)) network indices"))
+
+    return NetworkVector(collect(values))
+end
+
+nw_vector(dim::Dimension, f::Function) =
+    NetworkVector([f(n, coordinates(dim, n)) for n in nw_ids(dim)])
+
+function nw_vector(dim::Dimension, name::Symbol, values::AbstractVector)
+    has_dim(dim, name) || _no_dim(dim, name)
+    length(values) == dim_length(dim, name) ||
+        throw(ArgumentError("`values` holds $(length(values)) entries but dimension `$name` has $(dim_length(dim, name)) coordinates"))
+
+    return NetworkVector([values[coordinates(dim, n)[name]] for n in nw_ids(dim)])
+end
 
 ################################################################################
 # Internals                                                                    #

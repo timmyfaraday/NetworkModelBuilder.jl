@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.2.0 - network dependent data stored per component                         #
 ################################################################################
 
 ################################################################################
@@ -32,21 +33,25 @@ A unit `(u, i)` that injects active and reactive power into its node.
   `sum(cost[k] * pg^(k-1) for k in eachindex(cost))` [currency/h].
 - `status`: whether the generator is in service.
 - `ext`: free-form storage.
+- every field but `id`, `name`, `node` and `ext` may be given as a
+  [`NetworkVector`](@ref) to make it vary over the network index. Note that a
+  network dependent `cost` is a `NetworkVector{Vector{Float64}}`: the plain
+  `Vector{Float64}` is the polynomial, not a profile.
 """
 Base.@kwdef struct Generator <: AbstractUnit
     id    ::Int
-    name  ::String           = ""
+    name  ::String                          = ""
     node  ::Int
-    pg    ::Float64          = 0.0
-    qg    ::Float64          = 0.0
-    pmin  ::Float64          = 0.0
-    pmax  ::Float64          = Inf
-    qmin  ::Float64          = -Inf
-    qmax  ::Float64          = Inf
-    vg    ::Float64          = 1.0
-    cost  ::Vector{Float64}  = [0.0]
-    status::Bool             = true
-    ext   ::Dict{Symbol,Any} = Dict{Symbol,Any}()
+    pg    ::NetworkQuantity{Float64}         = 0.0
+    qg    ::NetworkQuantity{Float64}         = 0.0
+    pmin  ::NetworkQuantity{Float64}         = 0.0
+    pmax  ::NetworkQuantity{Float64}         = Inf
+    qmin  ::NetworkQuantity{Float64}         = -Inf
+    qmax  ::NetworkQuantity{Float64}         = Inf
+    vg    ::NetworkQuantity{Float64}         = 1.0
+    cost  ::NetworkQuantity{Vector{Float64}} = [0.0]
+    status::NetworkQuantity{Bool}            = true
+    ext   ::Dict{Symbol,Any}                 = Dict{Symbol,Any}()
 end
 
 register_unit_type!(Generator)

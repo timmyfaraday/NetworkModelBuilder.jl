@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.2.0 - network dependent data stored per component                         #
 ################################################################################
 
 ################################################################################
@@ -26,15 +27,17 @@ node.
 - `pd`, `qd`: the active and reactive power withdrawn [pu].
 - `status`: whether the load is in service.
 - `ext`: free-form storage.
+- `pd`, `qd` and `status` may be given as a [`NetworkVector`](@ref) to make them
+  vary over the network index, which is how a demand profile is expressed.
 """
 Base.@kwdef struct Load <: AbstractUnit
     id    ::Int
-    name  ::String           = ""
+    name  ::String                    = ""
     node  ::Int
-    pd    ::Float64          = 0.0
-    qd    ::Float64          = 0.0
-    status::Bool             = true
-    ext   ::Dict{Symbol,Any} = Dict{Symbol,Any}()
+    pd    ::NetworkQuantity{Float64}  = 0.0
+    qd    ::NetworkQuantity{Float64}  = 0.0
+    status::NetworkQuantity{Bool}     = true
+    ext   ::Dict{Symbol,Any}          = Dict{Symbol,Any}()
 end
 
 register_unit_type!(Load)

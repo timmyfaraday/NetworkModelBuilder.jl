@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.2.0 - network dependent data stored per component                         #
 ################################################################################
 
 ################################################################################
@@ -26,15 +27,18 @@ A unit `(u, i)` that draws a current proportional to the voltage of its node.
   `y^{\\text{s}}_u = g^{\\text{s}}_u + j b^{\\text{s}}_u` [pu].
 - `status`: whether the shunt is in service.
 - `ext`: free-form storage.
+- `gs`, `bs` and `status` may be given as a [`NetworkVector`](@ref) to make them
+  vary over the network index, which is how a switched capacitor bank is
+  expressed.
 """
 Base.@kwdef struct Shunt <: AbstractUnit
     id    ::Int
-    name  ::String           = ""
+    name  ::String                    = ""
     node  ::Int
-    gs    ::Float64          = 0.0
-    bs    ::Float64          = 0.0
-    status::Bool             = true
-    ext   ::Dict{Symbol,Any} = Dict{Symbol,Any}()
+    gs    ::NetworkQuantity{Float64}  = 0.0
+    bs    ::NetworkQuantity{Float64}  = 0.0
+    status::NetworkQuantity{Bool}     = true
+    ext   ::Dict{Symbol,Any}          = Dict{Symbol,Any}()
 end
 
 register_unit_type!(Shunt)

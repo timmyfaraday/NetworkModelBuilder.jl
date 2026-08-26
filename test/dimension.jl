@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.2.0 - network dependent data stored per component                         #
 ################################################################################
 
 @testset "dimension" begin
@@ -84,6 +85,66 @@
         dim.meta[:time][:unit] = "hour"
         @test dim_meta(dim, :time, :unit) == "hour"
         @test_throws ArgumentError dim_meta(dim, :harmonic)
+    end
+
+    @testset "NetworkVector and the generalized getters" begin
+        dim = Dimension(:time => 3)
+
+        v = nw_vector(dim, [10.0, 20.0, 30.0])
+        @test v isa NetworkVector{Float64}
+        @test length(v) == 3
+        @test eltype(v) == Float64
+        @test v[2] == 20.0
+        @test collect(v) == [10.0, 20.0, 30.0]
+
+        # a constant passes through whatever its type, a NetworkVector is indexed
+        @test nw_value(dim, v, 2) == 20.0
+        @test nw_value(dim, 0.4, 2) == 0.4
+        @test nw_value(dim, [1, 2], 2) == [1, 2]        # a genuine vector, not a profile
+        @test nw_value(dim, "bus 4", 2) == "bus 4"
+        @test nw_values(dim, v) == [10.0, 20.0, 30.0]
+        @test nw_values(dim, 0.4) == [0.4, 0.4, 0.4]
+        @test_throws ArgumentError nw_value(dim, v, 4)
+
+        @test is_nw_varying(v)
+        @test !is_nw_varying(0.4)
+        @test !is_nw_varying([1, 2])
+    end
+
+    @testset "nw_component resolves a whole component" begin
+        dim = Dimension(:time => 3)
+        ld  = Load(; id = 2, name = "load", node = 7,
+                   pd = nw_vector(dim, [0.1, 0.2, 0.3]), qd = 0.05)
+
+        @test has_nw_data(ld)
+        for n in 1:3
+            resolved = nw_component(dim, ld, n)
+            @test resolved isa Load
+            @test resolved.pd ≈ 0.1 * n
+            @test resolved.qd == 0.05          # the constant survived
+            @test resolved.node == 7
+            @test !has_nw_data(resolved)
+        end
+
+        # a component with nothing network dependent is returned untouched
+        plain = Load(; id = 3, node = 7, pd = 0.1, qd = 0.05)
+        @test !has_nw_data(plain)
+        @test nw_component(dim, plain, 2) === plain
+    end
+
+    @testset "all_nw broadcasts constants against vectors" begin
+        dim = Dimension(:time => 3)
+
+        @test all_nw(>(0), 1.05)
+        @test !all_nw(>(0), 0.0)
+        @test all_nw(>(0), nw_vector(dim, [1.0, 1.05, 0.95]))
+        @test !all_nw(>(0), nw_vector(dim, [1.0, -0.1, 0.95]))
+
+        @test all_nw(<=, -0.5, 0.5)
+        @test all_nw(<=, nw_vector(dim, [-0.5, -0.4, -0.3]), 0.5)
+        @test !all_nw(<=, nw_vector(dim, [-0.5, 0.9, -0.3]), 0.5)
+        @test_throws ArgumentError all_nw(<=, nw_vector(dim, [1.0, 2.0, 3.0]),
+                                          NetworkVector([1.0, 2.0]))
     end
 
     @testset "add_dimension" begin

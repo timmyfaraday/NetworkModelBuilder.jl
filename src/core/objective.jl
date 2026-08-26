@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.2.0 - network dependent data stored per component                         #
 ################################################################################
 
 ################################################################################
@@ -26,7 +27,7 @@ probability of a scenario, or to the product of both, is what turns a
 single-index objective into an energy or an expected cost.
 """
 function network_weight(nm::NetworkModel, n::Int)
-    dim = nm.data.dim
+    dim = dimension(nm)
     w   = 1.0
     for name in dim_names(dim)
         w *= get(dim_prop(dim, n, name), :weight, 1.0)

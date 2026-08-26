@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.2.0 - network dependent data stored per component                         #
 ################################################################################
 
 module NetworkModelBuilder
@@ -69,13 +70,20 @@ module NetworkModelBuilder
     export nw_ids, similar_id, similar_ids, first_id, last_id, is_first_id, is_last_id
     export prev_id, next_id, prev_ids, next_ids
 
+    # export — network dependent data
+    export NetworkVector, NetworkQuantity
+    export nw_value, nw_values, nw_vector, nw_component
+    export is_nw_varying, has_nw_data, all_nw
+
     # export — extended graph
     export AbstractComponent, AbstractNode, AbstractEdge, AbstractUnit
-    export Arc, Network, NetworkData, replicate
-    export network, dimension, baseMVA
+    export Arc, Topology, Network, NetworkData
+    export set_dimension, replicate
+    export network, dimension, baseMVA, topology, nw_id_default
     export nodes, edges, units, arcs, node, edge, unit
     export node_arcs, node_units, edge_arcs, ids
-    export component_id, is_active, terminals, nterminals, edge_id, terminal_id, node_id
+    export component_id, status, is_active, terminals, nterminals
+    export edge_id, terminal_id, node_id
 
     # export — components
     export Node, NodeType, PQ, PV, REF, ISOLATED, reference_nodes
@@ -86,7 +94,7 @@ module NetworkModelBuilder
     # export — model
     export NetworkModel, problem_type, formulation_type
     export instantiate_model, build_model!, optimize_model!, solve_model
-    export register_model!, implemented_models, nw_id_default
+    export register_model!, implemented_models
 
     # export — variables, constraints and objective
     export variable_node_voltage

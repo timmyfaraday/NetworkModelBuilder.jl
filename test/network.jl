@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.2.0 - network dependent data stored per component                         #
 ################################################################################
 
 @testset "network" begin
@@ -50,7 +51,7 @@
         @test length(arcs(out)) == length(arcs(net)) - 2
         @test Arc(8, 1, 4) ∉ node_arcs(out, 4)
         @test haskey(edges(out), 8)          # kept in the data, absent from the topology
-        @test !haskey(out.edge_arc, 8)
+        @test !haskey(topology(out).edge_arc, 8)
     end
 
     @testset "construction errors" begin

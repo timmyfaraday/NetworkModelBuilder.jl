@@ -77,7 +77,7 @@ terminals of one edge may land on the same node.
 package, in the way an extension package would, and checks it against the same
 network written with three ordinary branches and an explicit star node.
 
-### 3. Every dimension aggregated under one network index
+### 3. Every dimension under one network index, and varying data on the component
 
 Time, contingencies, harmonics and scenarios are all axes of the same problem.
 A `Dimension` holds their names and sizes and gives the bijection between a
@@ -95,6 +95,46 @@ The index arithmetic — `similar_id`, `first_id`, `prev_ids`, `next_ids` — is
 what a coupling constraint needs: a storage balance links `n` to
 `prev_id(dim, n, :time)`, a non-anticipativity constraint links the scenarios
 returned by `similar_ids(dim, n; scenario = 1:dim_length(dim, :scenario))`.
+
+There is **one extended graph**, not one per network index. A field whose value
+the network index changes is stored on its component as a `NetworkVector` with
+one entry per index; a field that does not change is stored as a plain value.
+The impedance of a line is written once whether the problem spans one hour or
+eight thousand.
+
+```julia
+Load(; id = 4, node = 2,
+     pd = nw_vector(dim, :time, profile),   # varies: a NetworkVector
+     qd = 0.05)                             # constant: a Float64
+```
+
+Both cases are read through one getter, so no calling code has to ask which it
+is holding:
+
+```julia
+nw_value(dim, x, n)          # a constant as it is, a NetworkVector indexed at n
+nw_component(dim, comp, n)   # the whole component, every field resolved at n
+```
+
+`nw_component` is why the component files read plain fields — `br.r`, `ld.pd` —
+and never mention profiles: `edge(nm, e; nw = n)` hands them a `Branch` already
+resolved at `n`.
+
+The wrapper earns its keep by removing an ambiguity. A bare `Vector` is not
+enough to say what its entries mean: `terminals` and the cost polynomial of a
+generator are vectors too, and nothing in their type says whether entry two is
+the second terminal or the second hour. Only the network dependent case is
+wrapped.
+
+Because only `status` can change which components exist, network indices that
+agree on what is in service share one `Topology` object. A problem without
+contingencies holds exactly one, however many indices it spans; a contingency is
+nothing more than a `status` that varies:
+
+```julia
+Branch(; id = 1, terminals = [1, 2], r = 0.01, x = 0.1,
+       status = nw_vector(dim, (n, c) -> c.contingency != 2))
+```
 
 ## Installation
 
@@ -119,18 +159,25 @@ nw_solution(result)["unit"]["1"]["pg"]        # 2.32393
 An optimal power flow over three hours with a load profile:
 
 ```julia
-data  = parse_file("case5.m")
-dim   = Dimension(:time => [Dict{Symbol,Any}(:scale => s, :weight => 1.0) for s in (0.9, 1.0, 1.1)])
-multi = replicate(data, dim; apply! = function (net, n, coordinates)
-    s = dim_prop(dim, n, :time, :scale)
-    for (u, cmp) in net.unit
-        cmp isa Load || continue
-        net.unit[u] = Load(; id = cmp.id, node = cmp.node, pd = cmp.pd * s, qd = cmp.qd * s)
+data    = parse_file("case5.m")
+dim     = Dimension(:time => 3)
+profile = [0.9, 1.0, 1.1]
+
+data = set_dimension(data, dim; apply! = function (net, dim)
+    for (u, ld) in net.unit
+        ld isa Load || continue
+        net.unit[u] = Load(; id = ld.id, name = ld.name, node = ld.node,
+                           pd = nw_vector(dim, :time, ld.pd .* profile),
+                           qd = nw_vector(dim, :time, ld.qd .* profile))
     end
 end)
 
-result = solve_model(multi, OptimalPowerFlowProblem, IVRFormulation, Ipopt.Optimizer)
+result = solve_model(data, OptimalPowerFlowProblem, IVRFormulation, Ipopt.Optimizer)
+nw_solution(result, 3)["node"]["2"]["vm"]     # the third hour
 ```
+
+Everything `apply!` leaves alone stays a plain value, and is therefore constant
+over the network index.
 
 ## Package layout
 
@@ -224,7 +271,8 @@ type. `src/prob/rd.jl` sketches this for a redispatch problem.
 | flow index | `(l, i, j)` arc | `Arc(edge, terminal, node)` |
 | gen/load/shunt | three separate balance terms | one set `U` with one injection variable pair |
 | code layout | by kind — `variable.jl`, `constraint.jl` | by component — one file per component |
-| multinetwork | replicated `nw` dictionaries | `Dimension` over named axes, network index arithmetic |
+| multinetwork | the whole data dictionary replicated per `nw` | one graph; only the data that varies is a `NetworkVector` on its component |
+| dimensions | `nw` ids, flat | `Dimension` over named axes, with index arithmetic |
 
 ## Acknowledgements
 

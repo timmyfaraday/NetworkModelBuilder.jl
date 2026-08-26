@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.2.0 - network dependent data stored per component                         #
 ################################################################################
 
 ################################################################################
@@ -33,6 +34,8 @@ A node `i ∈ I` of the extended graph, i.e., an electrical busbar.
 - `type`: the [`NodeType`](@ref).
 - `vm`, `va`: the voltage magnitude [pu] and angle [rad] setpoint, used by `REF`
   and `PV` nodes and as a solution report reference elsewhere.
+- every field but `id`, `name`, `base_kv`, `area`, `zone` and `ext` may be given
+  as a [`NetworkVector`](@ref) to make it vary over the network index.
 - `vmin`, `vmax`: the voltage magnitude limits [pu].
 - `base_kv`: the voltage base [kV].
 - `area`, `zone`: bookkeeping identifiers carried through from the input data.
@@ -41,17 +44,17 @@ A node `i ∈ I` of the extended graph, i.e., an electrical busbar.
 """
 Base.@kwdef struct Node <: AbstractNode
     id     ::Int
-    name   ::String            = ""
-    type   ::NodeType          = PQ
-    vm     ::Float64           = 1.0
-    va     ::Float64           = 0.0
-    vmin   ::Float64           = 0.9
-    vmax   ::Float64           = 1.1
-    base_kv::Float64           = 1.0
-    area   ::Int               = 1
-    zone   ::Int               = 1
-    status ::Bool              = true
-    ext    ::Dict{Symbol,Any}  = Dict{Symbol,Any}()
+    name   ::String                    = ""
+    type   ::NetworkQuantity{NodeType} = PQ
+    vm     ::NetworkQuantity{Float64}  = 1.0
+    va     ::NetworkQuantity{Float64}  = 0.0
+    vmin   ::NetworkQuantity{Float64}  = 0.9
+    vmax   ::NetworkQuantity{Float64}  = 1.1
+    base_kv::Float64                   = 1.0
+    area   ::Int                       = 1
+    zone   ::Int                       = 1
+    status ::NetworkQuantity{Bool}     = true
+    ext    ::Dict{Symbol,Any}          = Dict{Symbol,Any}()
 end
 
 "sorted identifiers of the in-service reference nodes at network index `nw`"

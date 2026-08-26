@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.2.0 - network dependent data stored per component                         #
 ################################################################################
 
 ################################################################################
@@ -89,35 +90,48 @@ nw_id_default(nm::NetworkModel) = first(nm.nws)
 
 "the system power base, in MVA"
 baseMVA(nm::NetworkModel) = nm.data.baseMVA
-baseMVA(data::NetworkData) = data.baseMVA
 
 for f in (:dim_names, :has_dim, :dim_position, :coordinates, :dim_prop, :dim_meta,
           :similar_ids, :similar_id, :first_id, :last_id, :is_first_id, :is_last_id,
-          :prev_id, :next_id, :prev_ids, :next_ids)
-    @eval $f(nm::NetworkModel, args...; kwargs...) = $f(nm.data.dim, args...; kwargs...)
+          :prev_id, :next_id, :prev_ids, :next_ids,
+          :nw_value, :nw_values, :nw_vector, :nw_component)
+    @eval $f(nm::NetworkModel, args...; kwargs...) = $f(dimension(nm), args...; kwargs...)
 end
-dim_length(nm::NetworkModel, args...) = dim_length(nm.data.dim, args...)
+dim_length(nm::NetworkModel, args...) = dim_length(dimension(nm), args...)
 
-"the extended graph at network index `nw`"
-network(nm::NetworkModel; nw::Int = nw_id_default(nm)) = nm.data.nw[nw]
+"the extended graph of a model, of which there is one however many network indices"
+network(nm::NetworkModel) = nm.data.net
 
-for (f, n) in ((:nodes, 0), (:edges, 0), (:units, 0), (:arcs, 0),
-               (:node, 1), (:edge, 1), (:unit, 1),
-               (:node_arcs, 1), (:node_units, 1), (:edge_arcs, 1))
-    if n == 0
-        @eval $f(nm::NetworkModel; nw::Int = nw_id_default(nm)) = $f(network(nm; nw))
-    else
-        @eval $f(nm::NetworkModel, i::Int; nw::Int = nw_id_default(nm)) = $f(network(nm; nw), i)
-    end
+"the [`Dimension`](@ref) of a model"
+dimension(nm::NetworkModel) = nm.data.net.dim
+
+"the components of a model, as stored, which may hold [`NetworkVector`](@ref) fields"
+nodes(nm::NetworkModel) = nodes(network(nm))
+edges(nm::NetworkModel) = edges(network(nm))
+units(nm::NetworkModel) = units(network(nm))
+
+# a component of the model, resolved at network index `nw`, see `node(net, i; nw)`
+for f in (:node, :edge, :unit)
+    @eval $f(nm::NetworkModel, i::Int; nw::Int = nw_id_default(nm)) = $f(network(nm), i; nw)
 end
+
+for f in (:node_arcs, :node_units, :edge_arcs)
+    @eval $f(nm::NetworkModel, i::Int; nw::Int = nw_id_default(nm)) = $f(network(nm), i; nw)
+end
+
+"the [`Topology`](@ref) of a model at network index `nw`"
+topology(nm::NetworkModel; nw::Int = nw_id_default(nm)) = topology(network(nm); nw)
+
+"the arcs of a model at network index `nw`"
+arcs(nm::NetworkModel; nw::Int = nw_id_default(nm)) = arcs(network(nm); nw)
 
 "sorted identifiers of the in-service components of type `T` at network index `nw`"
 ids(nm::NetworkModel, ::Type{T}; nw::Int = nw_id_default(nm)) where {T<:AbstractComponent} =
-    ids(network(nm; nw), T)
+    ids(network(nm), T; nw)
 
 "sorted arcs of the in-service edges of type `T` at network index `nw`"
 arcs(nm::NetworkModel, ::Type{T}; nw::Int = nw_id_default(nm)) where {T<:AbstractEdge} =
-    arcs(network(nm; nw), T)
+    arcs(network(nm), T; nw)
 
 """
     var(nm[, key[, idx]]; nw)

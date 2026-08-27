@@ -29,6 +29,20 @@ makedocs(
             "The linearized formulation" => "manual/linearized.md",
             "Extending the package"     => "manual/extending.md",
         ],
+        "Problems" => [
+            "Overview"           => "problems/overview.md",
+            "Load flow" => [
+                "The problem"      => "problems/load_flow/index.md",
+                "IVR formulation"  => "problems/load_flow/ivr.md",
+                "LPF formulation"  => "problems/load_flow/lpf.md",
+            ],
+            "Optimal power flow" => [
+                "The problem"      => "problems/optimal_power_flow/index.md",
+                "IVR formulation"  => "problems/optimal_power_flow/ivr.md",
+                "LPF formulation"  => "problems/optimal_power_flow/lpf.md",
+            ],
+            "Redispatch"         => "problems/redispatch/index.md",
+        ],
         "Components" => [
             "The hierarchy" => "components/hierarchy.md",
             "Node"          => "components/node.md",

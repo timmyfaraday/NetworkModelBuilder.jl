@@ -182,7 +182,8 @@ flow. A `MultiWindingTransformer` keeps its star point as an edge variable
 rather than inventing a node for it.
 
 See [the documentation](https://timmyfaraday.github.io/NetworkModelBuilder.jl/)
-for the parameters, variables and constraints of each.
+for the parameters, variables and constraints of each component, and for the
+complete optimization problem of every implemented problem and formulation pair.
 
 ## Installation
 

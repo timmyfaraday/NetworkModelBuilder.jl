@@ -281,11 +281,11 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{MultiWindingTransf
                                 nw::Int = nw_id_default(nm)
                                ) where {P<:AbstractDispatchProblem,F<:LPFFormulation}
     p      = var(nm, :p; nw)
-    rating = get!(() -> Dict{Int,Any}(), con(nm; nw), :edge_rating)
+    limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :edge_limits)
 
     for e in ids(nm, MultiWindingTransformer; nw)
         tf = edge(nm, e; nw)::MultiWindingTransformer
-        rating[e] = [JuMP.@constraint(nm.model, -tf.rate_a[k] <= p[a] <= tf.rate_a[k])
+        limits[e] = [JuMP.@constraint(nm.model, -tf.rate_a[k] <= p[a] <= tf.rate_a[k])
                      for (k, a) in enumerate(edge_arcs(nm, e; nw)) if isfinite(tf.rate_a[k])]
     end
 

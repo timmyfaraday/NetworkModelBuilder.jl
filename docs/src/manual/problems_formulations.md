@@ -22,9 +22,6 @@ so an extension package specialises one by subtyping it.
 AbstractProblemType
 AbstractPowerFlowProblem
 AbstractDispatchProblem
-LoadFlowProblem
-OptimalPowerFlowProblem
-RedispatchProblem
 AbstractFormulationType
 AbstractACFormulation
 AbstractCurrentFormulation
@@ -82,8 +79,6 @@ instantiate_model
 build_model!
 optimize_model!
 solve_model
-solve_lf
-solve_opf
 problem_type
 formulation_type
 register_model!

@@ -235,17 +235,116 @@ function constraint_node_voltage_limits(nm::NetworkModel{P,F}; nw::Int = nw_id_d
 end
 
 ################################################################################
+# Node — the linearized formulation                                            #
+################################################################################
+
+"""
+    variable_node_voltage(nm; nw)
+
+Under a [`LPFFormulation`](@ref) the voltage magnitude is one by assumption, so
+the only voltage variable a node has is its angle.
+
+The angle is left unbounded whatever the problem: there is no magnitude to
+limit, and the angle differences that matter are bounded on the edges that span
+them.
+"""
+function variable_node_voltage(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+                              ) where {P<:AbstractProblemType,F<:LPFFormulation}
+    I = ids(nm, Node; nw)
+
+    var(nm; nw)[:va] = JuMP.@variable(nm.model, [i in I], base_name = "$(nw)_va",
+                                      start = get(node(nm, i; nw).ext, :va_start, 0.0))
+
+    return nothing
+end
+
+"""
+    constraint_node_balance(nm; nw)
+
+Active power balance at every in-service node,
+
+```math
+\\sum_{a \\in A(i)} p_{a} = \\sum_{u \\in U(i)} p_{u} .
+```
+
+The same statement as in the current based formulation, in active power alone:
+the arcs incident to a node against the units connected to it, with neither side
+needing to know what the other contains.
+"""
+function constraint_node_balance(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+                                ) where {P<:AbstractProblemType,F<:LPFFormulation}
+    p, pu = var(nm, :p; nw), var(nm, :pu; nw)
+
+    con(nm; nw)[:node_balance] = Dict{Int,JuMP.ConstraintRef}()
+    for i in ids(nm, Node; nw)
+        A, U = node_arcs(nm, i; nw), node_units(nm, i; nw)
+
+        con(nm; nw)[:node_balance][i] = JuMP.@constraint(nm.model,
+            sum(p[a] for a in A; init = 0.0) == sum(pu[u] for u in U; init = 0.0))
+    end
+
+    return nothing
+end
+
+"""
+    constraint_node_voltage_reference(nm; nw)
+
+Fix the angle of every reference node, `v^{\\text{a}}_{i} = v^{\\text{a,set}}_{i}`.
+
+Unlike the current based formulation this does not depend on the problem: the
+angle is the only thing a reference node has to give, so a power flow and a
+dispatch problem anchor it the same way.
+"""
+function constraint_node_voltage_reference(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+                                          ) where {P<:AbstractProblemType,F<:LPFFormulation}
+    va = var(nm, :va; nw)
+
+    con(nm; nw)[:node_voltage_reference] = Dict{Int,JuMP.ConstraintRef}()
+    for i in reference_nodes(nm; nw)
+        con(nm; nw)[:node_voltage_reference][i] =
+            JuMP.@constraint(nm.model, va[i] == node(nm, i; nw).va)
+    end
+
+    return nothing
+end
+
+"""
+    constraint_node_voltage_setpoint(nm; nw)
+    constraint_node_voltage_limits(nm; nw)
+
+Nothing to do: a linearized formulation has no voltage magnitude to hold at a
+setpoint or between limits. The methods exist so that a problem builder can call
+them without asking which formulation it is building.
+"""
+constraint_node_voltage_setpoint(::NetworkModel{P,F}; nw::Int = 0
+                                ) where {P<:AbstractPowerFlowProblem,F<:LPFFormulation} = nothing
+
+constraint_node_voltage_limits(::NetworkModel{P,F}; nw::Int = 0
+                              ) where {P<:AbstractDispatchProblem,F<:LPFFormulation} = nothing
+
+################################################################################
 # Node — solution                                                              #
 ################################################################################
 
 "the node part of the solution at network index `nw`"
-function solution_node(nm::NetworkModel{P,F}, nw::Int) where {P,F<:IVRFormulation}
+function solution_node(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:IVRFormulation}
     sol = Dict{String,Any}()
     for i in ids(nm, Node; nw)
         vr = JuMP.value(var(nm, :vr, i; nw))
         vi = JuMP.value(var(nm, :vi, i; nw))
         sol["$i"] = Dict{String,Any}("vr" => vr, "vi" => vi,
                                      "vm" => hypot(vr, vi), "va" => atan(vi, vr))
+    end
+
+    return sol
+end
+
+"the node part of the solution under a linearized formulation"
+function solution_node(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:LPFFormulation}
+    sol = Dict{String,Any}()
+    for i in ids(nm, Node; nw)
+        va = JuMP.value(var(nm, :va, i; nw))
+        sol["$i"] = Dict{String,Any}("va" => va, "vm" => 1.0)
     end
 
     return sol

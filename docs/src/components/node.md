@@ -40,6 +40,16 @@ so that the solver is not steered away from the one physical answer. A dispatch
 problem bounds each by ``v^{\text{max}}_{i}`` and adds the magnitude limits
 below.
 
+### In the `LPFFormulation`
+
+| symbol | key | index | description | unit |
+|:-------|:----|:------|:------------|:-----|
+| ``v^{\text{a}}_{i}`` | `:va` | node | voltage angle | rad |
+
+There is no magnitude variable: it is one by assumption. The angle is unbounded
+whatever the problem, since the differences that matter are bounded on the edges
+that span them.
+
 ## Constraints
 
 | name | applies to | problem |
@@ -93,6 +103,19 @@ In a dispatch problem no node has a setpoint, and every node has limits:
 ```math
 (v^{\text{min}}_{i})^2 \le (v^{\text{r}}_{i})^2 + (v^{\text{i}}_{i})^2 \le (v^{\text{max}}_{i})^2 .
 ```
+
+### In the `LPFFormulation`
+
+The balance is the same statement in active power alone,
+
+```math
+\sum_{a \in A(i)} p_{a} = \sum_{u \in U(i)} p_{u} ,
+```
+
+and the reference node fixes its angle, ``v^{\text{a}}_{i} =
+v^{\text{a,set}}_{i}``, in every problem rather than only in a dispatch one.
+The magnitude setpoint and the magnitude limits have nothing to act on and are
+no-ops.
 
 ```@docs
 constraint_node_balance

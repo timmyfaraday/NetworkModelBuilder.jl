@@ -64,6 +64,19 @@ a pair of bounds, in place of a sine and a cosine of a variable. A
 [`TapChanger`](@ref) needs one variable rather than two, because only the
 magnitude moves.
 
+### In the `LPFFormulation`
+
+| symbol | key | index | description | unit | when |
+|:-------|:----|:------|:------------|:-----|:-----|
+| ``p_{a}`` | `:p` | arc | terminal active power | pu | all |
+| ``ta_{e}`` | `:ta` | edge | the ratio angle | rad | [`PhaseShifter`](@ref), dispatch |
+| ``v^{\text{as}}_{e}`` | `:vas` | edge | star point angle | rad | [`MultiWindingTransformer`](@ref) |
+
+The ratio magnitude appears nowhere: with every voltage magnitude equal to one
+there is nothing for it to change. A [`TapChanger`](@ref) is therefore **inert**
+here and a [`PhaseShifter`](@ref) is a linear control. See
+[The linearized formulation](@ref).
+
 ## Constraints
 
 ### Two-winding
@@ -138,6 +151,27 @@ middle and one branch per winding — which is what the test suite checks.
     component. In exchange the node set stays a set of real busbars, no synthetic
     identifier has to be invented and kept from colliding, and the topology does
     not grow.
+
+### In the `LPFFormulation`
+
+```math
+p_{a^{\text{f}}} = -b_{e} \left(v^{\text{a}}_{i} - v^{\text{a}}_{j} - ta_{e}\right),
+\qquad
+p_{a^{\text{t}}} = -p_{a^{\text{f}}} ,
+```
+
+and, for a multi-winding transformer,
+
+```math
+p_{a_k} = -b_{e,k} \left(v^{\text{a}}_{i_k} - ta_{e,k} - v^{\text{as}}_{e}\right)
+\quad \text{for every } k,
+\qquad
+\sum_{k} p_{a_k} = 0 .
+```
+
+```@docs
+phase_shift
+```
 
 ```@docs
 tap_ratio

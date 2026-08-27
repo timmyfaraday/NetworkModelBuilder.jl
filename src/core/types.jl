@@ -139,13 +139,41 @@ completeness; no variables or constraints are implemented yet.
 """
 abstract type ACRFormulation <: AbstractPowerFormulation end
 
-""
-abstract type AbstractDCFormulation <: AbstractFormulationType end
+"""
+    AbstractLinearizedFormulation <: AbstractFormulationType
+
+Formulations that linearize the network physics, giving up exactness for a model
+an ordinary linear or quadratic programming solver can take.
+
+These are deliberately not [`AbstractACFormulation`](@ref)s: a linearized model
+has no voltage magnitude and no reactive power, so the methods that write those
+must not apply to it.
+"""
+abstract type AbstractLinearizedFormulation <: AbstractFormulationType end
 
 """
-    DCPFormulation <: AbstractDCFormulation
+    LPFFormulation <: AbstractLinearizedFormulation
 
-Linearized active power only formulation. Declared for completeness; no
-variables or constraints are implemented yet.
+Linearized power flow: active power only, in the voltage angles.
+
+Three approximations get you here — every voltage magnitude is one per unit,
+reactive power is omitted, and angle differences are small enough that
+`sin θ ≈ θ` and `cos θ ≈ 1` — after which the flow of a two-terminal edge is
+
+```math
+p_{a^{\\text{f}}} = -b_{e} \\left(v^{\\text{a}}_{i} - v^{\\text{a}}_{j} - ta_{e}\\right),
+\\qquad
+p_{a^{\\text{t}}} = -p_{a^{\\text{f}}} ,
+```
+
+and the model is lossless, linear, and solvable without a nonlinear solver.
+
+This is what the literature calls the DC power flow, a name this package avoids:
+nothing about it involves direct current. It is a linearization of the
+alternating current equations around a flat voltage profile.
+
+See the manual for what survives the approximations and what does not — most
+notably that a [`PhaseShifter`](@ref) remains a control here while a
+[`TapChanger`](@ref) becomes inert.
 """
-abstract type DCPFormulation <: AbstractDCFormulation end
+abstract type LPFFormulation <: AbstractLinearizedFormulation end

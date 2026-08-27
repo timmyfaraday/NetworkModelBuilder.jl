@@ -125,3 +125,84 @@ function constraint_edge_angle_difference!(nm::NetworkModel, a_fr::Arc, a_to::Ar
             tan(angmin) * (vr[i] * vr[j] + vi[i] * vi[j])),
     )
 end
+
+################################################################################
+# The linearized two-terminal flow                                             #
+################################################################################
+
+"""
+    susceptance(r, x)
+
+The series susceptance of an impedance `z = r + jx`, i.e., the imaginary part of
+`1/z`:
+
+```math
+b = \\frac{-x}{r^2 + x^2} .
+```
+
+The resistance is kept. Dropping it as well, `b = -1/x`, is the other common
+convention and gives Matpower's DC model; the three approximations this package
+makes — unit voltage magnitude, no reactive power, small angles — do not require
+it.
+"""
+susceptance(r::Real, x::Real) = -x / (r^2 + x^2)
+
+"""
+    constraint_linear_flow!(nm, e, a_fr, a_to, b, shift; nw)
+
+Add the linearized flow of a two-terminal edge,
+
+```math
+p_{a^{\\text{f}}} = -b_{e} \\left(v^{\\text{a}}_{i} - v^{\\text{a}}_{j} - ta_{e}\\right),
+\\qquad
+p_{a^{\\text{t}}} = -p_{a^{\\text{f}}} ,
+```
+
+where `shift` is the phase shift the edge applies, zero for a branch. The second
+equation is what makes the model lossless: whatever leaves one terminal arrives
+at the other.
+
+`shift` may be a number or a variable, which is what lets a
+[`PhaseShifter`](@ref) be a control here.
+"""
+function constraint_linear_flow!(nm::NetworkModel, e::Int, a_fr::Arc, a_to::Arc,
+                                 b::Real, shift; nw::Int)
+    va = var(nm, :va; nw)
+    p  = var(nm, :p;  nw)
+    i, j = a_fr.node, a_to.node
+
+    return (
+        JuMP.@constraint(nm.model, p[a_fr] == -b * (va[i] - va[j] - shift)),
+        JuMP.@constraint(nm.model, p[a_to] == -p[a_fr]),
+    )
+end
+
+"""
+    constraint_linear_limits!(nm, e, a_fr, a_to, rate_a, angmin, angmax; nw)
+
+The operating limits of a two-terminal edge in a linearized formulation: the
+rating becomes a bound on the terminal power, and the angle difference limit is
+already linear.
+
+```math
+-s^{\\text{max}}_{e} \\le p_{a} \\le s^{\\text{max}}_{e},
+\\qquad
+\\theta^{\\text{min}}_{e} \\le v^{\\text{a}}_{i} - v^{\\text{a}}_{j} \\le \\theta^{\\text{max}}_{e} .
+```
+
+With no reactive power in the model, apparent power is active power, so the
+rating applies to it directly.
+"""
+function constraint_linear_limits!(nm::NetworkModel, e::Int, a_fr::Arc, a_to::Arc,
+                                   rate_a::Real, angmin::Real, angmax::Real; nw::Int)
+    va = var(nm, :va; nw)
+    p  = var(nm, :p;  nw)
+    i, j = a_fr.node, a_to.node
+
+    rating = isfinite(rate_a) ?
+        [JuMP.@constraint(nm.model, -rate_a <= p[a] <= rate_a) for a in (a_fr, a_to)] : nothing
+    angle = (angmin > -pi / 2 || angmax < pi / 2) ?
+        JuMP.@constraint(nm.model, angmin <= va[i] - va[j] <= angmax) : nothing
+
+    return (rating, angle)
+end

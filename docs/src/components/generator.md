@@ -43,6 +43,18 @@ The injection currents are shared by every unit type. `pg` and `qg` are free in
 a power flow, where [`constraint_unit`](@ref) fixes them at their setpoint
 instead, and bounded by the operating limits in a dispatch problem.
 
+### In the `LPFFormulation`
+
+| symbol | key | index | description | unit |
+|:-------|:----|:------|:------------|:-----|
+| ``p_{u}`` | `:pu` | unit | active power injected into the node | pu |
+| ``p^{\text{g}}_{u}`` | `:pg` | unit | active power | pu |
+
+There is no reactive power, so `qg` is not created and the reactive limits play
+no part. In a load flow the `PV` and `PQ` distinction disappears with it: every
+generator away from the reference node holds its active setpoint and nothing
+else.
+
 ## Constraints
 
 The power a generator injects, against the current it injects:

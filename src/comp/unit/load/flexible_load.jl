@@ -79,7 +79,7 @@ The active demand of every in-service flexible load, held between `pd_min` and
 `pd_max`. A power flow creates nothing: there the demand is its nominal value.
 """
 function variable_unit(nm::NetworkModel{P,F}, ::Type{FlexibleLoad}; nw::Int = nw_id_default(nm)
-                      ) where {P<:AbstractDispatchProblem,F<:IVRFormulation}
+                      ) where {P<:AbstractDispatchProblem,F<:AbstractFormulationType}
     isempty(ids(nm, FlexibleLoad; nw)) && return nothing
     require_time_dimension(nm, FlexibleLoad)
 
@@ -99,7 +99,7 @@ end
 demand(::NetworkModel, ld::FlexibleLoad, ::Int; nw::Int) = (ld.pd_nominal, ld.qd_nominal)
 
 function demand(nm::NetworkModel{P,F}, ld::FlexibleLoad, u::Int; nw::Int
-               ) where {P<:AbstractDispatchProblem,F<:IVRFormulation}
+               ) where {P<:AbstractDispatchProblem,F<:AbstractFormulationType}
     pd = var(nm, :pdf, u; nw)
 
     return (pd, JuMP.@expression(nm.model, power_factor_ratio(ld) * pd))
@@ -124,7 +124,7 @@ dimension therefore gets one balance per contingency, which is what makes each
 contingency a self-contained day rather than a shared one.
 """
 function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{FlexibleLoad}
-                                 ) where {P<:AbstractDispatchProblem,F<:IVRFormulation}
+                                 ) where {P<:AbstractDispatchProblem,F<:AbstractFormulationType}
     isempty(ids(nm, FlexibleLoad; nw = nw_id_default(nm))) && return nothing
     require_time_dimension(nm, FlexibleLoad)
 

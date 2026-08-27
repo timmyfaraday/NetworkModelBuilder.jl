@@ -210,3 +210,84 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{MultiWindingTransf
 
     return nothing
 end
+
+################################################################################
+# MultiWindingTransformer — the linearized formulation                         #
+################################################################################
+
+"""
+    variable_edge(nm, MultiWindingTransformer; nw)
+
+The angle of the star point of every in-service multi-winding transformer.
+
+The star point stays implicit here exactly as it does in the current based
+formulation: one variable belonging to the edge, and no node.
+"""
+function variable_edge(nm::NetworkModel{P,F}, ::Type{MultiWindingTransformer};
+                       nw::Int = nw_id_default(nm)
+                      ) where {P<:AbstractProblemType,F<:LPFFormulation}
+    vas = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :vas)
+
+    for e in ids(nm, MultiWindingTransformer; nw)
+        vas[e] = JuMP.@variable(nm.model, base_name = "$(nw)_vas[$e]", start = 0.0)
+    end
+
+    return nothing
+end
+
+"""
+    constraint_edge(nm, MultiWindingTransformer; nw)
+
+The linearized flow of every winding into the star point, and the balance there,
+
+```math
+p_{a_k} = -b_{e,k} \\left(v^{\\text{a}}_{i_k} - ta_{e,k} - v^{\\text{as}}_{e}\\right)
+\\quad \\text{for every } k,
+\\qquad
+\\sum_{k} p_{a_k} = 0 .
+```
+
+The magnetising branch plays no part, for the same reason a branch's shunt does
+not.
+"""
+function constraint_edge(nm::NetworkModel{P,F}, ::Type{MultiWindingTransformer};
+                         nw::Int = nw_id_default(nm)
+                        ) where {P<:AbstractProblemType,F<:LPFFormulation}
+    va, p, vas = var(nm, :va; nw), var(nm, :p; nw), var(nm, :vas; nw)
+
+    winding = get!(() -> Dict{Int,Any}(), con(nm; nw), :winding)
+    star    = get!(() -> Dict{Int,Any}(), con(nm; nw), :star_balance)
+
+    for e in ids(nm, MultiWindingTransformer; nw)
+        tf = edge(nm, e; nw)::MultiWindingTransformer
+        A  = edge_arcs(nm, e; nw)
+
+        winding[e] = map(enumerate(A)) do (k, a)
+            JuMP.@constraint(nm.model, p[a] ==
+                -susceptance(tf.r[k], tf.x[k]) * (va[a.node] - tf.ta[k] - vas[e]))
+        end
+        star[e] = JuMP.@constraint(nm.model, sum(p[a] for a in A) == 0.0)
+    end
+
+    return nothing
+end
+
+"""
+    constraint_edge_limits(nm, MultiWindingTransformer; nw)
+
+The rating of every winding, applied per terminal.
+"""
+function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{MultiWindingTransformer};
+                                nw::Int = nw_id_default(nm)
+                               ) where {P<:AbstractDispatchProblem,F<:LPFFormulation}
+    p      = var(nm, :p; nw)
+    rating = get!(() -> Dict{Int,Any}(), con(nm; nw), :edge_rating)
+
+    for e in ids(nm, MultiWindingTransformer; nw)
+        tf = edge(nm, e; nw)::MultiWindingTransformer
+        rating[e] = [JuMP.@constraint(nm.model, -tf.rate_a[k] <= p[a] <= tf.rate_a[k])
+                     for (k, a) in enumerate(edge_arcs(nm, e; nw)) if isfinite(tf.rate_a[k])]
+    end
+
+    return nothing
+end

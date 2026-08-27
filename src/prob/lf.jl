@@ -30,7 +30,18 @@ file.
 | constraints| the voltage anchor at the reference nodes, the magnitude setpoint at the `PV` nodes, Kirchhoff's current law at every node, the physics of every edge, the behaviour of every unit |
 | objective  | zero, the problem is a feasibility problem                        |
 """
-function build_model!(nm::NetworkModel{P,F}) where {P<:LoadFlowProblem,F<:IVRFormulation}
+build_model!(nm::NetworkModel{P,F}) where {P<:LoadFlowProblem,F<:IVRFormulation} = _build_load_flow!(nm)
+build_model!(nm::NetworkModel{P,F}) where {P<:LoadFlowProblem,F<:LPFFormulation} = _build_load_flow!(nm)
+
+"""
+    _build_load_flow!(nm)
+
+The body both formulations share. Every call in it is a dispatch point, so the
+definition of the problem says nothing about the formulation it is being built
+in; swapping `IVRFormulation` for `LPFFormulation` changes which methods these
+names resolve to and nothing else.
+"""
+function _build_load_flow!(nm::NetworkModel)
     for n in nw_ids(nm)
         variable_node_voltage(nm; nw = n)
         variable_edge(nm; nw = n)
@@ -52,6 +63,7 @@ function build_model!(nm::NetworkModel{P,F}) where {P<:LoadFlowProblem,F<:IVRFor
 end
 
 register_model!(LoadFlowProblem, IVRFormulation)
+register_model!(LoadFlowProblem, LPFFormulation)
 
 """
     solve_lf(data, F, optimizer; kwargs...)

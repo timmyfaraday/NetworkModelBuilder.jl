@@ -267,3 +267,102 @@ function solution_edge!(entry::Dict{String,Any}, nm::NetworkModel, ::Type{T}, e:
 
     return nothing
 end
+
+################################################################################
+# Transformer — the linearized formulation                                     #
+################################################################################
+
+"""
+    phase_shift(nm, tf, e; nw)
+
+The angle a transformer shifts, `ta_{e}`.
+
+This is the counterpart of [`tap_ratio`](@ref) for a linearized formulation, and
+the single point at which the two-winding transformer types differ there. A
+[`Transformer`](@ref) and a [`TapChanger`](@ref) return a number; a
+[`PhaseShifter`](@ref) returns a number in a power flow and the variable the
+optimizer chooses in a dispatch problem.
+"""
+phase_shift(::NetworkModel, tf::AbstractTwoWindingTransformer, ::Int; nw::Int) = tf.ta
+
+"""
+    variable_edge(nm, T; nw)
+
+A two-winding transformer with a fixed ratio needs no variables of its own under
+a [`LPFFormulation`](@ref).
+
+!!! note "The tap magnitude does nothing here"
+    With every voltage magnitude equal to one there is nothing for a ratio
+    magnitude to change, so `tm` does not appear in the linearized equations at
+    all — for a [`Transformer`](@ref) or a [`TapChanger`](@ref) alike. A tap
+    changer is therefore **inert** in this formulation: it is built and solved as
+    an ordinary transformer at its fixed phase angle, and the control it offers
+    an alternating current model is simply absent. Use an
+    [`IVRFormulation`](@ref) where that control is the point.
+"""
+variable_edge(::NetworkModel{P,F}, ::Type{T}; nw::Int = 0
+             ) where {P<:AbstractProblemType,F<:LPFFormulation,
+                      T<:AbstractTwoWindingTransformer} = nothing
+
+"""
+    constraint_edge(nm, T; nw)
+
+The linearized flow of every in-service two-winding transformer,
+
+```math
+p_{a^{\\text{f}}} = -b_{e} \\left(v^{\\text{a}}_{i} - v^{\\text{a}}_{j} - ta_{e}\\right),
+\\qquad
+p_{a^{\\text{t}}} = -p_{a^{\\text{f}}} .
+```
+
+The phase shift survives the approximations and the ratio magnitude does not,
+which is what makes a [`PhaseShifter`](@ref) a real control in this formulation
+and a [`TapChanger`](@ref) an inert one.
+"""
+function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                        ) where {P<:AbstractProblemType,F<:LPFFormulation,
+                                 T<:AbstractTwoWindingTransformer}
+    branch = get!(() -> Dict{Int,Any}(), con(nm; nw), :branch)
+
+    for e in ids(nm, T; nw)
+        tf         = edge(nm, e; nw)::T
+        a_fr, a_to = edge_arcs(nm, e; nw)
+
+        branch[e] = constraint_linear_flow!(nm, e, a_fr, a_to, susceptance(tf.r, tf.x),
+                                            phase_shift(nm, tf, e; nw); nw)
+    end
+
+    return nothing
+end
+
+"""
+    constraint_edge_limits(nm, T; nw)
+
+The rating and the angle difference limits of every in-service two-winding
+transformer.
+"""
+function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                               ) where {P<:AbstractDispatchProblem,F<:LPFFormulation,
+                                        T<:AbstractTwoWindingTransformer}
+    limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :edge_limits)
+
+    for e in ids(nm, T; nw)
+        tf         = edge(nm, e; nw)::T
+        a_fr, a_to = edge_arcs(nm, e; nw)
+
+        limits[e] = constraint_linear_limits!(nm, e, a_fr, a_to,
+                                              tf.rate_a, tf.angmin, tf.angmax; nw)
+    end
+
+    return nothing
+end
+
+"the tap setting of a two-winding transformer under a linearized formulation"
+function solution_edge!(entry::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T},
+                        e::Int, nw::Int) where {P<:AbstractProblemType,F<:LPFFormulation,
+                                                T<:AbstractTwoWindingTransformer}
+    tf = edge(nm, e; nw)::T
+    entry["tap"] = Dict{String,Any}("tm" => tf.tm, "ta" => _value(phase_shift(nm, tf, e; nw)))
+
+    return nothing
+end

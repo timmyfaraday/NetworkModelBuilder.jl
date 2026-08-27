@@ -11,8 +11,8 @@ AbstractProblemType                  AbstractFormulationType
     ├── OptimalPowerFlowProblem      │   └── AbstractPowerFormulation
     └── RedispatchProblem            │       ├── ACPFormulation
                                      │       └── ACRFormulation
-                                     └── AbstractDCFormulation
-                                         └── DCPFormulation
+                                     └── AbstractLinearizedFormulation
+                                         └── LPFFormulation
 ```
 
 Every tag in both hierarchies is an **abstract type** used purely for dispatch,
@@ -29,11 +29,11 @@ AbstractFormulationType
 AbstractACFormulation
 AbstractCurrentFormulation
 AbstractPowerFormulation
-AbstractDCFormulation
+AbstractLinearizedFormulation
 IVRFormulation
 ACPFormulation
 ACRFormulation
-DCPFormulation
+LPFFormulation
 ```
 
 ## What each axis decides
@@ -51,15 +51,25 @@ The same axis decides whether a generator holds a setpoint or moves within its
 limits, whether a [`TapChanger`](@ref) is a control or a constant, and whether a
 [`FlexibleLoad`](@ref) is flexible at all.
 
-The formulation type decides *in which variables the physics are written*.
+The formulation type decides *in which variables the physics are written*. The
+two problem builders are shared between the formulations, because every call
+inside them is itself a dispatch point:
+
+```julia
+build_model!(nm::NetworkModel{P,F}) where {P<:LoadFlowProblem,F<:IVRFormulation} = _build_load_flow!(nm)
+build_model!(nm::NetworkModel{P,F}) where {P<:LoadFlowProblem,F<:LPFFormulation} = _build_load_flow!(nm)
+```
 
 ## What is implemented
 
-|                           | `IVRFormulation` | `ACPFormulation` | `ACRFormulation` | `DCPFormulation` |
+|                           | `IVRFormulation` | `LPFFormulation` | `ACPFormulation` | `ACRFormulation` |
 |:--------------------------|:-----------------|:-----------------|:-----------------|:-----------------|
-| `LoadFlowProblem`         | yes              | —                | —                | —                |
-| `OptimalPowerFlowProblem` | yes              | —                | —                | —                |
-| `RedispatchProblem`       | sketched         | —                | —                | —                |
+| `LoadFlowProblem`         | yes              | yes              | —                | —                |
+| `OptimalPowerFlowProblem` | yes              | yes              | —                | —                |
+| `RedispatchProblem`       | sketched         | sketched         | —                | —                |
+
+See [The linearized formulation](@ref) for what `LPFFormulation` approximates
+and what that costs.
 
 Asking for a combination that has no builder reports what is available rather
 than building a wrong model.

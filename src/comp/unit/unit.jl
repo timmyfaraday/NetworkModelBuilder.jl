@@ -56,6 +56,40 @@ function variable_unit_injection_current(nm::NetworkModel{P,F}; nw::Int = nw_id_
 end
 
 """
+    variable_unit_injection(nm; nw)
+
+The injection variables every unit has, whichever formulation is being built:
+currents under a [`IVRFormulation`](@ref), active power under a
+[`LPFFormulation`](@ref).
+"""
+function variable_unit_injection end
+
+variable_unit_injection(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+                       ) where {P<:AbstractProblemType,F<:IVRFormulation} =
+    variable_unit_injection_current(nm; nw)
+
+variable_unit_injection(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+                       ) where {P<:AbstractProblemType,F<:LPFFormulation} =
+    variable_unit_injection_power(nm; nw)
+
+"""
+    variable_unit_injection_power(nm; nw)
+
+The active power a unit injects into its node, one variable per in-service unit,
+shared by every unit type. The linearized counterpart of
+[`variable_unit_injection_current`](@ref), and what makes
+[`constraint_node_balance`](@ref) a sum over `U(i)` here too.
+"""
+function variable_unit_injection_power(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+                                      ) where {P<:AbstractProblemType,F<:LPFFormulation}
+    U = ids(nm, AbstractUnit; nw)
+
+    var(nm; nw)[:pu] = JuMP.@variable(nm.model, [u in U], base_name = "$(nw)_pu", start = 0.0)
+
+    return nothing
+end
+
+"""
     variable_unit(nm; nw)
     variable_unit(nm, T; nw)
 
@@ -63,7 +97,7 @@ The unit variables at network index `nw`: the shared injection currents,
 followed by the internal variables of each registered unit type.
 """
 function variable_unit(nm::NetworkModel; nw::Int = nw_id_default(nm))
-    variable_unit_injection_current(nm; nw)
+    variable_unit_injection(nm; nw)
     for T in _UNIT_TYPES
         variable_unit(nm, T; nw)
     end
@@ -123,6 +157,16 @@ function constraint_unit_power!(nm::NetworkModel, u::Int, p, q; nw::Int)
         JuMP.@constraint(nm.model, p == vr[i] * cru[u] + vi[i] * ciu[u]),
         JuMP.@constraint(nm.model, q == vi[i] * cru[u] - vr[i] * ciu[u]))
 end
+
+"""
+    constraint_unit_injection!(nm, u, p; nw)
+
+Fix the active power unit `u` injects into its node, the linearized counterpart
+of [`constraint_unit_power!`](@ref). `p` is an injection, so a load hands in the
+negative of what it withdraws.
+"""
+constraint_unit_injection!(nm::NetworkModel, u::Int, p; nw::Int) =
+    JuMP.@constraint(nm.model, var(nm, :pu, u; nw) == p)
 
 ################################################################################
 # Unit — constraints across network indices                                    #
@@ -189,7 +233,7 @@ The unit part of the solution at network index `nw`: for every unit the injected
 current and the active and reactive power it injects into its node. Unit types
 add their own entries through [`solution_unit`](@ref) methods.
 """
-function solution_unit(nm::NetworkModel{P,F}, nw::Int) where {P,F<:IVRFormulation}
+function solution_unit(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:IVRFormulation}
     sol = Dict{String,Any}()
     for T in _UNIT_TYPES, u in ids(nm, T; nw)
         i   = node(unit(nm, u; nw))
@@ -210,3 +254,16 @@ end
 "add the type specific entries of unit `u` to its solution dictionary"
 solution_unit!(::Dict{String,Any}, ::NetworkModel, ::Type{T}, ::Int, ::Int) where {T<:AbstractUnit} =
     nothing
+
+"the unit part of the solution under a linearized formulation"
+function solution_unit(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:LPFFormulation}
+    sol = Dict{String,Any}()
+    for T in _UNIT_TYPES, u in ids(nm, T; nw)
+        sol["$u"] = Dict{String,Any}("type" => string(nameof(T)),
+                                     "node" => node(unit(nm, u; nw)),
+                                     "p"    => JuMP.value(var(nm, :pu, u; nw)))
+        solution_unit!(sol["$u"], nm, T, u, nw)
+    end
+
+    return sol
+end

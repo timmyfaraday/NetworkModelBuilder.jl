@@ -67,9 +67,34 @@ end
 
 register_unit_type!(Generator)
 
-"the generation cost of `g` at an active power `pg`, as a JuMP expression or a number"
-generation_cost(g::AbstractGenerator, pg) =
-    sum(c * pg^(k - 1) for (k, c) in enumerate(g.cost); init = 0.0)
+"""
+    generation_cost(g, pg)
+
+The generation cost of `g` at an active power `pg`, as a JuMP expression or a
+number.
+
+Coefficients that are zero are skipped, and the linear and quadratic terms are
+written as products rather than powers. Both matter: a cost vector padded with
+zeros — which is what Matpower writes for a quadratic cost declared with `ncost`
+above three — would otherwise put `pg^3` and `pg^4` into the objective and make
+the whole model nonlinear, when it is in fact quadratic. A
+[`LPFFormulation`](@ref) is a linear program or a quadratic one, and stays that
+way only if nothing needlessly raises its objective's degree.
+"""
+function generation_cost(g::AbstractGenerator, pg)
+    c = g.cost
+    isempty(c) && return 0.0
+
+    total = c[1]
+    for k in 2:length(c)
+        iszero(c[k]) && continue
+        total += k == 2 ? c[k] * pg :
+                 k == 3 ? c[k] * pg * pg :
+                          c[k] * pg^(k - 1)
+    end
+
+    return total
+end
 
 ################################################################################
 # Generator — variables                                                        #
@@ -169,10 +194,90 @@ end
 # Generator — solution                                                         #
 ################################################################################
 
-function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel, ::Type{T}, u::Int, nw::Int
-                       ) where {T<:AbstractGenerator}
+function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T},
+                        u::Int, nw::Int) where {P<:AbstractProblemType,F<:AbstractACFormulation,T<:AbstractGenerator}
     sol["pg"] = JuMP.value(var(nm, :pg, u; nw))
     sol["qg"] = JuMP.value(var(nm, :qg, u; nw))
+
+    return nothing
+end
+
+function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T},
+                        u::Int, nw::Int) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractGenerator}
+    sol["pg"] = JuMP.value(var(nm, :pg, u; nw))
+
+    return nothing
+end
+
+################################################################################
+# Generator — the linearized formulation                                       #
+################################################################################
+
+"""
+    variable_unit(nm, T; nw)
+
+The active power of every in-service generator. There is no reactive power in a
+linearized formulation, so `qg` is not created and the generator's reactive
+limits play no part.
+"""
+variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+             ) where {P<:AbstractPowerFlowProblem,F<:LPFFormulation,T<:AbstractGenerator} =
+    _variable_generator_active(nm, T, nw, false)
+
+variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+             ) where {P<:AbstractDispatchProblem,F<:LPFFormulation,T<:AbstractGenerator} =
+    _variable_generator_active(nm, T, nw, true)
+
+function _variable_generator_active(nm::NetworkModel, ::Type{T}, nw::Int, bounded::Bool
+                                   ) where {T<:AbstractGenerator}
+    pg = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :pg)
+
+    for u in ids(nm, T; nw)
+        g     = unit(nm, u; nw)::T
+        pg[u] = JuMP.@variable(nm.model, base_name = "$(nw)_pg[$u]", start = g.pg)
+
+        bounded || continue
+        isfinite(g.pmin) && JuMP.set_lower_bound(pg[u], g.pmin)
+        isfinite(g.pmax) && JuMP.set_upper_bound(pg[u], g.pmax)
+    end
+
+    return nothing
+end
+
+"""
+    constraint_unit(nm, T; nw)
+
+Link the active power of every in-service generator to what it injects, and, for
+a load flow, fix it at its setpoint everywhere but the reference node.
+
+The `PV` and `PQ` distinction disappears here: with no reactive power and no
+voltage magnitude, both hold their active setpoint and nothing else.
+"""
+function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                        ) where {P<:AbstractPowerFlowProblem,F<:LPFFormulation,T<:AbstractGenerator}
+    _constraint_generator_active(nm, T, nw)
+
+    pg = var(nm, :pg; nw)
+    for u in ids(nm, T; nw)
+        g = unit(nm, u; nw)::T
+        node(nm, g.node; nw).type == REF && continue
+        JuMP.fix(pg[u], g.pg; force = true)
+    end
+
+    return nothing
+end
+
+constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+               ) where {P<:AbstractDispatchProblem,F<:LPFFormulation,T<:AbstractGenerator} =
+    _constraint_generator_active(nm, T, nw)
+
+function _constraint_generator_active(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractGenerator}
+    pg    = var(nm, :pg; nw)
+    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :generator_power)
+
+    for u in ids(nm, T; nw)
+        power[u] = constraint_unit_injection!(nm, u, pg[u]; nw)
+    end
 
     return nothing
 end

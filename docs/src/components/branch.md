@@ -54,6 +54,15 @@ The terminal currents are shared by every edge type and are created once, over
 all arcs; the series current is created by each edge type that has one, into a
 shared container.
 
+### In the `LPFFormulation`
+
+| symbol | key | index | description | unit |
+|:-------|:----|:------|:------------|:-----|
+| ``p_{a}`` | `:p` | arc | terminal active power, node into edge | pu |
+
+A branch needs no variables of its own: there is no series current left to carry
+once the model is lossless.
+
 ## Constraints
 
 | name | problem |
@@ -99,6 +108,25 @@ which is the apparent power at that terminal against the rating, and
 
 which bounds the angle difference across the edge. Both are skipped where the
 data leaves them unbounded.
+
+### In the `LPFFormulation`
+
+```math
+p_{a^{\text{f}}} = -b_{e} \left(v^{\text{a}}_{i} - v^{\text{a}}_{j}\right),
+\qquad
+p_{a^{\text{t}}} = -p_{a^{\text{f}}} ,
+```
+
+with ``b_{e}`` the series susceptance, see [`susceptance`](@ref). The shunt
+admittance plays no part. The rating becomes a bound, ``-s^{\text{max}}_{e} \le
+p_{a} \le s^{\text{max}}_{e}``, and the angle difference limit is already
+linear.
+
+```@docs
+susceptance
+constraint_linear_flow!
+constraint_linear_limits!
+```
 
 ```@docs
 impedance

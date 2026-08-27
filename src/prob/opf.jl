@@ -32,7 +32,18 @@ objective stops being zero.
 | constraints| the angle anchor at the reference nodes, the voltage magnitude limits, Kirchhoff's current law, the physics and the limits of every edge, the behaviour of every unit |
 | objective  | the total generation cost                                         |
 """
-function build_model!(nm::NetworkModel{P,F}) where {P<:OptimalPowerFlowProblem,F<:IVRFormulation}
+build_model!(nm::NetworkModel{P,F}) where {P<:OptimalPowerFlowProblem,F<:IVRFormulation} = _build_optimal_power_flow!(nm)
+build_model!(nm::NetworkModel{P,F}) where {P<:OptimalPowerFlowProblem,F<:LPFFormulation} = _build_optimal_power_flow!(nm)
+
+"""
+    _build_optimal_power_flow!(nm)
+
+The body both formulations share. Every call in it is a dispatch point, so the
+definition of the problem says nothing about the formulation it is being built
+in; swapping `IVRFormulation` for `LPFFormulation` changes which methods these
+names resolve to and nothing else.
+"""
+function _build_optimal_power_flow!(nm::NetworkModel)
     for n in nw_ids(nm)
         variable_node_voltage(nm; nw = n)
         variable_edge(nm; nw = n)
@@ -55,6 +66,7 @@ function build_model!(nm::NetworkModel{P,F}) where {P<:OptimalPowerFlowProblem,F
 end
 
 register_model!(OptimalPowerFlowProblem, IVRFormulation)
+register_model!(OptimalPowerFlowProblem, LPFFormulation)
 
 """
     solve_opf(data, F, optimizer; kwargs...)

@@ -9,6 +9,7 @@
 # v0.1.0 - initial implementation                                              #
 # v0.2.0 - network dependent data stored per component                         #
 # v0.3.0 - component hierarchy                                                 #
+# v0.4.0 - the linearized formulation                                          #
 ################################################################################
 
 module NetworkModelBuilder
@@ -71,9 +72,9 @@ module NetworkModelBuilder
     export LoadFlowProblem, OptimalPowerFlowProblem, RedispatchProblem
 
     # export — formulation types
-    export AbstractFormulationType, AbstractACFormulation, AbstractDCFormulation
+    export AbstractFormulationType, AbstractACFormulation, AbstractLinearizedFormulation
     export AbstractCurrentFormulation, AbstractPowerFormulation
-    export IVRFormulation, ACPFormulation, ACRFormulation, DCPFormulation
+    export IVRFormulation, ACPFormulation, ACRFormulation, LPFFormulation
 
     # export — network index
     export Dimension, add_dimension
@@ -121,14 +122,19 @@ module NetworkModelBuilder
 
     # export — variables, constraints and objective
     export variable_node_voltage
-    export variable_edge, variable_edge_terminal_current
-    export variable_unit, variable_unit_injection_current
+    export variable_edge, variable_edge_terminal_flow
+    export variable_edge_terminal_current, variable_edge_terminal_power
+    export variable_unit, variable_unit_injection
+    export variable_unit_injection_current, variable_unit_injection_power
     export constraint_node_balance, constraint_node_voltage_reference
     export constraint_node_voltage_setpoint, constraint_node_voltage_limits
     export constraint_edge, constraint_edge_limits, constraint_edge_coupling
     export constraint_unit, constraint_unit_coupling
     export constraint_pi_section!, constraint_edge_rating!
     export constraint_edge_angle_difference!, constraint_unit_power!
+    export constraint_linear_flow!, constraint_linear_limits!
+    export constraint_unit_injection!, susceptance, phase_shift
+    export variable_storage_active!
     export variable_edge_series_current, variable_two_winding!
     export constraint_two_winding_limits!
     export time_step, require_time_dimension

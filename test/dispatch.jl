@@ -17,7 +17,7 @@
         @test RedispatchProblem        <: AbstractDispatchProblem
         @test IVRFormulation           <: AbstractCurrentFormulation <: AbstractACFormulation
         @test ACPFormulation           <: AbstractPowerFormulation   <: AbstractACFormulation
-        @test DCPFormulation           <: AbstractDCFormulation      <: AbstractFormulationType
+        @test LPFFormulation           <: AbstractLinearizedFormulation      <: AbstractFormulationType
 
         # every tag is abstract, so an extension package can specialise it
         @test isabstracttype(LoadFlowProblem)

@@ -25,8 +25,8 @@ AbstractProblemType                  AbstractFormulationType
     ├── OptimalPowerFlowProblem      │   └── AbstractPowerFormulation
     └── RedispatchProblem            │       ├── ACPFormulation
                                      │       └── ACRFormulation
-                                     └── AbstractDCFormulation
-                                         └── DCPFormulation
+                                     └── AbstractLinearizedFormulation
+                                         └── LPFFormulation
 
                     NetworkModel{LoadFlowProblem, IVRFormulation}
 ```
@@ -271,11 +271,27 @@ branch in one file is worth more than keeping the whole of IVR in one file.
 
 ## What is implemented
 
-|                              | `IVRFormulation` | `ACPFormulation` | `ACRFormulation` | `DCPFormulation` |
+|                              | `IVRFormulation` | `LPFFormulation` | `ACPFormulation` | `ACRFormulation` |
 |:-----------------------------|:-----------------|:-----------------|:-----------------|:-----------------|
-| `LoadFlowProblem`            | yes              | —                | —                | —                |
-| `OptimalPowerFlowProblem`    | yes              | —                | —                | —                |
-| `RedispatchProblem`          | sketched         | —                | —                | —                |
+| `LoadFlowProblem`            | yes              | yes              | —                | —                |
+| `OptimalPowerFlowProblem`    | yes              | yes              | —                | —                |
+| `RedispatchProblem`          | sketched         | sketched         | —                | —                |
+
+`LPFFormulation` is the linearized power flow — what the literature calls the DC
+power flow, a name avoided here because nothing about it involves direct
+current. Every voltage magnitude is one, reactive power is omitted, and angle
+differences are small, which leaves a linear program. Both problem builders are
+*shared* between the two formulations, because every call inside them is itself
+a dispatch point:
+
+```julia
+build_model!(nm::NetworkModel{P,F}) where {P<:LoadFlowProblem,F<:IVRFormulation} = _build_load_flow!(nm)
+build_model!(nm::NetworkModel{P,F}) where {P<:LoadFlowProblem,F<:LPFFormulation} = _build_load_flow!(nm)
+```
+
+One consequence is worth knowing: a `PhaseShifter` stays a control in the
+linearized model and a `TapChanger` becomes inert, because the ratio angle
+survives the approximations and the ratio magnitude has nothing left to act on.
 
 The formulation types that carry no methods are declared so that the hierarchy
 is complete; asking for one reports what is available instead of building a

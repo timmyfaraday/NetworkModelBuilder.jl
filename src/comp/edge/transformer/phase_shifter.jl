@@ -132,3 +132,35 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{PhaseShifter}; nw:
 
     return nothing
 end
+
+################################################################################
+# PhaseShifter — the linearized formulation                                    #
+################################################################################
+
+"""
+    variable_edge(nm, PhaseShifter; nw)
+
+The ratio angle of every in-service phase shifter, held between `ta_min` and
+`ta_max`.
+
+Where the current based formulation has to carry the ratio as a real and an
+imaginary part to stay polynomial, here the angle is the variable itself and
+enters the flow linearly. A phase shifter is the one transformer control that
+survives the linearization, and it is the classic use for one.
+"""
+function variable_edge(nm::NetworkModel{P,F}, ::Type{PhaseShifter}; nw::Int = nw_id_default(nm)
+                      ) where {P<:AbstractDispatchProblem,F<:LPFFormulation}
+    ta = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :ta)
+
+    for e in ids(nm, PhaseShifter; nw)
+        ps = edge(nm, e; nw)::PhaseShifter
+        ta[e] = JuMP.@variable(nm.model, base_name = "$(nw)_ta[$e]",
+                               lower_bound = ps.ta_min, upper_bound = ps.ta_max,
+                               start = clamp(ps.ta, ps.ta_min, ps.ta_max))
+    end
+
+    return nothing
+end
+
+phase_shift(nm::NetworkModel{P,F}, ::PhaseShifter, e::Int; nw::Int
+           ) where {P<:AbstractDispatchProblem,F<:LPFFormulation} = var(nm, :ta, e; nw)

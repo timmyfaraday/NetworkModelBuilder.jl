@@ -39,6 +39,13 @@ Storage
 
 A power flow creates none of these: there the unit holds its setpoint.
 
+### In the `LPFFormulation`
+
+As above but without ``q^{\text{s}}_{u}``: the charge, discharge and state of
+charge variables are shared between the formulations, and only the reactive
+power is dropped. The state of charge constraint is unchanged, for the same
+reason a flexible load's energy balance is.
+
 ## Constraints
 
 The injection, against the current:

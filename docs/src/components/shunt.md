@@ -36,6 +36,12 @@ A switched capacitor bank is a `bs` given as a [`NetworkVector`](@ref).
 | ``c^{\text{r}}_{u}`` | `:cru` | unit | real injected current | pu |
 | ``c^{\text{i}}_{u}`` | `:ciu` | unit | imaginary injected current | pu |
 
+### In the `LPFFormulation`
+
+| symbol | key | index | description | unit |
+|:-------|:----|:------|:------------|:-----|
+| ``p_{u}`` | `:pu` | unit | active power injected into the node | pu |
+
 ## Constraints
 
 The injected current is minus the current the admittance draws,
@@ -50,3 +56,17 @@ c^{\text{i}}_{u} = -\left(g^{\text{s}}_{u} v^{\text{i}}_{i} + b^{\text{s}}_{u} v
 This is **linear**, where the constant power of a [`FixedLoad`](@ref) is
 bilinear in the voltage and the current. Cheap shunts are one of the reasons to
 prefer a current based formulation.
+
+### In the `LPFFormulation`
+
+With the voltage magnitude fixed at one, the current a shunt draws is fixed too,
+so it becomes a constant withdrawal:
+
+```math
+p_{u} = -g^{\text{s}}_{u} .
+```
+
+The susceptance is reactive and plays no part. The conductance is kept rather
+than dropped with it: it is a real active withdrawal, and keeping it costs
+nothing, being a constant in the node balance. Note that `Gs` is zero throughout
+the Matpower cases in the test suite, so the choice makes no difference there.

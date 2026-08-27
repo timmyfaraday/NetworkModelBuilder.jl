@@ -80,11 +80,41 @@ end
 # Load — solution                                                              #
 ################################################################################
 
-function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel, ::Type{T}, u::Int, nw::Int
-                       ) where {T<:AbstractLoad}
+function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T},
+                        u::Int, nw::Int) where {P<:AbstractProblemType,F<:AbstractACFormulation,T<:AbstractLoad}
     pd, qd = demand(nm, unit(nm, u; nw)::T, u; nw)
     sol["pd"] = _value(pd)
     sol["qd"] = _value(qd)
+
+    return nothing
+end
+
+function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T},
+                        u::Int, nw::Int) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractLoad}
+    sol["pd"] = _value(first(demand(nm, unit(nm, u; nw)::T, u; nw)))
+
+    return nothing
+end
+
+################################################################################
+# Load — the linearized formulation                                            #
+################################################################################
+
+"""
+    constraint_unit(nm, T; nw)
+
+Fix the active power a load injects at minus its withdrawal,
+`p_{u} = -p^{\\text{d}}_{u}`. The reactive demand plays no part in a linearized
+formulation.
+"""
+function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                        ) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractLoad}
+    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :load_power)
+
+    for u in ids(nm, T; nw)
+        pd = first(demand(nm, unit(nm, u; nw)::T, u; nw))
+        power[u] = constraint_unit_injection!(nm, u, -pd; nw)
+    end
 
     return nothing
 end

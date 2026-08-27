@@ -171,3 +171,69 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_i
 
     return nothing
 end
+
+################################################################################
+# Branch — the linearized formulation                                          #
+################################################################################
+
+"""
+    variable_edge(nm, T; nw)
+
+A branch needs no variables of its own under a [`LPFFormulation`](@ref): its
+flow is the terminal power every edge already has, and there is no series
+current left to carry once the model is lossless.
+"""
+variable_edge(::NetworkModel{P,F}, ::Type{T}; nw::Int = 0
+             ) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractBranch} = nothing
+
+"""
+    constraint_edge(nm, T; nw)
+
+The linearized flow of every in-service branch,
+
+```math
+p_{a^{\\text{f}}} = -b_{e} \\left(v^{\\text{a}}_{i} - v^{\\text{a}}_{j}\\right),
+\\qquad
+p_{a^{\\text{t}}} = -p_{a^{\\text{f}}} ,
+```
+
+with `b_e` the series susceptance, see [`susceptance`](@ref). The shunt
+admittance of the branch plays no part: its susceptance is reactive, and its
+conductance would draw a constant power that the same three approximations
+discard along with the rest of the loss.
+"""
+function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                        ) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractBranch}
+    branch = get!(() -> Dict{Int,Any}(), con(nm; nw), :branch)
+
+    for e in ids(nm, T; nw)
+        br         = edge(nm, e; nw)::T
+        a_fr, a_to = edge_arcs(nm, e; nw)
+
+        branch[e] = constraint_linear_flow!(nm, e, a_fr, a_to,
+                                            susceptance(br.r, br.x), 0.0; nw)
+    end
+
+    return nothing
+end
+
+"""
+    constraint_edge_limits(nm, T; nw)
+
+The rating and the angle difference limits of every in-service branch, see
+[`constraint_linear_limits!`](@ref).
+"""
+function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                               ) where {P<:AbstractDispatchProblem,F<:LPFFormulation,T<:AbstractBranch}
+    limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :edge_limits)
+
+    for e in ids(nm, T; nw)
+        br         = edge(nm, e; nw)::T
+        a_fr, a_to = edge_arcs(nm, e; nw)
+
+        limits[e] = constraint_linear_limits!(nm, e, a_fr, a_to,
+                                              br.rate_a, br.angmin, br.angmax; nw)
+    end
+
+    return nothing
+end

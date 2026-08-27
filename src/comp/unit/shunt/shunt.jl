@@ -100,3 +100,35 @@ function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel, ::Type{T}, u::I
 
     return nothing
 end
+
+################################################################################
+# Shunt — the linearized formulation                                           #
+################################################################################
+
+"""
+    constraint_unit(nm, T; nw)
+
+A shunt withdraws a constant active power under a [`LPFFormulation`](@ref),
+
+```math
+p_{u} = -g^{\\text{s}}_{u} ,
+```
+
+because with the voltage magnitude fixed at one the current it draws is fixed
+too. Its susceptance is reactive and plays no part.
+
+The conductance is kept rather than dropped along with the susceptance: it is a
+real active withdrawal, and keeping it costs nothing, since it is a constant in
+the node balance. Note that `Gs` is zero throughout the Matpower cases in the
+test suite, so this choice makes no difference there.
+"""
+function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                        ) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractShunt}
+    current = get!(() -> Dict{Int,Any}(), con(nm; nw), :shunt_current)
+
+    for u in ids(nm, T; nw)
+        current[u] = constraint_unit_injection!(nm, u, -(unit(nm, u; nw)::T).gs; nw)
+    end
+
+    return nothing
+end

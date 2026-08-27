@@ -102,15 +102,18 @@ The charge and discharge power, the state of charge and the reactive power of
 every in-service storage unit. A power flow creates nothing: there the unit
 holds its setpoint.
 """
-function variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
-                      ) where {P<:AbstractDispatchProblem,F<:IVRFormulation,T<:AbstractStorage}
+variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+             ) where {P<:AbstractDispatchProblem,F<:AbstractFormulationType,T<:AbstractStorage} =
+    variable_storage_active!(nm, T; nw)
+
+"the charge, discharge and state of charge of every storage unit, in any formulation"
+function variable_storage_active!(nm::NetworkModel, ::Type{T}; nw::Int) where {T<:AbstractStorage}
     isempty(ids(nm, T; nw)) && return nothing
     require_time_dimension(nm, T)
 
     psc = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :psc)
     psd = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :psd)
     es  = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :es)
-    qs  = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :qs)
 
     for u in ids(nm, T; nw)
         st = unit(nm, u; nw)::T
@@ -124,9 +127,29 @@ function variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default
         es[u]  = JuMP.@variable(nm.model, base_name = "$(nw)_es[$u]",
                                 lower_bound = 0.0, upper_bound = st.energy_capacity,
                                 start = st.energy_initial)
-        qs[u]  = JuMP.@variable(nm.model, base_name = "$(nw)_qs[$u]",
-                                lower_bound = st.qmin, upper_bound = st.qmax,
-                                start = 0.0)
+    end
+
+    return nothing
+end
+
+"""
+    variable_unit(nm, T; nw)
+
+The charge, discharge and state of charge variables, plus the reactive power a
+storage unit exchanges — the latter only where the formulation has reactive
+power at all.
+"""
+function variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                      ) where {P<:AbstractDispatchProblem,F<:AbstractACFormulation,
+                               T<:AbstractStorage}
+    isempty(ids(nm, T; nw)) && return nothing
+    variable_storage_active!(nm, T; nw)
+
+    qs = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :qs)
+    for u in ids(nm, T; nw)
+        st = unit(nm, u; nw)::T
+        qs[u] = JuMP.@variable(nm.model, base_name = "$(nw)_qs[$u]",
+                               lower_bound = st.qmin, upper_bound = st.qmax, start = 0.0)
     end
 
     return nothing
@@ -187,7 +210,7 @@ so a problem with a contingency dimension gives each contingency its own
 trajectory from the same starting energy.
 """
 function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
-                                 ) where {P<:AbstractDispatchProblem,F<:IVRFormulation,
+                                 ) where {P<:AbstractDispatchProblem,F<:AbstractFormulationType,
                                           T<:AbstractStorage}
     isempty(ids(nm, T; nw = nw_id_default(nm))) && return nothing
     require_time_dimension(nm, T)
@@ -229,6 +252,42 @@ function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel, ::Type{T}, u::I
         sol["psc"] = max(-st.ps, 0.0)
         sol["psd"] = max(st.ps, 0.0)
         sol["es"]  = st.energy_initial
+    end
+
+    return nothing
+end
+
+################################################################################
+# Storage — the linearized formulation                                         #
+################################################################################
+
+"""
+    constraint_unit(nm, T; nw)
+
+Link the injection of every in-service storage unit to what it charges and
+discharges. Reactive power plays no part in a linearized formulation.
+"""
+function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                        ) where {P<:AbstractPowerFlowProblem,F<:LPFFormulation,T<:AbstractStorage}
+    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :storage_power)
+
+    for u in ids(nm, T; nw)
+        power[u] = constraint_unit_injection!(nm, u, unit(nm, u; nw).ps; nw)
+    end
+
+    return nothing
+end
+
+function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                        ) where {P<:AbstractDispatchProblem,F<:LPFFormulation,T<:AbstractStorage}
+    isempty(ids(nm, T; nw)) && return nothing
+
+    psc, psd = var(nm, :psc; nw), var(nm, :psd; nw)
+    power    = get!(() -> Dict{Int,Any}(), con(nm; nw), :storage_power)
+
+    for u in ids(nm, T; nw)
+        power[u] = constraint_unit_injection!(nm, u,
+                       JuMP.@expression(nm.model, psd[u] - psc[u]); nw)
     end
 
     return nothing

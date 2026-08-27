@@ -26,6 +26,7 @@ makedocs(
             "The extended graph"        => "manual/extended_graph.md",
             "The network index"         => "manual/network_index.md",
             "Problems and formulations" => "manual/problems_formulations.md",
+            "The linearized formulation" => "manual/linearized.md",
             "Extending the package"     => "manual/extending.md",
         ],
         "Components" => [

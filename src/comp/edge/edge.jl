@@ -59,6 +59,40 @@ function variable_edge_terminal_current(nm::NetworkModel{P,F}; nw::Int = nw_id_d
 end
 
 """
+    variable_edge_terminal_flow(nm; nw)
+
+The flow variables every edge terminal has, whichever formulation is being
+built: currents under a [`IVRFormulation`](@ref), active power under a
+[`LPFFormulation`](@ref). A problem builder calls [`variable_edge`](@ref),
+which calls this, and so never has to ask which.
+"""
+function variable_edge_terminal_flow end
+
+variable_edge_terminal_flow(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+                           ) where {P<:AbstractProblemType,F<:IVRFormulation} =
+    variable_edge_terminal_current(nm; nw)
+
+variable_edge_terminal_flow(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+                           ) where {P<:AbstractProblemType,F<:LPFFormulation} =
+    variable_edge_terminal_power(nm; nw)
+
+"""
+    variable_edge_terminal_power(nm; nw)
+
+The active power flowing from a node into an edge terminal, one variable per
+arc, shared by every edge type. The linearized counterpart of
+[`variable_edge_terminal_current`](@ref).
+"""
+function variable_edge_terminal_power(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+                                     ) where {P<:AbstractProblemType,F<:LPFFormulation}
+    A = arcs(nm; nw)
+
+    var(nm; nw)[:p] = JuMP.@variable(nm.model, [a in A], base_name = "$(nw)_p", start = 0.0)
+
+    return nothing
+end
+
+"""
     variable_edge(nm; nw)
     variable_edge(nm, T; nw)
 
@@ -66,7 +100,7 @@ The edge variables at network index `nw`: the shared terminal currents, followed
 by the internal variables of each registered edge type.
 """
 function variable_edge(nm::NetworkModel; nw::Int = nw_id_default(nm))
-    variable_edge_terminal_current(nm; nw)
+    variable_edge_terminal_flow(nm; nw)
     for T in _EDGE_TYPES
         variable_edge(nm, T; nw)
     end
@@ -153,7 +187,7 @@ The edge part of the solution at network index `nw`: for every arc the terminal
 current and the active and reactive power flowing from the node into that
 terminal.
 """
-function solution_edge(nm::NetworkModel{P,F}, nw::Int) where {P,F<:IVRFormulation}
+function solution_edge(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:IVRFormulation}
     sol = Dict{String,Any}()
     for T in _EDGE_TYPES, e in ids(nm, T; nw)
         entry = Dict{String,Any}("terminal" => Dict{String,Any}())
@@ -176,3 +210,19 @@ end
 "add the type specific entries of edge `e` to its solution dictionary"
 solution_edge!(::Dict{String,Any}, ::NetworkModel, ::Type{T}, ::Int, ::Int) where {T<:AbstractEdge} =
     nothing
+
+"the edge part of the solution under a linearized formulation"
+function solution_edge(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:LPFFormulation}
+    sol = Dict{String,Any}()
+    for T in _EDGE_TYPES, e in ids(nm, T; nw)
+        entry = Dict{String,Any}("terminal" => Dict{String,Any}())
+        for a in edge_arcs(nm, e; nw)
+            entry["terminal"]["$(a.terminal)"] = Dict{String,Any}(
+                "node" => a.node, "p" => JuMP.value(var(nm, :p, a; nw)))
+        end
+        solution_edge!(entry, nm, T, e, nw)
+        sol["$e"] = entry
+    end
+
+    return sol
+end

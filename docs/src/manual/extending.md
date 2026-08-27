@@ -83,6 +83,12 @@ constraint_unit_power!
 ## Dispatchers
 
 ```@docs
+variable_edge_terminal_flow
+variable_edge_terminal_power
+variable_unit_injection
+variable_unit_injection_power
+constraint_unit_injection!
+variable_storage_active!
 variable_edge
 constraint_edge
 constraint_edge_limits

@@ -51,6 +51,18 @@ taken.
 | ``c^{\text{r}}_{u}``, ``c^{\text{i}}_{u}`` | `:cru`, `:ciu` | unit | injected current | pu | all |
 | ``p^{\text{d}}_{u}`` | `:pdf` | unit | active demand | pu | [`FlexibleLoad`](@ref), dispatch |
 
+### In the `LPFFormulation`
+
+| symbol | key | index | description | unit | when |
+|:-------|:----|:------|:------------|:-----|:-----|
+| ``p_{u}`` | `:pu` | unit | active power injected into the node | pu | all |
+| ``p^{\text{d}}_{u}`` | `:pdf` | unit | active demand | pu | [`FlexibleLoad`](@ref), dispatch |
+
+The constraint is ``p_{u} = -p^{\text{d}}_{u}``; the reactive demand plays no
+part. A [`FlexibleLoad`](@ref) keeps its energy balance unchanged — that
+constraint is about time, not about how the physics are written, and is shared
+between the formulations.
+
 ## Constraints
 
 Both load types share one constraint, and differ only in what [`demand`](@ref)

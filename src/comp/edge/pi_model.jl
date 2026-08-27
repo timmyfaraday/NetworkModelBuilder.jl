@@ -1,0 +1,127 @@
+################################################################################
+# NetworkModelBuilder.jl                                                       #
+# A Julia package to build optimization models for power system problems.      #
+# See http://github.com/timmyfaraday/NetworkModelBuilder.jl                    #
+################################################################################
+# Authors: Tom Van Acker                                                       #
+################################################################################
+# Changelog:                                                                   #
+# v0.3.0 - component hierarchy                                                 #
+################################################################################
+
+################################################################################
+# The π-equivalent                                                             #
+################################################################################
+
+# Every two-terminal edge in the package is a π-equivalent: a series impedance
+# `z = r + jx` between two shunt admittances `y = g + jb`. A branch applies it
+# directly between its two nodes; a transformer applies it between the secondary
+# of its ideal ratio and its to-node. Rather than write the physics twice, both
+# call the fragment below, a branch with the voltage and current of its from
+# node and a transformer with the voltage and current on the transformer side of
+# its ratio.
+#
+# `csr, csi` is the series current, defined positive from the from side to the
+# to side.
+
+"""
+    constraint_pi_section!(nm, ctr, cti, vtr, vti, a_to, e, z, y_fr, y_to; nw)
+
+Add the equations of a π-equivalent whose from side sees the current
+`ctr + j·cti` at the voltage `vtr + j·vti`, and whose to side is the arc `a_to`.
+
+`ctr`, `cti`, `vtr` and `vti` may be variables or expressions, which is what lets
+a transformer hand in the quantities behind its ideal ratio.
+
+```math
+\\begin{aligned}
+c^{\\text{t}} &= y^{\\text{sh}}_{\\text{fr}} v^{\\text{t}} + c^{\\text{s}}, \\\\
+c_{a^{\\text{t}}} &= -c^{\\text{s}} + y^{\\text{sh}}_{\\text{to}} v_{j}, \\\\
+v^{\\text{t}} - v_{j} &= z \\, c^{\\text{s}}.
+\\end{aligned}
+```
+"""
+function constraint_pi_section!(nm::NetworkModel, ctr, cti, vtr, vti, a_to::Arc, e::Int,
+                                z::Tuple{<:Real,<:Real},
+                                y_fr::Tuple{<:Real,<:Real},
+                                y_to::Tuple{<:Real,<:Real}; nw::Int)
+    r, x         = z
+    g_fr, b_fr   = y_fr
+    g_to, b_to   = y_to
+    j            = a_to.node
+
+    vr, vi   = var(nm, :vr;  nw), var(nm, :vi;  nw)
+    cr, ci   = var(nm, :cr;  nw), var(nm, :ci;  nw)
+    csr, csi = var(nm, :csr; nw), var(nm, :csi; nw)
+
+    return (
+        JuMP.@constraint(nm.model, ctr == g_fr * vtr - b_fr * vti + csr[e]),
+        JuMP.@constraint(nm.model, cti == g_fr * vti + b_fr * vtr + csi[e]),
+        JuMP.@constraint(nm.model, cr[a_to] == -csr[e] + g_to * vr[j] - b_to * vi[j]),
+        JuMP.@constraint(nm.model, ci[a_to] == -csi[e] + g_to * vi[j] + b_to * vr[j]),
+        JuMP.@constraint(nm.model, vtr - vr[j] == r * csr[e] - x * csi[e]),
+        JuMP.@constraint(nm.model, vti - vi[j] == r * csi[e] + x * csr[e]),
+    )
+end
+
+"""
+    variable_edge_series_current(nm, T; nw)
+
+The series current of every in-service edge of type `T`, added to the `:csr` and
+`:csi` containers shared by every edge type that has one.
+
+The container is a `Dict` rather than a JuMP array because several edge types
+contribute to it: the dispatcher visits one concrete type at a time, and each
+adds its own edges to the same two containers.
+"""
+function variable_edge_series_current(nm::NetworkModel, ::Type{T}; nw::Int) where {T<:AbstractEdge}
+    csr = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :csr)
+    csi = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :csi)
+
+    for e in ids(nm, T; nw)
+        csr[e] = JuMP.@variable(nm.model, base_name = "$(nw)_csr[$e]", start = 0.0)
+        csi[e] = JuMP.@variable(nm.model, base_name = "$(nw)_csi[$e]", start = 0.0)
+    end
+
+    return nothing
+end
+
+"""
+    constraint_edge_rating!(nm, e, rate_a; nw)
+
+Bound the apparent power at every terminal of edge `e` by `rate_a`,
+`(v^{\\text{r}}_i{}^2 + v^{\\text{i}}_i{}^2)(c^{\\text{r}}_a{}^2 + c^{\\text{i}}_a{}^2) \\le
+(s^{\\text{max}}_e)^2`. Written per terminal, it applies to an edge with any
+number of them.
+"""
+function constraint_edge_rating!(nm::NetworkModel, e::Int, rate_a::Real; nw::Int)
+    isfinite(rate_a) || return nothing
+
+    vr, vi = var(nm, :vr; nw), var(nm, :vi; nw)
+    cr, ci = var(nm, :cr; nw), var(nm, :ci; nw)
+
+    return [JuMP.@constraint(nm.model,
+                (vr[a.node]^2 + vi[a.node]^2) * (cr[a]^2 + ci[a]^2) <= rate_a^2)
+            for a in edge_arcs(nm, e; nw)]
+end
+
+"""
+    constraint_edge_angle_difference!(nm, a_fr, a_to, angmin, angmax; nw)
+
+Bound the voltage angle difference across a two-terminal edge. Skipped where the
+data leaves it unbounded.
+"""
+function constraint_edge_angle_difference!(nm::NetworkModel, a_fr::Arc, a_to::Arc,
+                                           angmin::Real, angmax::Real; nw::Int)
+    angmin > -pi / 2 || angmax < pi / 2 || return nothing
+
+    vr, vi = var(nm, :vr; nw), var(nm, :vi; nw)
+    i, j   = a_fr.node, a_to.node
+
+    return (
+        JuMP.@constraint(nm.model, vi[i] * vr[j] - vr[i] * vi[j] <=
+            tan(angmax) * (vr[i] * vr[j] + vi[i] * vi[j])),
+        JuMP.@constraint(nm.model, vi[i] * vr[j] - vr[i] * vi[j] >=
+            tan(angmin) * (vr[i] * vr[j] + vi[i] * vi[j])),
+    )
+end

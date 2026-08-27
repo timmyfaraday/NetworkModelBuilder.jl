@@ -46,6 +46,9 @@ function build_model!(nm::NetworkModel{P,F}) where {P<:OptimalPowerFlowProblem,F
         constraint_unit(nm; nw = n)
     end
 
+    constraint_edge_coupling(nm)
+    constraint_unit_coupling(nm)
+
     objective(nm)
 
     return nm

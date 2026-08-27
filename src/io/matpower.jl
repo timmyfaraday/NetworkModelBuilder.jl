@@ -27,9 +27,10 @@ The mapping onto the extended graph is:
 | Matpower                       | extended graph                              |
 |:-------------------------------|:--------------------------------------------|
 | a row of `bus`                 | a [`Node`](@ref)                            |
-| a row of `branch`              | a two-terminal [`Branch`](@ref)             |
+| a row of `branch` without a ratio | a [`Branch`](@ref)                        |
+| a row of `branch` with a ratio | a [`Transformer`](@ref)                     |
 | a row of `gen`                 | a [`Generator`](@ref)                       |
-| `Pd`, `Qd` of a row of `bus`   | a [`Load`](@ref), when either is non-zero   |
+| `Pd`, `Qd` of a row of `bus`   | a [`FixedLoad`](@ref), when either is non-zero |
 | `Gs`, `Bs` of a row of `bus`   | a [`Shunt`](@ref), when either is non-zero  |
 
 Node identifiers are the Matpower bus numbers and need not be contiguous. Edge
@@ -193,20 +194,28 @@ end
 function _matpower_edges(branch::Matrix{Float64}, baseMVA::Float64)
     E = Dict{Int,AbstractEdge}()
     for e in axes(branch, 1)
-        f, t  = Int(branch[e, 1]), Int(branch[e, 2])
-        b     = branch[e, 5]
-        rate  = branch[e, 6]
-        ratio = branch[e, 9]
+        f, t   = Int(branch[e, 1]), Int(branch[e, 2])
+        b      = branch[e, 5]
+        rate   = branch[e, 6]
+        ratio  = branch[e, 9]
+        angle  = branch[e, 10]
+        common = (id = e, terminals = [f, t],
+                  r = branch[e, 3], x = branch[e, 4], b_fr = b / 2, b_to = b / 2,
+                  rate_a = rate <= 0 ? Inf : rate / baseMVA,
+                  angmin = size(branch, 2) >= 12 ? deg2rad(branch[e, 12]) : -pi / 2,
+                  angmax = size(branch, 2) >= 13 ? deg2rad(branch[e, 13]) :  pi / 2,
+                  status = branch[e, 11] > 0,
+                  ext = Dict{Symbol,Any}(:source_id => (f, t, e)))
 
-        E[e] = Branch(; id = e, name = "branch $e", terminals = [f, t],
-                      r = branch[e, 3], x = branch[e, 4],
-                      b_fr = b / 2, b_to = b / 2,
-                      tm = ratio == 0 ? 1.0 : ratio, ta = deg2rad(branch[e, 10]),
-                      rate_a = rate <= 0 ? Inf : rate / baseMVA,
-                      angmin = size(branch, 2) >= 12 ? deg2rad(branch[e, 12]) : -pi / 2,
-                      angmax = size(branch, 2) >= 13 ? deg2rad(branch[e, 13]) :  pi / 2,
-                      status = branch[e, 11] > 0,
-                      ext = Dict{Symbol,Any}(:source_id => (f, t, e)))
+        # Matpower writes a branch and a transformer into the same table; a turns
+        # ratio, or the lack of one, is what tells them apart. A ratio of zero
+        # means the row is not a transformer at all.
+        E[e] = if (ratio != 0 && ratio != 1) || angle != 0
+            Transformer(; common..., name = "transformer $e",
+                        tm = ratio == 0 ? 1.0 : ratio, ta = deg2rad(angle))
+        else
+            Branch(; common..., name = "branch $e")
+        end
     end
 
     return E
@@ -254,7 +263,7 @@ function _matpower_loads!(U::Dict{Int,AbstractUnit}, u::Int, bus::Matrix{Float64
         (pd == 0.0 && qd == 0.0) && continue
         u += 1
         i = Int(bus[k, 1])
-        U[u] = Load(; id = u, name = "load at bus $i", node = i, pd, qd,
+        U[u] = FixedLoad(; id = u, name = "load at bus $i", node = i, pd, qd,
                     ext = Dict{Symbol,Any}(:source_id => i))
     end
 

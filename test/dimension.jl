@@ -150,13 +150,13 @@
 
     @testset "nw_component resolves a whole component" begin
         dim = Dimension(:time => 3)
-        ld  = Load(; id = 2, name = "load", node = 7,
+        ld  = FixedLoad(; id = 2, name = "load", node = 7,
                    pd = nw_vector(dim, [0.1, 0.2, 0.3]), qd = 0.05)
 
         @test has_nw_data(ld)
         for n in 1:3
             resolved = nw_component(dim, ld, n)
-            @test resolved isa Load
+            @test resolved isa FixedLoad
             @test resolved.pd ≈ 0.1 * n
             @test resolved.qd == 0.05          # the constant survived
             @test resolved.node == 7
@@ -164,7 +164,7 @@
         end
 
         # a component with nothing network dependent is returned untouched
-        plain = Load(; id = 3, node = 7, pd = 0.1, qd = 0.05)
+        plain = FixedLoad(; id = 3, node = 7, pd = 0.1, qd = 0.05)
         @test !has_nw_data(plain)
         @test nw_component(dim, plain, 2) === plain
     end

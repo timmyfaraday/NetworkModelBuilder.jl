@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
 # v0.2.0 - network dependent data stored per component                         #
+# v0.3.0 - component hierarchy                                                 #
 ################################################################################
 
 module NetworkModelBuilder
@@ -32,12 +33,22 @@ module NetworkModelBuilder
     include("comp/node/node.jl")
 
     include("comp/edge/edge.jl")
-    include("comp/edge/branch.jl")
+    include("comp/edge/pi_model.jl")
+    include("comp/edge/branch/branch.jl")
+    include("comp/edge/branch/cable.jl")
+    include("comp/edge/branch/overhead_line.jl")
+    include("comp/edge/transformer/transformer.jl")
+    include("comp/edge/transformer/phase_shifter.jl")
+    include("comp/edge/transformer/tap_changer.jl")
+    include("comp/edge/transformer/multi_winding.jl")
 
     include("comp/unit/unit.jl")
-    include("comp/unit/generator.jl")
-    include("comp/unit/load.jl")
-    include("comp/unit/shunt.jl")
+    include("comp/unit/generator/generator.jl")
+    include("comp/unit/load/load.jl")
+    include("comp/unit/load/fixed_load.jl")
+    include("comp/unit/load/flexible_load.jl")
+    include("comp/unit/storage/storage.jl")
+    include("comp/unit/shunt/shunt.jl")
 
     # include — core, depending on the components
     include("core/objective.jl")
@@ -85,10 +96,22 @@ module NetworkModelBuilder
     export component_id, status, is_active, terminals, nterminals
     export edge_id, terminal_id, node_id
 
-    # export — components
+    # export — components, node
     export Node, NodeType, PQ, PV, REF, ISOLATED, reference_nodes
-    export Branch, tap
-    export Generator, Load, Shunt, generation_cost
+
+    # export — components, edge
+    export AbstractBranch, Branch, Cable, OverheadLine
+    export AbstractTransformer, AbstractTwoWindingTransformer
+    export Transformer, PhaseShifter, TapChanger, MultiWindingTransformer
+    export impedance, shunt_admittance, tap_ratio, dynamic_rating
+
+    # export — components, unit
+    export AbstractGenerator, Generator, generation_cost
+    export AbstractLoad, FixedLoad, FlexibleLoad, demand, power_factor_ratio
+    export AbstractStorage, Storage
+    export AbstractShunt, Shunt
+
+    # export — component registries
     export register_edge_type!, register_unit_type!, edge_types, unit_types
 
     # export — model
@@ -102,12 +125,19 @@ module NetworkModelBuilder
     export variable_unit, variable_unit_injection_current
     export constraint_node_balance, constraint_node_voltage_reference
     export constraint_node_voltage_setpoint, constraint_node_voltage_limits
-    export constraint_edge, constraint_edge_limits, constraint_unit
+    export constraint_edge, constraint_edge_limits, constraint_edge_coupling
+    export constraint_unit, constraint_unit_coupling
+    export constraint_pi_section!, constraint_edge_rating!
+    export constraint_edge_angle_difference!, constraint_unit_power!
+    export variable_edge_series_current, variable_two_winding!
+    export constraint_two_winding_limits!
+    export time_step, require_time_dimension
     export objective, objective_generation_cost, network_weight
 
     # export — solution
     export build_solution, nw_solution, print_summary, solution
-    export solution_node, solution_edge, solution_unit, solution_unit!
+    export solution_node, solution_edge, solution_unit
+    export solution_edge!, solution_unit!, solution_tap
 
     # export — problems
     export solve_lf, solve_opf

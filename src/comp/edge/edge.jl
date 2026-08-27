@@ -123,6 +123,25 @@ end
 constraint_edge_limits(nm::NetworkModel, ::Type{T}; nw::Int = nw_id_default(nm)
                       ) where {T<:AbstractEdge} = nothing
 
+"""
+    constraint_edge_coupling(nm)
+    constraint_edge_coupling(nm, T)
+
+The constraints of every registered edge type that tie network indices to one
+another. The counterpart of [`constraint_unit_coupling`](@ref); no edge type in
+the package needs one yet, and the hook is here so that one can be added without
+touching a problem builder.
+"""
+function constraint_edge_coupling(nm::NetworkModel)
+    for T in _EDGE_TYPES
+        constraint_edge_coupling(nm, T)
+    end
+
+    return nothing
+end
+
+constraint_edge_coupling(::NetworkModel, ::Type{T}) where {T<:AbstractEdge} = nothing
+
 ################################################################################
 # Edge — solution                                                              #
 ################################################################################
@@ -147,8 +166,13 @@ function solution_edge(nm::NetworkModel{P,F}, nw::Int) where {P,F<:IVRFormulatio
                 "node" => a.node, "cr" => cr, "ci" => ci,
                 "p" => vr * cr + vi * ci, "q" => vi * cr - vr * ci)
         end
+        solution_edge!(entry, nm, T, e, nw)
         sol["$e"] = entry
     end
 
     return sol
 end
+
+"add the type specific entries of edge `e` to its solution dictionary"
+solution_edge!(::Dict{String,Any}, ::NetworkModel, ::Type{T}, ::Int, ::Int) where {T<:AbstractEdge} =
+    nothing

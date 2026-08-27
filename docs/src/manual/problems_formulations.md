@@ -1,0 +1,100 @@
+# Problems and formulations
+
+A model is a [`NetworkModel{P,F}`](@ref). The pair `(P, F)` is what selects the
+variables, the constraints and the objective.
+
+```
+AbstractProblemType                  AbstractFormulationType
+├── AbstractPowerFlowProblem         ├── AbstractACFormulation
+│   └── LoadFlowProblem              │   ├── AbstractCurrentFormulation
+└── AbstractDispatchProblem          │   │   └── IVRFormulation
+    ├── OptimalPowerFlowProblem      │   └── AbstractPowerFormulation
+    └── RedispatchProblem            │       ├── ACPFormulation
+                                     │       └── ACRFormulation
+                                     └── AbstractDCFormulation
+                                         └── DCPFormulation
+```
+
+Every tag in both hierarchies is an **abstract type** used purely for dispatch,
+so an extension package specialises one by subtyping it.
+
+```@docs
+AbstractProblemType
+AbstractPowerFlowProblem
+AbstractDispatchProblem
+LoadFlowProblem
+OptimalPowerFlowProblem
+RedispatchProblem
+AbstractFormulationType
+AbstractACFormulation
+AbstractCurrentFormulation
+AbstractPowerFormulation
+AbstractDCFormulation
+IVRFormulation
+ACPFormulation
+ACRFormulation
+DCPFormulation
+```
+
+## What each axis decides
+
+The problem type decides *which question is asked*. The clearest case is the
+reference node: a load flow pins its complex voltage, a dispatch problem pins
+only its angle. Same call site, different method:
+
+```julia
+constraint_node_voltage_reference(nm::NetworkModel{<:AbstractPowerFlowProblem,<:IVRFormulation}; nw)
+constraint_node_voltage_reference(nm::NetworkModel{<:AbstractDispatchProblem,<:IVRFormulation}; nw)
+```
+
+The same axis decides whether a generator holds a setpoint or moves within its
+limits, whether a [`TapChanger`](@ref) is a control or a constant, and whether a
+[`FlexibleLoad`](@ref) is flexible at all.
+
+The formulation type decides *in which variables the physics are written*.
+
+## What is implemented
+
+|                           | `IVRFormulation` | `ACPFormulation` | `ACRFormulation` | `DCPFormulation` |
+|:--------------------------|:-----------------|:-----------------|:-----------------|:-----------------|
+| `LoadFlowProblem`         | yes              | —                | —                | —                |
+| `OptimalPowerFlowProblem` | yes              | —                | —                | —                |
+| `RedispatchProblem`       | sketched         | —                | —                | —                |
+
+Asking for a combination that has no builder reports what is available rather
+than building a wrong model.
+
+## The pipeline
+
+```@docs
+NetworkModel
+instantiate_model
+build_model!
+optimize_model!
+solve_model
+solve_lf
+solve_opf
+problem_type
+formulation_type
+register_model!
+implemented_models
+objective
+objective_generation_cost
+network_weight
+```
+
+## The solution
+
+```@docs
+build_solution
+nw_solution
+print_summary
+solution
+```
+
+## Input
+
+```@docs
+parse_file
+parse_matpower
+```

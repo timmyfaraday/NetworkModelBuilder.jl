@@ -98,6 +98,86 @@ function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     error("no constraints are defined for unit type `$T` under problem `$P` with formulation `$F`")
 end
 
+"""
+    constraint_unit_power!(nm, u, p, q; nw)
+
+Link the power a unit exchanges with its node to the current it injects,
+
+```math
+p = v^{\\text{r}}_{i} c^{\\text{r}}_{u} + v^{\\text{i}}_{i} c^{\\text{i}}_{u},
+\\qquad
+q = v^{\\text{i}}_{i} c^{\\text{r}}_{u} - v^{\\text{r}}_{i} c^{\\text{i}}_{u}.
+```
+
+`p` and `q` are injections, so a load hands in the negative of what it
+withdraws. They may be numbers, variables or expressions, which is what lets one
+implementation serve a generator whose power is a decision, a fixed load whose
+power is data, and a flexible load whose power is a decision within an envelope.
+"""
+function constraint_unit_power!(nm::NetworkModel, u::Int, p, q; nw::Int)
+    i        = node(unit(nm, u; nw))
+    vr,  vi  = var(nm, :vr;  nw), var(nm, :vi;  nw)
+    cru, ciu = var(nm, :cru; nw), var(nm, :ciu; nw)
+
+    return (
+        JuMP.@constraint(nm.model, p == vr[i] * cru[u] + vi[i] * ciu[u]),
+        JuMP.@constraint(nm.model, q == vi[i] * cru[u] - vr[i] * ciu[u]))
+end
+
+################################################################################
+# Unit — constraints across network indices                                    #
+################################################################################
+
+"""
+    constraint_unit_coupling(nm)
+    constraint_unit_coupling(nm, T)
+
+The constraints of every registered unit type that tie network indices to one
+another, rather than holding within one.
+
+A problem builder calls this once, outside its loop over network indices,
+because a constraint that spans indices cannot be written from inside it. The
+energy balance of a [`Storage`](@ref) and the energy envelope of a
+[`FlexibleLoad`](@ref) live here; a unit without such a constraint needs no
+method.
+"""
+function constraint_unit_coupling(nm::NetworkModel)
+    for T in _UNIT_TYPES
+        constraint_unit_coupling(nm, T)
+    end
+
+    return nothing
+end
+
+constraint_unit_coupling(::NetworkModel, ::Type{T}) where {T<:AbstractUnit} = nothing
+
+"""
+    time_step(nm, n)
+
+The duration of the time step at network index `n`, taken from the `:duration`
+property of its coordinate along `:time` and defaulting to one hour.
+
+```julia
+Dimension(:time => [Dict{Symbol,Any}(:duration => 0.25) for _ in 1:96])
+```
+"""
+time_step(nm::NetworkModel, n::Int) =
+    has_dim(nm, :time) ? dim_prop(nm, n, :time, :duration, 1.0) : 1.0
+
+"""
+    require_time_dimension(nm, T)
+
+Raise an informative error when a component type that couples network indices
+along `:time` is used in a problem that has no such dimension.
+"""
+function require_time_dimension(nm::NetworkModel, ::Type{T}) where {T<:AbstractComponent}
+    has_dim(nm, :time) && return nothing
+
+    throw(ArgumentError("`$T` couples network indices along `:time`, but this problem has " *
+                        "no such dimension; give it one with " *
+                        "`set_dimension(data, Dimension(:time => n))`"))
+end
+
 ################################################################################
 # Unit — solution                                                              #
 ################################################################################

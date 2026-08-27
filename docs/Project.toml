@@ -1,0 +1,6 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+NetworkModelBuilder = "c0b1e2d0-7be9-4b96-b5bf-fa53d4ca50b6"
+
+[compat]
+Documenter = "1"

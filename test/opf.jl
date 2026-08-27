@@ -43,7 +43,7 @@
             @test g.qmin - 1e-6 <= sol["unit"]["$u"]["qg"] <= g.qmax + 1e-6
         end
 
-        for e in ids(net, Branch)
+        for e in ids(net, AbstractEdge)
             br = edge(net, e)
             isfinite(br.rate_a) || continue
             for a in edge_arcs(net, e)
@@ -75,8 +75,15 @@
             br = edge(net, e)::Branch
             E[e] = Branch(; id = br.id, name = br.name, terminals = br.terminals,
                           r = br.r, x = br.x, b_fr = br.b_fr, b_to = br.b_to,
-                          tm = br.tm, ta = br.ta, rate_a = Inf,
-                          angmin = br.angmin, angmax = br.angmax, status = br.status)
+                          rate_a = Inf, angmin = br.angmin, angmax = br.angmax,
+                          status = br.status)
+        end
+        for e in ids(net, Transformer)
+            tf = edge(net, e)::Transformer
+            E[e] = Transformer(; id = tf.id, name = tf.name, terminals = tf.terminals,
+                               r = tf.r, x = tf.x, b_fr = tf.b_fr, b_to = tf.b_to,
+                               tm = tf.tm, ta = tf.ta, rate_a = Inf,
+                               angmin = tf.angmin, angmax = tf.angmax, status = tf.status)
         end
         relaxed = NetworkData(Network(net.node, E, net.unit);
                               name = "case5 unlimited", baseMVA = baseMVA(data))

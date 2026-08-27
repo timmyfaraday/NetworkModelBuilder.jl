@@ -43,6 +43,9 @@ function build_model!(nm::NetworkModel{P,F}) where {P<:LoadFlowProblem,F<:IVRFor
         constraint_unit(nm; nw = n)
     end
 
+    constraint_edge_coupling(nm)
+    constraint_unit_coupling(nm)
+
     objective(nm)
 
     return nm

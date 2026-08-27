@@ -1,4 +1,5 @@
 <a href="https://github.com/timmyfaraday/NetworkModelBuilder.jl/actions?query=workflow%3ACI"><img src="https://github.com/timmyfaraday/NetworkModelBuilder.jl/workflows/CI/badge.svg"></img></a>
+<a href="https://timmyfaraday.github.io/NetworkModelBuilder.jl/"><img src="https://github.com/timmyfaraday/NetworkModelBuilder.jl/workflows/Documentation/badge.svg"></img></a>
 
 # NetworkModelBuilder.jl
 
@@ -154,6 +155,35 @@ the data you asked for plus a constant, and the `Dimension` is flat: its index
 is arithmetic rather than tabulated, and a dimension given as a plain size
 stores that size rather than a dictionary per coordinate.
 
+## The component hierarchy
+
+Within the three families the types form a hierarchy, and a type earns its place
+by changing the *model*, not by carrying a label.
+
+```
+AbstractEdge                          AbstractUnit
+├── AbstractBranch                    ├── AbstractGenerator
+│   ├── Branch                        │   └── Generator
+│   ├── Cable                         ├── AbstractLoad
+│   └── OverheadLine                  │   ├── FixedLoad
+└── AbstractTransformer               │   └── FlexibleLoad
+    ├── AbstractTwoWindingTransformer ├── AbstractStorage
+    │   ├── Transformer               │   └── Storage
+    │   ├── PhaseShifter              └── AbstractShunt
+    │   └── TapChanger                    └── Shunt
+    └── MultiWindingTransformer
+```
+
+Every `AbstractBranch` shares one π-equivalent; `Cable` and `OverheadLine` are
+*electrically identical* to `Branch` and exist to be addressed and to carry the
+data that does differ. A `PhaseShifter` and a `TapChanger` are not labels: their
+ratio is a decision variable in a dispatch problem and a constant in a power
+flow. A `MultiWindingTransformer` keeps its star point as an edge variable
+rather than inventing a node for it.
+
+See [the documentation](https://timmyfaraday.github.io/NetworkModelBuilder.jl/)
+for the parameters, variables and constraints of each.
+
 ## Installation
 
 The package requires `Julia 1.10` or newer.
@@ -213,13 +243,19 @@ src/
 │   ├── objective.jl
 │   └── solution.jl
 ├── comp/
-│   ├── node/node.jl            I — data, variables, constraints
-│   ├── edge/edge.jl            E — the shared terminal currents and the registry
-│   ├── edge/branch.jl          E — a two-terminal π-equivalent
-│   ├── unit/unit.jl            U — the shared injection currents and the registry
-│   ├── unit/generator.jl       U
-│   ├── unit/load.jl            U
-│   └── unit/shunt.jl           U
+│   ├── node/node.jl            I
+│   ├── edge/
+│   │   ├── edge.jl             E — the registry, terminal currents, dispatchers
+│   │   ├── pi_model.jl         E — the π-equivalent, shared by branch and transformer
+│   │   ├── branch/             E — branch.jl, cable.jl, overhead_line.jl
+│   │   └── transformer/        E — transformer.jl, phase_shifter.jl,
+│   │                           #    tap_changer.jl, multi_winding.jl
+│   └── unit/
+│       ├── unit.jl             U — the registry, injection currents, dispatchers
+│       ├── generator/          U — generator.jl
+│       ├── load/               U — load.jl, fixed_load.jl, flexible_load.jl
+│       ├── storage/            U — storage.jl
+│       └── shunt/              U — shunt.jl
 ├── prob/
 │   ├── lf.jl           LoadFlowProblem
 │   ├── opf.jl          OptimalPowerFlowProblem
@@ -254,7 +290,9 @@ Implemented combinations are:
     OptimalPowerFlowProblem with IVRFormulation
 ```
 
-Components: `Node`, `Branch`, `Generator`, `Load`, `Shunt`. Readers: Matpower.
+Components: `Node`; `Branch`, `Cable`, `OverheadLine`, `Transformer`,
+`PhaseShifter`, `TapChanger`, `MultiWindingTransformer`; `Generator`,
+`FixedLoad`, `FlexibleLoad`, `Storage`, `Shunt`. Readers: Matpower.
 
 The two implemented models are checked against PowerModels.jl v0.21 in
 `test/`: the load flow reproduces its AC power flow solution on `case14` and

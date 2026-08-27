@@ -6,8 +6,7 @@
 # Authors: Tom Van Acker                                                       #
 ################################################################################
 # Changelog:                                                                   #
-# v0.1.0 - initial implementation                                              #
-# v0.2.0 - network dependent data stored per component                         #
+# v0.3.0 - component hierarchy                                                 #
 ################################################################################
 
 ################################################################################
@@ -15,23 +14,36 @@
 ################################################################################
 
 """
-    Shunt <: AbstractUnit
+    AbstractShunt <: AbstractUnit
 
-A unit `(u, i)` that draws a current proportional to the voltage of its node.
+A unit that draws a current proportional to the voltage of its node, i.e., a
+constant impedance.
+
+Constant impedance, not "reactive power", is what distinguishes a shunt. Its
+admittance `y = g + jb` has a conductance as well as a susceptance, and that
+conductance draws *active* power in proportion to the square of the voltage
+magnitude. What makes a shunt cheap in a current based formulation is that
+`c = -y v` is linear, where the constant power of a [`FixedLoad`](@ref) is not.
+"""
+abstract type AbstractShunt <: AbstractUnit end
+
+"""
+    Shunt <: AbstractShunt
+
+A unit `(u, i)` of constant admittance.
 
 # Fields
-- `id`: the identifier of the shunt.
-- `name`: a human readable label.
+- `id`, `name`: the identifier and a human readable label.
 - `node`: the node the shunt is connected to.
 - `gs`, `bs`: the conductance and susceptance of the shunt admittance
   `y^{\\text{s}}_u = g^{\\text{s}}_u + j b^{\\text{s}}_u` [pu].
 - `status`: whether the shunt is in service.
 - `ext`: free-form storage.
-- `gs`, `bs` and `status` may be given as a [`NetworkVector`](@ref) to make them
-  vary over the network index, which is how a switched capacitor bank is
-  expressed.
+
+`gs`, `bs` and `status` may be given as a [`NetworkVector`](@ref); a switched
+capacitor bank is a `bs` that varies over the network index.
 """
-Base.@kwdef struct Shunt <: AbstractUnit
+Base.@kwdef struct Shunt <: AbstractShunt
     id    ::Int
     name  ::String                    = ""
     node  ::Int
@@ -48,7 +60,7 @@ register_unit_type!(Shunt)
 ################################################################################
 
 """
-    constraint_unit(nm, Shunt; nw)
+    constraint_unit(nm, T; nw)
 
 Fix the current a shunt injects into its node at `c_u = -y^{\\text{s}}_u v_i`,
 i.e.,
@@ -58,20 +70,17 @@ c^{\\text{r}}_{u} = -\\left(g^{\\text{s}}_{u} v^{\\text{r}}_{i} - b^{\\text{s}}_
 \\qquad
 c^{\\text{i}}_{u} = -\\left(g^{\\text{s}}_{u} v^{\\text{i}}_{i} + b^{\\text{s}}_{u} v^{\\text{r}}_{i}\\right).
 ```
-
-Unlike a generator or a load this is a linear relation, which is the reason a
-current based formulation keeps a shunt cheap.
 """
-function constraint_unit(nm::NetworkModel{P,F}, ::Type{Shunt}; nw::Int = nw_id_default(nm)
-                        ) where {P<:AbstractProblemType,F<:IVRFormulation}
+function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                        ) where {P<:AbstractProblemType,F<:IVRFormulation,T<:AbstractShunt}
     vr,  vi  = var(nm, :vr;  nw), var(nm, :vi;  nw)
     cru, ciu = var(nm, :cru; nw), var(nm, :ciu; nw)
+    current  = get!(() -> Dict{Int,Any}(), con(nm; nw), :shunt_current)
 
-    con(nm; nw)[:shunt_current] = Dict{Int,Any}()
-    for u in ids(nm, Shunt; nw)
-        sh = unit(nm, u; nw)::Shunt
+    for u in ids(nm, T; nw)
+        sh = unit(nm, u; nw)::T
         i  = sh.node
-        con(nm; nw)[:shunt_current][u] = (
+        current[u] = (
             JuMP.@constraint(nm.model, cru[u] == -(sh.gs * vr[i] - sh.bs * vi[i])),
             JuMP.@constraint(nm.model, ciu[u] == -(sh.gs * vi[i] + sh.bs * vr[i])))
     end
@@ -83,8 +92,9 @@ end
 # Shunt — solution                                                             #
 ################################################################################
 
-function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel, ::Type{Shunt}, u::Int, nw::Int)
-    sh = unit(nm, u; nw)::Shunt
+function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel, ::Type{T}, u::Int, nw::Int
+                       ) where {T<:AbstractShunt}
+    sh = unit(nm, u; nw)::T
     sol["gs"] = sh.gs
     sol["bs"] = sh.bs
 

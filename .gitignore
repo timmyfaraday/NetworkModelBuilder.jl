@@ -5,3 +5,4 @@ docs/site/
 docs/.documenter
 .DS_Store
 .DS_store
+docs/Manifest.toml

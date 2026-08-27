@@ -20,9 +20,11 @@
         @test dim_length(data) == 1
 
         @test length(ids(net, Node))      == 14
-        @test length(ids(net, Branch))    == 20
+        @test length(ids(net, AbstractEdge))  == 20
+        @test length(ids(net, Branch))       == 17   # no turns ratio
+        @test length(ids(net, Transformer))  == 3    # branches 8, 9 and 10 have one
         @test length(ids(net, Generator)) == 5
-        @test length(ids(net, Load))      == 11   # buses with a non-zero Pd or Qd
+        @test length(ids(net, FixedLoad))      == 11   # buses with a non-zero Pd or Qd
         @test length(ids(net, Shunt))     == 1    # bus 9 carries Bs = 19 MVAr
         @test length(ids(net, AbstractUnit)) == 17
 
@@ -39,6 +41,7 @@
         @test unit(net, 1).pmax ≈ 3.324
         @test unit(net, 1).pg   ≈ 2.324
         @test unit(net, 17).bs  ≈ 0.19
+        @test edge(net, 8)::Transformer isa Transformer
         @test edge(net, 8).tm   ≈ 0.978
         @test edge(net, 8).ta   ≈ 0.0
         @test edge(net, 1).b_fr ≈ 0.0528 / 2
@@ -71,6 +74,7 @@
 
         @test ids(net, Node) == [1, 2, 3, 4, 10]
         @test node(net, 10).type == PV
+        @test edge(net, 5)::Transformer isa Transformer
         @test edge(net, 5).tm ≈ 1.05
         @test edge(net, 5).ta ≈ deg2rad(1.0)
         @test edge(net, 6).ta ≈ deg2rad(-1.0)

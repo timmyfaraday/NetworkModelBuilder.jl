@@ -76,7 +76,7 @@ const CASE5_LF_VA = Dict(1 => 3.585141, 2 => 0.031853, 3 => 0.482437,
             @test sol["unit"]["$u"]["pg"] ≈ g.pg atol = 1e-8
         end
 
-        for u in ids(net, Load)
+        for u in ids(net, FixedLoad)
             ld = unit(net, u)
             @test sol["unit"]["$u"]["p"] ≈ -ld.pd atol = 1e-8
             @test sol["unit"]["$u"]["q"] ≈ -ld.qd atol = 1e-8

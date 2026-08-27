@@ -11,8 +11,8 @@
 ################################################################################
 
 "a copy of load `ld` whose demand follows `profile` over dimension `:time`"
-profiled(ld::Load, dim, profile) =
-    Load(; id = ld.id, name = ld.name, node = ld.node,
+profiled(ld::FixedLoad, dim, profile) =
+    FixedLoad(; id = ld.id, name = ld.name, node = ld.node,
          pd = nw_vector(dim, :time, ld.pd .* profile),
          qd = nw_vector(dim, :time, ld.qd .* profile),
          status = ld.status, ext = ld.ext)
@@ -21,13 +21,12 @@ profiled(ld::Load, dim, profile) =
 outaged(br::Branch, dim, out) =
     Branch(; id = br.id, name = br.name, terminals = br.terminals, r = br.r, x = br.x,
            b_fr = br.b_fr, b_to = br.b_to, g_fr = br.g_fr, g_to = br.g_to,
-           tm = br.tm, ta = br.ta, rate_a = br.rate_a,
-           angmin = br.angmin, angmax = br.angmax,
+           rate_a = br.rate_a, angmin = br.angmin, angmax = br.angmax,
            status = nw_vector(dim, (n, c) -> n ∉ out), ext = br.ext)
 
 "apply a `:time` profile to every load"
 scale_loads(profile) = (net, dim) -> for (u, cmp) in net.unit
-    cmp isa Load || continue
+    cmp isa FixedLoad || continue
     net.unit[u] = profiled(cmp, dim, profile)
 end
 
@@ -63,7 +62,7 @@ const PROFILE = [0.9, 1.0, 1.1]
         mn   = set_dimension(data, Dimension(:time => 3); apply! = scale_loads(PROFILE))
         net  = network(mn)
 
-        ld = units(net)[6]::Load
+        ld = units(net)[6]::FixedLoad
         @test is_nw_varying(ld.pd)               # the demand was made to vary
         @test !is_nw_varying(ld.node)            # the node it hangs off did not
         @test !is_nw_varying(ld.status)
@@ -82,7 +81,7 @@ const PROFILE = [0.9, 1.0, 1.1]
         data = quiet(() -> parse_file(case("case5")))
         mn   = set_dimension(data, Dimension(:time => 3); apply! = scale_loads(PROFILE))
         net  = network(mn)
-        ld   = units(net)[6]::Load
+        ld   = units(net)[6]::FixedLoad
 
         for n in nw_ids(mn)
             @test nw_value(mn, ld.pd, n) ≈ ld.pd.data[n]
@@ -112,9 +111,9 @@ const PROFILE = [0.9, 1.0, 1.1]
         data = quiet(() -> parse_file(case("case5")))
         mn   = set_dimension(data, Dimension(:time => 3); apply! = scale_loads(PROFILE))
 
-        base = sum(unit(network(data), u).pd for u in ids(network(data), Load))
+        base = sum(unit(network(data), u).pd for u in ids(network(data), FixedLoad))
         for n in nw_ids(mn)
-            total = sum(unit(network(mn), u; nw = n).pd for u in ids(network(mn), Load; nw = n))
+            total = sum(unit(network(mn), u; nw = n).pd for u in ids(network(mn), FixedLoad; nw = n))
             @test total ≈ base * PROFILE[n]
         end
     end
@@ -224,12 +223,12 @@ const PROFILE = [0.9, 1.0, 1.1]
         # the whole graph is the profile data plus a constant: take the profiles
         # away and what is left is what a single network index costs
         single   = set_dimension(data, Dimension(:time => 1); apply! = scale_loads([1.0]))
-        profiles = 2 * sum(length(units(net)[u].pd) * sizeof(Float64) for u in ids(net, Load))
+        profiles = 2 * sum(length(units(net)[u].pd) * sizeof(Float64) for u in ids(net, FixedLoad))
         @test Base.summarysize(net) - profiles <
               Base.summarysize(network(single)) + 4_000
 
         # and the data that does vary is there, indexed by the network index
-        ld = units(net)[6]::Load
+        ld = units(net)[6]::FixedLoad
         @test length(ld.pd) == 1000
         @test unit(net, 6; nw = 500).pd ≈ nw_value(mn, ld.pd, 500)
     end
@@ -239,8 +238,8 @@ const PROFILE = [0.9, 1.0, 1.1]
 
         old_apply! = function (net, n, c)
             for (u, cmp) in net.unit
-                cmp isa Load || continue
-                net.unit[u] = Load(; id = cmp.id, name = cmp.name, node = cmp.node,
+                cmp isa FixedLoad || continue
+                net.unit[u] = FixedLoad(; id = cmp.id, name = cmp.name, node = cmp.node,
                                    pd = cmp.pd * PROFILE[n], qd = cmp.qd * PROFILE[n],
                                    status = cmp.status, ext = cmp.ext)
             end
@@ -257,7 +256,7 @@ const PROFILE = [0.9, 1.0, 1.1]
 
         # and it agrees with what set_dimension builds directly
         direct = set_dimension(data, Dimension(:time => 3); apply! = scale_loads(PROFILE))
-        for n in nw_ids(mn), u in ids(network(mn), Load; nw = n)
+        for n in nw_ids(mn), u in ids(network(mn), FixedLoad; nw = n)
             @test unit(network(mn), u; nw = n).pd ≈ unit(network(direct), u; nw = n).pd
         end
     end

@@ -6,8 +6,7 @@
 # Authors: Tom Van Acker                                                       #
 ################################################################################
 # Changelog:                                                                   #
-# v0.1.0 - initial implementation                                              #
-# v0.2.0 - network dependent data stored per component                         #
+# v0.3.0 - component hierarchy                                                 #
 ################################################################################
 
 ################################################################################
@@ -15,39 +14,43 @@
 ################################################################################
 
 """
-    Load <: AbstractUnit
+    AbstractLoad <: AbstractUnit
 
-A unit `(u, i)` that withdraws a constant active and reactive power from its
-node.
+A unit that withdraws power from its node.
 
-# Fields
-- `id`: the identifier of the load.
-- `name`: a human readable label.
-- `node`: the node the load is connected to.
-- `pd`, `qd`: the active and reactive power withdrawn [pu].
-- `status`: whether the load is in service.
-- `ext`: free-form storage.
-- `pd`, `qd` and `status` may be given as a [`NetworkVector`](@ref) to make them
-  vary over the network index, which is how a demand profile is expressed.
+What separates a load from an [`AbstractGenerator`](@ref) is not the sign of the
+power — a load may well have a negative reactive demand — but where the number
+comes from. A [`FixedLoad`](@ref) states what it takes and the model has no say;
+a [`FlexibleLoad`](@ref) lets the model choose within an envelope, subject to
+getting the same energy over the horizon.
+
+Both are constant *power*, not constant impedance: at any voltage they take the
+same `p` and `q`. The constant impedance case is an [`AbstractShunt`](@ref).
+
+Every load type shares one implementation of its constraint, and differs only in
+what [`demand`](@ref) returns.
 """
-Base.@kwdef struct Load <: AbstractUnit
-    id    ::Int
-    name  ::String                    = ""
-    node  ::Int
-    pd    ::NetworkQuantity{Float64}  = 0.0
-    qd    ::NetworkQuantity{Float64}  = 0.0
-    status::NetworkQuantity{Bool}     = true
-    ext   ::Dict{Symbol,Any}          = Dict{Symbol,Any}()
-end
+abstract type AbstractLoad <: AbstractUnit end
 
-register_unit_type!(Load)
+"""
+    demand(nm, ld, u; nw)
+
+The active and reactive power load `u` withdraws at network index `nw`, as a
+pair.
+
+This is the single point at which load types differ. A [`FixedLoad`](@ref)
+returns two numbers. A [`FlexibleLoad`](@ref) returns two numbers in a power
+flow, where it has no freedom, and the variable it is free to choose in a
+dispatch problem.
+"""
+function demand end
 
 ################################################################################
 # Load — constraints                                                           #
 ################################################################################
 
 """
-    constraint_unit(nm, Load; nw)
+    constraint_unit(nm, T; nw)
 
 Fix the power a load injects into its node at minus its withdrawal,
 
@@ -60,18 +63,14 @@ v^{\\text{i}}_{i} c^{\\text{r}}_{u} - v^{\\text{r}}_{i} c^{\\text{i}}_{u} = -q^{
 Written this way the load draws a constant power at any voltage, which is the
 usual assumption; a voltage dependent load is a different unit type.
 """
-function constraint_unit(nm::NetworkModel{P,F}, ::Type{Load}; nw::Int = nw_id_default(nm)
-                        ) where {P<:AbstractProblemType,F<:IVRFormulation}
-    vr,  vi  = var(nm, :vr;  nw), var(nm, :vi;  nw)
-    cru, ciu = var(nm, :cru; nw), var(nm, :ciu; nw)
+function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                        ) where {P<:AbstractProblemType,F<:IVRFormulation,T<:AbstractLoad}
+    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :load_power)
 
-    con(nm; nw)[:load_power] = Dict{Int,Any}()
-    for u in ids(nm, Load; nw)
-        ld = unit(nm, u; nw)::Load
-        i  = ld.node
-        con(nm; nw)[:load_power][u] = (
-            JuMP.@constraint(nm.model, vr[i] * cru[u] + vi[i] * ciu[u] == -ld.pd),
-            JuMP.@constraint(nm.model, vi[i] * cru[u] - vr[i] * ciu[u] == -ld.qd))
+    for u in ids(nm, T; nw)
+        ld     = unit(nm, u; nw)::T
+        pd, qd = demand(nm, ld, u; nw)
+        power[u] = constraint_unit_power!(nm, u, -pd, -qd; nw)
     end
 
     return nothing
@@ -81,10 +80,11 @@ end
 # Load — solution                                                              #
 ################################################################################
 
-function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel, ::Type{Load}, u::Int, nw::Int)
-    ld = unit(nm, u; nw)::Load
-    sol["pd"] = ld.pd
-    sol["qd"] = ld.qd
+function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel, ::Type{T}, u::Int, nw::Int
+                       ) where {T<:AbstractLoad}
+    pd, qd = demand(nm, unit(nm, u; nw)::T, u; nw)
+    sol["pd"] = _value(pd)
+    sol["qd"] = _value(qd)
 
     return nothing
 end

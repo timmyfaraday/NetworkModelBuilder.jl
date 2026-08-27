@@ -163,6 +163,18 @@ end
 "the solution of a model, populated by [`optimize_model!`](@ref)"
 solution(nm::NetworkModel) = nm.sol
 
+"""
+    _value(x)
+
+The value of a quantity that may be a number or something JuMP has solved for.
+
+Component data reaches the solution builder either as a number, when the problem
+fixed it, or as a variable, when the problem chose it. A tap ratio and the demand
+of a flexible load are both.
+"""
+_value(x::Real) = float(x)
+_value(x) = JuMP.value(x)
+
 ################################################################################
 # Pipeline                                                                     #
 ################################################################################

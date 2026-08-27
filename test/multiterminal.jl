@@ -81,8 +81,8 @@ function star_network()
         1 => StarEdge(; id = 1, terminals = [1, 2, 3], r = STAR_R, x = STAR_X))
     U = Dict{Int,AbstractUnit}(
         1 => Generator(; id = 1, node = 1),
-        2 => Load(; id = 2, node = 2, pd = 0.40, qd = 0.15),
-        3 => Load(; id = 3, node = 3, pd = 0.25, qd = 0.10))
+        2 => FixedLoad(; id = 2, node = 2, pd = 0.40, qd = 0.15),
+        3 => FixedLoad(; id = 3, node = 3, pd = 0.25, qd = 0.10))
 
     return NetworkData(Network(I, E, U); name = "star")
 end
@@ -98,8 +98,8 @@ function split_network()
         k => Branch(; id = k, terminals = [k, 4], r = STAR_R[k], x = STAR_X[k]) for k in 1:3)
     U = Dict{Int,AbstractUnit}(
         1 => Generator(; id = 1, node = 1),
-        2 => Load(; id = 2, node = 2, pd = 0.40, qd = 0.15),
-        3 => Load(; id = 3, node = 3, pd = 0.25, qd = 0.10))
+        2 => FixedLoad(; id = 2, node = 2, pd = 0.40, qd = 0.15),
+        3 => FixedLoad(; id = 3, node = 3, pd = 0.25, qd = 0.10))
 
     return NetworkData(Network(I, E, U); name = "split")
 end

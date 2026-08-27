@@ -6,8 +6,7 @@
 # Authors: Tom Van Acker                                                       #
 ################################################################################
 # Changelog:                                                                   #
-# v0.1.0 - initial implementation                                              #
-# v0.2.0 - network dependent data stored per component                         #
+# v0.3.0 - component hierarchy                                                 #
 ################################################################################
 
 ################################################################################
@@ -15,13 +14,24 @@
 ################################################################################
 
 """
-    Generator <: AbstractUnit
+    AbstractGenerator <: AbstractUnit
+
+A unit whose injection is a decision bounded by its capability.
+
+That, rather than the sign of the power, is what separates a generator from a
+load: a generator says how much it *could* deliver and the model chooses within
+that, whereas a [`FixedLoad`](@ref) states what it takes. Both exchange reactive
+power, and either may take a negative value of it.
+"""
+abstract type AbstractGenerator <: AbstractUnit end
+
+"""
+    Generator <: AbstractGenerator
 
 A unit `(u, i)` that injects active and reactive power into its node.
 
 # Fields
-- `id`: the identifier of the generator.
-- `name`: a human readable label.
+- `id`, `name`: the identifier and a human readable label.
 - `node`: the node the generator is connected to.
 - `pg`, `qg`: the active and reactive power setpoint [pu], used by a load flow.
 - `pmin`, `pmax`, `qmin`, `qmax`: the operating limits [pu], used by a dispatch
@@ -33,12 +43,13 @@ A unit `(u, i)` that injects active and reactive power into its node.
   `sum(cost[k] * pg^(k-1) for k in eachindex(cost))` [currency/h].
 - `status`: whether the generator is in service.
 - `ext`: free-form storage.
-- every field but `id`, `name`, `node` and `ext` may be given as a
-  [`NetworkVector`](@ref) to make it vary over the network index. Note that a
-  network dependent `cost` is a `NetworkVector{Vector{Float64}}`: the plain
-  `Vector{Float64}` is the polynomial, not a profile.
+
+Every field but `id`, `name`, `node` and `ext` may be given as a
+[`NetworkVector`](@ref). Note that a network dependent `cost` is a
+`NetworkVector{Vector{Float64}}`: the plain `Vector{Float64}` is the polynomial,
+not a profile.
 """
-Base.@kwdef struct Generator <: AbstractUnit
+Base.@kwdef struct Generator <: AbstractGenerator
     id    ::Int
     name  ::String                          = ""
     node  ::Int
@@ -57,14 +68,15 @@ end
 register_unit_type!(Generator)
 
 "the generation cost of `g` at an active power `pg`, as a JuMP expression or a number"
-generation_cost(g::Generator, pg) = sum(c * pg^(k - 1) for (k, c) in enumerate(g.cost); init = 0.0)
+generation_cost(g::AbstractGenerator, pg) =
+    sum(c * pg^(k - 1) for (k, c) in enumerate(g.cost); init = 0.0)
 
 ################################################################################
 # Generator — variables                                                        #
 ################################################################################
 
 """
-    variable_unit(nm, Generator; nw)
+    variable_unit(nm, T; nw)
 
 The active and reactive power of every in-service generator.
 
@@ -75,35 +87,30 @@ operating limits of the generator.
 """
 function variable_unit end
 
-function variable_unit(nm::NetworkModel{P,F}, ::Type{Generator}; nw::Int = nw_id_default(nm)
-                      ) where {P<:AbstractPowerFlowProblem,F<:IVRFormulation}
-    U = ids(nm, Generator; nw)
+variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+             ) where {P<:AbstractPowerFlowProblem,F<:IVRFormulation,T<:AbstractGenerator} =
+    _variable_generator_power(nm, T, nw, false)
 
-    var(nm; nw)[:pg] = JuMP.@variable(nm.model, [u in U], base_name = "$(nw)_pg",
-                                      start = unit(nm, u; nw).pg)
-    var(nm; nw)[:qg] = JuMP.@variable(nm.model, [u in U], base_name = "$(nw)_qg",
-                                      start = unit(nm, u; nw).qg)
+variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+             ) where {P<:AbstractDispatchProblem,F<:IVRFormulation,T<:AbstractGenerator} =
+    _variable_generator_power(nm, T, nw, true)
 
-    return nothing
-end
+function _variable_generator_power(nm::NetworkModel, ::Type{T}, nw::Int, bounded::Bool
+                                  ) where {T<:AbstractGenerator}
+    pg = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :pg)
+    qg = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :qg)
 
-function variable_unit(nm::NetworkModel{P,F}, ::Type{Generator}; nw::Int = nw_id_default(nm)
-                      ) where {P<:AbstractDispatchProblem,F<:IVRFormulation}
-    U = ids(nm, Generator; nw)
+    for u in ids(nm, T; nw)
+        g     = unit(nm, u; nw)::T
+        pg[u] = JuMP.@variable(nm.model, base_name = "$(nw)_pg[$u]", start = g.pg)
+        qg[u] = JuMP.@variable(nm.model, base_name = "$(nw)_qg[$u]", start = g.qg)
 
-    pg = JuMP.@variable(nm.model, [u in U], base_name = "$(nw)_pg", start = unit(nm, u; nw).pg)
-    qg = JuMP.@variable(nm.model, [u in U], base_name = "$(nw)_qg", start = unit(nm, u; nw).qg)
-
-    for u in U
-        g = unit(nm, u; nw)::Generator
+        bounded || continue
         isfinite(g.pmin) && JuMP.set_lower_bound(pg[u], g.pmin)
         isfinite(g.pmax) && JuMP.set_upper_bound(pg[u], g.pmax)
         isfinite(g.qmin) && JuMP.set_lower_bound(qg[u], g.qmin)
         isfinite(g.qmax) && JuMP.set_upper_bound(qg[u], g.qmax)
     end
-
-    var(nm; nw)[:pg] = pg
-    var(nm; nw)[:qg] = qg
 
     return nothing
 end
@@ -113,17 +120,10 @@ end
 ################################################################################
 
 """
-    constraint_unit(nm, Generator; nw)
+    constraint_unit(nm, T; nw)
 
-Link the power of every in-service generator to the current it injects,
-
-```math
-p_{u} = v^{\\text{r}}_{i} c^{\\text{r}}_{u} + v^{\\text{i}}_{i} c^{\\text{i}}_{u},
-\\qquad
-q_{u} = v^{\\text{i}}_{i} c^{\\text{r}}_{u} - v^{\\text{r}}_{i} c^{\\text{i}}_{u},
-```
-
-and, for a load flow only, fix that power at its setpoint.
+Link the power of every in-service generator to the current it injects, and, for
+a load flow only, fix that power at its setpoint.
 
 The setpoint follows the role of the node the generator sits on. At a `REF` node
 both are free: the reference generator closes the system balance. At a `PV` node
@@ -134,13 +134,13 @@ the model; the solver returns one of the admissible splits.
 """
 function constraint_unit end
 
-function constraint_unit(nm::NetworkModel{P,F}, ::Type{Generator}; nw::Int = nw_id_default(nm)
-                        ) where {P<:AbstractPowerFlowProblem,F<:IVRFormulation}
-    _constraint_generator_power(nm, nw)
+function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                        ) where {P<:AbstractPowerFlowProblem,F<:IVRFormulation,T<:AbstractGenerator}
+    _constraint_generator_power(nm, T, nw)
 
     pg, qg = var(nm, :pg; nw), var(nm, :qg; nw)
-    for u in ids(nm, Generator; nw)
-        g  = unit(nm, u; nw)::Generator
+    for u in ids(nm, T; nw)
+        g  = unit(nm, u; nw)::T
         nd = node(nm, g.node; nw)
         nd.type == REF && continue
         JuMP.fix(pg[u], g.pg; force = true)
@@ -150,21 +150,16 @@ function constraint_unit(nm::NetworkModel{P,F}, ::Type{Generator}; nw::Int = nw_
     return nothing
 end
 
-constraint_unit(nm::NetworkModel{P,F}, ::Type{Generator}; nw::Int = nw_id_default(nm)
-               ) where {P<:AbstractDispatchProblem,F<:IVRFormulation} =
-    _constraint_generator_power(nm, nw)
+constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+               ) where {P<:AbstractDispatchProblem,F<:IVRFormulation,T<:AbstractGenerator} =
+    _constraint_generator_power(nm, T, nw)
 
-function _constraint_generator_power(nm::NetworkModel, nw::Int)
-    vr,  vi  = var(nm, :vr;  nw), var(nm, :vi;  nw)
-    cru, ciu = var(nm, :cru; nw), var(nm, :ciu; nw)
-    pg,  qg  = var(nm, :pg;  nw), var(nm, :qg;  nw)
+function _constraint_generator_power(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractGenerator}
+    pg, qg = var(nm, :pg; nw), var(nm, :qg; nw)
+    power  = get!(() -> Dict{Int,Any}(), con(nm; nw), :generator_power)
 
-    con(nm; nw)[:generator_power] = Dict{Int,Any}()
-    for u in ids(nm, Generator; nw)
-        i = node(unit(nm, u; nw))
-        con(nm; nw)[:generator_power][u] = (
-            JuMP.@constraint(nm.model, pg[u] == vr[i] * cru[u] + vi[i] * ciu[u]),
-            JuMP.@constraint(nm.model, qg[u] == vi[i] * cru[u] - vr[i] * ciu[u]))
+    for u in ids(nm, T; nw)
+        power[u] = constraint_unit_power!(nm, u, pg[u], qg[u]; nw)
     end
 
     return nothing
@@ -174,7 +169,8 @@ end
 # Generator — solution                                                         #
 ################################################################################
 
-function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel, ::Type{Generator}, u::Int, nw::Int)
+function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel, ::Type{T}, u::Int, nw::Int
+                       ) where {T<:AbstractGenerator}
     sol["pg"] = JuMP.value(var(nm, :pg, u; nw))
     sol["qg"] = JuMP.value(var(nm, :qg, u; nw))
 

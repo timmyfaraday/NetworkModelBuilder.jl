@@ -964,6 +964,67 @@ discharge(result, steps) = [nw_solution(result, n)["unit"]["4"]["psd"] for n in 
         @test direct["objective"] ≈ result["objective"] rtol = 1e-6
     end
 
+    @testset "a reused model gives what a rebuilt one gives" begin
+        # distinct prices, so every window has one answer and the two rolls are
+        # comparable, see the tied case above
+        data = rolling_network([10.0, 40.0, 90.0, 200.0])
+
+        for F in (LPFFormulation, IVRFormulation)
+            built  = quiet(() -> solve_rd(data, F, OPTIMIZER; horizon = 2, step = 1))
+            reused = quiet(() -> solve_rd(data, F, OPTIMIZER; horizon = 2, step = 1,
+                                          reuse = true))
+
+            @test reused["termination_status"] == built["termination_status"]
+            @test reused["objective"] ≈ built["objective"] rtol = 1e-6
+            for n in 1:4, key in ("pg", "pgup", "pgdn")
+                @test nw_solution(reused, n)["unit"]["2"][key] ≈
+                      nw_solution(built, n)["unit"]["2"][key] atol = 1e-5
+            end
+
+            # one model served the windows that had the same shape; the short one
+            # at the end has fewer indices and cannot
+            @test reused["horizon"]["built"] < built["horizon"]["built"]
+        end
+    end
+
+    @testset "a model is rebuilt where the shape changes" begin
+        # the branch is unlimited at the third step, which writes no rating there
+        # and so gives that window a different shape, see `same_structure`
+        dim  = Dimension(:time => 6)
+        net  = network(rolling_network([10.0, 40.0, 90.0, 200.0, 30.0, 60.0]))
+        net.edge[1] = Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1,
+                             rate_a = nw_vector(dim, [0.5, 0.5, Inf, 0.5, 0.5, 0.5]))
+        data = NetworkData(Network(net.node, net.edge, net.unit; dim))
+
+        built  = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1))
+        reused = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1,
+                                      reuse = true))
+
+        @test reused["objective"] ≈ built["objective"] rtol = 1e-6
+        # it did reuse, but not blindly: the windows spanning the unlimited step
+        # forced a rebuild rather than being updated into the wrong shape
+        @test 1 < reused["horizon"]["built"] < built["horizon"]["built"]
+    end
+
+    @testset "update_model! refuses data of another shape" begin
+        data = rolling_network()
+        nm   = instantiate_model(window(data, :time, 1:2), RedispatchProblem, LPFFormulation)
+
+        err = try
+            update_model!(nm, window(data, :time, 1:3))
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("same shape", err.msg)
+
+        # and accepts one of the same shape, leaving the model the size it was
+        before = JuMP.num_variables(nm.model)
+        update_model!(nm, window(data, :time, 3:4))
+        @test JuMP.num_variables(nm.model) == before
+        @test length(registered_constraints(nm)) > 0
+    end
+
     @testset "the result reports what each window covered" begin
         data   = rolling_network()
         result = quiet(() -> solve_rolling_horizon(data, RedispatchProblem, LPFFormulation,

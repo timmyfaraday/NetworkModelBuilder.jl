@@ -77,6 +77,7 @@ than building a wrong model.
 NetworkModel
 instantiate_model
 build_model!
+update_model!
 optimize_model!
 solve_model
 problem_type

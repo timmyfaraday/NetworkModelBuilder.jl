@@ -243,6 +243,7 @@ src/
 │   ├── model.jl        NetworkModel, the accessors and the build pipeline
 │   ├── redispatch.jl   the redispatch setup and the hooks the components use
 │   ├── window.jl       cutting a window out of a dimension, for a rolling horizon
+│   ├── rebuild.jl      the add-or-update door every variable and constraint goes through
 │   ├── objective.jl
 │   └── solution.jl
 ├── comp/

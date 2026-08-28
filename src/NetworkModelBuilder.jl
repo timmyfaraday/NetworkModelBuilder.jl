@@ -124,7 +124,7 @@ module NetworkModelBuilder
     export constrain!, variable!, variables!, variable_container!, bound!
     export registered_constraints
     export NetworkModel, problem_type, formulation_type
-    export instantiate_model, build_model!, optimize_model!, solve_model
+    export instantiate_model, build_model!, update_model!, optimize_model!, solve_model
     export register_model!, implemented_models
 
     # export — variables, constraints and objective

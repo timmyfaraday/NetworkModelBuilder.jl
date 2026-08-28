@@ -227,7 +227,7 @@ Give it a `horizon` and it becomes a **rolling** redispatch: a sequence of
 windows along `:time`, each looking `horizon` steps ahead and committing the
 first `step` of them, rather than one problem decided over the whole horizon at
 once. That is [`solve_rolling_horizon`](@ref), which is what this forwards to —
-`step`, `warm_start` and `new_model` along with it — and the result is shaped the same either
+`step`, `reuse`, `warm_start` and `new_model` along with it — and the result is shaped the same either
 way.
 
 # Examples
@@ -248,7 +248,7 @@ julia> rolling = solve_rd(mn, LPFFormulation, HiGHS.Optimizer; horizon = 6);
 function solve_rd(data, ::Type{F}, optimizer; redispatch::Redispatch = Redispatch(),
                   ext::Dict{Symbol,Any} = Dict{Symbol,Any}(),
                                 horizon::Union{Nothing,Int} = nothing, step::Int = 1,
-                  warm_start::Bool = false, kwargs...
+                  reuse::Bool = false, warm_start::Bool = false, kwargs...
                  ) where {F<:AbstractFormulationType}
     ext = merge(ext, Dict{Symbol,Any}(:redispatch => redispatch))
 
@@ -256,7 +256,7 @@ function solve_rd(data, ::Type{F}, optimizer; redispatch::Redispatch = Redispatc
         return solve_model(data, RedispatchProblem, F, optimizer; ext, kwargs...)
 
     return solve_rolling_horizon(data, RedispatchProblem, F, optimizer;
-                                 horizon, step, warm_start, ext, kwargs...)
+                                 horizon, step, reuse, warm_start, ext, kwargs...)
 end
 
 ################################################################################
@@ -272,7 +272,7 @@ end
 # far — and because `solve_rd` is the entry point that forwards to it.
 
 """
-    solve_rolling_horizon(data, P, F, optimizer; horizon, step = 1, warm_start = false, new_model = () -> JuMP.Model(), kwargs...)
+    solve_rolling_horizon(data, P, F, optimizer; horizon, step = 1, reuse = false, warm_start = false, new_model = () -> JuMP.Model(), kwargs...)
 
 Solve `data` as a sequence of overlapping problems along `:time` rather than as
 one problem over the whole of it, and return a single solution covering every
@@ -311,6 +311,9 @@ committed.
 # Arguments
 - `horizon`: how many time steps a window sees. Must be at least `step`.
 - `step`: how many of them it commits, one by default.
+- `reuse`: keep one model across the windows, updating it in place instead of
+  building it again, wherever the two windows have the same shape. Off by
+  default. See the note below.
 - `warm_start`: hand each window the previous one's answer as a starting point.
   Off by default, and see the warning below for why.
 - `new_model`: called once per window for the `JuMP.Model` that window is built
@@ -320,6 +323,20 @@ committed.
 
 Remaining keyword arguments reach [`instantiate_model`](@ref) and
 [`optimize_model!`](@ref), as they do for [`solve_model`](@ref).
+
+!!! tip "`reuse` is where the time is"
+    A window's model is very nearly the one the next window needs, and building
+    it again is most of what a roll does. With `reuse` it is built once and
+    updated after that — [`update_model!`](@ref) — which saves the building, and
+    on a solver that keeps a basis saves much of the solving too, since the
+    updated problem is a few numbers away from the one just solved.
+
+    Reuse is only sound between windows of the same *shape*, so each window is
+    checked against the last with [`same_structure`](@ref) and built afresh
+    where the answer is no — an outage that starts or ends inside the horizon,
+    a rating that goes from finite to unlimited, the short windows at the end.
+    The check costs a fraction of a millisecond for a whole year; where nothing
+    varies but the numbers it never fails.
 
 !!! tip "A direct model is worth having here"
     `JuMP.direct_model` skips the layer that caches a copy of the problem before
@@ -389,8 +406,8 @@ julia> nw_solution(result, 17)["unit"]["3"]["pgup"]
 ```
 """
 function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimizer;
-                               horizon::Int, step::Int = 1, warm_start::Bool = false,
-                               new_model = () -> JuMP.Model(),
+                               horizon::Int, step::Int = 1, reuse::Bool = false,
+                               warm_start::Bool = false, new_model = () -> JuMP.Model(),
                                solution_processors = [], kwargs...
                               ) where {P<:AbstractProblemType,F<:AbstractFormulationType}
     haskey(kwargs, :jump_model) &&
@@ -416,14 +433,21 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
     cost     = 0.0
     elapsed  = 0.0
     previous = nothing
+    held     = nothing
+    before   = Int[]
+    rebuilt  = 0
 
     for first in 1:step:steps
         last      = min(first + horizon - 1, steps)
         committed = first:min(first + step - 1, steps)
         kept      = window_indices(state, :time, first:last)
+        w         = window(state, :time, first:last)
 
-        nm = instantiate_model(window(state, :time, first:last), P, F;
-                               jump_model = new_model(), kwargs...)
+        nm = reuse && held !== nothing && _same_shape(state, before, kept) ?
+             update_model!(held, w) :
+             (rebuilt += 1;
+              instantiate_model(w, P, F; jump_model = new_model(), kwargs...))
+        held, before = nm, kept
         warm_start && _warm_start!(nm, previous, kept)
         optimize_model!(nm, optimizer; solution_processors)
 
@@ -468,6 +492,7 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
         "solve_time"         => elapsed,
         "objective"          => cost,
         "horizon"            => Dict{String,Any}("horizon" => horizon, "step" => step,
+                                                 "built"   => rebuilt,
                                                  "window"  => windows))
 
     isempty(solution) || (result["solution"] = Dict{String,Any}("nw" => solution))
@@ -579,6 +604,23 @@ end
 "the `index => variable` pairs of a variable container, whichever kind it is"
 _variable_pairs(container::AbstractDict) = pairs(container)
 _variable_pairs(container) = ((idx, container[idx]) for idx in keys(container))
+
+"""
+    _same_shape(state, before, kept)
+
+Whether the window whose source indices are `kept` gives a model of the same
+shape as the one whose were `before`, so that the second can be the first
+updated rather than a new one.
+
+The two are compared **position by position**: the shape of a window is the
+shape of its first index, then its second, and so on, and the windows of a roll
+are offset from one another, so what has to hold is not that the structure is
+constant but that it survives the shift. A short window at the end of a problem
+has fewer indices than the one before it and is never the same shape.
+"""
+_same_shape(state::NetworkData, before::Vector{Int}, kept::Vector{Int}) =
+    length(before) == length(kept) &&
+    all(same_structure(state, a, b) for (a, b) in zip(before, kept))
 
 "the status of a roll: the first window that did not solve, or the status they agree on"
 function _rolling_status(windows::Vector{Dict{String,Any}})

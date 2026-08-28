@@ -265,55 +265,50 @@ one that is real.
 
 ### Making it fast
 
-A year at `horizon = 24, step = 4` is 2190 windows. Where the time goes, on a
-small network:
+A year at `horizon = 24, step = 4` is 2190 windows. Three choices matter, and
+together they are worth about a factor of three:
 
-| stage | share |
-|:------|------:|
-| solving the models | 63% |
-| building them | 25% |
-| reading the solutions back | 8% |
-| cutting the windows out, [`window`](@ref) | 4% |
+| | wall | what changed |
+|:--|-----:|:--|
+| Ipopt, cached model | 17.5 s | the starting point |
+| HiGHS, cached model | 8.1 s | an LP solver for a linear program |
+| HiGHS, direct model | 7.3 s | `new_model` skips the copy MOI keeps |
+| **HiGHS, direct model, `reuse`** | **5.7 s** | one model, updated rather than rebuilt |
 
-So the solver is the lever, and **which** solver is the whole of it. Under a
-[`LPFFormulation`](@ref) a redispatch is a linear program; handing it to an
-interior point method is using the wrong tool:
+**Take an LP solver first.** Under a [`LPFFormulation`](@ref) a redispatch is a
+linear program, and an interior point method is the wrong tool for one: it
+halves the run to give it to HiGHS, and it converges cleanly where Ipopt left
+one window in 2190 short of tolerance and dragged the status of the whole year
+down with it.
 
-| solver | `warm_start` | wall | solver | status |
-|:-------|:-------------|-----:|-------:|:-------|
-| Ipopt | no | 17.5 s | 12.5 s | `ALMOST_LOCALLY_SOLVED` |
-| Ipopt | yes | 15.3 s | 9.3 s | `ALMOST_LOCALLY_SOLVED` |
-| **HiGHS** | no | **8.2 s** | **3.4 s** | `OPTIMAL` |
-| HiGHS | yes | 8.8 s | 3.0 s | `OPTIMAL` |
-
-An LP solver halves the run and converges cleanly, where the interior point
-method left one window in 2190 short of tolerance and dragged the status of the
-whole year down with it.
-
-Then take a **direct model**. `JuMP.direct_model` skips the layer that keeps a
-copy of the problem before handing it over — a copy a roll makes once per window
-and throws away with it — which is worth another 14%:
+**Then a direct model**, which skips the layer that keeps a copy of the problem
+before handing it over — a copy a roll makes once per window and throws away
+with it:
 
 ```julia
-solve_rd(mn, LPFFormulation, HiGHS.Optimizer; horizon = 24, step = 4,
+solve_rd(mn, LPFFormulation, HiGHS.Optimizer; horizon = 24, step = 4, reuse = true,
          new_model = () -> (m = JuMP.direct_model(HiGHS.Optimizer());
                             JuMP.set_silent(m); m))
 ```
 
-| | wall |
-|:--|-----:|
-| HiGHS, cached model | 8.1 s |
-| HiGHS, direct model | **7.0 s** |
+`new_model` is a *constructor* rather than a model, because each window that is
+built needs one of its own; handing the roll a `jump_model` would give them all
+the same one and is refused rather than silently shared.
 
-`new_model` is a *constructor* rather than a model, because each window needs one
-of its own; handing the roll a `jump_model` would give them all the same one and
-is refused rather than silently shared.
+**Then `reuse`.** A window's model is very nearly the one the next window needs,
+so it is built once and updated after that, wherever [`same_structure`](@ref)
+says the two windows have the same shape. On the year above that is 2184 of the
+2190 windows; the six that are built are the first and the short ones at the
+end.
 
-Note the last row: `warm_start` still takes 10% off the solver, but handing the
-overlap over costs more than that in bookkeeping, so it is a net **loss** on a
-solver that was already fast. It earns its keep where there is no LP solver to
-reach for — a nonconvex [`IVRFormulation`](@ref), where it took 28% off Ipopt —
-and that is why it is off by default rather than on.
+!!! note "Where `warm_start` fits now"
+    It does not, on this path. `warm_start` hands the next window the last
+    window's answer, which took 28% off Ipopt — but a reused model keeps the
+    solver's own basis, which is the better version of the same idea, and on an
+    LP solver the hand-over costs more in bookkeeping than it saves. Reach for
+    `warm_start` where neither is available: a nonconvex
+    [`IVRFormulation`](@ref), where `reuse` still saves the building but Ipopt
+    has no basis to carry.
 
 ### Reading the result
 

@@ -242,6 +242,7 @@ src/
 │   ├── network.jl      the extended graph (I, E, U) and its topology
 │   ├── model.jl        NetworkModel, the accessors and the build pipeline
 │   ├── redispatch.jl   the redispatch setup and the hooks the components use
+│   ├── window.jl       cutting a window out of a dimension, for a rolling horizon
 │   ├── objective.jl
 │   └── solution.jl
 ├── comp/
@@ -261,7 +262,8 @@ src/
 ├── prob/
 │   ├── lf.jl           LoadFlowProblem
 │   ├── opf.jl          OptimalPowerFlowProblem
-│   └── rd.jl           RedispatchProblem
+│   ├── rd.jl           RedispatchProblem
+│   └── rolling_horizon.jl  solving any problem as a sequence of windows
 └── io/
     ├── common.jl
     └── matpower.jl

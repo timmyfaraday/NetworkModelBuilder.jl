@@ -40,6 +40,7 @@ quiet(f) = Logging.with_logger(f, Logging.NullLogger())
     include("opf.jl")
     include("lpf.jl")
     include("rd.jl")
+    include("rolling_horizon.jl")
     include("multinetwork.jl")
     include("multiterminal.jl")
 end

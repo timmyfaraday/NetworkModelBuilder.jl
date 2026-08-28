@@ -113,6 +113,27 @@ step from the `:duration` property of that dimension:
 Dimension(:time => [Dict{Symbol,Any}(:duration => 0.25) for _ in 1:96])
 ```
 
+## Cutting a window out
+
+A problem posed over a dimension can be restricted to part of it, which is what a
+[rolling horizon](@ref "Redispatch") cuts one step of its work out of:
+
+```julia
+w = window(mn, :time, 7:12)
+```
+
+The result is an ordinary [`NetworkData`](@ref) over a smaller `Dimension`, with
+every other dimension left whole. The properties of the coordinates, the
+[`NetworkVector`](@ref) field of every component and the topology all follow the
+cut — the last re-derived from the sliced statuses rather than copied, and a
+slice that no longer varies collapsed back to a plain value, so a window that
+steps over an outage is back on the single-topology fast path.
+
+```@docs
+window
+window_indices
+```
+
 ## Nothing is stored per network index
 
 On case14 with an hourly demand profile:

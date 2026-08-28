@@ -186,14 +186,15 @@ Dimension(:time => 24,
           :contingency => [Dict{Symbol,Any}(:weight => p) for p in (0.97, 0.02, 0.01)])
 ```
 """
-function objective_redispatch_cost(nm::NetworkModel)
-    return JuMP.@objective(nm.model, Min,
-        sum(network_weight(nm, n) * _redispatch_cost_at(nm, n)
-            for n in nw_ids(nm); init = 0.0))
-end
+objective_redispatch_cost(nm::NetworkModel) = minimize_network_cost(nm)
 
-"the price of every measure taken at network index `n`"
-function _redispatch_cost_at(nm::NetworkModel, n::Int)
+"""
+    network_cost(nm, n)
+
+The price of every measure taken at network index `n`, summed over every
+registered edge and unit type through [`redispatch_cost`](@ref).
+"""
+function network_cost(nm::NetworkModel{P,F}, n::Int) where {P<:RedispatchProblem,F}
     total = JuMP.AffExpr(0.0)
 
     for (T, id) in ((T, id) for T in edge_types() for id in ids(nm, T; nw = n))
@@ -211,7 +212,7 @@ end
 ################################################################################
 
 """
-    solve_rd(data, F, optimizer; redispatch = Redispatch(), kwargs...)
+    solve_rd(data, F, optimizer; redispatch = Redispatch(), horizon = nothing, step = 1, kwargs...)
 
 Solve a [`RedispatchProblem`](@ref) in formulation `F`.
 
@@ -220,6 +221,12 @@ the split between preventive and corrective measures. It is placed in the `ext`
 of the model, so `instantiate_model(data, RedispatchProblem, F;
 ext = Dict{Symbol,Any}(:redispatch => rd))` is the equivalent that stops before
 the solve.
+
+Give it a `horizon` and it becomes a **rolling** redispatch: a sequence of
+windows along `:time`, each looking `horizon` steps ahead and committing the
+first `step` of them, rather than one problem decided over the whole horizon at
+once. That is [`solve_rolling_horizon`](@ref), which is what this forwards to,
+and the result is shaped the same either way.
 
 # Examples
 ```julia
@@ -232,12 +239,19 @@ julia> mn = set_dimension(data, dim; apply! = schedule!);
 julia> result = solve_rd(mn, LPFFormulation, HiGHS.Optimizer;
                          redispatch = Redispatch(; monitored = [3, 7],
                                                    control   = :preventive));
+
+julia> rolling = solve_rd(mn, LPFFormulation, HiGHS.Optimizer; horizon = 6);
 ```
 """
 function solve_rd(data, ::Type{F}, optimizer; redispatch::Redispatch = Redispatch(),
-                  ext::Dict{Symbol,Any} = Dict{Symbol,Any}(), kwargs...
+                  ext::Dict{Symbol,Any} = Dict{Symbol,Any}(),
+                  horizon::Union{Nothing,Int} = nothing, step::Int = 1, kwargs...
                  ) where {F<:AbstractFormulationType}
     ext = merge(ext, Dict{Symbol,Any}(:redispatch => redispatch))
 
-    return solve_model(data, RedispatchProblem, F, optimizer; ext, kwargs...)
+    horizon === nothing &&
+        return solve_model(data, RedispatchProblem, F, optimizer; ext, kwargs...)
+
+    return solve_rolling_horizon(data, RedispatchProblem, F, optimizer;
+                                 horizon, step, ext, kwargs...)
 end

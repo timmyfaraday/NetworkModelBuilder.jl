@@ -454,3 +454,37 @@ horizon on.
 """
 redispatch_controls(::NetworkModel, ::Type{T}) where {T<:AbstractStorage} =
     (:psc, :psd, :psup, :psdn)
+
+################################################################################
+# Storage — across windows                                                     #
+################################################################################
+
+"""
+    initial_state(st, nm, n)
+
+The storage unit `st` starting from the energy it holds at network index `n` of
+the solved model `nm`.
+
+This is the one thing a rolling horizon carries: everything else a window
+decided it decides again, but the energy left in a battery at the end of a
+committed step is a fact the next window inherits rather than a choice it makes.
+Without it each window would start from `energy_initial` again and the unit
+would appear to refill itself for free between them.
+
+The unit is returned untouched where the model has no state of charge to read,
+i.e. where it was built for a power flow rather than a dispatch problem.
+"""
+function initial_state(st::Storage, nm::NetworkModel, n::Int)
+    haskey(var(nm; nw = n), :es) || return st
+    haskey(var(nm, :es; nw = n), st.id) || return st
+
+    return Storage(; id = st.id, name = st.name, node = st.node, ps = st.ps, qs = st.qs,
+                   energy_capacity = st.energy_capacity,
+                   energy_initial = JuMP.value(var(nm, :es, st.id; nw = n)),
+                   charge_rating = st.charge_rating, discharge_rating = st.discharge_rating,
+                   charge_efficiency = st.charge_efficiency,
+                   discharge_efficiency = st.discharge_efficiency,
+                   qmin = st.qmin, qmax = st.qmax,
+                   cost_up = st.cost_up, cost_dn = st.cost_dn,
+                   status = st.status, ext = st.ext)
+end

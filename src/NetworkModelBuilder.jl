@@ -31,6 +31,7 @@ module NetworkModelBuilder
     include("core/network.jl")
     include("core/model.jl")
     include("core/redispatch.jl")
+    include("core/window.jl")
 
     # include — components, following the (I, E, U) hierarchy
     include("comp/node/node.jl")
@@ -61,6 +62,7 @@ module NetworkModelBuilder
     include("prob/lf.jl")
     include("prob/opf.jl")
     include("prob/rd.jl")
+    include("prob/rolling_horizon.jl")
 
     # include — input and output
     include("io/common.jl")
@@ -141,6 +143,7 @@ module NetworkModelBuilder
     export constraint_two_winding_limits!
     export time_step, require_time_dimension
     export objective, objective_generation_cost, network_weight, default_weight
+    export network_cost, minimize_network_cost
     export objective_redispatch_cost
 
     # export — solution
@@ -153,6 +156,9 @@ module NetworkModelBuilder
     export control_mode, is_preventive, is_corrective
     export redispatch_controls, redispatch_cost, redispatch_price
     export constraint_redispatch_control
+
+    # export — the rolling horizon
+    export window, window_indices, initial_state, solve_rolling_horizon
 
     # export — problems
     export solve_lf, solve_opf, solve_rd

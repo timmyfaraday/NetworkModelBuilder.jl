@@ -193,9 +193,88 @@ the horizon runs along `:time` with every other coordinate held fixed. A
 preventive battery then holds the same trajectory in every state, which is what
 [`redispatch_controls`](@ref) ties for it.
 
-Rolling that window forward is the natural next step and is not implemented:
-it would rebuild the problem per step from the previous step's `energy_initial`
-and a shifted schedule, which needs nothing this problem does not already have.
+## Rolling the window forward
+
+An operator does not decide the day at once from a schedule known in full. The
+day is decided step by step against a forecast that reaches only so far, and by
+the time the far end of that forecast arrives it has changed. Give
+[`solve_rd`](@ref) a `horizon` and that is what it does:
+
+```julia
+result = solve_rd(mn, LPFFormulation, HiGHS.Optimizer; horizon = 6, step = 1)
+```
+
+Each window is a complete redispatch over six steps — same physics, same limits,
+same objective — of which the first step is **committed** and the rest is thrown
+away. The next window starts one step later and sees one step further.
+
+```@docs
+solve_rolling_horizon
+```
+
+Two things make the sequence a single trajectory rather than a set of unrelated
+problems:
+
+```@docs
+initial_state
+```
+
+[`window`](@ref) cuts one step's problem out of the whole, slicing the profile of
+every component and re-deriving the topology, so a window is an ordinary
+[`NetworkData`](@ref) that knows nothing about being one — see
+[Cutting a window out](@ref). [`initial_state`](@ref) is what survives the cut:
+it draws the line between a
+*decision*, which each window makes afresh, and a *state*, which the previous
+window already fixed. A [`Storage`](@ref) unit carries its state of charge and
+has a method; nothing else in the package carries anything.
+
+### What the lookahead buys
+
+On a four-step problem whose expensive generator is priced `10, 10, 10, 200`,
+with a battery holding `0.4` behind the constraint:
+
+| lookahead | cost | what the battery does |
+|:----------|-----:|:----------------------|
+| one step | 131 | spends everything in the first, cheapest hour |
+| two steps | 105 | |
+| three steps | 81 | |
+| four steps — full information | 55 | saves everything for the last, dear hour |
+
+Seeing one step ahead is not wrong, it is *myopic*: the battery is free, so the
+window spends it on the congestion it can see, and the expensive hour it cannot
+see arrives with an empty battery. No window ever beats the full information
+optimum, because none of them knows more. The test suite asserts both endpoints
+and that the sequence never improves on the last.
+
+### What is carried, and from where
+
+The state is read at the last committed step of the **base case** — the first
+coordinate of every dimension other than `:time`. The windows form one
+trajectory through time, and only one of the contingencies is the world that
+actually happened; a preventive measure leaves the same state behind in every
+state of the world anyway, a corrective one does not, and the base case is the
+one that is real.
+
+!!! warning "A flexible load keeps its energy per window"
+    The energy balance of a [`FlexibleLoad`](@ref) holds over the horizon it is
+    posed on, so in a rolling solve it holds over each **window**. With the
+    default `energy = NaN` that is right — the target is the nominal energy of
+    the window itself — but an `energy` given explicitly is read as a per-window
+    target, not a per-day one. A load that must hit a daily figure needs its own
+    [`initial_state`](@ref) method to carry down what it has already taken.
+
+### Reading the result
+
+The result is shaped like any other and keyed by the network indices of the
+original problem, so [`nw_solution`](@ref) reaches a step by the index it has
+there. Its `"objective"` is the cost of the **committed** steps only; a window's
+own objective prices its lookahead too, and is reported apart under
+`"horizon"`, with what each window covered and committed.
+
+The roll is not redispatch-specific — [`solve_rolling_horizon`](@ref) takes the
+problem type as an argument and rolls an [Optimal power flow](@ref) just as
+readily. All it needs from a problem is [`network_cost`](@ref), which is how it
+prices a committed step without knowing what it is rolling.
 
 ## In each formulation
 

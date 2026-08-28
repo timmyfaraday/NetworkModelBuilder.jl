@@ -212,7 +212,7 @@ end
 ################################################################################
 
 """
-    solve_rd(data, F, optimizer; redispatch = Redispatch(), horizon = nothing, step = 1, kwargs...)
+    solve_rd(data, F, optimizer; redispatch = Redispatch(), horizon = nothing, step = 1, warm_start = false, kwargs...)
 
 Solve a [`RedispatchProblem`](@ref) in formulation `F`.
 
@@ -225,8 +225,9 @@ the solve.
 Give it a `horizon` and it becomes a **rolling** redispatch: a sequence of
 windows along `:time`, each looking `horizon` steps ahead and committing the
 first `step` of them, rather than one problem decided over the whole horizon at
-once. That is [`solve_rolling_horizon`](@ref), which is what this forwards to,
-and the result is shaped the same either way.
+once. That is [`solve_rolling_horizon`](@ref), which is what this forwards to —
+`step` and `warm_start` along with it — and the result is shaped the same either
+way.
 
 # Examples
 ```julia
@@ -245,7 +246,8 @@ julia> rolling = solve_rd(mn, LPFFormulation, HiGHS.Optimizer; horizon = 6);
 """
 function solve_rd(data, ::Type{F}, optimizer; redispatch::Redispatch = Redispatch(),
                   ext::Dict{Symbol,Any} = Dict{Symbol,Any}(),
-                  horizon::Union{Nothing,Int} = nothing, step::Int = 1, kwargs...
+                                horizon::Union{Nothing,Int} = nothing, step::Int = 1,
+                  warm_start::Bool = false, kwargs...
                  ) where {F<:AbstractFormulationType}
     ext = merge(ext, Dict{Symbol,Any}(:redispatch => redispatch))
 
@@ -253,7 +255,7 @@ function solve_rd(data, ::Type{F}, optimizer; redispatch::Redispatch = Redispatc
         return solve_model(data, RedispatchProblem, F, optimizer; ext, kwargs...)
 
     return solve_rolling_horizon(data, RedispatchProblem, F, optimizer;
-                                 horizon, step, ext, kwargs...)
+                                 horizon, step, warm_start, ext, kwargs...)
 end
 
 ################################################################################
@@ -269,7 +271,7 @@ end
 # far — and because `solve_rd` is the entry point that forwards to it.
 
 """
-    solve_rolling_horizon(data, P, F, optimizer; horizon, step = 1, kwargs...)
+    solve_rolling_horizon(data, P, F, optimizer; horizon, step = 1, warm_start = false, kwargs...)
 
 Solve `data` as a sequence of overlapping problems along `:time` rather than as
 one problem over the whole of it, and return a single solution covering every
@@ -308,9 +310,44 @@ committed.
 # Arguments
 - `horizon`: how many time steps a window sees. Must be at least `step`.
 - `step`: how many of them it commits, one by default.
+- `warm_start`: hand each window the previous one's answer as a starting point.
+  Off by default, and see the warning below for why.
 
 Remaining keyword arguments reach [`instantiate_model`](@ref) and
 [`optimize_model!`](@ref), as they do for [`solve_model`](@ref).
+
+!!! tip "Choose the solver before reaching for `warm_start`"
+    Across a year at `horizon = 24, step = 4` — 2190 windows — solving is about
+    two thirds of the work, building the models a quarter, and cutting the
+    windows out under a twentieth. Which solver does that two thirds matters
+    more than anything else here: a [`LPFFormulation`](@ref) redispatch is a
+    linear program, and giving it to an LP solver rather than to an interior
+    point method roughly halves the whole run and returns `OPTIMAL` rather than
+    a status that says it nearly converged.
+
+    `warm_start` is worth having where that choice is not available — a
+    nonconvex [`IVRFormulation`](@ref) has no LP solver to be given to — and is
+    not worth having once it is: on an LP solver the overlap it hands over saves
+    less solver time than it costs to hand over.
+
+!!! warning "A warm start can change the roll, even where every window is convex"
+    Consecutive windows overlap in `horizon - step` of their steps, so most of
+    what a window is asked is what the last one just answered. Handing that over
+    as a starting point does not change what any one window's optimum *is* — but
+    where a window has **several** optima it decides which of them comes back,
+    and a roll is not one solve: the optimum that comes back is committed, its
+    state is carried to the next window, and the whole trajectory downstream
+    follows from it. Two rolls that differ only in their starting points can
+    therefore end the year in different places, both of them correct.
+
+    Whether that happens is a property of the data, not of the warm start: it
+    needs a window whose answer is tied. A price that is flat across a window
+    ties it, a price that differs at every step does not. Under an
+    [`IVRFormulation`](@ref) there is the further ordinary caveat that a
+    different starting point may converge to a different local solution, and on
+    the network measured above it converged to a slightly worse one.
+
+    Keep it off for a run that has to reproduce an earlier one.
 
 !!! note "A flexible load keeps its energy per window"
     The energy balance of a [`FlexibleLoad`](@ref) holds over the horizon it is
@@ -330,7 +367,7 @@ julia> nw_solution(result, 17)["unit"]["3"]["pgup"]
 ```
 """
 function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimizer;
-                               horizon::Int, step::Int = 1,
+                               horizon::Int, step::Int = 1, warm_start::Bool = false,
                                solution_processors = [], kwargs...
                               ) where {P<:AbstractProblemType,F<:AbstractFormulationType}
     has_dim(data, :time) ||
@@ -351,12 +388,15 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
     windows  = Vector{Dict{String,Any}}()
     cost     = 0.0
     elapsed  = 0.0
+    previous = nothing
 
     for first in 1:step:steps
         last      = min(first + horizon - 1, steps)
         committed = first:min(first + step - 1, steps)
+        kept      = window_indices(state, :time, first:last)
 
         nm = instantiate_model(window(state, :time, first:last), P, F; kwargs...)
+        warm_start && _warm_start!(nm, previous, kept)
         optimize_model!(nm, optimizer; solution_processors)
 
         record = Dict{String,Any}(
@@ -378,14 +418,15 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
         push!(windows, record)
 
         # keep what the window committed, under the network indices it came from
-        kept = window_indices(state, :time, first:last)
         for m in nw_ids(nm)
             coordinates(nm, m).time in 1:length(committed) || continue
             solution["$(kept[m])"] = nm.sol["solution"]["nw"]["$m"]
             cost += network_weight(nm, m) * _value(network_cost(nm, m))
         end
 
-        first + step <= steps && _carry_state!(state, nm, length(committed))
+        first + step <= steps || break
+        warm_start && (previous = _overlap_values(nm, kept, step))
+        _carry_state!(state, nm, length(committed))
     end
 
     result = Dict{String,Any}(
@@ -444,6 +485,72 @@ function _carry_state!(state::NetworkData, nm::NetworkModel, committed::Int)
 
     return nothing
 end
+
+"""
+    _overlap_values(nm, kept, step)
+
+The value of every variable of the solved window `nm` that the **next** window
+will ask about again, keyed by the network index of the original problem it
+belongs to, the name it is registered under, and its index within that.
+
+Only the overlap is kept: a window index whose `:time` coordinate is at most
+`step` has been committed and will not appear again, and storing it would grow
+this with the whole window rather than with the part that is reused.
+
+Keying by the *source* network index rather than by anything local is what makes
+the hand-over exact under any combination of dimensions — the next window looks
+up the same source index, whatever local index it gives it.
+"""
+function _overlap_values(nm::NetworkModel, kept::Vector{Int}, step::Int)
+    values = Dict{Tuple{Int,Symbol,Any},Float64}()
+
+    for m in nw_ids(nm)
+        coordinates(nm, m).time > step || continue
+        for (key, container) in var(nm; nw = m), (idx, v) in _variable_pairs(container)
+            v isa JuMP.VariableRef || continue
+            values[(kept[m], key, idx)] = JuMP.value(v)
+        end
+    end
+
+    return values
+end
+
+"""
+    _warm_start!(nm, previous, kept)
+
+Start `nm` from the answer the previous window gave, wherever the two overlap.
+
+Consecutive windows share `horizon - step` of their steps, so most of what a
+window is asked is what the last one just answered — shifted, but about the same
+hours of the same network. Handing that over as a starting point does not change
+what is being solved, only where the solver begins looking, and it is the
+cheapest thing a roll can do for itself.
+
+A variable with no counterpart is left at whatever start the component gave it,
+which covers the steps the window sees for the first time and anything the
+previous window did not have at all.
+
+This is what the `warm_start` keyword of [`solve_rolling_horizon`](@ref) does,
+and the warning there — that it can change which of several equally good rolls
+comes back — is the reason that keyword is opt-in.
+"""
+function _warm_start!(nm::NetworkModel, previous, kept::Vector{Int})
+    previous === nothing && return nothing
+
+    for m in nw_ids(nm)
+        for (key, container) in var(nm; nw = m), (idx, v) in _variable_pairs(container)
+            v isa JuMP.VariableRef || continue
+            value = get(previous, (kept[m], key, idx), nothing)
+            value === nothing || JuMP.set_start_value(v, value)
+        end
+    end
+
+    return nothing
+end
+
+"the `index => variable` pairs of a variable container, whichever kind it is"
+_variable_pairs(container::AbstractDict) = pairs(container)
+_variable_pairs(container) = ((idx, container[idx]) for idx in keys(container))
 
 "the status of a roll: the first window that did not solve, or the status they agree on"
 function _rolling_status(windows::Vector{Dict{String,Any}})

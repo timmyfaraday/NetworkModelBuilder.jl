@@ -768,6 +768,104 @@ discharge(result, steps) = [nw_solution(result, n)["unit"]["4"]["psd"] for n in 
         end
     end
 
+    @testset "a warm start hands the overlap to the next window" begin
+        data = rolling_network()
+
+        # what a window keeps for its successor is the overlap and nothing else:
+        # its first `step` time coordinates were committed and will not be asked
+        # about again
+        nm = instantiate_model(window(data, :time, 1:3), RedispatchProblem, LPFFormulation)
+        quiet(() -> optimize_model!(nm, OPTIMIZER))
+        kept = window_indices(data, :time, 1:3)
+
+        values = _NMB._overlap_values(nm, kept, 1)
+        @test all(n in (2, 3) for (n, _, _) in keys(values))     # source indices, not local
+        @test (2, :pg, 1) in keys(values)
+        @test values[(2, :pg, 1)] ≈ JuMP.value(_NMB.var(nm, :pg, 1; nw = 2))
+
+        # the next window starts from them where the two overlap, and is left
+        # alone where it is seeing a step for the first time
+        next = instantiate_model(window(data, :time, 2:4), RedispatchProblem, LPFFormulation)
+        _NMB._warm_start!(next, values, window_indices(data, :time, 2:4))
+
+        @test JuMP.start_value(_NMB.var(next, :pg, 1; nw = 1)) ≈ values[(2, :pg, 1)]
+        @test JuMP.start_value(_NMB.var(next, :pg, 1; nw = 2)) ≈ values[(3, :pg, 1)]
+        @test JuMP.start_value(_NMB.var(next, :pg, 1; nw = 3)) ==
+              unit(network(data), 1; nw = 4).pg          # step 4 is new, so it keeps its own
+    end
+
+    @testset "a warm start changes the path, not the answer" begin
+        # a price that differs at every step gives every window a single optimum,
+        # and then where the solver starts cannot change where any of them ends
+        data = rolling_network([10.0, 40.0, 90.0, 200.0])
+
+        cold = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1))
+        warm = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1,
+                                    warm_start = true))
+
+        @test warm["objective"] ≈ cold["objective"] rtol = 1e-6
+        for n in 1:4, key in ("psd", "es")
+            @test nw_solution(warm, n)["unit"]["4"][key] ≈
+                  nw_solution(cold, n)["unit"]["4"][key] atol = 1e-5
+        end
+
+        # and it is off unless asked for
+        plain = instantiate_model(window(data, :time, 1:2), RedispatchProblem, LPFFormulation)
+        @test _NMB._warm_start!(plain, nothing, [1, 2]) === nothing
+    end
+
+    @testset "a tied window carries its tie-break into the roll" begin
+        # `ROLLING_PRICES` is flat over the first three steps, so the early
+        # windows have several answers that cost the same. Which one comes back
+        # is committed, its state is carried on, and the rest of the roll follows
+        # from it — so two rolls that differ only in where the solver started can
+        # end up in different places, both of them correct.
+        data = rolling_network()
+
+        cold = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1))
+        warm = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1,
+                                    warm_start = true))
+
+        @test cold["termination_status"] == JuMP.LOCALLY_SOLVED
+        @test warm["termination_status"] == JuMP.LOCALLY_SOLVED
+
+        # both are feasible rolls: every step committed, the battery never
+        # overdrawn, and neither beating what full information can do
+        best = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER))["objective"]
+        for result in (cold, warm)
+            @test sort(parse.(Int, collect(keys(result["solution"]["nw"])))) == [1, 2, 3, 4]
+            @test sum(discharge(result, 1:4)) ≤ 0.4 + 1e-6
+            @test result["objective"] >= best - 1e-6
+        end
+
+        # this is a property of rolling a tied problem, not of the warm start:
+        # the same data solved in one piece has one answer
+        @test best ≈ 55.0 atol = 1e-3
+    end
+
+    @testset "a warm start survives a contingency dimension" begin
+        # distinct prices again, so each window has one answer and the two rolls
+        # are comparable, see the tied case above
+        data = rolling_network([10.0, 40.0, 90.0, 200.0]; extra_dims = (:contingency => 2,))
+
+        cold = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1))
+        warm = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1,
+                                    warm_start = true))
+        @test warm["objective"] ≈ cold["objective"] rtol = 1e-6
+
+        # the hand-over is keyed by the source network index, so it lands on the
+        # right contingency of the right hour rather than on the right local index
+        nm = instantiate_model(window(data, :time, 1:2), RedispatchProblem, LPFFormulation)
+        quiet(() -> optimize_model!(nm, OPTIMIZER))
+        kept   = window_indices(data, :time, 1:2)
+        values = _NMB._overlap_values(nm, kept, 1)
+
+        for (n, key, idx) in keys(values)
+            @test coordinates(data, n).time == 2       # only the overlapping hour
+        end
+        @test length(unique(coordinates(data, n).contingency for (n, _, _) in keys(values))) == 2
+    end
+
     @testset "the result reports what each window covered" begin
         data   = rolling_network()
         result = quiet(() -> solve_rolling_horizon(data, RedispatchProblem, LPFFormulation,

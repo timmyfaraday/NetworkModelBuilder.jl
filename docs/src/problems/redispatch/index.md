@@ -263,6 +263,39 @@ one that is real.
     target, not a per-day one. A load that must hit a daily figure needs its own
     [`initial_state`](@ref) method to carry down what it has already taken.
 
+### Making it fast
+
+A year at `horizon = 24, step = 4` is 2190 windows. Where the time goes, on a
+small network:
+
+| stage | share |
+|:------|------:|
+| solving the models | 63% |
+| building them | 25% |
+| reading the solutions back | 8% |
+| cutting the windows out, [`window`](@ref) | 4% |
+
+So the solver is the lever, and **which** solver is the whole of it. Under a
+[`LPFFormulation`](@ref) a redispatch is a linear program; handing it to an
+interior point method is using the wrong tool:
+
+| solver | `warm_start` | wall | solver | status |
+|:-------|:-------------|-----:|-------:|:-------|
+| Ipopt | no | 17.5 s | 12.5 s | `ALMOST_LOCALLY_SOLVED` |
+| Ipopt | yes | 15.3 s | 9.3 s | `ALMOST_LOCALLY_SOLVED` |
+| **HiGHS** | no | **8.2 s** | **3.4 s** | `OPTIMAL` |
+| HiGHS | yes | 8.8 s | 3.0 s | `OPTIMAL` |
+
+An LP solver halves the run and converges cleanly, where the interior point
+method left one window in 2190 short of tolerance and dragged the status of the
+whole year down with it.
+
+Note the last row: `warm_start` still takes 10% off the solver, but handing the
+overlap over costs more than that in bookkeeping, so it is a net **loss** on a
+solver that was already fast. It earns its keep where there is no LP solver to
+reach for — a nonconvex [`IVRFormulation`](@ref), where it took 28% off Ipopt —
+and that is why it is off by default rather than on.
+
 ### Reading the result
 
 The result is shaped like any other and keyed by the network indices of the

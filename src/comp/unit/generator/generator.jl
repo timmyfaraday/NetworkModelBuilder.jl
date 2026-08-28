@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.3.0 - component hierarchy                                                 #
+# v0.5.0 - the redispatch problem                                              #
 ################################################################################
 
 ################################################################################
@@ -33,7 +34,8 @@ A unit `(u, i)` that injects active and reactive power into its node.
 # Fields
 - `id`, `name`: the identifier and a human readable label.
 - `node`: the node the generator is connected to.
-- `pg`, `qg`: the active and reactive power setpoint [pu], used by a load flow.
+- `pg`, `qg`: the active and reactive power setpoint [pu], used by a load flow,
+  and the **market dispatch** a [`RedispatchProblem`](@ref) moves away from.
 - `pmin`, `pmax`, `qmin`, `qmax`: the operating limits [pu], used by a dispatch
   problem.
 - `vg`: the voltage magnitude setpoint [pu] carried through from the input data;
@@ -41,6 +43,10 @@ A unit `(u, i)` that injects active and reactive power into its node.
 - `cost`: the coefficients of the generation cost polynomial in **ascending**
   order and in per unit, so that the cost is
   `sum(cost[k] * pg^(k-1) for k in eachindex(cost))` [currency/h].
+- `cost_up`, `cost_dn`: the price of moving one per unit up and down in a
+  [`RedispatchProblem`](@ref) [currency/pu/h]. `NaN`, the default, means the
+  marginal generation cost at the market dispatch, see
+  [`redispatch_price`](@ref).
 - `status`: whether the generator is in service.
 - `ext`: free-form storage.
 
@@ -50,19 +56,21 @@ Every field but `id`, `name`, `node` and `ext` may be given as a
 not a profile.
 """
 Base.@kwdef struct Generator <: AbstractGenerator
-    id    ::Int
-    name  ::String                          = ""
-    node  ::Int
-    pg    ::NetworkQuantity{Float64}         = 0.0
-    qg    ::NetworkQuantity{Float64}         = 0.0
-    pmin  ::NetworkQuantity{Float64}         = 0.0
-    pmax  ::NetworkQuantity{Float64}         = Inf
-    qmin  ::NetworkQuantity{Float64}         = -Inf
-    qmax  ::NetworkQuantity{Float64}         = Inf
-    vg    ::NetworkQuantity{Float64}         = 1.0
-    cost  ::NetworkQuantity{Vector{Float64}} = [0.0]
-    status::NetworkQuantity{Bool}            = true
-    ext   ::Dict{Symbol,Any}                 = Dict{Symbol,Any}()
+    id     ::Int
+    name   ::String                          = ""
+    node   ::Int
+    pg     ::NetworkQuantity{Float64}        = 0.0
+    qg     ::NetworkQuantity{Float64}        = 0.0
+    pmin   ::NetworkQuantity{Float64}        = 0.0
+    pmax   ::NetworkQuantity{Float64}        = Inf
+    qmin   ::NetworkQuantity{Float64}        = -Inf
+    qmax   ::NetworkQuantity{Float64}        = Inf
+    vg     ::NetworkQuantity{Float64}        = 1.0
+    cost   ::NetworkQuantity{Vector{Float64}} = [0.0]
+    cost_up::NetworkQuantity{Float64}        = NaN
+    cost_dn::NetworkQuantity{Float64}        = NaN
+    status ::NetworkQuantity{Bool}           = true
+    ext    ::Dict{Symbol,Any}                = Dict{Symbol,Any}()
 end
 
 register_unit_type!(Generator)
@@ -198,6 +206,7 @@ function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T},
                         u::Int, nw::Int) where {P<:AbstractProblemType,F<:AbstractACFormulation,T<:AbstractGenerator}
     sol["pg"] = JuMP.value(var(nm, :pg, u; nw))
     sol["qg"] = JuMP.value(var(nm, :qg, u; nw))
+    _solution_generator_redispatch!(sol, nm, u, nw)
 
     return nothing
 end
@@ -205,6 +214,7 @@ end
 function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T},
                         u::Int, nw::Int) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractGenerator}
     sol["pg"] = JuMP.value(var(nm, :pg, u; nw))
+    _solution_generator_redispatch!(sol, nm, u, nw)
 
     return nothing
 end
@@ -278,6 +288,181 @@ function _constraint_generator_active(nm::NetworkModel, ::Type{T}, nw::Int) wher
     for u in ids(nm, T; nw)
         power[u] = constraint_unit_injection!(nm, u, pg[u]; nw)
     end
+
+    return nothing
+end
+
+################################################################################
+# Generator — the redispatch problem                                           #
+################################################################################
+
+"""
+    marginal_cost(g, pg)
+
+The derivative of the generation cost of `g` with respect to its active power,
+`sum(k * cost[k+1] * pg^(k-1) for k)`, as a JuMP expression or a number.
+
+Zero coefficients are skipped for the same reason they are in
+[`generation_cost`](@ref): a Matpower cost vector padded with zeros would
+otherwise raise the degree of whatever this enters.
+"""
+function marginal_cost(g::AbstractGenerator, pg)
+    c = g.cost
+    length(c) < 2 && return 0.0
+
+    total = c[2]
+    for k in 3:length(c)
+        iszero(c[k]) && continue
+        total += k == 3 ? (k - 1) * c[k] * pg : (k - 1) * c[k] * pg^(k - 2)
+    end
+
+    return total
+end
+
+"""
+    redispatch_price(g)
+
+The price of moving `g` one per unit up and one per unit down, as a pair
+`(c↑, c↓)` [currency/pu/h].
+
+Where `cost_up` or `cost_dn` is `NaN` — the default — the marginal generation
+cost at the market dispatch stands in for it. That default prices a redispatch
+by the volume it moves weighted by what the generator's own cost curve says a
+unit of its output is worth, which is the usual proxy when no bid prices are
+available; both directions cost, since both are an intervention. Give the fields
+explicitly to price a real balancing bid, and note that a *downward* price is
+what it costs the system to have the generator back off, not the fuel it saves.
+"""
+function redispatch_price(g::AbstractGenerator)
+    mc = marginal_cost(g, g.pg)
+
+    return (isnan(g.cost_up) ? mc : g.cost_up,
+            isnan(g.cost_dn) ? mc : g.cost_dn)
+end
+
+"""
+    variable_unit(nm, T; nw)
+
+The power of every in-service generator, bounded by its capability, plus the
+volumes it moved away from the market dispatch.
+
+The volumes are bounded by the headroom that is left in each direction,
+`p^{\\uparrow}_{u} \\le p^{\\text{max}}_{u} - p^{\\text{g}}_{u}` and
+`p^{\\downarrow}_{u} \\le p^{\\text{g}}_{u} - p^{\\text{min}}_{u}`, clipped at
+zero so that a market dispatch outside the capability can still be brought back
+into it rather than making the problem infeasible.
+"""
+function variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                      ) where {P<:RedispatchProblem,F<:IVRFormulation,T<:AbstractGenerator}
+    _variable_generator_power(nm, T, nw, true)
+    _variable_generator_redispatch(nm, T, nw)
+
+    return nothing
+end
+
+function variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                      ) where {P<:RedispatchProblem,F<:LPFFormulation,T<:AbstractGenerator}
+    _variable_generator_active(nm, T, nw, true)
+    _variable_generator_redispatch(nm, T, nw)
+
+    return nothing
+end
+
+function _variable_generator_redispatch(nm::NetworkModel, ::Type{T}, nw::Int
+                                       ) where {T<:AbstractGenerator}
+    pgup = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :pgup)
+    pgdn = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :pgdn)
+
+    for u in ids(nm, T; nw)
+        g = unit(nm, u; nw)::T
+
+        pgup[u] = JuMP.@variable(nm.model, base_name = "$(nw)_pgup[$u]",
+                                 lower_bound = 0.0, start = 0.0)
+        pgdn[u] = JuMP.@variable(nm.model, base_name = "$(nw)_pgdn[$u]",
+                                 lower_bound = 0.0, start = 0.0)
+
+        isfinite(g.pmax) && JuMP.set_upper_bound(pgup[u], max(g.pmax - g.pg, 0.0))
+        isfinite(g.pmin) && JuMP.set_upper_bound(pgdn[u], max(g.pg - g.pmin, 0.0))
+    end
+
+    return nothing
+end
+
+"""
+    constraint_unit(nm, T; nw)
+
+Link the power of every in-service generator to what it injects, and split that
+power into the market dispatch and the volumes moved away from it,
+
+```math
+p^{\\text{g}}_{u} = p^{\\text{g,mkt}}_{u} + p^{\\uparrow}_{u} - p^{\\downarrow}_{u} .
+```
+
+The market dispatch is the setpoint `pg` the generator already carries — the
+same field a load flow holds it at. A redispatch over a horizon therefore takes
+its market schedule from a `pg` that varies over `:time`, see
+[`NetworkVector`](@ref).
+
+The two volumes are separate non-negative variables because they are priced
+separately. Nothing forbids both from being non-zero at once, and with positive
+prices on both it is never worth doing.
+"""
+function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                        ) where {P<:RedispatchProblem,F<:IVRFormulation,T<:AbstractGenerator}
+    _constraint_generator_power(nm, T, nw)
+    _constraint_generator_redispatch(nm, T, nw)
+
+    return nothing
+end
+
+function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                        ) where {P<:RedispatchProblem,F<:LPFFormulation,T<:AbstractGenerator}
+    _constraint_generator_active(nm, T, nw)
+    _constraint_generator_redispatch(nm, T, nw)
+
+    return nothing
+end
+
+function _constraint_generator_redispatch(nm::NetworkModel, ::Type{T}, nw::Int
+                                         ) where {T<:AbstractGenerator}
+    pg   = var(nm, :pg;   nw)
+    pgup = var(nm, :pgup; nw)
+    pgdn = var(nm, :pgdn; nw)
+    split = get!(() -> Dict{Int,Any}(), con(nm; nw), :generator_redispatch)
+
+    for u in ids(nm, T; nw)
+        g = unit(nm, u; nw)::T
+        split[u] = JuMP.@constraint(nm.model, pg[u] == g.pg + pgup[u] - pgdn[u])
+    end
+
+    return nothing
+end
+
+"""
+    redispatch_cost(nm, T, u; nw)
+
+What generator `u` costs at network index `nw`,
+`c^{\\uparrow}_{u} p^{\\uparrow}_{u} + c^{\\downarrow}_{u} p^{\\downarrow}_{u}`,
+with the prices [`redispatch_price`](@ref) gives.
+"""
+function redispatch_cost(nm::NetworkModel, ::Type{T}, u::Int; nw::Int) where {T<:AbstractGenerator}
+    cup, cdn = redispatch_price(unit(nm, u; nw)::T)
+
+    return JuMP.@expression(nm.model,
+        cup * var(nm, :pgup, u; nw) + cdn * var(nm, :pgdn, u; nw))
+end
+
+"a preventive generator holds one redispatch volume across every contingency"
+redispatch_controls(::NetworkModel, ::Type{T}) where {T<:AbstractGenerator} = (:pgup, :pgdn)
+
+"add the redispatch volumes of generator `u` to its solution, where the problem has them"
+function _solution_generator_redispatch!(sol::Dict{String,Any}, nm::NetworkModel,
+                                         u::Int, nw::Int)
+    haskey(var(nm; nw), :pgup) || return nothing
+
+    sol["pg_market"] = unit(nm, u; nw).pg
+    sol["pgup"]      = JuMP.value(var(nm, :pgup, u; nw))
+    sol["pgdn"]      = JuMP.value(var(nm, :pgdn, u; nw))
 
     return nothing
 end

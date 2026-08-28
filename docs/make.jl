@@ -41,7 +41,11 @@ makedocs(
                 "IVR formulation"  => "problems/optimal_power_flow/ivr.md",
                 "LPF formulation"  => "problems/optimal_power_flow/lpf.md",
             ],
-            "Redispatch"         => "problems/redispatch/index.md",
+            "Redispatch" => [
+                "The problem"      => "problems/redispatch/index.md",
+                "IVR formulation"  => "problems/redispatch/ivr.md",
+                "LPF formulation"  => "problems/redispatch/lpf.md",
+            ],
         ],
         "Components" => [
             "The hierarchy" => "components/hierarchy.md",

@@ -62,7 +62,9 @@ Add the tag, a [`build_model!`](@ref) method in `src/prob/`, an
 problem changes how a component behaves — different bounds, an extra variable —
 add a method in that component's own file dispatching on the new problem type.
 
-`src/prob/rd.jl` sketches this for a redispatch problem.
+`src/prob/rd.jl` is the worked example: the redispatch problem adds a builder
+of nine lines, an objective, and one method each on the generator, the storage
+unit and the two controllable transformers — and no formulation code at all.
 
 ## Shared model fragments
 
@@ -89,6 +91,7 @@ variable_unit_injection
 variable_unit_injection_power
 constraint_unit_injection!
 variable_storage_active!
+variable_storage_reactive!
 variable_edge
 constraint_edge
 constraint_edge_limits

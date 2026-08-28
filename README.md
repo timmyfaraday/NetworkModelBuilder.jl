@@ -241,6 +241,7 @@ src/
 │   ├── dimension.jl    the network index
 │   ├── network.jl      the extended graph (I, E, U) and its topology
 │   ├── model.jl        NetworkModel, the accessors and the build pipeline
+│   ├── redispatch.jl   the redispatch setup and the hooks the components use
 │   ├── objective.jl
 │   └── solution.jl
 ├── comp/
@@ -260,7 +261,7 @@ src/
 ├── prob/
 │   ├── lf.jl           LoadFlowProblem
 │   ├── opf.jl          OptimalPowerFlowProblem
-│   └── rd.jl           RedispatchProblem — a sketch, not implemented
+│   └── rd.jl           RedispatchProblem
 └── io/
     ├── common.jl
     └── matpower.jl
@@ -276,7 +277,7 @@ branch in one file is worth more than keeping the whole of IVR in one file.
 |:-----------------------------|:-----------------|:-----------------|:-----------------|:-----------------|
 | `LoadFlowProblem`            | yes              | yes              | —                | —                |
 | `OptimalPowerFlowProblem`    | yes              | yes              | —                | —                |
-| `RedispatchProblem`          | sketched         | sketched         | —                | —                |
+| `RedispatchProblem`          | yes              | yes              | —                | —                |
 
 `LPFFormulation` is the linearized power flow — what the literature calls the DC
 power flow, a name avoided here because nothing about it involves direct
@@ -331,7 +332,9 @@ component file, dispatching on it. Nothing outside the component files moves.
 in `src/prob/`, an `objective` method, and a `register_model!` call. Where the
 new problem changes how a component behaves — different bounds, an extra
 variable — add a method in that component's file dispatching on the new problem
-type. `src/prob/rd.jl` sketches this for a redispatch problem.
+type. `src/prob/rd.jl` is the worked example: the redispatch problem is a
+builder of nine lines, an objective, and one method each on the generator, the
+storage unit and the two controllable transformers.
 
 ## Differences from PowerModels.jl
 

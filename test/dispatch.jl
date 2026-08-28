@@ -38,6 +38,7 @@
     @testset "the implemented combinations" begin
         @test (LoadFlowProblem, IVRFormulation) in implemented_models()
         @test (OptimalPowerFlowProblem, IVRFormulation) in implemented_models()
+        @test (RedispatchProblem, IVRFormulation) in implemented_models()
     end
 
     @testset "an unsupported combination reports what is available" begin
@@ -54,12 +55,13 @@
         @test occursin("LoadFlowProblem with IVRFormulation", err.msg)
 
         err = try
-            instantiate_model(data, RedispatchProblem, IVRFormulation)
+            instantiate_model(data, RedispatchProblem, ACRFormulation)
         catch e
             e
         end
         @test err isa ErrorException
-        @test occursin("RedispatchProblem", err.msg)
+        @test occursin("ACRFormulation", err.msg)
+        @test occursin("RedispatchProblem with IVRFormulation", err.msg)
     end
 
     @testset "the problem type changes the model" begin

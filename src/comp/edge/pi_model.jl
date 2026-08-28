@@ -93,9 +93,12 @@ Bound the apparent power at every terminal of edge `e` by `rate_a`,
 `(v^{\\text{r}}_i{}^2 + v^{\\text{i}}_i{}^2)(c^{\\text{r}}_a{}^2 + c^{\\text{i}}_a{}^2) \\le
 (s^{\\text{max}}_e)^2`. Written per terminal, it applies to an edge with any
 number of them.
+
+Skipped where the data leaves the rating unbounded, and where the problem does
+not watch the edge for congestion, see [`is_monitored`](@ref).
 """
 function constraint_edge_rating!(nm::NetworkModel, e::Int, rate_a::Real; nw::Int)
-    isfinite(rate_a) || return nothing
+    isfinite(rate_a) && is_monitored(nm, e) || return nothing
 
     vr, vi = var(nm, :vr; nw), var(nm, :vi; nw)
     cr, ci = var(nm, :cr; nw), var(nm, :ci; nw)
@@ -182,7 +185,9 @@ end
 
 The operating limits of a two-terminal edge in a linearized formulation: the
 rating becomes a bound on the terminal power, and the angle difference limit is
-already linear.
+already linear. The rating is skipped where the problem does not watch the edge
+for congestion, see [`is_monitored`](@ref); the angle limit is not congestion and
+always holds.
 
 ```math
 -s^{\\text{max}}_{e} \\le p_{a} \\le s^{\\text{max}}_{e},
@@ -199,7 +204,7 @@ function constraint_linear_limits!(nm::NetworkModel, e::Int, a_fr::Arc, a_to::Ar
     p  = var(nm, :p;  nw)
     i, j = a_fr.node, a_to.node
 
-    rating = isfinite(rate_a) ?
+    rating = isfinite(rate_a) && is_monitored(nm, e) ?
         [JuMP.@constraint(nm.model, -rate_a <= p[a] <= rate_a) for a in (a_fr, a_to)] : nothing
     angle = (angmin > -pi / 2 || angmax < pi / 2) ?
         JuMP.@constraint(nm.model, angmin <= va[i] - va[j] <= angmax) : nothing

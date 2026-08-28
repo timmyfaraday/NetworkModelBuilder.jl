@@ -65,9 +65,27 @@ abstract type OptimalPowerFlowProblem <: AbstractDispatchProblem end
 """
     RedispatchProblem <: AbstractDispatchProblem
 
-Minimize the cost of deviating from a given market dispatch subject to the
-network physics and the operating limits. Not implemented yet, see
-`src/prob/rd.jl`.
+Minimize the price of the measures needed to relieve congestion on a dispatch
+that has already been decided — typically one a market cleared without regard
+to the network.
+
+The network side is that of an [`OptimalPowerFlowProblem`](@ref); what makes it
+a different question is what is minimized and what is watched. Each generator
+and storage unit splits its dispatch into the market schedule it carries as a
+setpoint and the volumes it moved away from it, and only those volumes are
+priced. The rating is enforced on the edges the problem watches, which may be a
+subset of them, and a control that costs nothing to move — a
+[`PhaseShifter`](@ref), a [`TapChanger`](@ref) — is taken first because it is
+free.
+
+Posed over a `:contingency` dimension the problem asks the same question of
+every state at once, with each measure either **preventive**, one setting that
+has to serve every contingency, or **corrective**, free per contingency. Posed
+over a `:time` dimension it is a horizon rather than a snapshot, which is what a
+[`Storage`](@ref) unit needs to be a measure at all.
+
+See [`Redispatch`](@ref) for the two choices it takes beyond the data, and
+[`solve_rd`](@ref) for the entry point.
 """
 abstract type RedispatchProblem <: AbstractDispatchProblem end
 

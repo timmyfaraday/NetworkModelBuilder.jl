@@ -101,3 +101,21 @@ function tap_ratio(nm::NetworkModel{P,F}, tc::TapChanger, e::Int; nw::Int
     return (JuMP.@expression(nm.model, cos(tc.ta) * tm),
             JuMP.@expression(nm.model, sin(tc.ta) * tm))
 end
+
+################################################################################
+# TapChanger — the redispatch problem                                          #
+################################################################################
+
+"""
+    redispatch_controls(nm, TapChanger)
+
+The ratio magnitude of a preventive tap changer, held equal across the
+contingencies. Like a [`PhaseShifter`](@ref) a tap changer is a non-costly
+measure.
+
+There is no linearized counterpart: a tap changer is inert under a
+[`LPFFormulation`](@ref), so the fallback `()` is the correct answer there and
+no method is given for it.
+"""
+redispatch_controls(::NetworkModel{P,F}, ::Type{TapChanger}
+                   ) where {P<:AbstractProblemType,F<:IVRFormulation} = (:tm,)

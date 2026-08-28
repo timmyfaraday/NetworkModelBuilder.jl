@@ -929,6 +929,41 @@ discharge(result, steps) = [nw_solution(result, n)["unit"]["4"]["psd"] for n in 
         @test length(unique(coordinates(data, n).contingency for (n, _, _) in keys(values))) == 2
     end
 
+    @testset "each window is built in a model of its own" begin
+        # distinct prices, so the windows are not tied and two rolls that took
+        # different paths are comparable, see the tied case above
+        data = rolling_network([10.0, 40.0, 90.0, 200.0])
+        plain = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1))
+
+        # `new_model` is a constructor, called once per window
+        built  = Ref(0)
+        result = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1,
+                                      new_model = () -> (built[] += 1; JuMP.Model())))
+        @test built[] == length(result["horizon"]["window"]) == 4
+        @test result["objective"] ≈ plain["objective"] rtol = 1e-6
+
+        # handing it a model rather than a constructor would give every window the
+        # same one, so it is refused rather than silently shared
+        err = try
+            solve_rolling_horizon(data, RedispatchProblem, LPFFormulation, OPTIMIZER;
+                                  horizon = 2, jump_model = JuMP.Model())
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("new_model", err.msg)
+
+        # a direct model carries its own optimizer and reaches the same answer
+        direct = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1,
+                                      new_model = () -> begin
+                                          m = JuMP.direct_model(Ipopt.Optimizer())
+                                          JuMP.set_silent(m)
+                                          m
+                                      end))
+        @test direct["termination_status"] == JuMP.LOCALLY_SOLVED
+        @test direct["objective"] ≈ result["objective"] rtol = 1e-6
+    end
+
     @testset "the result reports what each window covered" begin
         data   = rolling_network()
         result = quiet(() -> solve_rolling_horizon(data, RedispatchProblem, LPFFormulation,

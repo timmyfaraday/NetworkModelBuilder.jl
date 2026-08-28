@@ -212,7 +212,7 @@ end
 ################################################################################
 
 """
-    solve_rd(data, F, optimizer; redispatch = Redispatch(), horizon = nothing, step = 1, warm_start = false, kwargs...)
+    solve_rd(data, F, optimizer; redispatch = Redispatch(), horizon = nothing, step = 1, warm_start = false, new_model, kwargs...)
 
 Solve a [`RedispatchProblem`](@ref) in formulation `F`.
 
@@ -226,7 +226,7 @@ Give it a `horizon` and it becomes a **rolling** redispatch: a sequence of
 windows along `:time`, each looking `horizon` steps ahead and committing the
 first `step` of them, rather than one problem decided over the whole horizon at
 once. That is [`solve_rolling_horizon`](@ref), which is what this forwards to —
-`step` and `warm_start` along with it — and the result is shaped the same either
+`step`, `warm_start` and `new_model` along with it — and the result is shaped the same either
 way.
 
 # Examples
@@ -271,7 +271,7 @@ end
 # far — and because `solve_rd` is the entry point that forwards to it.
 
 """
-    solve_rolling_horizon(data, P, F, optimizer; horizon, step = 1, warm_start = false, kwargs...)
+    solve_rolling_horizon(data, P, F, optimizer; horizon, step = 1, warm_start = false, new_model = () -> JuMP.Model(), kwargs...)
 
 Solve `data` as a sequence of overlapping problems along `:time` rather than as
 one problem over the whole of it, and return a single solution covering every
@@ -312,9 +312,30 @@ committed.
 - `step`: how many of them it commits, one by default.
 - `warm_start`: hand each window the previous one's answer as a starting point.
   Off by default, and see the warning below for why.
+- `new_model`: called once per window for the `JuMP.Model` that window is built
+  in. A roll needs a *fresh* model each time, so it takes the constructor rather
+  than the model — passing `jump_model` here would give every window the same
+  one, and is refused.
 
 Remaining keyword arguments reach [`instantiate_model`](@ref) and
 [`optimize_model!`](@ref), as they do for [`solve_model`](@ref).
+
+!!! tip "A direct model is worth having here"
+    `JuMP.direct_model` skips the layer that caches a copy of the problem before
+    handing it to the solver. For a roll that is the right trade: the copy is
+    made once per window and thrown away with it, and on a year at
+    `horizon = 24, step = 4` skipping it took the solver side from 3.0 s to
+    1.7 s.
+
+    ```julia
+    solve_rolling_horizon(mn, RedispatchProblem, LPFFormulation, HiGHS.Optimizer;
+                          horizon = 24, step = 4,
+                          new_model = () -> (m = JuMP.direct_model(HiGHS.Optimizer());
+                                             JuMP.set_silent(m); m))
+    ```
+
+    A direct model carries its own optimizer, so the `optimizer` argument is then
+    only a fallback and is left unused. Not every solver supports direct mode.
 
 !!! tip "Choose the solver before reaching for `warm_start`"
     Across a year at `horizon = 24, step = 4` — 2190 windows — solving is about
@@ -368,8 +389,13 @@ julia> nw_solution(result, 17)["unit"]["3"]["pgup"]
 """
 function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimizer;
                                horizon::Int, step::Int = 1, warm_start::Bool = false,
+                               new_model = () -> JuMP.Model(),
                                solution_processors = [], kwargs...
                               ) where {P<:AbstractProblemType,F<:AbstractFormulationType}
+    haskey(kwargs, :jump_model) &&
+        throw(ArgumentError("a rolling horizon builds one model per window, so it takes a " *
+                            "constructor rather than a model; pass `new_model = () -> ...` " *
+                            "instead of `jump_model`"))
     has_dim(data, :time) ||
         throw(ArgumentError("a rolling horizon runs along `:time`, but this problem has no " *
                             "such dimension; give it one with " *
@@ -395,7 +421,8 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
         committed = first:min(first + step - 1, steps)
         kept      = window_indices(state, :time, first:last)
 
-        nm = instantiate_model(window(state, :time, first:last), P, F; kwargs...)
+        nm = instantiate_model(window(state, :time, first:last), P, F;
+                               jump_model = new_model(), kwargs...)
         warm_start && _warm_start!(nm, previous, kept)
         optimize_model!(nm, optimizer; solution_processors)
 

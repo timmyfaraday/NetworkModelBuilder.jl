@@ -290,6 +290,25 @@ An LP solver halves the run and converges cleanly, where the interior point
 method left one window in 2190 short of tolerance and dragged the status of the
 whole year down with it.
 
+Then take a **direct model**. `JuMP.direct_model` skips the layer that keeps a
+copy of the problem before handing it over — a copy a roll makes once per window
+and throws away with it — which is worth another 14%:
+
+```julia
+solve_rd(mn, LPFFormulation, HiGHS.Optimizer; horizon = 24, step = 4,
+         new_model = () -> (m = JuMP.direct_model(HiGHS.Optimizer());
+                            JuMP.set_silent(m); m))
+```
+
+| | wall |
+|:--|-----:|
+| HiGHS, cached model | 8.1 s |
+| HiGHS, direct model | **7.0 s** |
+
+`new_model` is a *constructor* rather than a model, because each window needs one
+of its own; handing the roll a `jump_model` would give them all the same one and
+is refused rather than silently shared.
+
 Note the last row: `warm_start` still takes 10% off the solver, but handing the
 overlap over costs more than that in bookkeeping, so it is a net **loss** on a
 solver that was already fast. It earns its keep where there is no LP solver to

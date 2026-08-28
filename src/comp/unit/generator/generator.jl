@@ -76,6 +76,15 @@ end
 register_unit_type!(Generator)
 
 """
+    structure_gates(g)
+
+A generator is given a bound only where the limit is finite — and in a
+[`RedispatchProblem`](@ref) the bounds on its volumes follow the same two — so
+its capability decides the shape of its model. See [`structure_gates`](@ref).
+"""
+structure_gates(::AbstractGenerator) = (:pmin, :pmax, :qmin, :qmax)
+
+"""
     generation_cost(g, pg)
 
 The generation cost of `g` at an active power `pg`, as a JuMP expression or a

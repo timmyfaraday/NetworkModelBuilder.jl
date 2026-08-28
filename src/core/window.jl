@@ -160,3 +160,141 @@ over its own horizon, and a *state*, which the previous window has already fixed
 and the next one inherits. Only the second survives the roll.
 """
 initial_state(c::AbstractComponent, ::NetworkModel, ::Int) = c
+
+################################################################################
+# Whether two network indices give the same model                              #
+################################################################################
+
+"""
+    same_topology(net, a, b)
+
+Whether network indices `a` and `b` have the same [`Topology`](@ref).
+
+This is a pointer comparison and costs almost nothing. [`topology`](@ref) does
+not build a fresh object per network index: indices that agree on which
+components are in service are handed *the same* object, because the topologies
+are cached under the statuses that produce them. Where no status varies at all
+the question is answered before a signature is even computed.
+
+It is the cheap half of [`same_structure`](@ref), and on its own it is
+**necessary but not sufficient** — see there.
+"""
+same_topology(net::Network, a::Int, b::Int) =
+    a == b || topology(net; nw = a) === topology(net; nw = b)
+
+same_topology(data::NetworkData, a::Int, b::Int) = same_topology(network(data), a, b)
+
+"""
+    structure_gates(component)
+
+The fields of `component` whose value decides *which* constraints and bounds a
+model has, rather than only what they say.
+
+Most component data is a coefficient: change a load and the same constraint
+holds a different number. A handful of fields are not, because the code that
+writes the model asks a question of them first and writes nothing when the
+answer is no — a `rate_a` of `Inf` produces no rating at all, a `pmax` of `Inf`
+produces no upper bound, an `angmin` of `-π/2` produces no angle limit. A field
+like that changes the *shape* of the model, not a number in it.
+
+Returns `()` unless the type says otherwise, which is the right answer for a
+component with no such field. An extension type whose constraints are written
+conditionally needs a method here, or the answers [`same_structure`](@ref) gives
+about it will be wrong.
+
+The methods in this package correspond one for one to the guards in the model:
+the `isfinite` tests in `constraint_edge_rating!`, `constraint_linear_limits!`,
+`_variable_generator_power`, `_variable_generator_active` and the flexible load,
+and the `±π/2` test in `constraint_edge_angle_difference!`.
+"""
+structure_gates(::AbstractComponent) = ()
+
+"""
+    structure_varies(net)
+
+Whether anything that decides the *structure* of a model varies over the network
+index.
+
+`false` is the strong answer and the common one: no status varies, so every
+network index has one topology, and no [`structure_gates`](@ref) field varies, so
+every index writes the same constraints. One model shape then serves the whole
+problem, and [`same_structure`](@ref) is `true` everywhere without being asked.
+
+Costs one pass over the components, once, rather than anything per network
+index — which is why it is worth asking before asking anything else.
+"""
+function structure_varies(net::Network)
+    isempty(switchable(net)) || return true
+
+    for family in (net.node, net.edge, net.unit), (_, c) in family
+        has_nw_data(c) || continue
+        any(is_nw_varying(getfield(c, f)) for f in structure_gates(c)) && return true
+    end
+
+    return false
+end
+
+structure_varies(data::NetworkData) = structure_varies(network(data))
+
+"""
+    same_structure(net, a, b)
+
+Whether network indices `a` and `b` produce a model of the same shape: the same
+variables, and the same constraints holding between them.
+
+Two things have to agree, and the second is the one that is easy to miss:
+
+1. the [`Topology`](@ref), i.e. which components are in service — see
+   [`same_topology`](@ref);
+2. every [`structure_gates`](@ref) field, because a `rate_a` that is finite at
+   one index and `Inf` at another writes a rating at one and not at the other
+   while the topology sits perfectly still.
+
+The test is **conservative**: it compares whether each gate bounds anything at
+all, so it may call two indices different where the model would in fact have
+come out the same. It never calls them the same where the model would differ,
+which is the direction that matters for anything built on top of it.
+
+# Examples
+A rolling horizon reuses a model between two windows only where the whole window
+agrees, and its windows are offset by `step`, so what it needs is not that the
+structure is *constant* but that it survives a shift:
+
+```julia
+stable = [same_structure(net, n, n + step) for n in 1:steps-step]
+breaks = cumsum(.!stable)            # then any window is answered in O(1)
+```
+
+Ask [`structure_varies`](@ref) first: where it is `false` this is `true` for
+every pair and neither loop is needed.
+"""
+function same_structure(net::Network, a::Int, b::Int)
+    a == b && return true
+    same_topology(net, a, b) || return false
+
+    for family in (net.node, net.edge, net.unit), (_, c) in family
+        has_nw_data(c) || continue
+        for f in structure_gates(c)
+            x = getfield(c, f)
+            is_nw_varying(x) || continue
+            _gate(nw_value(net.dim, x, a)) == _gate(nw_value(net.dim, x, b)) || return false
+        end
+    end
+
+    return true
+end
+
+same_structure(data::NetworkData, a::Int, b::Int) = same_structure(network(data), a, b)
+
+"""
+    _gate(x)
+
+What a [`structure_gates`](@ref) value means structurally: whether it bounds
+anything at all, and whether it lies inside `(-π/2, π/2)`.
+
+The pair covers both kinds of guard the package writes — `isfinite` for a rating
+or an operating limit, `±π/2` for an angle difference — without the caller
+having to know which kind a given field is.
+"""
+_gate(x::Real) = (isfinite(x), -pi / 2 < x < pi / 2)
+_gate(x::AbstractVector) = map(_gate, x)

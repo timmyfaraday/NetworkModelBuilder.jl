@@ -158,6 +158,7 @@ module NetworkModelBuilder
 
     # export — the rolling horizon
     export window, window_indices, initial_state, solve_rolling_horizon
+    export same_topology, same_structure, structure_gates, structure_varies
 
     # export — problems
     export solve_lf, solve_opf, solve_rd

@@ -88,6 +88,9 @@ _fill_winding(v::NetworkVector, ::Int, ::Float64) = v
 
 register_edge_type!(MultiWindingTransformer)
 
+"a multi-winding transformer rates each winding on its own, and has no angle limits"
+structure_gates(::MultiWindingTransformer) = (:rate_a,)
+
 ################################################################################
 # MultiWindingTransformer — variables                                          #
 ################################################################################

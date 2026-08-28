@@ -106,6 +106,9 @@ end
 
 register_edge_type!(Transformer)
 
+"a two-winding transformer gates on the same three fields a branch does"
+structure_gates(::AbstractTwoWindingTransformer) = (:rate_a, :angmin, :angmax)
+
 "the series impedance of a transformer resolved at one network index"
 impedance(tf::AbstractTransformer) = (tf.r, tf.x)
 

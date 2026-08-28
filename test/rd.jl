@@ -573,6 +573,69 @@ discharge(result, steps) = [nw_solution(result, n)["unit"]["4"]["psd"] for n in 
         @test_throws ArgumentError window(data, :time, 0:2)
     end
 
+    @testset "when two network indices give the same model" begin
+        data = rolling_network()
+        net  = network(data)
+
+        # nothing switches and no gate varies, so one shape serves the year
+        @test !structure_varies(data)
+        @test all(same_structure(data, 1, n) for n in 2:4)
+        @test all(same_topology(data, 1, n) for n in 2:4)
+
+        # and `topology` proves it by handing back the very same object
+        @test topology(net; nw = 1) === topology(net; nw = 4)
+        @test length(topologies(net)) == 1
+
+        # the gates are the fields the model asks a question of before writing
+        @test structure_gates(edges(net)[1]) == (:rate_a, :angmin, :angmax)
+        @test structure_gates(units(net)[1]) == (:pmin, :pmax, :qmin, :qmax)
+        @test structure_gates(units(net)[3]) == ()          # a fixed load has none
+        @test structure_gates(units(net)[4]) == ()          # nor a storage unit
+    end
+
+    @testset "an outage is a change of topology" begin
+        dim  = Dimension(:time => 4)
+        data = rolling_network()
+        net  = network(data)
+        net.edge[1] = Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, rate_a = 0.5,
+                             status = nw_vector(dim, (n, c) -> n != 3))
+        data = NetworkData(Network(net.node, net.edge, net.unit; dim))
+
+        @test structure_varies(data)
+        @test same_structure(data, 1, 2)
+        @test !same_topology(data, 2, 3)
+        @test !same_structure(data, 2, 3)
+        @test same_structure(data, 2, 4)                    # in service at both
+    end
+
+    @testset "a gate changes the model without touching the topology" begin
+        # the branch is in service throughout — only its rating moves, and only
+        # across the boundary between finite and unlimited
+        dim  = Dimension(:time => 3)
+        net  = network(rolling_network())
+        net.edge[1] = Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1,
+                             rate_a = nw_vector(dim, [0.5, 0.9, Inf]))
+        data = NetworkData(Network(net.node, net.edge, net.unit; dim))
+
+        # the topology cannot tell the difference: nothing went out of service
+        @test isempty(switchable(network(data)))
+        @test all(same_topology(data, 1, n) for n in 2:3)
+
+        # but the model does, and `same_structure` is what catches it
+        @test structure_varies(data)
+        @test same_structure(data, 1, 2)                    # 0.5 and 0.9 both bound
+        @test !same_structure(data, 1, 3)                   # Inf writes no rating
+
+        # and that is not a theory about the code, it is what gets built
+        counts = map(1:3) do n
+            nm = instantiate_model(window(data, :time, n:n), RedispatchProblem, LPFFormulation)
+            sum(JuMP.num_constraints(nm.model, F, S) for (F, S) in
+                JuMP.list_of_constraint_types(nm.model))
+        end
+        @test counts[1] == counts[2]
+        @test counts[3] < counts[1]
+    end
+
     @testset "one window is the whole problem" begin
         data = rolling_network()
 

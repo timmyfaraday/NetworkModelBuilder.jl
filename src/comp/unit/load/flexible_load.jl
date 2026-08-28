@@ -65,6 +65,9 @@ end
 
 register_unit_type!(FlexibleLoad)
 
+"a flexible load is given an upper bound only where `pd_max` is finite"
+structure_gates(::FlexibleLoad) = (:pd_max,)
+
 "the ratio of reactive to active demand at the nominal point"
 power_factor_ratio(ld::FlexibleLoad) = iszero(ld.pd_nominal) ? 0.0 : ld.qd_nominal / ld.pd_nominal
 

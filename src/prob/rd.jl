@@ -315,7 +315,10 @@ committed.
   building it again, wherever the two windows have the same shape. Off by
   default. See the note below.
 - `warm_start`: hand each window the previous one's answer as a starting point.
-  Off by default, and see the warning below for why.
+  Off by default, and see the warning below for why. With `reuse` the hand-over
+  is a shift within the one model, and without it a carry between two; the first
+  is much the cheaper, so the two keywords are better together than either is
+  alone.
 - `new_model`: called once per window for the `JuMP.Model` that window is built
   in. A roll needs a *fresh* model each time, so it takes the constructor rather
   than the model — passing `jump_model` here would give every window the same
@@ -367,9 +370,9 @@ Remaining keyword arguments reach [`instantiate_model`](@ref) and
 
     | formulation | solver | `reuse` | `warm_start` | wall |
     |:---|:---|:---|:---|---:|
-    | LPF | HiGHS | yes | no | **5.5 s** |
+    | LPF | HiGHS | yes | no | **5.8 s** |
     | LPF | HiGHS | yes | yes | 6.0 s |
-    | IVR | Ipopt | yes | no | 3.3 s |
+    | IVR | Ipopt | yes | no | 3.6 s |
     | IVR | Ipopt | yes | yes | **2.9 s** |
 
     Under a [`LPFFormulation`](@ref) the model is a linear program, an LP solver
@@ -462,7 +465,7 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
              (rebuilt += 1;
               instantiate_model(w, P, F; jump_model = new_model(), kwargs...))
         held, before = nm, kept
-        warm_start && _warm_start!(nm, previous, kept)
+        warm_start && !reuse && _warm_start!(nm, previous, kept)
         optimize_model!(nm, optimizer; solution_processors)
 
         record = Dict{String,Any}(
@@ -491,8 +494,13 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
         end
 
         first + step <= steps || break
-        warm_start && (previous = _overlap_values(nm, kept, step))
+
+        # everything that reads this window's answer has to come before anything
+        # that writes to its model: a model that has been written to has no
+        # solution any more, and `_shift_starts!` writes
         _carry_state!(state, nm, length(committed))
+        warm_start && (reuse ? _shift_starts!(nm, step) :
+                               (previous = _overlap_values(nm, kept, step)))
     end
 
     result = Dict{String,Any}(
@@ -614,6 +622,60 @@ function _warm_start!(nm::NetworkModel, previous, kept::Vector{Int})
 
     return nothing
 end
+
+"""
+    _shift_starts!(nm, step)
+
+Move the answer `nm` just gave back by `step` time steps, and leave it there as
+the starting point for the next window.
+
+This is [`_warm_start!`](@ref) for a model that is being **reused**, and it is
+the same idea arrived at for nothing. Where two windows are two models the
+overlap has to be carried between them, keyed by something both can agree on;
+where they are one model the overlap is already in it — the variable the next
+window will call step `j` is the variable this window called step `j + step`, and
+handing over means reading a value and writing a start on the same model.
+
+The last `step` steps have no counterpart to take one from, being the part of the
+horizon the next window sees for the first time, and are left at whatever start
+they had.
+
+Every value is read before any start is written, and the two passes are not an
+accident of style. Writing a start counts as modifying the model, and a model
+that is modified has no solution any more — so a loop that read and wrote by
+turns would find the answer it was reading gone after the first write. It fails
+that way on a cached model and, quietly, not on a direct one.
+"""
+function _shift_starts!(nm::NetworkModel, step::Int)
+    horizon = dim_length(nm, :time)
+    starts  = Pair{JuMP.VariableRef,Float64}[]
+
+    for n in nw_ids(nm)
+        later = coordinates(nm, n).time + step
+        later <= horizon || continue
+        m = similar_id(nm, n; time = later)
+
+        for (key, container) in var(nm; nw = n)
+            source = get(var(nm; nw = m), key, nothing)
+            source === nothing && continue
+
+            for (idx, v) in _variable_pairs(container)
+                v isa JuMP.VariableRef || continue
+                push!(starts, v => JuMP.value(_variable_at(source, idx)))
+            end
+        end
+    end
+
+    for (v, x) in starts
+        JuMP.set_start_value(v, x)
+    end
+
+    return nothing
+end
+
+"the variable at `idx` of a container, whichever kind it is"
+_variable_at(container::AbstractDict, idx) = container[idx]
+_variable_at(container, idx) = container[idx]
 
 "the `index => variable` pairs of a variable container, whichever kind it is"
 _variable_pairs(container::AbstractDict) = pairs(container)

@@ -964,25 +964,38 @@ discharge(result, steps) = [nw_solution(result, n)["unit"]["4"]["psd"] for n in 
         @test direct["objective"] ≈ result["objective"] rtol = 1e-6
     end
 
-    @testset "a reused model gives what a rebuilt one gives" begin
-        # distinct prices, so every window has one answer and the two rolls are
+    @testset "reuse and warm_start do not change the answer, in any combination" begin
+        # distinct prices, so every window has one answer and the rolls are
         # comparable, see the tied case above
         data = rolling_network([10.0, 40.0, 90.0, 200.0])
 
         for F in (LPFFormulation, IVRFormulation)
-            built  = quiet(() -> solve_rd(data, F, OPTIMIZER; horizon = 2, step = 1))
-            reused = quiet(() -> solve_rd(data, F, OPTIMIZER; horizon = 2, step = 1,
-                                          reuse = true))
+            built = quiet(() -> solve_rd(data, F, OPTIMIZER; horizon = 2, step = 1))
 
-            @test reused["termination_status"] == built["termination_status"]
-            @test reused["objective"] ≈ built["objective"] rtol = 1e-6
-            for n in 1:4, key in ("pg", "pgup", "pgdn")
-                @test nw_solution(reused, n)["unit"]["2"][key] ≈
-                      nw_solution(built, n)["unit"]["2"][key] atol = 1e-5
+            # `reuse` speaks to the building and `warm_start` to the solving, so
+            # they compose — and each of the four has to reach the same place.
+            # The hand-over takes a different route under `reuse`, within one
+            # model rather than between two, which is why all four are checked
+            for reuse in (false, true), warm_start in (false, true)
+                (reuse || warm_start) || continue
+                result = quiet(() -> solve_rd(data, F, OPTIMIZER; horizon = 2, step = 1,
+                                              reuse, warm_start))
+
+                @test result["termination_status"] == built["termination_status"]
+                @test result["objective"] ≈ built["objective"] rtol = 1e-6
+                for n in 1:4, key in ("pg", "pgup", "pgdn")
+                    @test nw_solution(result, n)["unit"]["2"][key] ≈
+                          nw_solution(built, n)["unit"]["2"][key] atol = 1e-5
+                end
+                # the battery carried its state across the windows either way
+                @test nw_solution(result, 4)["unit"]["4"]["es"] ≈
+                      nw_solution(built, 4)["unit"]["4"]["es"] atol = 1e-5
             end
 
             # one model served the windows that had the same shape; the short one
             # at the end has fewer indices and cannot
+            reused = quiet(() -> solve_rd(data, F, OPTIMIZER; horizon = 2, step = 1,
+                                          reuse = true))
             @test reused["horizon"]["built"] < built["horizon"]["built"]
         end
     end

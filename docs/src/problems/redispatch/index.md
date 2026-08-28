@@ -320,16 +320,21 @@ bookkeeping depends on how much of the run the solve is:
 
 | formulation | solver | `reuse` | `warm_start` | wall |
 |:---|:---|:---|:---|---:|
-| LPF | HiGHS | yes | no | **5.5 s** |
+| LPF | HiGHS | yes | no | **5.8 s** |
 | LPF | HiGHS | yes | yes | 6.0 s |
-| IVR | Ipopt | yes | no | 3.3 s |
+| IVR | Ipopt | yes | no | 3.6 s |
 | IVR | Ipopt | yes | yes | **2.9 s** |
 
 Under a [`LPFFormulation`](@ref) the model is a linear program and an LP solver
 disposes of it in well under a second per thousand windows, so gathering the
-overlap costs more than it saves — leave it off. Under an
+overlap still costs a little more than it saves — leave it off. Under an
 [`IVRFormulation`](@ref) the solve is most of the run and the same hand-over is
 worth about a fifth of the whole — turn it on.
+
+With `reuse` the hand-over is much the cheaper of its two forms: the windows are
+one model rather than two, so the variable the next window will call step `j` is
+the variable this one called step `j + step`, and handing over is a shift within
+the model rather than a dictionary carried between models.
 
 The two compose: `warm_start` acts on the solving, `reuse` on the building, and
 on the nonconvex formulation both together were both the fastest combination and

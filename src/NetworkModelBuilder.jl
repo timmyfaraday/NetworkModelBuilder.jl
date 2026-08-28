@@ -62,7 +62,6 @@ module NetworkModelBuilder
     include("prob/lf.jl")
     include("prob/opf.jl")
     include("prob/rd.jl")
-    include("prob/rolling_horizon.jl")
 
     # include — input and output
     include("io/common.jl")

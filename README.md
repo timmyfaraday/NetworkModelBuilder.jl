@@ -262,8 +262,7 @@ src/
 ├── prob/
 │   ├── lf.jl           LoadFlowProblem
 │   ├── opf.jl          OptimalPowerFlowProblem
-│   ├── rd.jl           RedispatchProblem
-│   └── rolling_horizon.jl  solving any problem as a sequence of windows
+│   └── rd.jl           RedispatchProblem, and the rolling horizon
 └── io/
     ├── common.jl
     └── matpower.jl

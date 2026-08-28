@@ -11,6 +11,7 @@
 
 using Test
 using Logging
+using Markdown
 
 using Ipopt
 using JuMP
@@ -42,4 +43,5 @@ quiet(f) = Logging.with_logger(f, Logging.NullLogger())
     include("rd.jl")
     include("multinetwork.jl")
     include("multiterminal.jl")
+    include("docs.jl")
 end

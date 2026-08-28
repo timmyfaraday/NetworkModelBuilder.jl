@@ -16,7 +16,7 @@ calls with one line added. A redispatch *is* a dispatch problem; the network
 does not care why the dispatch is being chosen.
 
 | | optimal power flow | redispatch |
-|:-|:-------------------|:-----------|
+|:--|:-------------------|:-----------|
 | generator | free within its capability | free within its capability, split into the market dispatch and the volumes moved |
 | storage | free within its ratings | the same, split against its market schedule |
 | edge rating | on every edge | on the monitored edges |

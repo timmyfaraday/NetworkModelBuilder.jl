@@ -10,6 +10,7 @@
 # v0.2.0 - network dependent data stored per component                         #
 # v0.3.0 - component hierarchy                                                 #
 # v0.4.0 - the linearized formulation                                          #
+# v0.5.0 - the redispatch problem                                              #
 ################################################################################
 
 module NetworkModelBuilder
@@ -29,6 +30,7 @@ module NetworkModelBuilder
     include("core/dimension.jl")
     include("core/network.jl")
     include("core/model.jl")
+    include("core/redispatch.jl")
 
     # include — components, following the (I, E, U) hierarchy
     include("comp/node/node.jl")
@@ -107,7 +109,7 @@ module NetworkModelBuilder
     export impedance, shunt_admittance, tap_ratio, dynamic_rating
 
     # export — components, unit
-    export AbstractGenerator, Generator, generation_cost
+    export AbstractGenerator, Generator, generation_cost, marginal_cost
     export AbstractLoad, FixedLoad, FlexibleLoad, demand, power_factor_ratio
     export AbstractStorage, Storage
     export AbstractShunt, Shunt
@@ -134,19 +136,26 @@ module NetworkModelBuilder
     export constraint_edge_angle_difference!, constraint_unit_power!
     export constraint_linear_flow!, constraint_linear_limits!
     export constraint_unit_injection!, susceptance, phase_shift
-    export variable_storage_active!
+    export variable_storage_active!, variable_storage_reactive!
     export variable_edge_series_current, variable_two_winding!
     export constraint_two_winding_limits!
     export time_step, require_time_dimension
-    export objective, objective_generation_cost, network_weight
+    export objective, objective_generation_cost, network_weight, default_weight
+    export objective_redispatch_cost
 
     # export — solution
     export build_solution, nw_solution, print_summary, solution
     export solution_node, solution_edge, solution_unit
     export solution_edge!, solution_unit!, solution_tap
 
+    # export — the redispatch problem
+    export Redispatch, redispatch_setup, is_monitored, monitored_edges
+    export control_mode, is_preventive, is_corrective
+    export redispatch_controls, redispatch_cost, redispatch_price
+    export constraint_redispatch_control
+
     # export — problems
-    export solve_lf, solve_opf
+    export solve_lf, solve_opf, solve_rd
 
     # export — input and output
     export parse_file, parse_matpower

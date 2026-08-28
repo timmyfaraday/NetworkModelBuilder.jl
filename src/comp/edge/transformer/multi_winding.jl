@@ -192,7 +192,8 @@ end
 """
     constraint_edge_limits(nm, MultiWindingTransformer; nw)
 
-The apparent power rating of every winding, applied per terminal.
+The apparent power rating of every winding, applied per terminal, and only where
+the problem watches the transformer for congestion, see [`is_monitored`](@ref).
 """
 function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{MultiWindingTransformer};
                                 nw::Int = nw_id_default(nm)
@@ -202,6 +203,7 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{MultiWindingTransf
     rating = get!(() -> Dict{Int,Any}(), con(nm; nw), :edge_rating)
 
     for e in ids(nm, MultiWindingTransformer; nw)
+        is_monitored(nm, e) || continue
         tf = edge(nm, e; nw)::MultiWindingTransformer
         rating[e] = [JuMP.@constraint(nm.model,
                          (vr[a.node]^2 + vi[a.node]^2) * (cr[a]^2 + ci[a]^2) <= tf.rate_a[k]^2)
@@ -275,7 +277,8 @@ end
 """
     constraint_edge_limits(nm, MultiWindingTransformer; nw)
 
-The rating of every winding, applied per terminal.
+The rating of every winding, applied per terminal, and only where the problem
+watches the transformer for congestion, see [`is_monitored`](@ref).
 """
 function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{MultiWindingTransformer};
                                 nw::Int = nw_id_default(nm)
@@ -284,6 +287,7 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{MultiWindingTransf
     limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :edge_limits)
 
     for e in ids(nm, MultiWindingTransformer; nw)
+        is_monitored(nm, e) || continue
         tf = edge(nm, e; nw)::MultiWindingTransformer
         limits[e] = [JuMP.@constraint(nm.model, -tf.rate_a[k] <= p[a] <= tf.rate_a[k])
                      for (k, a) in enumerate(edge_arcs(nm, e; nw)) if isfinite(tf.rate_a[k])]

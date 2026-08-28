@@ -63,7 +63,7 @@ build_model!(nm::NetworkModel{P,F}) where {P<:LoadFlowProblem,F<:LPFFormulation}
 |:--------------------------|:-----------------|:-----------------|:-----------------|:-----------------|
 | `LoadFlowProblem`         | yes              | yes              | —                | —                |
 | `OptimalPowerFlowProblem` | yes              | yes              | —                | —                |
-| `RedispatchProblem`       | sketched         | sketched         | —                | —                |
+| `RedispatchProblem`       | yes              | yes              | —                | —                |
 
 See [The linearized formulation](@ref) for what `LPFFormulation` approximates
 and what that costs.
@@ -86,6 +86,7 @@ implemented_models
 objective
 objective_generation_cost
 network_weight
+default_weight
 ```
 
 ## The solution

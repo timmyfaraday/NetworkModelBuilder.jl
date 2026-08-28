@@ -67,9 +67,11 @@ Beyond the [symbols in the introduction](@ref "Notation"), these pages use:
 | ``E^{\text{mw}}`` | the multi-winding transformers |
 | ``U^{\text{g}}, U^{\text{d}}, U^{\text{s}}, U^{\text{sh}}`` | the generators, loads, storage units and shunts |
 | ``U^{\text{fl}} \subseteq U^{\text{d}}`` | the flexible loads |
+| ``E^{\text{mon}} \subseteq E`` | the monitored edges of a redispatch |
 | ``a^{\text{f}}_{e}, a^{\text{t}}_{e}`` | the from and to arc of a two-terminal edge `e` |
 | ``a_{e,k}`` | the arc of winding `k` of a multi-winding transformer |
 | ``\mathcal{N}`` | the network indices, ``\mathcal{T}`` a horizon along `:time` |
+| ``p^{\uparrow}_{u}, p^{\downarrow}_{u}`` | the volumes a unit moved up and down from its market schedule |
 
 Every variable and constraint below exists **once per network index**. The index
 is written out only where a constraint relates one index to another; elsewhere it

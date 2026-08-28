@@ -21,20 +21,45 @@ The weight of network index `n` in an objective that spans several network
 indices.
 
 The weight is the product, over the dimensions of the problem, of the `:weight`
-property of the coordinate `n` has along that dimension, defaulting to one where
-the property is absent. Setting `:weight` to the duration of a time step, to the
-probability of a scenario, or to the product of both, is what turns a
-single-index objective into an energy or an expected cost.
+property of the coordinate `n` has along that dimension, falling back on
+[`default_weight`](@ref) where the property is absent. Setting `:weight` to the
+duration of a time step, to the probability of a scenario, or to the product of
+both, is what turns a single-index objective into an energy or an expected cost.
 """
 function network_weight(nm::NetworkModel, n::Int)
     dim = dimension(nm)
     w   = 1.0
     for name in dim_names(dim)
-        w *= dim_prop(dim, n, name, :weight, 1.0)
+        w *= dim_prop(dim, n, name, :weight, default_weight(dim, name))
     end
 
     return w
 end
+
+"""
+    default_weight(dim, name)
+
+The weight a coordinate of dimension `name` carries when the data gives it no
+`:weight` property.
+
+One, except along `:contingency`, where it is `1/N` with `N` the number of
+contingencies. A set of contingencies is a set of *states of the world*, and a
+weight that does not sum to one over them is not a probability: the objective
+would then be the sum of the cost in every state rather than its expectation,
+and a measure that has to serve every state — a preventive one, see
+[`Redispatch`](@ref) — would be charged once per contingency while a corrective
+one is charged once. Uniform probabilities are the least surprising default, and
+give the two the same footing.
+
+Give the coordinates an explicit `:weight` wherever the contingencies are not
+equally likely, which is the usual case; it overrides this entirely.
+
+```julia
+Dimension(:contingency => [Dict{Symbol,Any}(:weight => p) for p in (0.97, 0.02, 0.01)])
+```
+"""
+default_weight(dim::Dimension, name::Symbol) =
+    name === :contingency ? 1 / dim_length(dim, :contingency) : 1.0
 
 """
     objective(nm)

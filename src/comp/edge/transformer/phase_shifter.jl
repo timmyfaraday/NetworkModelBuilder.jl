@@ -164,3 +164,24 @@ end
 
 phase_shift(nm::NetworkModel{P,F}, ::PhaseShifter, e::Int; nw::Int
            ) where {P<:AbstractDispatchProblem,F<:LPFFormulation} = var(nm, :ta, e; nw)
+
+################################################################################
+# PhaseShifter — the redispatch problem                                        #
+################################################################################
+
+"""
+    redispatch_controls(nm, PhaseShifter)
+
+The ratio of a preventive phase shifter, held equal across the contingencies.
+
+Which variables that is depends on the formulation: the current based one
+carries the ratio as `(:tr, :ti)` to stay polynomial, the linearized one as the
+angle `(:ta,)` itself. A phase shifter is a **non-costly** measure — it has no
+[`redispatch_cost`](@ref) method, so it moves for free — and it is the one
+transformer control that survives the linearization.
+"""
+redispatch_controls(::NetworkModel{P,F}, ::Type{PhaseShifter}
+                   ) where {P<:AbstractProblemType,F<:IVRFormulation} = (:tr, :ti)
+
+redispatch_controls(::NetworkModel{P,F}, ::Type{PhaseShifter}
+                   ) where {P<:AbstractProblemType,F<:LPFFormulation} = (:ta,)

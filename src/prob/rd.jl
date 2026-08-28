@@ -327,9 +327,14 @@ Remaining keyword arguments reach [`instantiate_model`](@ref) and
 !!! tip "`reuse` is where the time is"
     A window's model is very nearly the one the next window needs, and building
     it again is most of what a roll does. With `reuse` it is built once and
-    updated after that — [`update_model!`](@ref) — which saves the building, and
-    on a solver that keeps a basis saves much of the solving too, since the
-    updated problem is a few numbers away from the one just solved.
+    updated after that — [`update_model!`](@ref) — which took the building of a
+    year from 5.7 s to 3.8 s.
+
+    It saves the *building* and not the solving: on the year measured, solver
+    time was 1.72 s rebuilt and 1.65 s reused. A solver does not carry a basis
+    across rows that have been rewritten, so an updated problem is re-solved
+    much as a fresh one is. `warm_start` is what addresses the solving, and
+    where it pays it pays on top of this rather than instead of it.
 
     Reuse is only sound between windows of the same *shape*, so each window is
     checked against the last with [`same_structure`](@ref) and built afresh
@@ -355,19 +360,28 @@ Remaining keyword arguments reach [`instantiate_model`](@ref) and
     A direct model carries its own optimizer, so the `optimizer` argument is then
     only a fallback and is left unused. Not every solver supports direct mode.
 
-!!! tip "Choose the solver before reaching for `warm_start`"
-    Across a year at `horizon = 24, step = 4` — 2190 windows — solving is about
-    two thirds of the work, building the models a quarter, and cutting the
-    windows out under a twentieth. Which solver does that two thirds matters
-    more than anything else here: a [`LPFFormulation`](@ref) redispatch is a
-    linear program, and giving it to an LP solver rather than to an interior
-    point method roughly halves the whole run and returns `OPTIMAL` rather than
-    a status that says it nearly converged.
+!!! tip "`warm_start` pays on a nonlinear solve and not on a linear one"
+    Handing the overlap over reliably takes 15–25% off the *solve*, whichever
+    formulation is being built. Whether that is worth the bookkeeping depends on
+    how much of the run the solve is:
 
-    `warm_start` is worth having where that choice is not available — a
-    nonconvex [`IVRFormulation`](@ref) has no LP solver to be given to — and is
-    not worth having once it is: on an LP solver the overlap it hands over saves
-    less solver time than it costs to hand over.
+    | formulation | solver | `reuse` | `warm_start` | wall |
+    |:---|:---|:---|:---|---:|
+    | LPF | HiGHS | yes | no | **5.5 s** |
+    | LPF | HiGHS | yes | yes | 6.0 s |
+    | IVR | Ipopt | yes | no | 3.3 s |
+    | IVR | Ipopt | yes | yes | **2.9 s** |
+
+    Under a [`LPFFormulation`](@ref) the model is a linear program, an LP solver
+    disposes of it in well under a second per thousand windows, and gathering
+    the overlap costs more than it saves. Under an [`IVRFormulation`](@ref) the
+    solve is most of the run, and the same hand-over is worth about a fifth of
+    the whole.
+
+    On the network measured, `reuse` and `warm_start` together also reached the
+    same solution a cold roll did, where `warm_start` alone had settled on a
+    slightly worse local one — but that is one network, and the warning below
+    stands.
 
 !!! warning "A warm start can change the roll, even where every window is convex"
     Consecutive windows overlap in `horizon - step` of their steps, so most of

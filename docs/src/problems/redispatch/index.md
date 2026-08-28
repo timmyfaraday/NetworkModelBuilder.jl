@@ -301,14 +301,41 @@ says the two windows have the same shape. On the year above that is 2184 of the
 2190 windows; the six that are built are the first and the short ones at the
 end.
 
-!!! note "Where `warm_start` fits now"
-    It does not, on this path. `warm_start` hands the next window the last
-    window's answer, which took 28% off Ipopt — but a reused model keeps the
-    solver's own basis, which is the better version of the same idea, and on an
-    LP solver the hand-over costs more in bookkeeping than it saves. Reach for
-    `warm_start` where neither is available: a nonconvex
-    [`IVRFormulation`](@ref), where `reuse` still saves the building but Ipopt
-    has no basis to carry.
+It saves the building and not the solving. Splitting the year's 5.5 s in two:
+
+| | building | solving |
+|:--|--:|--:|
+| rebuilt every window | 5.7 s | 1.7 s |
+| `reuse` | **3.8 s** | 1.7 s |
+
+A solver does not carry a basis across rows that have been rewritten, so an
+updated problem is re-solved much as a fresh one is. What addresses the solving
+is `warm_start`, and it is a separate question.
+
+### Should `warm_start` be on?
+
+Handing the next window the overlap of the last window's answer takes 15–25% off
+the solve, whichever formulation is being built. Whether that is worth the
+bookkeeping depends on how much of the run the solve is:
+
+| formulation | solver | `reuse` | `warm_start` | wall |
+|:---|:---|:---|:---|---:|
+| LPF | HiGHS | yes | no | **5.5 s** |
+| LPF | HiGHS | yes | yes | 6.0 s |
+| IVR | Ipopt | yes | no | 3.3 s |
+| IVR | Ipopt | yes | yes | **2.9 s** |
+
+Under a [`LPFFormulation`](@ref) the model is a linear program and an LP solver
+disposes of it in well under a second per thousand windows, so gathering the
+overlap costs more than it saves — leave it off. Under an
+[`IVRFormulation`](@ref) the solve is most of the run and the same hand-over is
+worth about a fifth of the whole — turn it on.
+
+The two compose: `warm_start` acts on the solving, `reuse` on the building, and
+on the nonconvex formulation both together were both the fastest combination and
+the one that reached the same solution a cold roll did, where `warm_start` alone
+had settled on a slightly worse local optimum. Read the warning on
+[`solve_rolling_horizon`](@ref) before relying on that.
 
 ### Reading the result
 

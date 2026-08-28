@@ -188,6 +188,11 @@ and build it unless `build = false`.
 `data` may be a [`NetworkData`](@ref) or the path of a file that
 [`parse_file`](@ref) understands.
 
+`ext` is **copied**, not held: a model writes into its own `ext` — the register
+[`constrain!`](@ref) keeps is there — and two models handed the same dictionary
+would write over each other. That is not hypothetical; it is what a rolling
+horizon does, building one model per window from one setup.
+
 # Examples
 ```julia
 julia> nm = instantiate_model("case14.m", LoadFlowProblem, IVRFormulation);
@@ -203,7 +208,7 @@ function instantiate_model(data::NetworkData, ::Type{P}, ::Type{F};
                             Dict(n => Dict{Symbol,Any}() for n in nws),
                             Dict(n => Dict{Symbol,Any}() for n in nws),
                             Dict(n => Dict{Symbol,Any}() for n in nws),
-                            Dict{String,Any}(), nws, ext)
+                            Dict{String,Any}(), nws, copy(ext))
     build && build_model!(nm)
 
     return nm

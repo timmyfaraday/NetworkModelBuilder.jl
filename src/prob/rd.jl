@@ -127,7 +127,8 @@ function constraint_redispatch_control(nm::NetworkModel)
                     x = _control_variable(nm, key, id, n)
                     y = _control_variable(nm, key, id, base)
                     (x === nothing || y === nothing) && continue
-                    tie[(family, id, key, n)] = JuMP.@constraint(nm.model, x == y)
+                    tie[(family, id, key, n)] = constrain!(nm, :redispatch_control,
+                        (family, id, key), JuMP.@build_constraint(x == y); nw = n)
                 end
             end
         end

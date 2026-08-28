@@ -122,22 +122,17 @@ function variable_storage_active!(nm::NetworkModel, ::Type{T}; nw::Int) where {T
     isempty(ids(nm, T; nw)) && return nothing
     require_time_dimension(nm, T)
 
-    psc = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :psc)
-    psd = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :psd)
-    es  = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :es)
+    variable_container!(nm, :psc, :psd, :es; nw)
 
     for u in ids(nm, T; nw)
         st = unit(nm, u; nw)::T
 
-        psc[u] = JuMP.@variable(nm.model, base_name = "$(nw)_psc[$u]",
-                                lower_bound = 0.0, upper_bound = st.charge_rating,
-                                start = 0.0)
-        psd[u] = JuMP.@variable(nm.model, base_name = "$(nw)_psd[$u]",
-                                lower_bound = 0.0, upper_bound = st.discharge_rating,
-                                start = 0.0)
-        es[u]  = JuMP.@variable(nm.model, base_name = "$(nw)_es[$u]",
-                                lower_bound = 0.0, upper_bound = st.energy_capacity,
-                                start = st.energy_initial)
+        variable!(nm, :psc, u; nw, base_name = "$(nw)_psc[$u]", start = 0.0,
+                  lower = 0.0, upper = st.charge_rating)
+        variable!(nm, :psd, u; nw, base_name = "$(nw)_psd[$u]", start = 0.0,
+                  lower = 0.0, upper = st.discharge_rating)
+        variable!(nm, :es, u; nw, base_name = "$(nw)_es[$u]", start = st.energy_initial,
+                  lower = 0.0, upper = st.energy_capacity)
     end
 
     return nothing
@@ -162,12 +157,12 @@ end
 
 "the reactive power of every storage unit, in a formulation that has reactive power"
 function variable_storage_reactive!(nm::NetworkModel, ::Type{T}; nw::Int) where {T<:AbstractStorage}
-    qs = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :qs)
+    variable_container!(nm, :qs; nw)
 
     for u in ids(nm, T; nw)
         st = unit(nm, u; nw)::T
-        qs[u] = JuMP.@variable(nm.model, base_name = "$(nw)_qs[$u]",
-                               lower_bound = st.qmin, upper_bound = st.qmax, start = 0.0)
+        variable!(nm, :qs, u; nw, base_name = "$(nw)_qs[$u]", start = 0.0,
+                  lower = st.qmin, upper = st.qmax)
     end
 
     return nothing
@@ -248,9 +243,9 @@ function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
             start = is_first_id(nm, n, :time) ? st.energy_initial :
                                                 var(nm, :es, u; nw = prev_id(nm, n, :time))
 
-            balance[(u, n)] = JuMP.@constraint(nm.model,
+            balance[(u, n)] = constrain!(nm, :storage_balance, u, JuMP.@build_constraint(
                 es[u] == start + dt * (st.charge_efficiency * psc[u] -
-                                       psd[u] / st.discharge_efficiency))
+                                       psd[u] / st.discharge_efficiency)); nw = n)
         end
     end
 
@@ -361,18 +356,15 @@ function variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default
 end
 
 function _variable_storage_redispatch(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractStorage}
-    psup = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :psup)
-    psdn = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :psdn)
+    variable_container!(nm, :psup, :psdn; nw)
 
     for u in ids(nm, T; nw)
         st = unit(nm, u; nw)::T
 
-        psup[u] = JuMP.@variable(nm.model, base_name = "$(nw)_psup[$u]",
-                                 lower_bound = 0.0, start = 0.0,
-                                 upper_bound = max(st.discharge_rating - st.ps, 0.0))
-        psdn[u] = JuMP.@variable(nm.model, base_name = "$(nw)_psdn[$u]",
-                                 lower_bound = 0.0, start = 0.0,
-                                 upper_bound = max(st.ps + st.charge_rating, 0.0))
+        variable!(nm, :psup, u; nw, base_name = "$(nw)_psup[$u]", start = 0.0,
+                  lower = 0.0, upper = max(st.discharge_rating - st.ps, 0.0))
+        variable!(nm, :psdn, u; nw, base_name = "$(nw)_psdn[$u]", start = 0.0,
+                  lower = 0.0, upper = max(st.ps + st.charge_rating, 0.0))
     end
 
     return nothing
@@ -421,8 +413,8 @@ function _constraint_storage_redispatch(nm::NetworkModel, ::Type{T}, nw::Int
 
     for u in ids(nm, T; nw)
         st = unit(nm, u; nw)::T
-        split[u] = JuMP.@constraint(nm.model,
-            psd[u] - psc[u] == st.ps + psup[u] - psdn[u])
+        split[u] = constrain!(nm, :storage_redispatch, u, JuMP.@build_constraint(
+            psd[u] - psc[u] == st.ps + psup[u] - psdn[u]); nw)
     end
 
     return nothing

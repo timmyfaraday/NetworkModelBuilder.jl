@@ -82,19 +82,14 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{PhaseShifter}; nw::Int = nw
                       ) where {P<:AbstractDispatchProblem,F<:IVRFormulation}
     variable_two_winding!(nm, PhaseShifter; nw)
 
-    tr = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :tr)
-    ti = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :ti)
+    variable_container!(nm, :tr, :ti; nw)
 
     for e in ids(nm, PhaseShifter; nw)
         ps = edge(nm, e; nw)::PhaseShifter
-        tr[e] = JuMP.@variable(nm.model, base_name = "$(nw)_tr[$e]",
-                               lower_bound = ps.tm * cos(max(abs(ps.ta_min), abs(ps.ta_max))),
-                               upper_bound = ps.tm,
-                               start = ps.tm * cos(ps.ta))
-        ti[e] = JuMP.@variable(nm.model, base_name = "$(nw)_ti[$e]",
-                               lower_bound = ps.tm * sin(ps.ta_min),
-                               upper_bound = ps.tm * sin(ps.ta_max),
-                               start = ps.tm * sin(ps.ta))
+        variable!(nm, :tr, e; nw, base_name = "$(nw)_tr[$e]", start = ps.tm * cos(ps.ta),
+                  lower = ps.tm * cos(max(abs(ps.ta_min), abs(ps.ta_max))), upper = ps.tm)
+        variable!(nm, :ti, e; nw, base_name = "$(nw)_ti[$e]", start = ps.tm * sin(ps.ta),
+                  lower = ps.tm * sin(ps.ta_min), upper = ps.tm * sin(ps.ta_max))
     end
 
     return nothing
@@ -125,9 +120,12 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{PhaseShifter}; nw:
     for e in ids(nm, PhaseShifter; nw)
         ps = edge(nm, e; nw)::PhaseShifter
         tap[e] = (
-            JuMP.@constraint(nm.model, tr[e]^2 + ti[e]^2 == ps.tm^2),
-            JuMP.@constraint(nm.model, ti[e] <= tan(ps.ta_max) * tr[e]),
-            JuMP.@constraint(nm.model, ti[e] >= tan(ps.ta_min) * tr[e]))
+            constrain!(nm, :tap_setting, (e, :magnitude),
+                       JuMP.@build_constraint(tr[e]^2 + ti[e]^2 == ps.tm^2); nw),
+            constrain!(nm, :tap_setting, (e, :max),
+                       JuMP.@build_constraint(ti[e] <= tan(ps.ta_max) * tr[e]); nw),
+            constrain!(nm, :tap_setting, (e, :min),
+                       JuMP.@build_constraint(ti[e] >= tan(ps.ta_min) * tr[e]); nw))
     end
 
     return nothing
@@ -150,13 +148,13 @@ survives the linearization, and it is the classic use for one.
 """
 function variable_edge(nm::NetworkModel{P,F}, ::Type{PhaseShifter}; nw::Int = nw_id_default(nm)
                       ) where {P<:AbstractDispatchProblem,F<:LPFFormulation}
-    ta = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :ta)
+    variable_container!(nm, :ta; nw)
 
     for e in ids(nm, PhaseShifter; nw)
         ps = edge(nm, e; nw)::PhaseShifter
-        ta[e] = JuMP.@variable(nm.model, base_name = "$(nw)_ta[$e]",
-                               lower_bound = ps.ta_min, upper_bound = ps.ta_max,
-                               start = clamp(ps.ta, ps.ta_min, ps.ta_max))
+        variable!(nm, :ta, e; nw, base_name = "$(nw)_ta[$e]",
+                  start = clamp(ps.ta, ps.ta_min, ps.ta_max),
+                  lower = ps.ta_min, upper = ps.ta_max)
     end
 
     return nothing

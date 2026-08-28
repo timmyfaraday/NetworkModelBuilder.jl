@@ -139,19 +139,14 @@ variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
 
 function _variable_generator_power(nm::NetworkModel, ::Type{T}, nw::Int, bounded::Bool
                                   ) where {T<:AbstractGenerator}
-    pg = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :pg)
-    qg = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :qg)
+    variable_container!(nm, :pg, :qg; nw)
 
     for u in ids(nm, T; nw)
-        g     = unit(nm, u; nw)::T
-        pg[u] = JuMP.@variable(nm.model, base_name = "$(nw)_pg[$u]", start = g.pg)
-        qg[u] = JuMP.@variable(nm.model, base_name = "$(nw)_qg[$u]", start = g.qg)
-
-        bounded || continue
-        isfinite(g.pmin) && JuMP.set_lower_bound(pg[u], g.pmin)
-        isfinite(g.pmax) && JuMP.set_upper_bound(pg[u], g.pmax)
-        isfinite(g.qmin) && JuMP.set_lower_bound(qg[u], g.qmin)
-        isfinite(g.qmax) && JuMP.set_upper_bound(qg[u], g.qmax)
+        g = unit(nm, u; nw)::T
+        variable!(nm, :pg, u; nw, base_name = "$(nw)_pg[$u]", start = g.pg,
+                  lower = bounded ? g.pmin : nothing, upper = bounded ? g.pmax : nothing)
+        variable!(nm, :qg, u; nw, base_name = "$(nw)_qg[$u]", start = g.qg,
+                  lower = bounded ? g.qmin : nothing, upper = bounded ? g.qmax : nothing)
     end
 
     return nothing
@@ -184,9 +179,8 @@ function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     for u in ids(nm, T; nw)
         g  = unit(nm, u; nw)::T
         nd = node(nm, g.node; nw)
-        nd.type == REF && continue
-        JuMP.fix(pg[u], g.pg; force = true)
-        nd.type == PQ && JuMP.fix(qg[u], g.qg; force = true)
+        bound!(pg[u]; fix = nd.type == REF ? nothing : g.pg)
+        bound!(qg[u]; fix = nd.type == PQ  ? g.qg : nothing)
     end
 
     return nothing
@@ -249,15 +243,12 @@ variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
 
 function _variable_generator_active(nm::NetworkModel, ::Type{T}, nw::Int, bounded::Bool
                                    ) where {T<:AbstractGenerator}
-    pg = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :pg)
+    variable_container!(nm, :pg; nw)
 
     for u in ids(nm, T; nw)
-        g     = unit(nm, u; nw)::T
-        pg[u] = JuMP.@variable(nm.model, base_name = "$(nw)_pg[$u]", start = g.pg)
-
-        bounded || continue
-        isfinite(g.pmin) && JuMP.set_lower_bound(pg[u], g.pmin)
-        isfinite(g.pmax) && JuMP.set_upper_bound(pg[u], g.pmax)
+        g = unit(nm, u; nw)::T
+        variable!(nm, :pg, u; nw, base_name = "$(nw)_pg[$u]", start = g.pg,
+                  lower = bounded ? g.pmin : nothing, upper = bounded ? g.pmax : nothing)
     end
 
     return nothing
@@ -279,8 +270,7 @@ function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     pg = var(nm, :pg; nw)
     for u in ids(nm, T; nw)
         g = unit(nm, u; nw)::T
-        node(nm, g.node; nw).type == REF && continue
-        JuMP.fix(pg[u], g.pg; force = true)
+        bound!(pg[u]; fix = node(nm, g.node; nw).type == REF ? nothing : g.pg)
     end
 
     return nothing
@@ -379,19 +369,15 @@ end
 
 function _variable_generator_redispatch(nm::NetworkModel, ::Type{T}, nw::Int
                                        ) where {T<:AbstractGenerator}
-    pgup = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :pgup)
-    pgdn = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :pgdn)
+    variable_container!(nm, :pgup, :pgdn; nw)
 
     for u in ids(nm, T; nw)
         g = unit(nm, u; nw)::T
 
-        pgup[u] = JuMP.@variable(nm.model, base_name = "$(nw)_pgup[$u]",
-                                 lower_bound = 0.0, start = 0.0)
-        pgdn[u] = JuMP.@variable(nm.model, base_name = "$(nw)_pgdn[$u]",
-                                 lower_bound = 0.0, start = 0.0)
-
-        isfinite(g.pmax) && JuMP.set_upper_bound(pgup[u], max(g.pmax - g.pg, 0.0))
-        isfinite(g.pmin) && JuMP.set_upper_bound(pgdn[u], max(g.pg - g.pmin, 0.0))
+        variable!(nm, :pgup, u; nw, base_name = "$(nw)_pgup[$u]", start = 0.0,
+                  lower = 0.0, upper = isfinite(g.pmax) ? max(g.pmax - g.pg, 0.0) : nothing)
+        variable!(nm, :pgdn, u; nw, base_name = "$(nw)_pgdn[$u]", start = 0.0,
+                  lower = 0.0, upper = isfinite(g.pmin) ? max(g.pg - g.pmin, 0.0) : nothing)
     end
 
     return nothing
@@ -441,7 +427,8 @@ function _constraint_generator_redispatch(nm::NetworkModel, ::Type{T}, nw::Int
 
     for u in ids(nm, T; nw)
         g = unit(nm, u; nw)::T
-        split[u] = JuMP.@constraint(nm.model, pg[u] == g.pg + pgup[u] - pgdn[u])
+        split[u] = constrain!(nm, :generator_redispatch, u,
+                       JuMP.@build_constraint(pg[u] == g.pg + pgup[u] - pgdn[u]); nw)
     end
 
     return nothing

@@ -49,8 +49,8 @@ function variable_unit_injection_current(nm::NetworkModel{P,F}; nw::Int = nw_id_
                                         ) where {P<:AbstractProblemType,F<:IVRFormulation}
     U = ids(nm, AbstractUnit; nw)
 
-    var(nm; nw)[:cru] = JuMP.@variable(nm.model, [u in U], base_name = "$(nw)_cru", start = 0.0)
-    var(nm; nw)[:ciu] = JuMP.@variable(nm.model, [u in U], base_name = "$(nw)_ciu", start = 0.0)
+    variables!(nm, :cru, U; nw, base_name = "$(nw)_cru")
+    variables!(nm, :ciu, U; nw, base_name = "$(nw)_ciu")
 
     return nothing
 end
@@ -84,7 +84,7 @@ function variable_unit_injection_power(nm::NetworkModel{P,F}; nw::Int = nw_id_de
                                       ) where {P<:AbstractProblemType,F<:LPFFormulation}
     U = ids(nm, AbstractUnit; nw)
 
-    var(nm; nw)[:pu] = JuMP.@variable(nm.model, [u in U], base_name = "$(nw)_pu", start = 0.0)
+    variables!(nm, :pu, U; nw, base_name = "$(nw)_pu")
 
     return nothing
 end
@@ -154,8 +154,10 @@ function constraint_unit_power!(nm::NetworkModel, u::Int, p, q; nw::Int)
     cru, ciu = var(nm, :cru; nw), var(nm, :ciu; nw)
 
     return (
-        JuMP.@constraint(nm.model, p == vr[i] * cru[u] + vi[i] * ciu[u]),
-        JuMP.@constraint(nm.model, q == vi[i] * cru[u] - vr[i] * ciu[u]))
+        constrain!(nm, :unit_power, (u, :active),
+                   JuMP.@build_constraint(p == vr[i] * cru[u] + vi[i] * ciu[u]); nw),
+        constrain!(nm, :unit_power, (u, :reactive),
+                   JuMP.@build_constraint(q == vi[i] * cru[u] - vr[i] * ciu[u]); nw))
 end
 
 """
@@ -166,7 +168,8 @@ of [`constraint_unit_power!`](@ref). `p` is an injection, so a load hands in the
 negative of what it withdraws.
 """
 constraint_unit_injection!(nm::NetworkModel, u::Int, p; nw::Int) =
-    JuMP.@constraint(nm.model, var(nm, :pu, u; nw) == p)
+    constrain!(nm, :unit_injection, u,
+               JuMP.@build_constraint(var(nm, :pu, u; nw) == p); nw)
 
 ################################################################################
 # Unit — constraints across network indices                                    #

@@ -17,6 +17,7 @@ module NetworkModelBuilder
 
     # import pkgs
     import JuMP
+    import MathOptInterface as MOI
     import Printf
 
     # pkg constants
@@ -30,6 +31,7 @@ module NetworkModelBuilder
     include("core/dimension.jl")
     include("core/network.jl")
     include("core/model.jl")
+    include("core/rebuild.jl")
     include("core/redispatch.jl")
     include("core/window.jl")
 
@@ -119,6 +121,8 @@ module NetworkModelBuilder
     export register_edge_type!, register_unit_type!, edge_types, unit_types
 
     # export — model
+    export constrain!, variable!, variables!, variable_container!, bound!
+    export registered_constraints
     export NetworkModel, problem_type, formulation_type
     export instantiate_model, build_model!, optimize_model!, solve_model
     export register_model!, implemented_models

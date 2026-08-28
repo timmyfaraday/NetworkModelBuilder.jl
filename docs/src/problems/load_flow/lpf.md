@@ -94,7 +94,7 @@ conductance.
 Affine constraints and a constant objective, so any LP solver will do. On case14:
 
 | | variables | constraints |
-|:-|----------:|------------:|
+|:--|----------:|------------:|
 | case14 | 76 | 76 |
 
 Against 198 and 198 for the same problem in the IVR formulation.

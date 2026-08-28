@@ -148,7 +148,7 @@ Quadratic equality constraints throughout, hence nonconvex; it needs a nonlinear
 solver. On case14, which has 14 nodes, 20 edges and 17 units:
 
 | | variables | constraints |
-|:-|----------:|------------:|
+|:--|----------:|------------:|
 | case14 | 198 | 198 |
 
 Square, as a determinate problem should be.

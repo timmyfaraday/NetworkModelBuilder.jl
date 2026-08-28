@@ -102,7 +102,7 @@ Affine constraints with a quadratic objective, so a QP solver suffices, and an L
 solver where every cost is linear. On case14:
 
 | | variables | constraints |
-|:-|----------:|------------:|
+|:--|----------:|------------:|
 | case14 | 76 | 82 |
 
 Against 198 and 294 for the same problem in the IVR formulation.

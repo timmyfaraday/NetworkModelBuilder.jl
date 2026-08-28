@@ -106,6 +106,9 @@ end
 
 register_edge_type!(Transformer)
 
+"a two-winding transformer gates on the same three fields a branch does"
+structure_gates(::AbstractTwoWindingTransformer) = (:rate_a, :angmin, :angmax)
+
 "the series impedance of a transformer resolved at one network index"
 impedance(tf::AbstractTransformer) = (tf.r, tf.x)
 
@@ -149,12 +152,13 @@ variable_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
 function variable_two_winding!(nm::NetworkModel, ::Type{T}; nw::Int) where {T<:AbstractTwoWindingTransformer}
     variable_edge_series_current(nm, T; nw)
 
-    vtr = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :vtr)
-    vti = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :vti)
+
+
+    variable_container!(nm, :vtr, :vti; nw)
 
     for e in ids(nm, T; nw)
-        vtr[e] = JuMP.@variable(nm.model, base_name = "$(nw)_vtr[$e]", start = 1.0)
-        vti[e] = JuMP.@variable(nm.model, base_name = "$(nw)_vti[$e]", start = 0.0)
+        variable!(nm, :vtr, e; nw, base_name = "$(nw)_vtr[$e]", start = 1.0)
+        variable!(nm, :vti, e; nw, base_name = "$(nw)_vti[$e]", start = 0.0)
     end
 
     return nothing
@@ -198,8 +202,10 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
         tr, ti     = tap_ratio(nm, tf, e; nw)
 
         ratio[e] = (
-            JuMP.@constraint(nm.model, vr[i] == tr * vtr[e] - ti * vti[e]),
-            JuMP.@constraint(nm.model, vi[i] == tr * vti[e] + ti * vtr[e]))
+            constrain!(nm, :transformer_ratio, (e, :real),
+                       JuMP.@build_constraint(vr[i] == tr * vtr[e] - ti * vti[e]); nw),
+            constrain!(nm, :transformer_ratio, (e, :imag),
+                       JuMP.@build_constraint(vi[i] == tr * vti[e] + ti * vtr[e]); nw))
 
         ctr = JuMP.@expression(nm.model, tr * cr[a_fr] + ti * ci[a_fr])
         cti = JuMP.@expression(nm.model, tr * ci[a_fr] - ti * cr[a_fr])

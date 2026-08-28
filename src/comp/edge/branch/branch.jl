@@ -90,6 +90,15 @@ end
 
 register_edge_type!(Branch)
 
+"""
+    structure_gates(br)
+
+A branch writes its rating only where `rate_a` is finite and its angle limits
+only where they fall inside `(-π/2, π/2)`, so those three decide the shape of
+its model rather than a number in it. See [`structure_gates`](@ref).
+"""
+structure_gates(::AbstractBranch) = (:rate_a, :angmin, :angmax)
+
 "the series impedance of a branch resolved at one network index"
 impedance(br::AbstractBranch) = (br.r, br.x)
 

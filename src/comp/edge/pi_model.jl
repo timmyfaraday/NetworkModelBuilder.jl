@@ -55,12 +55,18 @@ function constraint_pi_section!(nm::NetworkModel, ctr, cti, vtr, vti, a_to::Arc,
     csr, csi = var(nm, :csr; nw), var(nm, :csi; nw)
 
     return (
-        JuMP.@constraint(nm.model, ctr == g_fr * vtr - b_fr * vti + csr[e]),
-        JuMP.@constraint(nm.model, cti == g_fr * vti + b_fr * vtr + csi[e]),
-        JuMP.@constraint(nm.model, cr[a_to] == -csr[e] + g_to * vr[j] - b_to * vi[j]),
-        JuMP.@constraint(nm.model, ci[a_to] == -csi[e] + g_to * vi[j] + b_to * vr[j]),
-        JuMP.@constraint(nm.model, vtr - vr[j] == r * csr[e] - x * csi[e]),
-        JuMP.@constraint(nm.model, vti - vi[j] == r * csi[e] + x * csr[e]),
+        constrain!(nm, :pi_section, (e, :cr_fr),
+                   JuMP.@build_constraint(ctr == g_fr * vtr - b_fr * vti + csr[e]); nw),
+        constrain!(nm, :pi_section, (e, :ci_fr),
+                   JuMP.@build_constraint(cti == g_fr * vti + b_fr * vtr + csi[e]); nw),
+        constrain!(nm, :pi_section, (e, :cr_to),
+                   JuMP.@build_constraint(cr[a_to] == -csr[e] + g_to * vr[j] - b_to * vi[j]); nw),
+        constrain!(nm, :pi_section, (e, :ci_to),
+                   JuMP.@build_constraint(ci[a_to] == -csi[e] + g_to * vi[j] + b_to * vr[j]); nw),
+        constrain!(nm, :pi_section, (e, :vr),
+                   JuMP.@build_constraint(vtr - vr[j] == r * csr[e] - x * csi[e]); nw),
+        constrain!(nm, :pi_section, (e, :vi),
+                   JuMP.@build_constraint(vti - vi[j] == r * csi[e] + x * csr[e]); nw),
     )
 end
 
@@ -75,12 +81,11 @@ contribute to it: the dispatcher visits one concrete type at a time, and each
 adds its own edges to the same two containers.
 """
 function variable_edge_series_current(nm::NetworkModel, ::Type{T}; nw::Int) where {T<:AbstractEdge}
-    csr = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :csr)
-    csi = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :csi)
+    variable_container!(nm, :csr, :csi; nw)
 
     for e in ids(nm, T; nw)
-        csr[e] = JuMP.@variable(nm.model, base_name = "$(nw)_csr[$e]", start = 0.0)
-        csi[e] = JuMP.@variable(nm.model, base_name = "$(nw)_csi[$e]", start = 0.0)
+        variable!(nm, :csr, e; nw, base_name = "$(nw)_csr[$e]", start = 0.0)
+        variable!(nm, :csi, e; nw, base_name = "$(nw)_csi[$e]", start = 0.0)
     end
 
     return nothing
@@ -103,9 +108,10 @@ function constraint_edge_rating!(nm::NetworkModel, e::Int, rate_a::Real; nw::Int
     vr, vi = var(nm, :vr; nw), var(nm, :vi; nw)
     cr, ci = var(nm, :cr; nw), var(nm, :ci; nw)
 
-    return [JuMP.@constraint(nm.model,
-                (vr[a.node]^2 + vi[a.node]^2) * (cr[a]^2 + ci[a]^2) <= rate_a^2)
-            for a in edge_arcs(nm, e; nw)]
+    return [constrain!(nm, :edge_rating, (e, t),
+                JuMP.@build_constraint(
+                    (vr[a.node]^2 + vi[a.node]^2) * (cr[a]^2 + ci[a]^2) <= rate_a^2); nw)
+            for (t, a) in enumerate(edge_arcs(nm, e; nw))]
 end
 
 """
@@ -122,10 +128,12 @@ function constraint_edge_angle_difference!(nm::NetworkModel, a_fr::Arc, a_to::Ar
     i, j   = a_fr.node, a_to.node
 
     return (
-        JuMP.@constraint(nm.model, vi[i] * vr[j] - vr[i] * vi[j] <=
-            tan(angmax) * (vr[i] * vr[j] + vi[i] * vi[j])),
-        JuMP.@constraint(nm.model, vi[i] * vr[j] - vr[i] * vi[j] >=
-            tan(angmin) * (vr[i] * vr[j] + vi[i] * vi[j])),
+        constrain!(nm, :edge_angle, (a_fr.edge, :max),
+            JuMP.@build_constraint(vi[i] * vr[j] - vr[i] * vi[j] <=
+                tan(angmax) * (vr[i] * vr[j] + vi[i] * vi[j])); nw),
+        constrain!(nm, :edge_angle, (a_fr.edge, :min),
+            JuMP.@build_constraint(vi[i] * vr[j] - vr[i] * vi[j] >=
+                tan(angmin) * (vr[i] * vr[j] + vi[i] * vi[j])); nw),
     )
 end
 
@@ -175,8 +183,10 @@ function constraint_linear_flow!(nm::NetworkModel, e::Int, a_fr::Arc, a_to::Arc,
     i, j = a_fr.node, a_to.node
 
     return (
-        JuMP.@constraint(nm.model, p[a_fr] == -b * (va[i] - va[j] - shift)),
-        JuMP.@constraint(nm.model, p[a_to] == -p[a_fr]),
+        constrain!(nm, :linear_flow, (e, :from),
+                   JuMP.@build_constraint(p[a_fr] == -b * (va[i] - va[j] - shift)); nw),
+        constrain!(nm, :linear_flow, (e, :to),
+                   JuMP.@build_constraint(p[a_to] == -p[a_fr]); nw),
     )
 end
 
@@ -205,9 +215,12 @@ function constraint_linear_limits!(nm::NetworkModel, e::Int, a_fr::Arc, a_to::Ar
     i, j = a_fr.node, a_to.node
 
     rating = isfinite(rate_a) && is_monitored(nm, e) ?
-        [JuMP.@constraint(nm.model, -rate_a <= p[a] <= rate_a) for a in (a_fr, a_to)] : nothing
+        [constrain!(nm, :linear_rating, (e, t),
+                    JuMP.@build_constraint(-rate_a <= p[a] <= rate_a); nw)
+         for (t, a) in enumerate((a_fr, a_to))] : nothing
     angle = (angmin > -pi / 2 || angmax < pi / 2) ?
-        JuMP.@constraint(nm.model, angmin <= va[i] - va[j] <= angmax) : nothing
+        constrain!(nm, :linear_angle, e,
+                   JuMP.@build_constraint(angmin <= va[i] - va[j] <= angmax); nw) : nothing
 
     return (rating, angle)
 end

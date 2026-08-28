@@ -65,6 +65,9 @@ end
 
 register_unit_type!(FlexibleLoad)
 
+"a flexible load is given an upper bound only where `pd_max` is finite"
+structure_gates(::FlexibleLoad) = (:pd_max,)
+
 "the ratio of reactive to active demand at the nominal point"
 power_factor_ratio(ld::FlexibleLoad) = iszero(ld.pd_nominal) ? 0.0 : ld.qd_nominal / ld.pd_nominal
 
@@ -83,14 +86,12 @@ function variable_unit(nm::NetworkModel{P,F}, ::Type{FlexibleLoad}; nw::Int = nw
     isempty(ids(nm, FlexibleLoad; nw)) && return nothing
     require_time_dimension(nm, FlexibleLoad)
 
-    pdf = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :pdf)
+    variable_container!(nm, :pdf; nw)
 
     for u in ids(nm, FlexibleLoad; nw)
-        ld     = unit(nm, u; nw)::FlexibleLoad
-        pdf[u] = JuMP.@variable(nm.model, base_name = "$(nw)_pdf[$u]",
-                                lower_bound = ld.pd_min,
-                                start = ld.pd_nominal)
-        isfinite(ld.pd_max) && JuMP.set_upper_bound(pdf[u], ld.pd_max)
+        ld = unit(nm, u; nw)::FlexibleLoad
+        variable!(nm, :pdf, u; nw, base_name = "$(nw)_pdf[$u]", start = ld.pd_nominal,
+                  lower = ld.pd_min, upper = ld.pd_max)
     end
 
     return nothing
@@ -141,8 +142,8 @@ function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{FlexibleLoad}
                 sum(time_step(nm, m) * unit(nm, u; nw = m).pd_nominal for m in window) :
                 ld.energy
 
-            energy[(u, n)] = JuMP.@constraint(nm.model,
-                sum(time_step(nm, m) * var(nm, :pdf, u; nw = m) for m in window) == target)
+            energy[(u, n)] = constrain!(nm, :flexible_energy, u, JuMP.@build_constraint(
+                sum(time_step(nm, m) * var(nm, :pdf, u; nw = m) for m in window) == target); nw = n)
         end
     end
 

@@ -66,6 +66,29 @@ add a method in that component's own file dispatching on the new problem type.
 of nine lines, an objective, and one method each on the generator, the storage
 unit and the two controllable transformers — and no formulation code at all.
 
+## Every variable and constraint goes in through one door
+
+A component does not call `JuMP.@constraint` or `JuMP.@variable` directly. It
+calls the functions below, which **add on first sight and update on second** —
+so building a model again against different data updates it rather than adding
+to it, and there is no second description of the model to keep in step with the
+first. That is what lets a rolling horizon keep one model across its windows,
+see [`update_model!`](@ref).
+
+A new component type has nothing to do differently: write the equations as they
+read, hand them over with a key that says which constraint they are, and give
+each one an `id` that distinguishes it from the others the same component
+writes.
+
+```@docs
+constrain!
+variable!
+variables!
+variable_container!
+bound!
+registered_constraints
+```
+
 ## Shared model fragments
 
 Physics that several components share lives in a fragment rather than being

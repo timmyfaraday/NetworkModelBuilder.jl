@@ -81,8 +81,10 @@ function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
         sh = unit(nm, u; nw)::T
         i  = sh.node
         current[u] = (
-            JuMP.@constraint(nm.model, cru[u] == -(sh.gs * vr[i] - sh.bs * vi[i])),
-            JuMP.@constraint(nm.model, ciu[u] == -(sh.gs * vi[i] + sh.bs * vr[i])))
+            constrain!(nm, :shunt_current, (u, :real),
+                       JuMP.@build_constraint(cru[u] == -(sh.gs * vr[i] - sh.bs * vi[i])); nw),
+            constrain!(nm, :shunt_current, (u, :imag),
+                       JuMP.@build_constraint(ciu[u] == -(sh.gs * vi[i] + sh.bs * vr[i])); nw))
     end
 
     return nothing

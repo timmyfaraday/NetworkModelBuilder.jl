@@ -193,9 +193,167 @@ the horizon runs along `:time` with every other coordinate held fixed. A
 preventive battery then holds the same trajectory in every state, which is what
 [`redispatch_controls`](@ref) ties for it.
 
-Rolling that window forward is the natural next step and is not implemented:
-it would rebuild the problem per step from the previous step's `energy_initial`
-and a shifted schedule, which needs nothing this problem does not already have.
+## Rolling the window forward
+
+An operator does not decide the day at once from a schedule known in full. The
+day is decided step by step against a forecast that reaches only so far, and by
+the time the far end of that forecast arrives it has changed. Give
+[`solve_rd`](@ref) a `horizon` and that is what it does:
+
+```julia
+result = solve_rd(mn, LPFFormulation, HiGHS.Optimizer; horizon = 6, step = 1)
+```
+
+Each window is a complete redispatch over six steps — same physics, same limits,
+same objective — of which the first step is **committed** and the rest is thrown
+away. The next window starts one step later and sees one step further.
+
+```@docs
+solve_rolling_horizon
+```
+
+Two things make the sequence a single trajectory rather than a set of unrelated
+problems:
+
+```@docs
+initial_state
+```
+
+[`window`](@ref) cuts one step's problem out of the whole, slicing the profile of
+every component and re-deriving the topology, so a window is an ordinary
+[`NetworkData`](@ref) that knows nothing about being one — see
+[Cutting a window out](@ref). [`initial_state`](@ref) is what survives the cut:
+it draws the line between a
+*decision*, which each window makes afresh, and a *state*, which the previous
+window already fixed. A [`Storage`](@ref) unit carries its state of charge and
+has a method; nothing else in the package carries anything.
+
+### What the lookahead buys
+
+On a four-step problem whose expensive generator is priced `10, 10, 10, 200`,
+with a battery holding `0.4` behind the constraint:
+
+| lookahead | cost | what the battery does |
+|:----------|-----:|:----------------------|
+| one step | 131 | spends everything in the first, cheapest hour |
+| two steps | 105 | |
+| three steps | 81 | |
+| four steps — full information | 55 | saves everything for the last, dear hour |
+
+Seeing one step ahead is not wrong, it is *myopic*: the battery is free, so the
+window spends it on the congestion it can see, and the expensive hour it cannot
+see arrives with an empty battery. No window ever beats the full information
+optimum, because none of them knows more. The test suite asserts both endpoints
+and that the sequence never improves on the last.
+
+### What is carried, and from where
+
+The state is read at the last committed step of the **base case** — the first
+coordinate of every dimension other than `:time`. The windows form one
+trajectory through time, and only one of the contingencies is the world that
+actually happened; a preventive measure leaves the same state behind in every
+state of the world anyway, a corrective one does not, and the base case is the
+one that is real.
+
+!!! warning "A flexible load keeps its energy per window"
+    The energy balance of a [`FlexibleLoad`](@ref) holds over the horizon it is
+    posed on, so in a rolling solve it holds over each **window**. With the
+    default `energy = NaN` that is right — the target is the nominal energy of
+    the window itself — but an `energy` given explicitly is read as a per-window
+    target, not a per-day one. A load that must hit a daily figure needs its own
+    [`initial_state`](@ref) method to carry down what it has already taken.
+
+### Making it fast
+
+A year at `horizon = 24, step = 4` is 2190 windows. Three choices matter, and
+together they are worth about a factor of three:
+
+| | wall | what changed |
+|:--|-----:|:--|
+| Ipopt, cached model | 17.5 s | the starting point |
+| HiGHS, cached model | 8.1 s | an LP solver for a linear program |
+| HiGHS, direct model | 7.3 s | `new_model` skips the copy MOI keeps |
+| **HiGHS, direct model, `reuse`** | **5.7 s** | one model, updated rather than rebuilt |
+
+**Take an LP solver first.** Under a [`LPFFormulation`](@ref) a redispatch is a
+linear program, and an interior point method is the wrong tool for one: it
+halves the run to give it to HiGHS, and it converges cleanly where Ipopt left
+one window in 2190 short of tolerance and dragged the status of the whole year
+down with it.
+
+**Then a direct model**, which skips the layer that keeps a copy of the problem
+before handing it over — a copy a roll makes once per window and throws away
+with it:
+
+```julia
+solve_rd(mn, LPFFormulation, HiGHS.Optimizer; horizon = 24, step = 4, reuse = true,
+         new_model = () -> (m = JuMP.direct_model(HiGHS.Optimizer());
+                            JuMP.set_silent(m); m))
+```
+
+`new_model` is a *constructor* rather than a model, because each window that is
+built needs one of its own; handing the roll a `jump_model` would give them all
+the same one and is refused rather than silently shared.
+
+**Then `reuse`.** A window's model is very nearly the one the next window needs,
+so it is built once and updated after that, wherever [`same_structure`](@ref)
+says the two windows have the same shape. On the year above that is 2184 of the
+2190 windows; the six that are built are the first and the short ones at the
+end.
+
+It saves the building and not the solving. Splitting the year's 5.5 s in two:
+
+| | building | solving |
+|:--|--:|--:|
+| rebuilt every window | 5.7 s | 1.7 s |
+| `reuse` | **3.8 s** | 1.7 s |
+
+A solver does not carry a basis across rows that have been rewritten, so an
+updated problem is re-solved much as a fresh one is. What addresses the solving
+is `warm_start`, and it is a separate question.
+
+### Should `warm_start` be on?
+
+Handing the next window the overlap of the last window's answer takes 15–25% off
+the solve, whichever formulation is being built. Whether that is worth the
+bookkeeping depends on how much of the run the solve is:
+
+| formulation | solver | `reuse` | `warm_start` | wall |
+|:---|:---|:---|:---|---:|
+| LPF | HiGHS | yes | no | **5.8 s** |
+| LPF | HiGHS | yes | yes | 6.0 s |
+| IVR | Ipopt | yes | no | 3.6 s |
+| IVR | Ipopt | yes | yes | **2.9 s** |
+
+Under a [`LPFFormulation`](@ref) the model is a linear program and an LP solver
+disposes of it in well under a second per thousand windows, so gathering the
+overlap still costs a little more than it saves — leave it off. Under an
+[`IVRFormulation`](@ref) the solve is most of the run and the same hand-over is
+worth about a fifth of the whole — turn it on.
+
+With `reuse` the hand-over is much the cheaper of its two forms: the windows are
+one model rather than two, so the variable the next window will call step `j` is
+the variable this one called step `j + step`, and handing over is a shift within
+the model rather than a dictionary carried between models.
+
+The two compose: `warm_start` acts on the solving, `reuse` on the building, and
+on the nonconvex formulation both together were both the fastest combination and
+the one that reached the same solution a cold roll did, where `warm_start` alone
+had settled on a slightly worse local optimum. Read the warning on
+[`solve_rolling_horizon`](@ref) before relying on that.
+
+### Reading the result
+
+The result is shaped like any other and keyed by the network indices of the
+original problem, so [`nw_solution`](@ref) reaches a step by the index it has
+there. Its `"objective"` is the cost of the **committed** steps only; a window's
+own objective prices its lookahead too, and is reported apart under
+`"horizon"`, with what each window covered and committed.
+
+The roll is not redispatch-specific — [`solve_rolling_horizon`](@ref) takes the
+problem type as an argument and rolls an [Optimal power flow](@ref) just as
+readily. All it needs from a problem is [`network_cost`](@ref), which is how it
+prices a committed step without knowing what it is rolling.
 
 ## In each formulation
 

@@ -17,6 +17,7 @@ module NetworkModelBuilder
 
     # import pkgs
     import JuMP
+    import MathOptInterface as MOI
     import Printf
 
     # pkg constants
@@ -30,7 +31,9 @@ module NetworkModelBuilder
     include("core/dimension.jl")
     include("core/network.jl")
     include("core/model.jl")
+    include("core/rebuild.jl")
     include("core/redispatch.jl")
+    include("core/window.jl")
 
     # include — components, following the (I, E, U) hierarchy
     include("comp/node/node.jl")
@@ -118,8 +121,10 @@ module NetworkModelBuilder
     export register_edge_type!, register_unit_type!, edge_types, unit_types
 
     # export — model
+    export constrain!, variable!, variables!, variable_container!, bound!
+    export registered_constraints
     export NetworkModel, problem_type, formulation_type
-    export instantiate_model, build_model!, optimize_model!, solve_model
+    export instantiate_model, build_model!, update_model!, optimize_model!, solve_model
     export register_model!, implemented_models
 
     # export — variables, constraints and objective
@@ -141,6 +146,7 @@ module NetworkModelBuilder
     export constraint_two_winding_limits!
     export time_step, require_time_dimension
     export objective, objective_generation_cost, network_weight, default_weight
+    export network_cost, minimize_network_cost
     export objective_redispatch_cost
 
     # export — solution
@@ -153,6 +159,10 @@ module NetworkModelBuilder
     export control_mode, is_preventive, is_corrective
     export redispatch_controls, redispatch_cost, redispatch_price
     export constraint_redispatch_control
+
+    # export — the rolling horizon
+    export window, window_indices, initial_state, solve_rolling_horizon
+    export same_topology, same_structure, structure_gates, structure_varies
 
     # export — problems
     export solve_lf, solve_opf, solve_rd

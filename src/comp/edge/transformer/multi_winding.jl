@@ -88,6 +88,9 @@ _fill_winding(v::NetworkVector, ::Int, ::Float64) = v
 
 register_edge_type!(MultiWindingTransformer)
 
+"a multi-winding transformer rates each winding on its own, and has no angle limits"
+structure_gates(::MultiWindingTransformer) = (:rate_a,)
+
 ################################################################################
 # MultiWindingTransformer — variables                                          #
 ################################################################################
@@ -105,12 +108,11 @@ is no separate series current to carry.
 function variable_edge(nm::NetworkModel{P,F}, ::Type{MultiWindingTransformer};
                        nw::Int = nw_id_default(nm)
                       ) where {P<:AbstractProblemType,F<:IVRFormulation}
-    vsr = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :vsr)
-    vsi = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :vsi)
+    variable_container!(nm, :vsr, :vsi; nw)
 
     for e in ids(nm, MultiWindingTransformer; nw)
-        vsr[e] = JuMP.@variable(nm.model, base_name = "$(nw)_vsr[$e]", start = 1.0)
-        vsi[e] = JuMP.@variable(nm.model, base_name = "$(nw)_vsi[$e]", start = 0.0)
+        variable!(nm, :vsr, e; nw, base_name = "$(nw)_vsr[$e]", start = 1.0)
+        variable!(nm, :vsi, e; nw, base_name = "$(nw)_vsi[$e]", start = 0.0)
     end
 
     return nothing
@@ -173,17 +175,17 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{MultiWindingTransformer};
             push!(ctr, JuMP.@expression(nm.model, trk * cr[a] + tik * ci[a]))
             push!(cti, JuMP.@expression(nm.model, trk * ci[a] - tik * cr[a]))
 
-            (JuMP.@constraint(nm.model,
-                 vtr - vsr[e] == tf.r[k] * ctr[k] - tf.x[k] * cti[k]),
-             JuMP.@constraint(nm.model,
-                 vti - vsi[e] == tf.r[k] * cti[k] + tf.x[k] * ctr[k]))
+            (constrain!(nm, :winding, (e, k, :real), JuMP.@build_constraint(
+                 vtr - vsr[e] == tf.r[k] * ctr[k] - tf.x[k] * cti[k]); nw),
+             constrain!(nm, :winding, (e, k, :imag), JuMP.@build_constraint(
+                 vti - vsi[e] == tf.r[k] * cti[k] + tf.x[k] * ctr[k]); nw))
         end
 
         star[e] = (
-            JuMP.@constraint(nm.model,
-                sum(ctr) == tf.g_m * vsr[e] - tf.b_m * vsi[e]),
-            JuMP.@constraint(nm.model,
-                sum(cti) == tf.g_m * vsi[e] + tf.b_m * vsr[e]))
+            constrain!(nm, :star_balance, (e, :real), JuMP.@build_constraint(
+                sum(ctr) == tf.g_m * vsr[e] - tf.b_m * vsi[e]); nw),
+            constrain!(nm, :star_balance, (e, :imag), JuMP.@build_constraint(
+                sum(cti) == tf.g_m * vsi[e] + tf.b_m * vsr[e]); nw))
     end
 
     return nothing
@@ -205,8 +207,8 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{MultiWindingTransf
     for e in ids(nm, MultiWindingTransformer; nw)
         is_monitored(nm, e) || continue
         tf = edge(nm, e; nw)::MultiWindingTransformer
-        rating[e] = [JuMP.@constraint(nm.model,
-                         (vr[a.node]^2 + vi[a.node]^2) * (cr[a]^2 + ci[a]^2) <= tf.rate_a[k]^2)
+        rating[e] = [constrain!(nm, :rating, (e, k), JuMP.@build_constraint(
+                         (vr[a.node]^2 + vi[a.node]^2) * (cr[a]^2 + ci[a]^2) <= tf.rate_a[k]^2); nw)
                      for (k, a) in enumerate(edge_arcs(nm, e; nw)) if isfinite(tf.rate_a[k])]
     end
 
@@ -228,10 +230,10 @@ formulation: one variable belonging to the edge, and no node.
 function variable_edge(nm::NetworkModel{P,F}, ::Type{MultiWindingTransformer};
                        nw::Int = nw_id_default(nm)
                       ) where {P<:AbstractProblemType,F<:LPFFormulation}
-    vas = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :vas)
+    variable_container!(nm, :vas; nw)
 
     for e in ids(nm, MultiWindingTransformer; nw)
-        vas[e] = JuMP.@variable(nm.model, base_name = "$(nw)_vas[$e]", start = 0.0)
+        variable!(nm, :vas, e; nw, base_name = "$(nw)_vas[$e]", start = 0.0)
     end
 
     return nothing
@@ -265,10 +267,11 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{MultiWindingTransformer};
         A  = edge_arcs(nm, e; nw)
 
         winding[e] = map(enumerate(A)) do (k, a)
-            JuMP.@constraint(nm.model, p[a] ==
-                -susceptance(tf.r[k], tf.x[k]) * (va[a.node] - tf.ta[k] - vas[e]))
+            constrain!(nm, :winding, (e, k), JuMP.@build_constraint(p[a] ==
+                -susceptance(tf.r[k], tf.x[k]) * (va[a.node] - tf.ta[k] - vas[e])); nw)
         end
-        star[e] = JuMP.@constraint(nm.model, sum(p[a] for a in A) == 0.0)
+        star[e] = constrain!(nm, :star_balance, e,
+                             JuMP.@build_constraint(sum(p[a] for a in A) == 0.0); nw)
     end
 
     return nothing
@@ -289,7 +292,8 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{MultiWindingTransf
     for e in ids(nm, MultiWindingTransformer; nw)
         is_monitored(nm, e) || continue
         tf = edge(nm, e; nw)::MultiWindingTransformer
-        limits[e] = [JuMP.@constraint(nm.model, -tf.rate_a[k] <= p[a] <= tf.rate_a[k])
+        limits[e] = [constrain!(nm, :linear_rating, (e, k),
+                         JuMP.@build_constraint(-tf.rate_a[k] <= p[a] <= tf.rate_a[k]); nw)
                      for (k, a) in enumerate(edge_arcs(nm, e; nw)) if isfinite(tf.rate_a[k])]
     end
 

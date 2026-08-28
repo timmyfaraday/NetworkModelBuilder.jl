@@ -82,13 +82,13 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{TapChanger}; nw::Int = nw_i
                       ) where {P<:AbstractDispatchProblem,F<:IVRFormulation}
     variable_two_winding!(nm, TapChanger; nw)
 
-    tm = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), :tm)
+    variable_container!(nm, :tm; nw)
 
     for e in ids(nm, TapChanger; nw)
         tc = edge(nm, e; nw)::TapChanger
-        tm[e] = JuMP.@variable(nm.model, base_name = "$(nw)_tm[$e]",
-                               lower_bound = tc.tm_min, upper_bound = tc.tm_max,
-                               start = clamp(tc.tm, tc.tm_min, tc.tm_max))
+        variable!(nm, :tm, e; nw, base_name = "$(nw)_tm[$e]",
+                  start = clamp(tc.tm, tc.tm_min, tc.tm_max),
+                  lower = tc.tm_min, upper = tc.tm_max)
     end
 
     return nothing

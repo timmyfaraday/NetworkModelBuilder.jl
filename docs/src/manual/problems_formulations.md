@@ -77,6 +77,7 @@ than building a wrong model.
 NetworkModel
 instantiate_model
 build_model!
+update_model!
 optimize_model!
 solve_model
 problem_type
@@ -85,6 +86,8 @@ register_model!
 implemented_models
 objective
 objective_generation_cost
+network_cost
+minimize_network_cost
 network_weight
 default_weight
 ```

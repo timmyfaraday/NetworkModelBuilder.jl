@@ -52,8 +52,8 @@ function variable_edge_terminal_current(nm::NetworkModel{P,F}; nw::Int = nw_id_d
                                        ) where {P<:AbstractProblemType,F<:IVRFormulation}
     A = arcs(nm; nw)
 
-    var(nm; nw)[:cr] = JuMP.@variable(nm.model, [a in A], base_name = "$(nw)_cr", start = 0.0)
-    var(nm; nw)[:ci] = JuMP.@variable(nm.model, [a in A], base_name = "$(nw)_ci", start = 0.0)
+    variables!(nm, :cr, A; nw, base_name = "$(nw)_cr")
+    variables!(nm, :ci, A; nw, base_name = "$(nw)_ci")
 
     return nothing
 end
@@ -87,7 +87,7 @@ function variable_edge_terminal_power(nm::NetworkModel{P,F}; nw::Int = nw_id_def
                                      ) where {P<:AbstractProblemType,F<:LPFFormulation}
     A = arcs(nm; nw)
 
-    var(nm; nw)[:p] = JuMP.@variable(nm.model, [a in A], base_name = "$(nw)_p", start = 0.0)
+    variables!(nm, :p, A; nw, base_name = "$(nw)_p")
 
     return nothing
 end

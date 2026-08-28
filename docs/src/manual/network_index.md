@@ -113,6 +113,69 @@ step from the `:duration` property of that dimension:
 Dimension(:time => [Dict{Symbol,Any}(:duration => 0.25) for _ in 1:96])
 ```
 
+## Cutting a window out
+
+A problem posed over a dimension can be restricted to part of it, which is what a
+[rolling horizon](@ref "Redispatch") cuts one step of its work out of:
+
+```julia
+w = window(mn, :time, 7:12)
+```
+
+The result is an ordinary [`NetworkData`](@ref) over a smaller `Dimension`, with
+every other dimension left whole. The properties of the coordinates, the
+[`NetworkVector`](@ref) field of every component and the topology all follow the
+cut — the last re-derived from the sliced statuses rather than copied, and a
+slice that no longer varies collapsed back to a plain value, so a window that
+steps over an outage is back on the single-topology fast path.
+
+```@docs
+window
+window_indices
+```
+
+### Do two indices give the same model?
+
+Two network indices produce a model of the same *shape* when the same components
+are in service and the same constraints get written between them. The first is
+cheap to ask, because [`topology`](@ref) hands indices that agree **the same
+object** rather than an equal one:
+
+```@docs
+same_topology
+```
+
+The second is the half that is easy to miss. A handful of fields are not
+coefficients but switches — the model asks a question of them and writes nothing
+when the answer is no, so a `rate_a` of `Inf` produces no rating at all and a
+`pmax` of `Inf` produces no upper bound. A field like that changes the shape of
+the model while the topology sits perfectly still:
+
+```@docs
+structure_gates
+same_structure
+structure_varies
+```
+
+Ask [`structure_varies`](@ref) once before asking anything else: where it is
+`false` — no status varies and no gate varies — one shape serves the whole
+problem and nothing further needs checking.
+
+None of this is expensive. Over a year of 8760 hours, with windows of 24 stepped
+by 4:
+
+| planned outages | [`structure_varies`](@ref) | one [`same_structure`](@ref) per hour | all 2190 windows | reusable |
+|:--|--:|--:|--:|--:|
+| none | 0.01 ms | 119 ms | 0.4 ms | 2189 / 2189 |
+| 5 | 0.001 ms | 73 ms | 0.5 ms | 2135 / 2189 |
+| 30 | 0.001 ms | 160 ms | 0.4 ms | 1835 / 2189 |
+
+The last two columns are the recipe in the [`same_structure`](@ref) example: build
+the shift-stability map once, prefix-sum it, and every window is then answered in
+constant time. Against the milliseconds it takes to *build* one model, the whole
+year's worth of checking is free — and even with thirty maintenance outages, 84%
+of consecutive windows still have the same shape.
+
 ## Nothing is stored per network index
 
 On case14 with an hourly demand profile:

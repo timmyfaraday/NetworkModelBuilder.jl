@@ -83,6 +83,53 @@ objective(nm::NetworkModel{P,F}) where {P<:OptimalPowerFlowProblem,F} =
     objective_generation_cost(nm)
 
 """
+    network_cost(nm, n)
+
+The objective contribution of network index `n`, before its weight, as a JuMP
+expression or a number.
+
+Where [`objective`](@ref) says *what is minimized*, this says *what one network
+index of it costs* — and the objective is nothing more than the weighted sum of
+these, see [`minimize_network_cost`](@ref). Splitting the two apart is what lets
+the cost of a **part** of a solved problem be read back: a rolling horizon
+prices only the network indices each of its windows commits, and does it without
+knowing which problem it is rolling.
+
+Like [`objective`](@ref) this is a dispatch point, and a new problem type needs
+a method here rather than an objective of its own.
+"""
+function network_cost(nm::NetworkModel{P,F}, n::Int) where {P,F}
+    error("no per-index cost is defined for problem `$P` with formulation `$F`")
+end
+
+"a power flow problem is a feasibility problem, so every index of it is free"
+network_cost(::NetworkModel{P,F}, ::Int) where {P<:AbstractPowerFlowProblem,F} = 0.0
+
+"an optimal power flow pays the generation cost at every index"
+function network_cost(nm::NetworkModel{P,F}, n::Int) where {P<:OptimalPowerFlowProblem,F}
+    pg = var(nm, :pg; nw = n)
+
+    return sum(generation_cost(unit(nm, u; nw = n)::Generator, pg[u])
+               for u in ids(nm, Generator; nw = n); init = 0.0)
+end
+
+"""
+    minimize_network_cost(nm)
+
+Set the objective to the weighted sum of [`network_cost`](@ref) over every
+network index,
+
+```math
+\\min\\quad \\sum_{n \\in \\mathcal{N}} w_{n} \\, c_{n} ,
+```
+
+with `w_n` the weight of network index `n`, see [`network_weight`](@ref).
+"""
+minimize_network_cost(nm::NetworkModel) =
+    JuMP.@objective(nm.model, Min,
+        sum(network_weight(nm, n) * network_cost(nm, n) for n in nw_ids(nm); init = 0.0))
+
+"""
     objective_generation_cost(nm)
 
 Minimize the total generation cost,
@@ -91,14 +138,7 @@ Minimize the total generation cost,
 \\min\\quad \\sum_{n} w_{n} \\sum_{u \\in U^{\\text{g}}_{n}} \\sum_{k} c_{u,k} \\, (p^{\\text{g}}_{u,n})^{k},
 ```
 
-with `w_n` the weight of network index `n`, see [`network_weight`](@ref).
+with `w_n` the weight of network index `n`, see [`network_weight`](@ref). This
+is [`minimize_network_cost`](@ref) against the generation cost of one index.
 """
-function objective_generation_cost(nm::NetworkModel)
-    pg = Dict(n => var(nm, :pg; nw = n) for n in nw_ids(nm))
-
-    return JuMP.@objective(nm.model, Min,
-        sum(network_weight(nm, n) *
-            sum(generation_cost(unit(nm, u; nw = n)::Generator, pg[n][u])
-                for u in ids(nm, Generator; nw = n); init = 0.0)
-            for n in nw_ids(nm); init = 0.0))
-end
+objective_generation_cost(nm::NetworkModel) = minimize_network_cost(nm)

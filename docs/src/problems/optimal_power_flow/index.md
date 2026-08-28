@@ -14,7 +14,7 @@ The builder is almost the same. The difference lives in the methods those calls
 resolve to.
 
 | | load flow | optimal power flow |
-|:-|:----------|:-------------------|
+|:--|:----------|:-------------------|
 | reference node | complex voltage fixed | angle fixed, magnitude free |
 | `PV` node | magnitude at its setpoint | no setpoint |
 | voltage magnitude | unbounded | between `vmin` and `vmax` |

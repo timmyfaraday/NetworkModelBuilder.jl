@@ -128,7 +128,7 @@ Nonconvex, quadratically constrained, with a quadratic objective. Needs a
 nonlinear solver. On case14:
 
 | | variables | constraints |
-|:-|----------:|------------:|
+|:--|----------:|------------:|
 | case14 | 198 | 294 |
 
 The same 198 variables as the load flow — case14 carries no controls — against 96

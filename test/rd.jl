@@ -446,6 +446,158 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         @test occursin("2 edge(s) monitored", sprint(show, rd))
         @test occursin("every edge monitored", sprint(show, Redispatch()))
     end
+
+    # Relieving the whole 0.5 of congestion on the radial network costs
+    # 0.5(100) + 0.5(10) = 55, i.e. 110 per pu relieved. So a price above 110
+    # buys the relief and a price below it buys the overload instead, and 110 is
+    # exactly where the problem is indifferent — which is what makes these
+    # numbers worth asserting rather than a solver artefact.
+    @testset "a rating can be priced instead of enforced" begin
+        data = radial_network(; rate = 0.5)
+        hard = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER))
+
+        dear = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
+                                    redispatch = Redispatch(; overload = 500.0)))
+        @test dear["termination_status"] == JuMP.LOCALLY_SOLVED
+        @test dear["objective"] ≈ hard["objective"] atol = 1e-5
+        @test nw_solution(dear)["edge"]["1"]["overload"] ≈ 0.0 atol = 1e-6
+
+        cheap = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
+                                     redispatch = Redispatch(; overload = 20.0)))
+        @test cheap["termination_status"] == JuMP.LOCALLY_SOLVED
+        # nothing is redispatched: 0.5 of overload at 20 beats 0.5 relieved at 110
+        @test cheap["objective"] ≈ 0.5 * 20.0 atol = 1e-5
+        @test nw_solution(cheap)["edge"]["1"]["overload"] ≈ 0.5 atol = 1e-6
+        @test nw_solution(cheap)["unit"]["1"]["pg"] ≈ 1.0 atol = 1e-6
+        @test abs(nw_solution(cheap)["edge"]["1"]["terminal"]["1"]["p"]) ≈ 1.0 atol = 1e-6
+    end
+
+    @testset "an infeasible congestion becomes an expensive one" begin
+        # generator 2 cannot produce, so nothing behind the constraint can
+        # relieve it and a hard rating has no answer at all
+        data = radial_network(; rate = 0.1)
+        g    = units(network(data))[2]::Generator
+        units(network(data))[2] = Generator(; id = g.id, node = g.node, pg = 0.0,
+                                            pmax = 0.0, qmin = -5.0, qmax = 5.0,
+                                            cost = g.cost)
+
+        hard = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER))
+        @test hard["termination_status"] != JuMP.LOCALLY_SOLVED
+
+        priced = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
+                                      redispatch = Redispatch(; overload = 30.0)))
+        @test priced["termination_status"] == JuMP.LOCALLY_SOLVED
+        # the flow is the load, and 0.9 of it is past the rating
+        @test nw_solution(priced)["edge"]["1"]["overload"] ≈ 0.9 atol = 1e-6
+        @test priced["objective"] ≈ 0.9 * 30.0 atol = 1e-5
+    end
+
+    @testset "the priced rating is a different row, not the same one relaxed" begin
+        data = radial_network(; rate = 0.5)
+
+        hard = instantiate_model(data, RedispatchProblem, LPFFormulation)
+        @test overload_price(hard) === nothing
+        @test !haskey(_NMB.var(hard), :ol)
+        @test haskey(_NMB.registered_constraints(hard), (1, :linear_rating, (1, 1)))
+
+        rd = Redispatch(; overload = 500.0)
+        soft = instantiate_model(data, RedispatchProblem, LPFFormulation;
+                                 ext = Dict{Symbol,Any}(:redispatch => rd))
+        @test overload_price(soft) == OverloadPrice(; per_energy = 500.0)
+        @test haskey(_NMB.var(soft), :ol)
+
+        # the hard row is gone and the pair that replaced it is under its own key,
+        # since a range constraint cannot be updated in place into a one-sided one
+        @test !haskey(_NMB.registered_constraints(soft), (1, :linear_rating, (1, 1)))
+        @test haskey(_NMB.registered_constraints(soft), (1, :linear_overload, (1, 1, :pos)))
+        @test haskey(_NMB.registered_constraints(soft), (1, :linear_overload, (1, 1, :neg)))
+
+        # one overload per edge, shared by its terminals, and non-negative
+        @test length(_NMB.var(soft, :ol)) == 1
+        @test JuMP.lower_bound(_NMB.var(soft, :ol, 1)) == 0.0
+    end
+
+    @testset "an unwatched edge is not priced either" begin
+        data = radial_network(; rate = 0.5)
+        rd   = Redispatch(; monitored = Int[], overload = 500.0)
+
+        nm = instantiate_model(data, RedispatchProblem, LPFFormulation;
+                               ext = Dict{Symbol,Any}(:redispatch => rd))
+        # `is_monitored` is asked first: an edge nobody watches has no rating to
+        # exceed, so it gets no overload variable and costs nothing
+        @test !haskey(_NMB.var(nm), :ol) || isempty(_NMB.var(nm, :ol))
+        @test _NMB.overload_cost(nm) == 0.0
+
+        result = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; redispatch = rd))
+        @test result["objective"] ≈ 0.0 atol = 1e-5
+    end
+
+    @testset "only a redispatch prices a rating" begin
+        data = radial_network(; rate = 0.5)
+        rd   = Redispatch(; overload = 500.0)
+
+        # an optimal power flow enforces every rating whatever the setup says,
+        # exactly as it monitors every edge
+        opf = instantiate_model(data, OptimalPowerFlowProblem, LPFFormulation;
+                                ext = Dict{Symbol,Any}(:redispatch => rd))
+        @test overload_price(opf) === nothing
+        @test !haskey(_NMB.var(opf), :ol)
+    end
+
+    @testset "the current based formulation prices it too" begin
+        data = radial_network(; rate = 0.5)
+        hard = quiet(() -> solve_rd(data, IVRFormulation, OPTIMIZER))
+
+        dear = quiet(() -> solve_rd(data, IVRFormulation, OPTIMIZER;
+                                    redispatch = Redispatch(; overload = 5000.0)))
+        @test dear["termination_status"] == JuMP.LOCALLY_SOLVED
+        @test nw_solution(dear)["edge"]["1"]["overload"] ≈ 0.0 atol = 1e-5
+        @test dear["objective"] ≈ hard["objective"] rtol = 1e-4
+
+        cheap = quiet(() -> solve_rd(data, IVRFormulation, OPTIMIZER;
+                                     redispatch = Redispatch(; overload = 1.0)))
+        @test cheap["termination_status"] == JuMP.LOCALLY_SOLVED
+        # the apparent power flow runs past the rating rather than paying to move
+        @test nw_solution(cheap)["edge"]["1"]["overload"] > 0.4
+        @test cheap["objective"] < hard["objective"]
+
+        # and it is the AC rating that was relaxed, under its own key
+        nm = instantiate_model(data, RedispatchProblem, IVRFormulation;
+                               ext = Dict{Symbol,Any}(:redispatch => Redispatch(; overload = 1.0)))
+        @test !haskey(_NMB.registered_constraints(nm), (1, :edge_rating, (1, 1)))
+        @test haskey(_NMB.registered_constraints(nm), (1, :edge_overload, (1, 1)))
+    end
+
+    @testset "an overload is a per-index cost like any other" begin
+        # two contingencies, the second twice as likely as the first: the price
+        # of an overload in each is weighted the way every other cost is
+        dim  = Dimension(:contingency => [Dict{Symbol,Any}(:weight => w) for w in (1.0, 2.0)])
+        data = radial_network(; dim, rate = 0.1)
+        g    = units(network(data))[2]::Generator
+        units(network(data))[2] = Generator(; id = g.id, node = g.node, pg = 0.0,
+                                            pmax = 0.0, qmin = -5.0, qmax = 5.0,
+                                            cost = g.cost)
+
+        result = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
+                                      redispatch = Redispatch(; overload = 30.0)))
+        @test result["termination_status"] == JuMP.LOCALLY_SOLVED
+        for n in 1:2
+            @test nw_solution(result, n)["edge"]["1"]["overload"] ≈ 0.9 atol = 1e-6
+        end
+        @test result["objective"] ≈ (1.0 + 2.0) * 0.9 * 30.0 atol = 1e-4
+    end
+
+    @testset "an overload price validates what it is given" begin
+        @test_throws ArgumentError OverloadPrice(; per_energy = -1.0)
+        @test_throws ArgumentError OverloadPrice(; per_energy = Inf)
+        @test_throws ArgumentError Redispatch(; overload = -1.0)
+
+        @test Redispatch(; overload = 500.0).overload == OverloadPrice(; per_energy = 500.0)
+        @test Redispatch().overload === nothing
+        @test occursin("overload at 500.0 per pu",
+                       sprint(show, Redispatch(; overload = 500.0)))
+        @test !occursin("overload", sprint(show, Redispatch()))
+    end
 end
 
 ################################################################################
@@ -998,6 +1150,64 @@ discharge(result, steps) = [nw_solution(result, n)["unit"]["4"]["psd"] for n in 
                                           reuse = true))
             @test reused["horizon"]["built"] < built["horizon"]["built"]
         end
+    end
+
+    @testset "a priced overload survives a roll on one model" begin
+        # relieving a per unit costs the dear generator plus the cheap one it
+        # displaces, so 20, 50, 100 and 210 across the four steps. A price of 150
+        # sits between the last two, which makes the battery worth a different
+        # amount in every step — a price that tied two of them would leave the
+        # roll a choice, and then reuse and rebuild could differ while both were
+        # right, see the tied window above
+        data = rolling_network([10.0, 40.0, 90.0, 200.0])
+        rd   = Redispatch(; overload = 150.0)
+
+        for F in (LPFFormulation, IVRFormulation)
+            built = quiet(() -> solve_rd(data, F, OPTIMIZER;
+                                         horizon = 2, step = 1, redispatch = rd))
+            @test built["termination_status"] == JuMP.LOCALLY_SOLVED
+
+            reused = quiet(() -> solve_rd(data, F, OPTIMIZER; horizon = 2, step = 1,
+                                          redispatch = rd, reuse = true, warm_start = true))
+            @test reused["objective"] ≈ built["objective"] rtol = 1e-6
+            for n in 1:4
+                @test nw_solution(reused, n)["edge"]["1"]["overload"] ≈
+                      nw_solution(built, n)["edge"]["1"]["overload"] atol = 1e-5
+            end
+
+            # one model really did serve several windows
+            @test reused["horizon"]["built"] < built["horizon"]["built"]
+        end
+
+        # only the dearest step is worth overloading, which is the whole point:
+        # the roll reports a violation there instead of paying 210 to avoid it
+        priced = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
+                                      horizon = 2, step = 1, redispatch = rd))
+        @test sum(nw_solution(priced, n)["edge"]["1"]["overload"] for n in 1:4) > 1e-4
+    end
+
+    @testset "a roll groups its steps the way the problem did" begin
+        # four steps in two days: a window cut from hours 2 to 3 straddles the
+        # boundary, and has to keep the days the problem stated rather than
+        # renumber its own
+        data = rolling_network([10.0, 40.0, 90.0, 200.0])
+        dim_meta(dimension(data), :time)[:period_length] = 2
+
+        @test period_ids(data, 1) == [1, 2]
+        @test period_ids(data, 3) == [3, 4]
+
+        w = window(data, :time, 2:3)
+        @test period_id(w, 1) == 1 && period_id(w, 2) == 2
+        @test period_ids(w, 1) == [1]
+        @test period_ids(w, 2) == [2]
+
+        # the roll still reaches the answer it reaches without any grouping,
+        # since nothing in this problem is written per period yet
+        grouped = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
+                                       horizon = 2, step = 1))
+        plain   = quiet(() -> solve_rd(rolling_network([10.0, 40.0, 90.0, 200.0]),
+                                       LPFFormulation, OPTIMIZER; horizon = 2, step = 1))
+        @test grouped["objective"] ≈ plain["objective"] rtol = 1e-6
     end
 
     @testset "a model is rebuilt where the shape changes" begin

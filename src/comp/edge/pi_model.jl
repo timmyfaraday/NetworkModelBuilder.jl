@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.3.0 - component hierarchy                                                 #
+# v0.6.0 - the rating of a monitored edge may hold an overload                 #
 ################################################################################
 
 ################################################################################
@@ -101,17 +102,56 @@ number of them.
 
 Skipped where the data leaves the rating unbounded, and where the problem does
 not watch the edge for congestion, see [`is_monitored`](@ref).
+
+Where the problem prices congestion rather than forbidding it, see
+[`overload_price`](@ref), the bound is relaxed by the overload of the edge,
+
+```math
+(v^{\\text{r}}_i{}^2 + v^{\\text{i}}_i{}^2)(c^{\\text{r}}_a{}^2 + c^{\\text{i}}_a{}^2)
+\\le (s^{\\text{max}}_e + o_e)^2 ,
+```
+
+with one `o_e ≥ 0` shared by every terminal, so the overload is the excess of the
+worst of them rather than a separate allowance for each. The constraint stays the
+same degree it already was and is written under its own key, since a row whose
+set is `≤ (s^{max})^2` cannot be updated in place into one holding a variable.
 """
 function constraint_edge_rating!(nm::NetworkModel, e::Int, rate_a::Real; nw::Int)
     isfinite(rate_a) && is_monitored(nm, e) || return nothing
 
     vr, vi = var(nm, :vr; nw), var(nm, :vi; nw)
     cr, ci = var(nm, :cr; nw), var(nm, :ci; nw)
+    price  = overload_price(nm)
 
-    return [constrain!(nm, :edge_rating, (e, t),
+    price === nothing &&
+        return [constrain!(nm, :edge_rating, (e, t),
+                    JuMP.@build_constraint(
+                        (vr[a.node]^2 + vi[a.node]^2) * (cr[a]^2 + ci[a]^2) <= rate_a^2); nw)
+                for (t, a) in enumerate(edge_arcs(nm, e; nw))]
+
+    ol = variable_edge_overload!(nm, e; nw)
+
+    return [constrain!(nm, :edge_overload, (e, t),
                 JuMP.@build_constraint(
-                    (vr[a.node]^2 + vi[a.node]^2) * (cr[a]^2 + ci[a]^2) <= rate_a^2); nw)
+                    (vr[a.node]^2 + vi[a.node]^2) * (cr[a]^2 + ci[a]^2) <= (rate_a + ol)^2); nw)
             for (t, a) in enumerate(edge_arcs(nm, e; nw))]
+end
+
+"""
+    variable_edge_overload!(nm, e; nw)
+
+The overload of edge `e` at network index `nw`: how far past its rating the
+problem is willing to pay to run it, in per-unit and non-negative.
+
+One variable per monitored edge, in the `:ol` container shared by every edge
+type and both formulations. It is apparent power where the formulation has
+reactive power and active power where it does not, which is the same thing the
+rating means in each.
+"""
+function variable_edge_overload!(nm::NetworkModel, e::Int; nw::Int)
+    variable_container!(nm, :ol; nw)
+
+    return variable!(nm, :ol, e; nw, base_name = "$(nw)_ol[$e]", start = 0.0, lower = 0.0)
 end
 
 """
@@ -207,6 +247,20 @@ always holds.
 
 With no reactive power in the model, apparent power is active power, so the
 rating applies to it directly.
+
+Where the problem prices congestion rather than forbidding it, see
+[`overload_price`](@ref), the rating is relaxed by the overload of the edge and
+written as a pair of one-sided rows per terminal,
+
+```math
+p_{a} - o_{e} \\le s^{\\text{max}}_{e}, \\qquad -p_{a} - o_{e} \\le s^{\\text{max}}_{e},
+```
+
+rather than as one two-sided bound: the bounds of a range constraint are
+constants, and `o_e` is not. The pair is what a bound on `|p_a|` becomes once
+the allowance is a variable, and it is exact without a binary because the
+objective pays for `o_e` and so never lifts it further than one of the two rows
+requires.
 """
 function constraint_linear_limits!(nm::NetworkModel, e::Int, a_fr::Arc, a_to::Arc,
                                    rate_a::Real, angmin::Real, angmax::Real; nw::Int)
@@ -215,12 +269,29 @@ function constraint_linear_limits!(nm::NetworkModel, e::Int, a_fr::Arc, a_to::Ar
     i, j = a_fr.node, a_to.node
 
     rating = isfinite(rate_a) && is_monitored(nm, e) ?
-        [constrain!(nm, :linear_rating, (e, t),
-                    JuMP.@build_constraint(-rate_a <= p[a] <= rate_a); nw)
-         for (t, a) in enumerate((a_fr, a_to))] : nothing
+        _linear_rating!(nm, e, (a_fr, a_to), rate_a; nw) : nothing
     angle = (angmin > -pi / 2 || angmax < pi / 2) ?
         constrain!(nm, :linear_angle, e,
                    JuMP.@build_constraint(angmin <= va[i] - va[j] <= angmax); nw) : nothing
 
     return (rating, angle)
+end
+
+"the rating rows of a monitored two-terminal edge, hard or priced"
+function _linear_rating!(nm::NetworkModel, e::Int, terminals, rate_a::Real; nw::Int)
+    p     = var(nm, :p; nw)
+    price = overload_price(nm)
+
+    price === nothing &&
+        return [constrain!(nm, :linear_rating, (e, t),
+                           JuMP.@build_constraint(-rate_a <= p[a] <= rate_a); nw)
+                for (t, a) in enumerate(terminals)]
+
+    ol = variable_edge_overload!(nm, e; nw)
+
+    return [(constrain!(nm, :linear_overload, (e, t, :pos),
+                        JuMP.@build_constraint(p[a] - ol <= rate_a); nw),
+             constrain!(nm, :linear_overload, (e, t, :neg),
+                        JuMP.@build_constraint(-p[a] - ol <= rate_a); nw))
+            for (t, a) in enumerate(terminals)]
 end

@@ -141,6 +141,7 @@ module NetworkModelBuilder
     export constraint_pi_section!, constraint_edge_rating!
     export constraint_edge_angle_difference!, constraint_unit_power!
     export constraint_linear_flow!, constraint_linear_limits!
+    export variable_edge_overload!
     export constraint_unit_injection!, susceptance, phase_shift
     export variable_storage_active!, variable_storage_reactive!
     export variable_edge_series_current, variable_two_winding!
@@ -156,7 +157,8 @@ module NetworkModelBuilder
     export solution_edge!, solution_unit!, solution_tap
 
     # export — the redispatch problem
-    export Redispatch, redispatch_setup, is_monitored, monitored_edges
+    export Redispatch, OverloadPrice, redispatch_setup
+    export is_monitored, monitored_edges, overload_price, overload_cost
     export control_mode, is_preventive, is_corrective
     export redispatch_controls, redispatch_cost, redispatch_price
     export constraint_redispatch_control

@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.5.0 - initial implementation, including the rolling horizon               #
+# v0.6.0 - the objective pays for the congestion it left                       #
 ################################################################################
 
 ################################################################################
@@ -193,7 +194,13 @@ objective_redispatch_cost(nm::NetworkModel) = minimize_network_cost(nm)
     network_cost(nm, n)
 
 The price of every measure taken at network index `n`, summed over every
-registered edge and unit type through [`redispatch_cost`](@ref).
+registered edge and unit type through [`redispatch_cost`](@ref), plus what the
+congestion left unrelieved costs, see [`overload_cost`](@ref).
+
+The two are separate sums because they price different things. A measure is
+something a component was asked to do, so it is charged to that component; an
+overload is the rating of an edge going unmet, which is charged to no component
+at all — it is what the problem pays for not solving the thing it was posed.
 """
 function network_cost(nm::NetworkModel{P,F}, n::Int) where {P<:RedispatchProblem,F}
     total = JuMP.AffExpr(0.0)
@@ -204,8 +211,34 @@ function network_cost(nm::NetworkModel{P,F}, n::Int) where {P<:RedispatchProblem
     for (T, id) in ((T, id) for T in unit_types() for id in ids(nm, T; nw = n))
         JuMP.add_to_expression!(total, redispatch_cost(nm, T, id; nw = n))
     end
+    JuMP.add_to_expression!(total, overload_cost(nm; nw = n))
 
     return total
+end
+
+"""
+    overload_cost(nm; nw)
+
+What the rating violations at network index `nw` cost, as a JuMP expression or
+`0.0`.
+
+Zero unless the setup carries an [`OverloadPrice`](@ref), and zero as well where
+it does but no monitored edge has a finite rating, since then nothing was ever
+relaxed. This is a per-index cost like any other, so
+[`minimize_network_cost`](@ref) weights it by the weight of its index — with a
+`:weight` of the step duration, a price per per-unit becomes a price per
+per-unit-hour without this having to know it.
+"""
+function overload_cost(nm::NetworkModel; nw::Int = nw_id_default(nm))
+    price = overload_price(nm)
+    price === nothing && return 0.0
+    haskey(var(nm; nw), :ol) || return 0.0
+
+    ol = var(nm, :ol; nw)
+
+    return JuMP.@expression(nm.model,
+                            price.per_energy *
+                            sum(ol[e] for e in sort!(collect(keys(ol))); init = 0.0))
 end
 
 ################################################################################

@@ -126,6 +126,60 @@ monitored_edges
     [`NetworkVector`](@ref) over the `:contingency` dimension and each state gets
     the rating it should have.
 
+## A rating you can price
+
+A rating is a bound the solver may not cross, which means a congestion nothing
+can relieve has no answer at all — the solve fails, and the volume that could
+not be relieved, which is usually the thing worth reporting, is not in the
+result because there is no result.
+
+Give the setup an [`OverloadPrice`](@ref) and the rating becomes a quantity the
+problem pays for instead:
+
+```julia
+solve_rd(data, LPFFormulation, HiGHS.Optimizer;
+         redispatch = Redispatch(; overload = 500.0))
+```
+
+Every monitored edge with a finite rating gets one non-negative overload
+variable, `o_e`, shared by its terminals, and the objective pays `per_energy`
+for it at every network index. An infeasible congestion becomes an expensive
+one, and `solution["edge"]["e"]["overload"]` reports the excess on every edge
+that was watched — including the ones the answer left at zero, since an edge
+missing from the result reads as *not asked* rather than *asked and clear*.
+
+| | hard rating | priced rating |
+|:-------------------|:---------------------------------|:-----------------------------------|
+| `overload`         | `nothing`, the default           | an [`OverloadPrice`](@ref)         |
+| linearized         | `-sᵐᵃˣ ≤ pₐ ≤ sᵐᵃˣ`              | `pₐ - oₑ ≤ sᵐᵃˣ`, `-pₐ - oₑ ≤ sᵐᵃˣ` |
+| current based      | `\|sₐ\|² ≤ (sᵐᵃˣ)²`                | `\|sₐ\|² ≤ (sᵐᵃˣ + oₑ)²`             |
+| unrelievable       | infeasible                       | priced                             |
+
+The two are different rows rather than one row relaxed, and they are written
+under different keys. A range constraint takes constant bounds, so the
+linearized rating cannot hold a variable and becomes the pair of one-sided rows
+above — exact without a binary, because the objective pays for `oₑ` and so never
+lifts it past what one of the two rows requires. This is also why there is no
+"infinite price": a hard rating is a shape the model has, not a number a solver
+can be handed.
+
+The price is on the setup rather than on the edge for the same reason
+`monitored` is. A conductor has a rating; what it costs to run past it is a
+statement about how the question is being asked, and the same network priced two
+ways is two questions about one set of data.
+
+```@docs
+OverloadPrice
+overload_price
+overload_cost
+```
+
+!!! note "A charge on the peak is not this"
+    Pricing the *worst* overload of a day rather than each hour of it is a cost
+    that spans network indices, and [`network_cost`](@ref) has one term per
+    index. That needs a hook the objective does not have yet; it is not a field
+    this type is missing.
+
 ## Contingencies, preventively and correctively
 
 Give the problem a `:contingency` dimension and it asks the same question of

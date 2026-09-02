@@ -47,6 +47,7 @@ module NetworkModelBuilder
     include("comp/edge/transformer/phase_shifter.jl")
     include("comp/edge/transformer/tap_changer.jl")
     include("comp/edge/transformer/multi_winding.jl")
+    include("comp/edge/dc_link/dc_link.jl")
 
     include("comp/unit/unit.jl")
     include("comp/unit/generator/generator.jl")
@@ -111,6 +112,7 @@ module NetworkModelBuilder
     export AbstractTransformer, AbstractTwoWindingTransformer
     export Transformer, PhaseShifter, TapChanger, MultiWindingTransformer
     export impedance, shunt_admittance, tap_ratio, dynamic_rating
+    export AbstractDCLink, DCLink, transfer_loss, transfer_limits
 
     # export — components, unit
     export AbstractGenerator, Generator, generation_cost, marginal_cost

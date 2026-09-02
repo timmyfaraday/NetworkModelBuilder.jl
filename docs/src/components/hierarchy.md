@@ -17,12 +17,14 @@ AbstractComponent
 │   │   ├── Branch                    of unspecified construction
 │   │   ├── Cable
 │   │   └── OverheadLine
-│   └── AbstractTransformer           transforms power between its terminals
-│       ├── AbstractTwoWindingTransformer
-│       │   ├── Transformer           fixed turns ratio
-│       │   ├── PhaseShifter          the ratio angle is a control
-│       │   └── TapChanger            the ratio magnitude is a control
-│       └── MultiWindingTransformer   three or more terminals, star equivalent
+│   ├── AbstractTransformer           transforms power between its terminals
+│   │   ├── AbstractTwoWindingTransformer
+│   │   │   ├── Transformer           fixed turns ratio
+│   │   │   ├── PhaseShifter          the ratio angle is a control
+│   │   │   └── TapChanger            the ratio magnitude is a control
+│   │   └── MultiWindingTransformer   three or more terminals, star equivalent
+│   └── AbstractDCLink                the flow is chosen, not determined
+│       └── DCLink                    two terminals, lossy, decoupling
 │
 └── AbstractUnit
     ├── AbstractGenerator
@@ -65,6 +67,7 @@ package is explicit about which is which.
 | [`Transformer`](@ref) vs [`TapChanger`](@ref) | **yes** — the ratio becomes a variable in a dispatch problem | a tap that the optimizer sets is a different model from one it does not |
 | [`FixedLoad`](@ref) vs [`FlexibleLoad`](@ref) | **yes** — the demand becomes a variable, and constraints span network indices | who chooses the demand |
 | [`FixedLoad`](@ref) vs [`Shunt`](@ref) | **yes** — constant power against constant impedance | one is bilinear in the voltage, the other linear |
+| [`Branch`](@ref) vs [`DCLink`](@ref) | **yes** — the flow stops being a function of the angles and becomes a decision | one transports what the physics send it, the other what it is told |
 
 Cable and overhead line are the honest case: in a steady-state model they are the
 same equations, and the documentation says so rather than implying a difference

@@ -52,6 +52,7 @@ makedocs(
             "Node"          => "components/node.md",
             "Branch"        => "components/branch.md",
             "Transformer"   => "components/transformer.md",
+            "DC link"       => "components/dc_link.md",
             "Generator"     => "components/generator.md",
             "Load"          => "components/load.md",
             "Storage"       => "components/storage.md",

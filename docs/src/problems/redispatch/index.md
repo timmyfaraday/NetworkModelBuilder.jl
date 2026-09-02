@@ -88,11 +88,14 @@ Nothing else marks it, and nothing has to.
 | [`Storage`](@ref) | yes, at `cost_up` and `cost_dn`, both zero by default | what it charges and discharges, over the whole window |
 | [`PhaseShifter`](@ref) | no | its ratio angle, between `ta_min` and `ta_max` |
 | [`TapChanger`](@ref) | no | its ratio magnitude — in the IVR formulation only |
+| [`DCLink`](@ref) | at `cost`, zero by default | its transfer, within its rating |
 | [`FlexibleLoad`](@ref) | no | its demand, subject to its energy balance |
 
 A free control is taken first, because it is free: on a meshed network a phase
 shifter that can steer flow off a congested corridor relieves it at no cost at
-all, and the costly measures only start once the free ones run out.
+all, and the costly measures only start once the free ones run out. A
+[`DCLink`](@ref) left at its default `cost` is the direct current counterpart —
+it carries whatever the congested branch cannot, for nothing.
 
 !!! note "A flexible load shifts for free"
     A [`FlexibleLoad`](@ref) behaves here as it does in an optimal power flow:
@@ -172,6 +175,7 @@ ways is two questions about one set of data.
 OverloadPrice
 overload_price
 overload_cost
+variable_edge_overload!
 ```
 
 !!! note "A charge on the peak is not this"

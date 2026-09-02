@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.3.0 - component hierarchy                                                 #
+# v0.6.0 - the energy balance runs per period                                  #
 ################################################################################
 
 ################################################################################
@@ -17,12 +18,14 @@
     FlexibleLoad <: AbstractLoad
 
 A unit `(u, i)` whose demand the model may shift in time, as long as it receives
-the same energy over the horizon.
+the same energy over each period.
 
 In a dispatch problem the withdrawal at each network index is a decision held
-between `pd_min` and `pd_max`, and one constraint per horizon ties the whole
-profile together: the energy it takes must equal `energy`. In a power flow it
-has no freedom and behaves as a [`FixedLoad`](@ref) at `pd_nominal`.
+between `pd_min` and `pd_max`, and one constraint per period ties the profile
+together: the energy it takes must equal `energy`. A `:time` dimension with no
+grouping declared is one period, so unless the problem says otherwise this is
+the whole horizon. In a power flow it has no freedom and behaves as a
+[`FixedLoad`](@ref) at `pd_nominal`.
 
 This is the first component in the package whose constraints span network
 indices, so it needs the problem to have a `:time` dimension and says so if it
@@ -37,8 +40,9 @@ point, so that shifting a load does not silently change what it does to voltages
 - `node`: the node the load is connected to.
 - `pd_nominal`, `qd_nominal`: the demand it would take without flexibility [pu].
 - `pd_min`, `pd_max`: the limits within which the demand may be shifted [pu].
-- `energy`: the energy it must receive over the horizon [pu·h]. `NaN`, the
-  default, means the energy the nominal profile would have taken.
+- `energy`: the energy it must receive over each period [pu·h]. `NaN`, the
+  default, means the energy the nominal profile would have taken over that
+  period, which is the one that stays right whatever the grouping.
 - `status`: whether the load is in service.
 - `ext`: free-form storage.
 """
@@ -113,28 +117,30 @@ end
 """
     constraint_unit_coupling(nm, FlexibleLoad; nw)
 
-One energy balance per flexible load per horizon,
+One energy balance per flexible load per period,
 
 ```math
-\\sum_{n \\in \\mathcal{T}} \\Delta t_{n} \\, p^{\\text{d}}_{u,n} = E_{u},
+\\sum_{n \\in \\mathcal{P}} \\Delta t_{n} \\, p^{\\text{d}}_{u,n} = E_{u},
 ```
 
-where the horizon `𝒯` runs over the `:time` coordinates while every other
-coordinate of the network index is held fixed. A problem with a contingency
-dimension therefore gets one balance per contingency, which is what makes each
-contingency a self-contained day rather than a shared one.
+where the period `𝒫` runs over the `:time` coordinates grouped with `n`, see
+[`period_ids`](@ref), while every other coordinate of the network index is held
+fixed. A problem with a contingency dimension therefore gets one balance per
+contingency, which is what makes each contingency a self-contained day rather
+than a shared one; a `:time` dimension with no grouping gives one period
+spanning the whole horizon, which is the behaviour this had before periods
+existed.
 """
 function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{FlexibleLoad}
                                  ) where {P<:AbstractDispatchProblem,F<:AbstractFormulationType}
     isempty(ids(nm, FlexibleLoad; nw = nw_id_default(nm))) && return nothing
     require_time_dimension(nm, FlexibleLoad)
 
-    horizon = 1:dim_length(nm, :time)
-    energy  = Dict{Tuple{Int,Int},Any}()
+    energy = Dict{Tuple{Int,Int},Any}()
 
     for n in nw_ids(nm)
-        is_first_id(nm, n, :time) || continue
-        window = similar_ids(nm, n; time = horizon)
+        is_first_period_id(nm, n, :time) || continue
+        window = period_ids(nm, n, :time)
 
         for u in ids(nm, FlexibleLoad; nw = n)
             ld     = unit(nm, u; nw = n)::FlexibleLoad

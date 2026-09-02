@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.5.0 - the redispatch problem                                              #
+# v0.6.0 - a window carries the periods it cut                                 #
 ################################################################################
 
 ################################################################################
@@ -100,18 +101,49 @@ end
 window_indices(data::NetworkData, name::Symbol, coord) =
     window_indices(dimension(data), name, coord)
 
-"the dimension a window over `coord` along `name` is posed on"
+"""
+    _window_dimension(dim, name, coord)
+
+The dimension a window over `coord` along `name` is posed on.
+
+A window renumbers the coordinates it cut from one, so anything the source
+stated *arithmetically* about them has to be carried over as data rather than
+copied as a rule. A regular period declared on `dim` is the one such statement:
+`:period_length` on a window starting at hour 5 would group hours 5–28 as its
+first day, which is not what the problem said. The periods the window inherits
+are therefore written out per coordinate, computed against the source, and the
+rule they came from is left behind — a window is a horizon long, so holding them
+costs nothing.
+"""
 function _window_dimension(dim::Dimension, name::Symbol, coord::Vector{Int})
+    periods = _window_periods(dim, name, coord)
+
     pairs = map(dim_names(dim)) do nm
         prop = dim.prop[nm]
         nm === name || return Pair{Symbol,Any}(nm, prop)
-        return Pair{Symbol,Any}(nm, prop isa Int ? length(coord) : prop[coord])
+        periods === nothing &&
+            return Pair{Symbol,Any}(nm, prop isa Int ? length(coord) : prop[coord])
+
+        sliced = prop isa Int ? [Dict{Symbol,Any}() for _ in coord] : prop[coord]
+        return Pair{Symbol,Any}(nm, [merge(d, Dict{Symbol,Any}(:period => p))
+                                     for (d, p) in zip(sliced, periods)])
     end
 
     sub = Dimension(pairs...)
     merge!(sub.meta, dim.meta)
+    # `merge!` shares the source's metadata dictionaries, so the entry that no
+    # longer holds is replaced rather than deleted from one the source still uses
+    periods === nothing ||
+        (sub.meta[name] = filter(p -> first(p) !== :period_length, dim_meta(dim, name)))
 
     return sub
+end
+
+"the source periods of the coordinates a window cuts, or `nothing` where the rule survives"
+function _window_periods(dim::Dimension, name::Symbol, coord::Vector{Int})
+    _period_length(dim, name) === nothing && return nothing
+
+    return [_period_of(dim, name, id) for id in coord]
 end
 
 """

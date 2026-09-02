@@ -86,6 +86,7 @@ module NetworkModelBuilder
     export dim_names, has_dim, dim_length, dim_position, dim_prop, dim_meta, coordinates
     export nw_ids, similar_id, similar_ids, first_id, last_id, is_first_id, is_last_id
     export prev_id, next_id, prev_ids, next_ids
+    export period_id, period_ids, is_first_period_id, is_last_period_id, period_count
 
     # export — network dependent data
     export NetworkVector, NetworkQuantity

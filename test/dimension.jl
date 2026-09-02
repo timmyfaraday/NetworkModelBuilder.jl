@@ -193,4 +193,104 @@
         @test dim_meta(dim, :harmonic, :orders) == [1, 5, 7]
         @test_throws ArgumentError add_dimension(dim, :time, 2)
     end
+
+    @testset "no grouping is one period spanning the horizon" begin
+        dim = Dimension(:time => 4, :contingency => 3)
+
+        @test period_count(dim) == 1
+        @test all(period_id(dim, n) == 1 for n in nw_ids(dim))
+        # the whole horizon, and only this contingency
+        @test period_ids(dim, 6) == [5, 6, 7, 8]
+        @test is_first_period_id(dim, 5) && is_last_period_id(dim, 8)
+        @test !is_first_period_id(dim, 6) && !is_last_period_id(dim, 7)
+    end
+
+    @testset "a regular grouping is arithmetic" begin
+        dim = Dimension(:time => 96, :contingency => 3)
+        dim_meta(dim, :time)[:period_length] = 24
+
+        @test period_count(dim) == 4
+        @test period_id(dim, 24) == 1
+        @test period_id(dim, 25) == 2
+        @test period_ids(dim, 30) == collect(25:48)
+        @test is_first_period_id(dim, 25)
+        @test is_last_period_id(dim, 48)
+        @test !is_first_period_id(dim, 26)
+
+        # nothing is stored per coordinate to say so
+        @test _NMB._prop(dim, :time) isa Int
+    end
+
+    @testset "a period composes with the other dimensions" begin
+        dim = Dimension(:time => 96, :contingency => 3)
+        dim_meta(dim, :time)[:period_length] = 24
+
+        # index 100 is hour 4 of contingency 2: its day is that contingency's
+        @test coordinates(dim, 100) == (time = 4, contingency = 2)
+        @test period_ids(dim, 100) == collect(97:120)
+        @test all(coordinates(dim, m).contingency == 2 for m in period_ids(dim, 100))
+
+        # every index belongs to exactly one period of its own contingency
+        for n in nw_ids(dim)
+            @test n in period_ids(dim, n)
+            @test length(period_ids(dim, n)) == 24
+        end
+    end
+
+    @testset "an irregular grouping is a coordinate property" begin
+        dim = Dimension(:time => [Dict{Symbol,Any}(:period => p) for p in [1, 1, 1, 2, 2]])
+
+        @test period_count(dim) == 2
+        @test period_ids(dim, 2) == [1, 2, 3]
+        @test period_ids(dim, 5) == [4, 5]
+        @test is_first_period_id(dim, 4) && is_last_period_id(dim, 3)
+
+        # a period that does not divide the dimension evenly is why this exists
+        @test length(period_ids(dim, 1)) != length(period_ids(dim, 5))
+    end
+
+    @testset "the property wins over the rule, being the more specific" begin
+        dim = Dimension(:time => [Dict{Symbol,Any}(:period => 1) for _ in 1:4])
+        dim_meta(dim, :time)[:period_length] = 2
+
+        @test period_count(dim) == 1
+        @test period_ids(dim, 3) == [1, 2, 3, 4]
+    end
+
+    @testset "a period length has to be a positive integer" begin
+        dim = Dimension(:time => 4)
+
+        dim_meta(dim, :time)[:period_length] = 0
+        @test_throws ArgumentError period_ids(dim, 1)
+
+        dim_meta(dim, :time)[:period_length] = 2.5
+        @test_throws ArgumentError period_ids(dim, 1)
+    end
+
+    @testset "a window carries the periods it cut, not the rule" begin
+        dim = Dimension(:time => 96)
+        dim_meta(dim, :time)[:period_length] = 24
+
+        # hours 20 to 31 straddle the boundary between day 1 and day 2
+        sub = _NMB._window_dimension(dim, :time, collect(20:31))
+
+        @test [period_id(sub, m) for m in nw_ids(sub)] == [fill(1, 5); fill(2, 7)]
+        @test period_ids(sub, 1) == [1, 2, 3, 4, 5]
+        @test period_ids(sub, 6) == collect(6:12)
+
+        # the rule is left behind rather than reapplied to renumbered coordinates
+        @test !haskey(dim_meta(sub, :time), :period_length)
+
+        # and the source keeps both its rule and its metadata dictionary
+        @test dim_meta(dim, :time)[:period_length] == 24
+        @test period_ids(dim, 30) == collect(25:48)
+
+        # a window aligned on a boundary is one whole period
+        aligned = _NMB._window_dimension(dim, :time, collect(25:48))
+        @test all(period_id(aligned, m) == 2 for m in nw_ids(aligned))
+
+        # a problem with no grouping keeps the cheap representation
+        plain = _NMB._window_dimension(Dimension(:time => 96), :time, collect(20:31))
+        @test _NMB._prop(plain, :time) isa Int
+    end
 end

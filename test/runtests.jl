@@ -13,6 +13,7 @@ using Test
 using Logging
 using Markdown
 
+using Arrow
 using Ipopt
 using JuMP
 
@@ -34,6 +35,7 @@ quiet(f) = Logging.with_logger(f, Logging.NullLogger())
 @testset "NetworkModelBuilder" begin
     include("dimension.jl")
     include("matpower.jl")
+    include("tables.jl")
     include("network.jl")
     include("hierarchy.jl")
     include("dispatch.jl")

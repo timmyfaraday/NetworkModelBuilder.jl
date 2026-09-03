@@ -68,6 +68,7 @@ module NetworkModelBuilder
 
     # include — input and output
     include("io/common.jl")
+    include("io/tables.jl")
     include("io/matpower.jl")
 
     # export — paths
@@ -173,6 +174,6 @@ module NetworkModelBuilder
     export solve_lf, solve_opf, solve_rd
 
     # export — input and output
-    export parse_file, parse_matpower
+    export parse_file, parse_matpower, parse_tables, parse_arrow, component_types
 
 end

@@ -27,6 +27,7 @@ makedocs(
             "The network index"         => "manual/network_index.md",
             "Problems and formulations" => "manual/problems_formulations.md",
             "The linearized formulation" => "manual/linearized.md",
+            "Tabular input"             => "manual/tabular_input.md",
             "Extending the package"     => "manual/extending.md",
         ],
         "Problems" => [

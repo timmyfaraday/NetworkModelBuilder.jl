@@ -109,7 +109,8 @@ module NetworkModelBuilder
     export edge_id, terminal_id, node_id
 
     # export — components, node
-    export Node, NodeType, PQ, PV, REF, ISOLATED, reference_nodes, nodal_price
+    export Node, NodeType, PQ, PV, REF, ISOLATED, reference_nodes
+    export nodal_price, reactive_price, current_prices
 
     # export — components, edge
     export AbstractBranch, Branch, Cable, OverheadLine

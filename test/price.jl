@@ -136,25 +136,77 @@ prices(result, n = 1) = [nw_solution(result, n)["node"]["$i"]["lambda"] for i in
         @test prices(result) ≈ [0.0, 0.0] atol = 1e-6
     end
 
-    @testset "the current based balance is priced in current, and says so" begin
-        result = quiet(() -> solve_opf(priced_network(), IVRFormulation, OPTIMIZER))
+    # The current based balance prices a per unit of *current*, which is the two
+    # power prices rotated by the voltage. Reading `lambda_real` as the nodal
+    # price is the mistake worth guarding: on the congested case below it reads
+    # 109.94 against a true price of 100, which is wrong in the direction that
+    # looks plausible.
+    @testset "the current based balance is priced in current" begin
+        result = quiet(() -> solve_opf(priced_network(; rate = 0.4), IVRFormulation,
+                                       OPTIMIZER))
+        node = result["solution"]["nw"]["1"]["node"]
 
-        # both rows of the balance are reported, and neither is called a price
+        # the raw duals are reported, and so are the power prices behind them
         for i in ("1", "2")
-            @test haskey(result["solution"]["nw"]["1"]["node"][i], "lambda_real")
-            @test haskey(result["solution"]["nw"]["1"]["node"][i], "lambda_imag")
-            @test !haskey(result["solution"]["nw"]["1"]["node"][i], "lambda")
+            for key in ("lambda_real", "lambda_imag", "lambda", "lambda_q")
+                @test haskey(node[i], key)
+            end
         end
 
-        nm = instantiate_model(priced_network(), OptimalPowerFlowProblem, IVRFormulation)
-        quiet(() -> optimize_model!(nm, OPTIMIZER))
+        # `lambda_real` is the price scaled by the real part of the voltage, and
+        # is emphatically not the price
+        @test node["2"]["lambda_real"] ≈ 109.9399 atol = 1e-3
+        @test !isapprox(node["2"]["lambda_real"], 100.0; atol = 1.0)
+        @test node["2"]["lambda_real"] ≈
+              node["2"]["vr"] * node["2"]["lambda"] +
+              node["2"]["vi"] * node["2"]["lambda_q"] atol = 1e-6
+    end
 
+    @testset "the rotation recovers the price the linearization gives" begin
+        # the branch is lossless and nothing prices reactive power, so the two
+        # formulations agree on the price exactly — which is what makes this a
+        # test of the rotation rather than of the approximation
+        for rate in (Inf, 0.4)
+            lpf = quiet(() -> solve_opf(priced_network(; rate), LPFFormulation, OPTIMIZER))
+            ivr = quiet(() -> solve_opf(priced_network(; rate), IVRFormulation, OPTIMIZER))
+
+            for i in ("1", "2")
+                @test ivr["solution"]["nw"]["1"]["node"][i]["lambda"] ≈
+                      lpf["solution"]["nw"]["1"]["node"][i]["lambda"] atol = 1e-4
+
+                # nothing pays for reactive power here, so its price is zero —
+                # even where `lambda_imag` is not, the angle alone putting it there
+                @test ivr["solution"]["nw"]["1"]["node"][i]["lambda_q"] ≈ 0.0 atol = 1e-6
+            end
+            @test abs(ivr["solution"]["nw"]["1"]["node"]["2"]["lambda_imag"]) > 1e-3
+        end
+    end
+
+    @testset "the accessors agree with the solution under both formulations" begin
+        nm = instantiate_model(priced_network(; rate = 0.4), OptimalPowerFlowProblem,
+                               IVRFormulation)
+        @test nodal_price(nm, 1) === nothing
+        @test reactive_price(nm, 1) === nothing
+        @test current_prices(nm, 1) === nothing
+
+        quiet(() -> optimize_model!(nm, OPTIMIZER))
+        node = nw_solution(nm.sol)["node"]
+
+        @test nodal_price(nm, 1) ≈ 10.0  atol = 1e-4
+        @test nodal_price(nm, 2) ≈ 100.0 atol = 1e-4
+        @test reactive_price(nm, 2) ≈ 0.0 atol = 1e-6
+        @test current_prices(nm, 2) == (node["2"]["lambda"], node["2"]["lambda_q"])
+        @test nodal_price(nm, 99) === nothing
+
+        # a linearized formulation has no reactive power to price, and says so
+        # rather than answering zero
+        lpf = instantiate_model(priced_network(), OptimalPowerFlowProblem, LPFFormulation)
         err = try
-            nodal_price(nm, 1)
+            reactive_price(lpf, 1)
         catch e
             e
         end
         @test err isa ErrorException
-        @test occursin("balance is in current", err.msg)
+        @test occursin("no reactive price", err.msg)
     end
 end

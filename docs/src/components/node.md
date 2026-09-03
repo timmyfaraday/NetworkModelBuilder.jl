@@ -129,8 +129,8 @@ reference_nodes
 ## The price of a node
 
 The balance is the row a nodal price is the dual of, so a solved model already
-holds one per node and per network index. Under a [`LPFFormulation`](@ref) it is
-a price per per-unit-hour and reaches the solution as `lambda`:
+holds one per node and per network index. It is a price per per-unit-hour and
+reaches the solution as `lambda`:
 
 ```julia
 result = solve_opf(data, LPFFormulation, HiGHS.Optimizer)
@@ -140,6 +140,7 @@ nodal_price(nm, 2)                       # the same number, from the model
 
 ```@docs
 nodal_price
+reactive_price
 ```
 
 ### What it is the price of
@@ -169,11 +170,37 @@ than as zero.
 A [`LoadFlowProblem`](@ref) is the one case where a price is present and
 uninformative: it minimizes zero, so every price in one is zero.
 
-!!! warning "The current based balance is not priced in energy"
-    Under an [`IVRFormulation`](@ref) the balance is Kirchhoff's current law, so
-    its two duals price a per unit of **current** rather than of energy. They are
-    reported as `lambda_real` and `lambda_imag`, never as `lambda`, and
-    `nodal_price` refuses the formulation outright rather than returning a number
-    that looks like a price and is not one. At a voltage magnitude near one the
-    real part comes out near the energy price, which is exactly what makes the
-    confusion worth refusing.
+The current based prices need the solved **voltage** as well as the duals, since
+the rotation is by that voltage, so they are absent wherever either is missing —
+and at a node whose voltage solved to zero, where there is nothing to rotate
+about.
+
+### Where the balance is in current
+
+Under an [`IVRFormulation`](@ref) the balance is Kirchhoff's current law, so its
+two duals price a per unit of **current** rather than of energy. They are one
+rotation by the voltage away from the power prices, and the rotation is invertible,
+so `nodal_price` means the same thing in both formulations — and the reactive
+price falls out of the same inversion, which the linearized formulation cannot
+produce at all.
+
+```@docs
+current_prices
+```
+
+The node solution therefore carries four numbers under an `IVRFormulation`:
+
+| key | what it is | unit |
+|:----|:-----------|:-----|
+| `lambda_real` | the dual of the real current row | currency/pu of current |
+| `lambda_imag` | the dual of the imaginary current row | currency/pu of current |
+| `lambda` | the active power price behind them | currency/pu/h |
+| `lambda_q` | the reactive power price behind them | currency/pu/h |
+
+!!! warning "`lambda_real` is not the nodal price"
+    It is the price scaled by the real part of the voltage with a bleed of the
+    reactive price, so at a magnitude near one it lands *near* the right answer
+    without being it — which is what makes reading it as the price a plausible
+    mistake rather than an obvious one. On the two node case in `test/price.jl`
+    the congested node prices at 100 and its `lambda_real` reads 109.94. Take
+    `lambda`, or [`current_prices`](@ref) for both halves at once.

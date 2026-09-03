@@ -148,6 +148,7 @@ module NetworkModelBuilder
     export constraint_unit, constraint_unit_coupling
     export constraint_pi_section!, constraint_edge_rating!
     export constraint_edge_angle_difference!, constraint_unit_power!
+    export constraint_two_winding_flow!
     export constraint_linear_flow!, constraint_linear_limits!
     export variable_edge_overload!
     export constraint_unit_injection!, susceptance, phase_shift

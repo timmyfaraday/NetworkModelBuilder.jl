@@ -40,7 +40,7 @@ path `1–2–3` carrying a phase shifter, which can steer flow off the corridor
 no cost. Edge 3 is what a contingency takes out.
 """
 function meshed_network(; dim::Dimension = Dimension(), rate::Float64 = 0.5,
-                          shift::Bool = true, out = ())
+                          shift::Bool = true, out = (), cost::Float64 = 0.0)
     ps_limit = shift ? 0.3 : 0.0
     status   = isempty(out) ? true : nw_vector(dim, (n, c) -> n ∉ out)
 
@@ -49,7 +49,7 @@ function meshed_network(; dim::Dimension = Dimension(), rate::Float64 = 0.5,
     E = Dict{Int,AbstractEdge}(
         1 => Branch(; id = 1, terminals = [1, 3], r = 0.0, x = 0.1, rate_a = rate),
         2 => PhaseShifter(; id = 2, terminals = [1, 2], r = 0.0, x = 0.1,
-                          ta_min = -ps_limit, ta_max = ps_limit),
+                          ta_min = -ps_limit, ta_max = ps_limit, cost = cost),
         3 => Branch(; id = 3, terminals = [2, 3], r = 0.0, x = 0.1, status = status))
     U = Dict{Int,AbstractUnit}(
         1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
@@ -197,6 +197,73 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         without = quiet(() -> solve_rd(meshed_network(; shift = false),
                                        LPFFormulation, OPTIMIZER))
         @test without["objective"] > 1.0
+    end
+
+    @testset "a phase shifter that is priced moves no further than it has to" begin
+        # free, the shifter has no reason to stop at the mildest setting that
+        # clears the rating; priced, every radian past that one costs
+        free  = quiet(() -> solve_rd(meshed_network(), LPFFormulation, OPTIMIZER))
+        dear  = quiet(() -> solve_rd(meshed_network(; cost = 10.0),
+                                     LPFFormulation, OPTIMIZER))
+
+        ta_free, ta_dear = (nw_solution(r)["edge"]["2"]["tap"]["ta"] for r in (free, dear))
+
+        # -0.05 is the setting that just brings the corridor under its rating
+        @test ta_dear ≈ -0.05 atol = 1e-4
+        @test abs(ta_dear) ≤ abs(ta_free) + 1e-6
+
+        # and the congestion is still relieved, at the price of the movement
+        @test abs(nw_solution(dear)["edge"]["1"]["terminal"]["1"]["p"]) ≤ 0.5 + 1e-6
+        @test dear["objective"] ≈ 10.0 * abs(ta_dear) atol = 1e-4
+        @test free["objective"] ≈ 0.0 atol = 1e-5
+    end
+
+    @testset "the angle a phase shifter moved is the intervention" begin
+        result = quiet(() -> solve_rd(meshed_network(; cost = 10.0),
+                                      LPFFormulation, OPTIMIZER))
+        tap    = nw_solution(result)["edge"]["2"]["tap"]
+
+        # the split is the same one a generator makes between its market
+        # dispatch and the volumes it was moved
+        @test tap["ta_market"] == 0.0
+        @test tap["ta"] ≈ tap["ta_market"] + tap["taup"] - tap["tadn"] atol = 1e-9
+        @test tap["tadn"] ≈ 0.05 atol = 1e-4
+        @test tap["taup"] ≈ 0.0  atol = 1e-4
+
+        # both volumes are written whatever the price, so an unpriced shifter
+        # still reports what it did
+        nm = instantiate_model(meshed_network(), RedispatchProblem, LPFFormulation)
+        @test haskey(_NMB.var(nm), :taup)
+        @test haskey(_NMB.var(nm), :tadn)
+        @test haskey(_NMB.con(nm), :phase_shifter_redispatch)
+        @test JuMP.upper_bound(_NMB.var(nm, :taup, 2)) ≈ 0.3     # ta_max - ta
+        @test JuMP.upper_bound(_NMB.var(nm, :tadn, 2)) ≈ 0.3     # ta - ta_min
+
+        # and only a redispatch has them: an optimal power flow prices the level
+        # of a dispatch, and a phase shifter has no level to price
+        opf = instantiate_model(meshed_network(; cost = 10.0), OptimalPowerFlowProblem,
+                                LPFFormulation)
+        @test !haskey(_NMB.var(opf), :taup)
+    end
+
+    @testset "a priced phase shifter is linearized only" begin
+        # the price is on the angle, which the current based formulation does not
+        # carry — it holds the ratio as `tr + j*ti` to stay polynomial
+        err = try
+            instantiate_model(meshed_network(; cost = 10.0), RedispatchProblem,
+                              IVRFormulation)
+        catch e
+            e
+        end
+        @test err isa ErrorException
+        @test occursin("priced phase shifter", err.msg)
+
+        # an unpriced one is the non-costly measure it always was
+        @test instantiate_model(meshed_network(), RedispatchProblem, IVRFormulation) isa
+              NetworkModel
+
+        @test_throws ArgumentError PhaseShifter(; id = 1, terminals = [1, 2], r = 0.0,
+                                                  x = 0.1, cost = -1.0)
     end
 
     @testset "a storage unit is a measure over the time window" begin

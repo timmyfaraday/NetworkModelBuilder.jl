@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.6.0 - the overload of an edge is reported                                 #
 ################################################################################
 
 ################################################################################
@@ -200,11 +201,32 @@ function solution_edge(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblem
                 "node" => a.node, "cr" => cr, "ci" => ci,
                 "p" => vr * cr + vi * ci, "q" => vi * cr - vr * ci)
         end
+        _solution_edge_overload!(entry, nm, e, nw)
         solution_edge!(entry, nm, T, e, nw)
         sol["$e"] = entry
     end
 
     return sol
+end
+
+"""
+    _solution_edge_overload!(entry, nm, e, nw)
+
+Record how far past its rating edge `e` was run, where the problem priced that
+rather than forbidding it.
+
+Reported for every monitored edge that has a rating, including the ones the
+answer left at zero: the overload volume is an output of the problem, and an
+edge missing from the result reads as *not asked*, not as *asked and clear*.
+"""
+function _solution_edge_overload!(entry::Dict{String,Any}, nm::NetworkModel, e::Int, nw::Int)
+    haskey(var(nm; nw), :ol) || return nothing
+    ol = var(nm, :ol; nw)
+    haskey(ol, e) || return nothing
+
+    entry["overload"] = JuMP.value(ol[e])
+
+    return nothing
 end
 
 "add the type specific entries of edge `e` to its solution dictionary"
@@ -220,6 +242,7 @@ function solution_edge(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblem
             entry["terminal"]["$(a.terminal)"] = Dict{String,Any}(
                 "node" => a.node, "p" => JuMP.value(var(nm, :p, a; nw)))
         end
+        _solution_edge_overload!(entry, nm, e, nw)
         solution_edge!(entry, nm, T, e, nw)
         sol["$e"] = entry
     end

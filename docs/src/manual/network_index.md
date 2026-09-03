@@ -113,6 +113,57 @@ step from the `:duration` property of that dimension:
 Dimension(:time => [Dict{Symbol,Any}(:duration => 0.25) for _ in 1:96])
 ```
 
+## Periods
+
+A **period** groups the coordinates of one dimension into sub-horizons: the days
+of a year of hours, the weeks of a season. It is what a constraint that holds
+once per day rather than once per horizon is written against — a daily energy
+limit, a storage cycle limit, the worst overload of a day.
+
+There are two ways to declare one, and they answer different questions.
+
+| grouping | declared as | period of a coordinate | cost |
+|:----------|:-------------------------------------------|:--------------------|:-----------------|
+| regular   | `dim_meta(dim, :time)[:period_length] = 24` | arithmetic          | one number       |
+| irregular | a `:period` property per coordinate         | read off            | one dict each    |
+| none      | nothing                                     | always `1`          | nothing          |
+
+The property wins where both are given, being the more specific statement.
+Saying nothing gives **one period spanning the whole dimension**, which is the
+right answer for a problem with no daily structure: a constraint written per
+period is then written once, over the horizon.
+
+```julia
+dim = Dimension(:time => 8760, :contingency => 3)
+dim_meta(dim, :time)[:period_length] = 24
+```
+
+What makes this worth having over a table from time step to day is not the
+storage — a `:period` property per coordinate *is* that table — but that the
+grouping **composes**. [`period_ids`](@ref) holds every other coordinate of the
+network index fixed, so the problem above gets one constraint per day *per
+contingency* without a second table, and without the component asking whether a
+contingency dimension exists at all:
+
+```julia
+period_ids(dim, n)                  # the day holding n, in n's own contingency
+is_first_period_id(dim, n)          # gate a per-period constraint on this
+```
+
+A [window](@ref "Cutting a window out") renumbers the coordinates it cuts from
+one, so a regular grouping is written out per coordinate as the window is taken,
+computed against the source. A window over hours 20 to 31 of the problem above
+therefore holds the rest of day 1 and the start of day 2, rather than regrouping
+its twelve steps into a day of its own.
+
+```@docs
+period_id
+period_ids
+is_first_period_id
+is_last_period_id
+period_count
+```
+
 ## Cutting a window out
 
 A problem posed over a dimension can be restricted to part of it, which is what a

@@ -455,6 +455,8 @@ baseMVA(data::NetworkData) = data.baseMVA
 for f in (:dim_names, :has_dim, :dim_length, :dim_position, :coordinates, :dim_prop,
           :dim_meta, :nw_ids, :similar_ids, :similar_id, :first_id, :last_id,
           :is_first_id, :is_last_id, :prev_id, :next_id, :prev_ids, :next_ids,
+          :period_id, :period_ids, :is_first_period_id, :is_last_period_id,
+          :period_count,
           :nw_value, :nw_values, :nw_vector, :nw_component)
     @eval $f(net::Network, args...; kwargs...) = $f(net.dim, args...; kwargs...)
     @eval $f(data::NetworkData, args...; kwargs...) = $f(data.net.dim, args...; kwargs...)

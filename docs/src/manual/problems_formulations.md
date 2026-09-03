@@ -107,3 +107,7 @@ solution
 parse_file
 parse_matpower
 ```
+
+A network held as tables rather than as a Matpower case is read by
+[`parse_tables`](@ref), and one written as Arrow files by
+[`parse_arrow`](@ref) — see [Tabular input](@ref).

@@ -232,6 +232,36 @@ const PRICES = [10.0, 100.0, 50.0]
         end
     end
 
+    @testset "a flexible load balances its energy per period" begin
+        # six steps, cheap-dear-cheap in each half, grouped into two days: the
+        # load may shift within a day but may not borrow energy from the other
+        prices = [10.0, 100.0, 50.0, 10.0, 100.0, 50.0]
+        flat   = FlexibleLoad(; id = 3, node = 2, pd_nominal = 0.10, qd_nominal = 0.02,
+                              pd_min = 0.0, pd_max = 0.15)
+        data   = price_network(prices; extra = Dict{Int,AbstractUnit}(3 => flat))
+        dim_meta(dimension(data), :time)[:period_length] = 3
+
+        result = quiet(() -> solve_model(data, OptimalPowerFlowProblem,
+                                         LPFFormulation, OPTIMIZER))
+        @test result["termination_status"] == JuMP.LOCALLY_SOLVED
+        pd = [nw_solution(result, n)["unit"]["3"]["pd"] for n in 1:6]
+
+        # each day balances on its own, rather than the horizon balancing as one
+        @test sum(pd[1:3]) ≈ 3 * 0.10 atol = 1e-6
+        @test sum(pd[4:6]) ≈ 3 * 0.10 atol = 1e-6
+
+        # and within a day it still runs to the cheap step
+        @test pd[1] ≈ 0.15 atol = 1e-5
+        @test pd[4] ≈ 0.15 atol = 1e-5
+
+        # ungrouped, the same data is one period and the halves may trade
+        loose = quiet(() -> solve_model(price_network(prices;
+                                            extra = Dict{Int,AbstractUnit}(3 => flat)),
+                                        OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
+        @test sum(nw_solution(loose, n)["unit"]["3"]["pd"] for n in 1:6) ≈ 6 * 0.10 atol = 1e-6
+        @test loose["objective"] <= result["objective"] + 1e-8
+    end
+
     @testset "a flexible load is fixed in a load flow" begin
         flat = FlexibleLoad(; id = 3, node = 2, pd_nominal = 0.10, qd_nominal = 0.02,
                             pd_min = 0.0, pd_max = 0.15)

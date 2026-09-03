@@ -11,6 +11,7 @@
 # v0.3.0 - component hierarchy                                                 #
 # v0.4.0 - the linearized formulation                                          #
 # v0.5.0 - the redispatch problem                                              #
+# v0.6.0 - priced congestion, periods, the dc link and tabular input           #
 ################################################################################
 
 module NetworkModelBuilder
@@ -47,6 +48,7 @@ module NetworkModelBuilder
     include("comp/edge/transformer/phase_shifter.jl")
     include("comp/edge/transformer/tap_changer.jl")
     include("comp/edge/transformer/multi_winding.jl")
+    include("comp/edge/dc_link/dc_link.jl")
 
     include("comp/unit/unit.jl")
     include("comp/unit/generator/generator.jl")
@@ -67,6 +69,7 @@ module NetworkModelBuilder
 
     # include — input and output
     include("io/common.jl")
+    include("io/tables.jl")
     include("io/matpower.jl")
 
     # export — paths
@@ -86,6 +89,7 @@ module NetworkModelBuilder
     export dim_names, has_dim, dim_length, dim_position, dim_prop, dim_meta, coordinates
     export nw_ids, similar_id, similar_ids, first_id, last_id, is_first_id, is_last_id
     export prev_id, next_id, prev_ids, next_ids
+    export period_id, period_ids, is_first_period_id, is_last_period_id, period_count
 
     # export — network dependent data
     export NetworkVector, NetworkQuantity
@@ -110,6 +114,7 @@ module NetworkModelBuilder
     export AbstractTransformer, AbstractTwoWindingTransformer
     export Transformer, PhaseShifter, TapChanger, MultiWindingTransformer
     export impedance, shunt_admittance, tap_ratio, dynamic_rating
+    export AbstractDCLink, DCLink, transfer_loss, transfer_limits
 
     # export — components, unit
     export AbstractGenerator, Generator, generation_cost, marginal_cost
@@ -140,6 +145,7 @@ module NetworkModelBuilder
     export constraint_pi_section!, constraint_edge_rating!
     export constraint_edge_angle_difference!, constraint_unit_power!
     export constraint_linear_flow!, constraint_linear_limits!
+    export variable_edge_overload!
     export constraint_unit_injection!, susceptance, phase_shift
     export variable_storage_active!, variable_storage_reactive!
     export variable_edge_series_current, variable_two_winding!
@@ -155,7 +161,8 @@ module NetworkModelBuilder
     export solution_edge!, solution_unit!, solution_tap
 
     # export — the redispatch problem
-    export Redispatch, redispatch_setup, is_monitored, monitored_edges
+    export Redispatch, OverloadPrice, redispatch_setup
+    export is_monitored, monitored_edges, overload_price, overload_cost
     export control_mode, is_preventive, is_corrective
     export redispatch_controls, redispatch_cost, redispatch_price
     export constraint_redispatch_control
@@ -168,6 +175,6 @@ module NetworkModelBuilder
     export solve_lf, solve_opf, solve_rd
 
     # export — input and output
-    export parse_file, parse_matpower
+    export parse_file, parse_matpower, parse_tables, parse_arrow, component_types
 
 end

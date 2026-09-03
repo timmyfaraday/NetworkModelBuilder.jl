@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
 # v0.2.0 - network dependent data stored per component                         #
+# v0.6.0 - periods group the coordinates of a dimension                        #
 ################################################################################
 
 ################################################################################
@@ -290,6 +291,88 @@ prev_ids(dim::Dimension, n::Int, name::Symbol) = _range_ids(dim, n, name, :befor
 next_ids(dim::Dimension, n::Int, name::Symbol) = _range_ids(dim, n, name, :after)
 
 ################################################################################
+# Periods                                                                      #
+################################################################################
+
+# A *period* groups the coordinates of one dimension into sub-horizons: the days
+# of a year of hours, the weeks of a season. It is what a constraint that holds
+# once per day rather than once per horizon is written against — a daily energy
+# limit, a storage cycle limit, the worst overload of a day.
+#
+# There are two ways to say what the periods are, and they answer different
+# questions. A **regular** grouping is one number on the dimension as a whole,
+# `dim_meta(dim, :time)[:period_length] = 24`, and the period of a coordinate is
+# then arithmetic. An **irregular** grouping is a `:period` property on each
+# coordinate, which is the only way to say that the periods have unequal length.
+# The property wins where both are given, being the more specific statement.
+#
+# Saying nothing gives one period spanning the whole dimension, which is the
+# right answer for a problem with no daily structure: every helper here then
+# reduces to the horizon, and a constraint written per period is written once.
+#
+# What makes this worth having over a table from time step to day is not the
+# storage — a `:period` property per coordinate *is* that table — but that the
+# grouping composes. `period_ids` holds every other coordinate of the network
+# index fixed, so a problem posed over contingencies as well as time gets one
+# constraint per period *per contingency* without a second table and without the
+# component asking whether a contingency dimension exists.
+
+"""
+    period_id(dim, n[, name])
+
+The period the network index `n` belongs to along dimension `name`, defaulting
+to `:time`.
+
+See [`period_ids`](@ref) for the indices that share it, and the source of this
+file for how a grouping is declared.
+"""
+period_id(dim::Dimension, n::Int, name::Symbol = :time) =
+    _period_of(dim, name, coordinates(dim, n)[name])
+
+"""
+    period_ids(dim, n[, name])
+
+Sorted network indices sharing the period of `n` along dimension `name`, with
+every other coordinate of `n` held fixed.
+
+This is the window a constraint that holds once per period sums over. With no
+grouping declared it is the whole horizon, so a component written against it
+behaves the same way in a problem that has no periods.
+
+# Examples
+```julia
+julia> dim = Dimension(:time => 96, :contingency => 3);
+
+julia> dim_meta(dim, :time)[:period_length] = 24;
+
+julia> period_ids(dim, 30)   # the day holding index 30, in its own contingency
+24-element Vector{Int64}:
+ 25
+  ⋮
+ 48
+```
+"""
+period_ids(dim::Dimension, n::Int, name::Symbol = :time) =
+    similar_ids(dim, n; (name => _period_coordinates(dim, name, period_id(dim, n, name)),)...)
+
+"whether `n` is the first network index of its period along dimension `name`"
+is_first_period_id(dim::Dimension, n::Int, name::Symbol = :time) =
+    coordinates(dim, n)[name] == first(_period_coordinates(dim, name, period_id(dim, n, name)))
+
+"whether `n` is the last network index of its period along dimension `name`"
+is_last_period_id(dim::Dimension, n::Int, name::Symbol = :time) =
+    coordinates(dim, n)[name] == last(_period_coordinates(dim, name, period_id(dim, n, name)))
+
+"""
+    period_count(dim[, name])
+
+The number of periods dimension `name` is grouped into, which is `1` where no
+grouping is declared.
+"""
+period_count(dim::Dimension, name::Symbol = :time) =
+    maximum(_period_of(dim, name, id) for id in 1:dim_length(dim, name))
+
+################################################################################
 # Network dependent data                                                       #
 ################################################################################
 
@@ -482,6 +565,45 @@ _check_kwargs(dim::Dimension, kwargs) =
     for name in keys(kwargs)
         has_dim(dim, name) || _no_dim(dim, name)
     end
+
+"the declared regular period length of dimension `name`, or `nothing`"
+function _period_length(dim::Dimension, name::Symbol)
+    len = get(dim_meta(dim, name), :period_length, nothing)
+    len === nothing && return nothing
+    len isa Integer && len > 0 ||
+        throw(ArgumentError("the `:period_length` of dimension `$name` must be a positive integer, got $(repr(len))"))
+
+    return Int(len)
+end
+
+"the period of coordinate `id` along dimension `name`"
+function _period_of(dim::Dimension, name::Symbol, id::Int)
+    p = dim_prop(dim, name, id, :period, nothing)
+    p === nothing || return p::Int
+
+    len = _period_length(dim, name)
+
+    return len === nothing ? 1 : (id - 1) ÷ len + 1
+end
+
+"""
+    _period_coordinates(dim, name, p)
+
+The coordinates of dimension `name` in period `p`.
+
+A dimension given as a plain size cannot carry a `:period` property, so its
+periods are contiguous and known arithmetically. One given as properties has to
+be scanned, which is the same order of work as holding it.
+"""
+function _period_coordinates(dim::Dimension, name::Symbol, p::Int)
+    if _prop(dim, name) isa Int
+        len = _period_length(dim, name)
+        len === nothing && return 1:dim_length(dim, name)
+        return ((p - 1) * len + 1):min(p * len, dim_length(dim, name))
+    end
+
+    return [id for id in 1:dim_length(dim, name) if _period_of(dim, name, id) == p]
+end
 
 "the network index or indices at the coordinates `idx`, offset included"
 _at(dim::Dimension, idx::Tuple) = dim.li[idx...] .+ dim.offset

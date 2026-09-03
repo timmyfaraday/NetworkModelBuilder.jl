@@ -27,6 +27,7 @@ makedocs(
             "The network index"         => "manual/network_index.md",
             "Problems and formulations" => "manual/problems_formulations.md",
             "The linearized formulation" => "manual/linearized.md",
+            "Tabular input"             => "manual/tabular_input.md",
             "Extending the package"     => "manual/extending.md",
         ],
         "Problems" => [
@@ -52,6 +53,7 @@ makedocs(
             "Node"          => "components/node.md",
             "Branch"        => "components/branch.md",
             "Transformer"   => "components/transformer.md",
+            "DC link"       => "components/dc_link.md",
             "Generator"     => "components/generator.md",
             "Load"          => "components/load.md",
             "Storage"       => "components/storage.md",

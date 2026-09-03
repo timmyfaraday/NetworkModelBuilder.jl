@@ -473,6 +473,12 @@ there. Its `"objective"` is the cost of the **committed** steps only; a window's
 own objective prices its lookahead too, and is reported apart under
 `"horizon"`, with what each window covered and committed.
 
+`"dual_status"` is `FEASIBLE_POINT` only where **every** window returned duals,
+since a roll is as priced as its least priced window and a committed step whose
+window gave none has no [`nodal_price`](@ref). `"horizon"` also carries
+`"closed"`, the number of periods a period-spanning cost was actually charged
+for, see [What a roll reports](@ref).
+
 The roll is not redispatch-specific — [`solve_rolling_horizon`](@ref) takes the
 problem type as an argument and rolls an [Optimal power flow](@ref) just as
 readily. All it needs from a problem is [`network_cost`](@ref), which is how it

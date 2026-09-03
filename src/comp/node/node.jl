@@ -324,17 +324,93 @@ constraint_node_voltage_limits(::NetworkModel{P,F}; nw::Int = 0
                               ) where {P<:AbstractDispatchProblem,F<:LPFFormulation} = nothing
 
 ################################################################################
+# Node — the price of a node                                                   #
+################################################################################
+
+"""
+    nodal_price(nm, i; nw)
+
+The marginal cost of one more per unit **withdrawn** at node `i` at network
+index `nw` [currency/pu/h], or `nothing` where the solve provided no duals.
+
+This is the nodal price — the locational marginal price of an
+[`OptimalPowerFlowProblem`](@ref), and under a [`RedispatchProblem`](@ref) the
+marginal cost of relieving one more per unit of withdrawal with the measures
+that problem is allowed to take. Both are the same question asked of a different
+objective, which is why this reads the objective's dual rather than knowing
+anything about either.
+
+# The sign
+
+[`constraint_node_balance`](@ref) is written as *what leaves the node equals
+what its units inject into it*, so raising the right hand side of that row by one
+is one more per unit **injected** at the node — and an extra per unit injected
+*lowers* the cost by the price of the node. The dual the solver reports is
+therefore the negative of the price an operator means, and the negation is here
+rather than left to the caller.
+
+# When there is none
+
+`nothing` where [`JuMP.has_duals`](https://jump.dev/JuMP.jl/stable/api/JuMP/#JuMP.has_duals)
+is false: a model that has not been solved, a solve that failed, or a problem
+whose relaxation is not what was solved — a mixed integer program has no duals
+at all, and returning a number there would be inventing one. `dual_status` in
+the result of [`build_solution`](@ref) says which case a result is in.
+
+Note that a [`LoadFlowProblem`](@ref) has a zero objective, so every price in one
+is zero. That is correct and says only that nothing was being minimized.
+"""
+function nodal_price end
+
+function nodal_price(nm::NetworkModel{P,F}, i::Int; nw::Int = nw_id_default(nm)
+                    ) where {P,F<:LPFFormulation}
+    JuMP.has_duals(nm.model) || return nothing
+
+    balance = get(con(nm; nw), :node_balance, nothing)
+    (balance === nothing || !haskey(balance, i)) && return nothing
+
+    return _balance_price(balance[i])
+end
+
+function nodal_price(::NetworkModel{P,F}, ::Int; nw::Int = 0) where {P,F}
+    error("`nodal_price` is a price per per-unit-hour and is defined under a " *
+          "`LPFFormulation`, where the node balance is in active power. Under `$F` the " *
+          "balance is in current: its duals price a per unit of *current* and are " *
+          "reported as `lambda_real` and `lambda_imag` rather than as a nodal price.")
+end
+
+"""
+    _balance_price(ref)
+
+The price a node balance row carries, which is minus the dual reported for it.
+
+One place for the sign, so that [`nodal_price`](@ref) and
+[`solution_node`](@ref) cannot drift apart on it.
+"""
+_balance_price(ref) = -JuMP.dual(ref)
+
+################################################################################
 # Node — solution                                                              #
 ################################################################################
 
 "the node part of the solution at network index `nw`"
 function solution_node(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:IVRFormulation}
-    sol = Dict{String,Any}()
+    sol   = Dict{String,Any}()
+    real  = get(con(nm; nw), :node_balance_real, nothing)
+    imag  = get(con(nm; nw), :node_balance_imag, nothing)
+    duals = JuMP.has_duals(nm.model) && real !== nothing && imag !== nothing
+
     for i in ids(nm, Node; nw)
         vr = JuMP.value(var(nm, :vr, i; nw))
         vi = JuMP.value(var(nm, :vi, i; nw))
         sol["$i"] = Dict{String,Any}("vr" => vr, "vi" => vi,
                                      "vm" => hypot(vr, vi), "va" => atan(vi, vr))
+
+        # the balance is in current here, so these price a per unit of current
+        # and are not a nodal energy price, see `nodal_price`
+        duals && haskey(real, i) || continue
+        sol["$i"]["lambda_real"] = _balance_price(real[i])
+        sol["$i"]["lambda_imag"] = _balance_price(imag[i])
     end
 
     return sol
@@ -342,10 +418,16 @@ end
 
 "the node part of the solution under a linearized formulation"
 function solution_node(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:LPFFormulation}
-    sol = Dict{String,Any}()
+    sol     = Dict{String,Any}()
+    balance = get(con(nm; nw), :node_balance, nothing)
+    duals   = JuMP.has_duals(nm.model) && balance !== nothing
+
     for i in ids(nm, Node; nw)
         va = JuMP.value(var(nm, :va, i; nw))
         sol["$i"] = Dict{String,Any}("va" => va, "vm" => 1.0)
+
+        duals && haskey(balance, i) || continue
+        sol["$i"]["lambda"] = _balance_price(balance[i])
     end
 
     return sol

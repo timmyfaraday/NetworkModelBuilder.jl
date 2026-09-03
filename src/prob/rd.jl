@@ -649,6 +649,7 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
     before   = Int[]
     rebuilt  = 0
     closes   = 0
+    priced   = true
 
     for first in 1:step:steps
         last      = min(first + horizon - 1, steps)
@@ -683,6 +684,11 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
         record["objective"] = nm.sol["objective"]
         push!(windows, record)
 
+        # a roll is as priced as its least priced window: a committed step whose
+        # window returned no duals has no price, and saying so once at the top is
+        # what lets a caller read `dual_status` and believe it
+        priced &= nm.sol["dual_status"] == JuMP.FEASIBLE_POINT
+
         # keep what the window committed, under the network indices it came from
         settled = Int[]
         for m in nw_ids(nm)
@@ -715,7 +721,8 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
         "formulation_type"   => F,
         "termination_status" => _rolling_status(windows),
         "primal_status"      => JuMP.FEASIBLE_POINT,
-        "dual_status"        => JuMP.NO_SOLUTION,
+        "dual_status"        => isempty(solution) || !priced ? JuMP.NO_SOLUTION :
+                                                                  JuMP.FEASIBLE_POINT,
         "solve_time"         => elapsed,
         "objective"          => cost,
         "horizon"            => Dict{String,Any}("horizon" => horizon, "step" => step,

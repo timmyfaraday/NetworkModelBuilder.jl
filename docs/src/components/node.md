@@ -125,3 +125,55 @@ constraint_node_voltage_limits
 variable_node_voltage
 reference_nodes
 ```
+
+## The price of a node
+
+The balance is the row a nodal price is the dual of, so a solved model already
+holds one per node and per network index. Under a [`LPFFormulation`](@ref) it is
+a price per per-unit-hour and reaches the solution as `lambda`:
+
+```julia
+result = solve_opf(data, LPFFormulation, HiGHS.Optimizer)
+result["solution"]["nw"]["1"]["node"]["2"]["lambda"]
+nodal_price(nm, 2)                       # the same number, from the model
+```
+
+```@docs
+nodal_price
+```
+
+### What it is the price of
+
+The marginal cost of one more per unit **withdrawn** at the node. In an
+[`OptimalPowerFlowProblem`](@ref) that is the locational marginal price; in a
+[`RedispatchProblem`](@ref) it is what relieving one more per unit of withdrawal
+costs in the measures that problem is allowed to take. Both are the same
+question asked of a different objective, which is why nothing in the
+implementation knows which problem it is pricing.
+
+The sign is the one thing worth reading twice. The balance is written as *what
+leaves the node equals what its units inject into it*, so raising the right hand
+side of that row by one is one more per unit **injected** — which *lowers* the
+cost by the price of the node. The dual a solver reports is therefore the
+negative of the price an operator means, and the package negates it rather than
+leaving the caller to.
+
+### When there is none
+
+The `lambda` entry is **absent**, and `nodal_price` returns `nothing`, wherever
+the solve gave the model no duals: an unsolved model, a failed solve, or a
+mixed integer program, which has no duals at all. `result["dual_status"]` says
+which case a result is in, and an absent price reads as *not available* rather
+than as zero.
+
+A [`LoadFlowProblem`](@ref) is the one case where a price is present and
+uninformative: it minimizes zero, so every price in one is zero.
+
+!!! warning "The current based balance is not priced in energy"
+    Under an [`IVRFormulation`](@ref) the balance is Kirchhoff's current law, so
+    its two duals price a per unit of **current** rather than of energy. They are
+    reported as `lambda_real` and `lambda_imag`, never as `lambda`, and
+    `nodal_price` refuses the formulation outright rather than returning a number
+    that looks like a price and is not one. At a voltage magnitude near one the
+    real part comes out near the energy price, which is exactly what makes the
+    confusion worth refusing.

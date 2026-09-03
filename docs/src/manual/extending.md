@@ -115,6 +115,7 @@ variable_unit_injection_power
 constraint_unit_injection!
 variable_storage_active!
 variable_storage_reactive!
+variable_slack_volume!
 variable_edge
 constraint_edge
 constraint_edge_limits

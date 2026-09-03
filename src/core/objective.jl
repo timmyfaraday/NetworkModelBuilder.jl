@@ -105,12 +105,41 @@ end
 "a power flow problem is a feasibility problem, so every index of it is free"
 network_cost(::NetworkModel{P,F}, ::Int) where {P<:AbstractPowerFlowProblem,F} = 0.0
 
-"an optimal power flow pays the generation cost at every index"
-function network_cost(nm::NetworkModel{P,F}, n::Int) where {P<:OptimalPowerFlowProblem,F}
-    pg = var(nm, :pg; nw = n)
+"""
+    dispatch_cost(nm, T, id; nw)
 
-    return sum(generation_cost(unit(nm, u; nw = n)::Generator, pg[u])
-               for u in ids(nm, Generator; nw = n); init = 0.0)
+What component `id` of type `T` costs at network index `nw` in a dispatch
+problem, as a JuMP expression or a number.
+
+The counterpart of [`redispatch_cost`](@ref), and the difference between the two
+is the difference between the problems: a redispatch prices the *deviation* from
+a schedule, so a component that is already where the market put it costs
+nothing, whereas a dispatch prices the *level*, so a generator pays for every per
+unit it produces.
+
+Zero for anything that does not say otherwise, which is what makes a component
+free — a branch, a load whose demand is data — rather than what makes it
+missing. A new component type that costs something in an optimal power flow adds
+a method here and needs nothing else; see [`generation_cost`](@ref) and
+[`slack_cost`](@ref) for the two the package ships.
+"""
+dispatch_cost(::NetworkModel, ::Type{T}, ::Int; nw::Int) where {T<:AbstractComponent} = 0.0
+
+"""
+    network_cost(nm, n)
+
+The cost of what every component does at network index `n`, summed over every
+registered edge and unit type through [`dispatch_cost`](@ref).
+
+The generation cost is the bulk of it and, in a problem with no slack units and
+no priced links, the whole of it — but it is reached through the same hook as
+everything else, so that pricing a new kind of unit does not mean editing the
+objective.
+"""
+function network_cost(nm::NetworkModel{P,F}, n::Int) where {P<:OptimalPowerFlowProblem,F}
+    return sum(dispatch_cost(nm, T, id; nw = n)
+               for T in (edge_types()..., unit_types()...)
+               for id in ids(nm, T; nw = n); init = 0.0)
 end
 
 """

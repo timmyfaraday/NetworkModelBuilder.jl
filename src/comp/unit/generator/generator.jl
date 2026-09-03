@@ -113,6 +113,16 @@ function generation_cost(g::AbstractGenerator, pg)
     return total
 end
 
+"""
+    dispatch_cost(nm, T, u; nw)
+
+What generator `u` costs at network index `nw`, its
+[`generation_cost`](@ref) at the active power it was dispatched to. This is what
+an [`OptimalPowerFlowProblem`](@ref) minimizes.
+"""
+dispatch_cost(nm::NetworkModel, ::Type{T}, u::Int; nw::Int) where {T<:AbstractGenerator} =
+    generation_cost(unit(nm, u; nw)::T, var(nm, :pg, u; nw))
+
 ################################################################################
 # Generator — variables                                                        #
 ################################################################################

@@ -57,6 +57,7 @@ makedocs(
             "Generator"     => "components/generator.md",
             "Load"          => "components/load.md",
             "Storage"       => "components/storage.md",
+            "Slack units"   => "components/slack.md",
             "Shunt"         => "components/shunt.md",
         ],
         "API reference" => "api.md",

@@ -135,12 +135,12 @@ reaches the solution as `lambda`:
 ```julia
 result = solve_opf(data, LPFFormulation, HiGHS.Optimizer)
 result["solution"]["nw"]["1"]["node"]["2"]["lambda"]
-nodal_price(nm, 2)                       # the same number, from the model
+active_nodal_price(nm, 2)                       # the same number, from the model
 ```
 
 ```@docs
-nodal_price
-reactive_price
+active_nodal_price
+reactive_nodal_price
 ```
 
 ### What it is the price of
@@ -161,7 +161,7 @@ leaving the caller to.
 
 ### When there is none
 
-The `lambda` entry is **absent**, and `nodal_price` returns `nothing`, wherever
+The `lambda` entry is **absent**, and `active_nodal_price` returns `nothing`, wherever
 the solve gave the model no duals: an unsolved model, a failed solve, or a
 mixed integer program, which has no duals at all. `result["dual_status"]` says
 which case a result is in, and an absent price reads as *not available* rather
@@ -180,12 +180,12 @@ about.
 Under an [`IVRFormulation`](@ref) the balance is Kirchhoff's current law, so its
 two duals price a per unit of **current** rather than of energy. They are one
 rotation by the voltage away from the power prices, and the rotation is invertible,
-so `nodal_price` means the same thing in both formulations — and the reactive
+so `active_nodal_price` means the same thing in both formulations — and the reactive
 price falls out of the same inversion, which the linearized formulation cannot
 produce at all.
 
 ```@docs
-current_prices
+nodal_prices
 ```
 
 The node solution therefore carries four numbers under an `IVRFormulation`:
@@ -203,4 +203,4 @@ The node solution therefore carries four numbers under an `IVRFormulation`:
     without being it — which is what makes reading it as the price a plausible
     mistake rather than an obvious one. On the two node case in `test/price.jl`
     the congested node prices at 100 and its `lambda_real` reads 109.94. Take
-    `lambda`, or [`current_prices`](@ref) for both halves at once.
+    `lambda`, or [`nodal_prices`](@ref) for both halves at once.

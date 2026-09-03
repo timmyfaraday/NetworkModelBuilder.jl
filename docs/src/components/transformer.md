@@ -173,9 +173,32 @@ p_{a_k} = -b_{e,k} \left(v^{\text{a}}_{i_k} - ta_{e,k} - v^{\text{as}}_{e}\right
 phase_shift
 ```
 
+### In a redispatch
+
+A [`PhaseShifter`](@ref) is a **measure**, and a redispatch splits its angle into
+the setpoint it was left at and the volumes it was moved by,
+
+```math
+ta_{e} = ta^{\text{set}}_{e} + ta^{\uparrow}_{e} - ta^{\downarrow}_{e},
+\qquad
+ta^{\uparrow}_{e}, ta^{\downarrow}_{e} \ge 0 ,
+```
+
+which is the same split a [`Generator`](@ref) makes between its market dispatch
+and the power it was moved. The volumes are written whatever the `cost`, so an
+unpriced shifter still reports what it was asked to do; where the `cost` is
+non-zero they are what the objective pays for, per radian.
+
+The default price is zero, which makes a phase shifter a **non-costly** measure
+— it moves before anything that is priced, and its final angle is then one of
+however many settings relieve the congestion equally. A price is what picks the
+mildest of them, and what says that swinging a tap is not free in the first
+place.
+
 ```@docs
 tap_ratio
 solution_tap
 variable_two_winding!
 constraint_two_winding_limits!
+constraint_two_winding_flow!
 ```

@@ -325,9 +325,25 @@ The phase shift survives the approximations and the ratio magnitude does not,
 which is what makes a [`PhaseShifter`](@ref) a real control in this formulation
 and a [`TapChanger`](@ref) an inert one.
 """
-function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
-                        ) where {P<:AbstractProblemType,F<:LPFFormulation,
-                                 T<:AbstractTwoWindingTransformer}
+constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+               ) where {P<:AbstractProblemType,F<:LPFFormulation,
+                        T<:AbstractTwoWindingTransformer} =
+    constraint_two_winding_flow!(nm, T; nw)
+
+"""
+    constraint_two_winding_flow!(nm, T; nw)
+
+The linearized flow of every in-service two-winding transformer of type `T`,
+written through [`constraint_linear_flow!`](@ref).
+
+The body of the method above, factored out so that a type which adds something
+to a redispatch — a priced [`PhaseShifter`](@ref) — can write the physics it
+shares with every other transformer rather than a second copy of it. The
+counterpart of [`constraint_two_winding_limits!`](@ref) in the current based
+formulation.
+"""
+function constraint_two_winding_flow!(nm::NetworkModel, ::Type{T}; nw::Int
+                                     ) where {T<:AbstractTwoWindingTransformer}
     branch = get!(() -> Dict{Int,Any}(), con(nm; nw), :branch)
 
     for e in ids(nm, T; nw)

@@ -249,8 +249,8 @@ Minimize the price of the volumes moved away from the market schedule,
 with ``w_{n}`` the weight of network index ``n``, see [`network_weight`](@ref),
 and the sum running over every registered edge and unit type through
 [`redispatch_cost`](@ref). A component with no method there — a
-[`PhaseShifter`](@ref), a [`TapChanger`](@ref) — contributes nothing, which is
-exactly what makes it a non-costly measure.
+[`TapChanger`](@ref) — contributes nothing, and so does one whose price is zero,
+which is what makes either a non-costly measure.
 
 Every network index enters this sum, contingencies included, which is what makes
 it an **expected** cost: a `:contingency` coordinate carries a weight of `1/N`

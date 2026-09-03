@@ -28,6 +28,7 @@ makedocs(
             "Problems and formulations" => "manual/problems_formulations.md",
             "The linearized formulation" => "manual/linearized.md",
             "Tabular input"             => "manual/tabular_input.md",
+            "The Zorba adapter"         => "manual/zorba.md",
             "Extending the package"     => "manual/extending.md",
         ],
         "Problems" => [

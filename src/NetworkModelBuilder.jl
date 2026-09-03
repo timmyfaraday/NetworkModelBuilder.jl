@@ -13,6 +13,7 @@
 # v0.5.0 - the redispatch problem                                              #
 # v0.6.0 - priced congestion, periods, the dc link and tabular input           #
 # v0.7.0 - the asset model                                                     #
+# v0.8.0 - the zorba adapter                                                   #
 ################################################################################
 
 module NetworkModelBuilder
@@ -73,6 +74,7 @@ module NetworkModelBuilder
     include("io/common.jl")
     include("io/tables.jl")
     include("io/matpower.jl")
+    include("io/zorba.jl")
 
     # export — paths
     export BASE_DIR
@@ -148,6 +150,7 @@ module NetworkModelBuilder
     export constraint_unit, constraint_unit_coupling
     export constraint_pi_section!, constraint_edge_rating!
     export constraint_edge_angle_difference!, constraint_unit_power!
+    export constraint_two_winding_flow!
     export constraint_linear_flow!, constraint_linear_limits!
     export variable_edge_overload!
     export constraint_unit_injection!, susceptance, phase_shift
@@ -185,5 +188,9 @@ module NetworkModelBuilder
 
     # export — input and output
     export parse_file, parse_matpower, parse_tables, parse_arrow, component_types
+
+    # export — the zorba adapter
+    export ZorbaLink, ZorbaStudy
+    export parse_zorba, zorba_study, solve_zorba, zorba_tables, write_zorba
 
 end

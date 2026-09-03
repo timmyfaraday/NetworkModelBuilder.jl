@@ -18,6 +18,7 @@ Storage
 | ``p^{\text{s,set}}_{u}``, ``q^{\text{s,set}}_{u}`` | `ps`, `qs` | injection setpoint, used by a power flow | pu |
 | ``e^{\text{max}}_{u}`` | `energy_capacity` | usable energy capacity | pu·h |
 | ``e^{0}_{u}`` | `energy_initial` | energy held before the first step | pu·h |
+| ``e^{\text{f}}_{u}`` | `energy_final` | energy required after the last step, or `NaN` | pu·h |
 | ``p^{\text{sc,max}}_{u}`` | `charge_rating` | charge power limit | pu |
 | ``p^{\text{sd,max}}_{u}`` | `discharge_rating` | discharge power limit | pu |
 | ``\eta^{\text{c}}_{u}`` | `charge_efficiency` | one-way charge efficiency, in ``(0,1]`` | |
@@ -84,6 +85,36 @@ duplicated to add one term is a coupling constraint that will drift.
 ```@docs
 inflow
 ```
+
+### The end of the horizon
+
+A unit that carries an `energy_final` is pinned at the last `:time` coordinate:
+
+```math
+e_{u,n} = e^{\text{f}}_{u} \quad \text{at the last } n \text{ along } \texttt{:time}
+```
+
+with every other coordinate held fixed, so a problem with a contingency
+dimension asks each contingency to arrive at the same place. It is a **pin**,
+not a floor: a target the ratings cannot reach makes the problem infeasible,
+which is the honest answer to a question that has none. `NaN`, the default, is
+the absence of a row rather than a row against `NaN`.
+
+```@docs
+constraint_storage_final_energy!
+interior_state
+```
+
+!!! note "What a rolling horizon does with it"
+    The last time step of a window is the last time step of the problem only for
+    the window that closes it, so a roll releases the target everywhere else, see
+    [`interior_state`](@ref). The alternative — asking every window to arrive at
+    the target — is stitching batches together by pinning both their ends to a
+    guessed profile, which is what `initial_state` exists so as not to need.
+
+    The trade is real and worth knowing: a lookahead too short to see why the
+    energy is being kept will spend it, and the window that does carry the target
+    is then asked for energy that is gone. The fix is a longer `horizon`.
 
 ### The cycle limit
 

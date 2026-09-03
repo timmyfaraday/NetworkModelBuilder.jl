@@ -216,6 +216,7 @@ Base.@kwdef struct InflowStorage <: AbstractStorage
     qs                   ::NetworkQuantity{Float64} = 0.0
     energy_capacity      ::NetworkQuantity{Float64} = 0.0
     energy_initial       ::Float64                  = 0.0
+    energy_final         ::Float64                  = NaN
     charge_rating        ::NetworkQuantity{Float64} = 0.0
     discharge_rating     ::NetworkQuantity{Float64} = 0.0
     charge_efficiency    ::Float64                  = 1.0
@@ -516,6 +517,71 @@ const PRICES = [10.0, 100.0, 50.0]
 
         # nothing of the inflow is lost or invented over the horizon
         @test sum(psd) ≈ 3 * 0.05 atol = 1e-6
+    end
+
+
+    @testset "a horizon can be asked to end where it started" begin
+        # the battery starts on 0.2 and may end wherever it likes: it charges in
+        # the cheap step, sells in the dear one and sells the rest in the last
+        loose = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.2,
+                        charge_rating = 0.2, discharge_rating = 0.2)
+        free   = quiet(() -> solve_model(price_network(PRICES;
+                                             extra = Dict{Int,AbstractUnit}(3 => loose)),
+                                         OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
+        @test storage_path(free, 1:3)[3] ≈ [0.4, 0.2, 0.0] atol = 1e-6
+        @test free["objective"] ≈ 4.0 atol = 1e-4
+
+        # asked to hand back 0.2, it stops one step short and pays for the step
+        # it can no longer cover
+        pinned = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.2,
+                         energy_final = 0.2, charge_rating = 0.2, discharge_rating = 0.2)
+        held   = quiet(() -> solve_model(price_network(PRICES;
+                                             extra = Dict{Int,AbstractUnit}(3 => pinned)),
+                                         OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
+        @test storage_path(held, 1:3)[3] ≈ [0.4, 0.2, 0.2] atol = 1e-6
+        @test held["objective"] ≈ 14.0 atol = 1e-4
+
+        # no target is the absence of a row, not a row against `NaN`
+        open  = instantiate_model(price_network(PRICES;
+                                      extra = Dict{Int,AbstractUnit}(3 => loose)),
+                                  OptimalPowerFlowProblem, LPFFormulation)
+        @test !haskey(_NMB.registered_constraints(open), (3, :storage_final, 3))
+        shut  = instantiate_model(price_network(PRICES;
+                                      extra = Dict{Int,AbstractUnit}(3 => pinned)),
+                                  OptimalPowerFlowProblem, LPFFormulation)
+        @test haskey(_NMB.registered_constraints(shut), (3, :storage_final, 3))
+    end
+
+    @testset "a target the ratings cannot reach has no answer" begin
+        # 0.5 asked of a unit that starts empty and may charge 0.2 a step, over
+        # two steps: a pin is a pin, and the honest answer is that there is none
+        unreachable = Storage(; id = 3, node = 2, energy_capacity = 0.5,
+                              energy_initial = 0.0, energy_final = 0.5,
+                              charge_rating = 0.2, discharge_rating = 0.2)
+        result = quiet(() -> solve_model(arbitrage_network(unreachable),
+                                         OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
+        @test result["termination_status"] != JuMP.LOCALLY_SOLVED
+
+        @test_throws ArgumentError Storage(; id = 3, node = 2, energy_final = -1.0)
+        @test isnan(Storage(; id = 3, node = 2).energy_final)
+    end
+
+    @testset "only the window that closes a horizon carries its target" begin
+        pinned = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.2,
+                         energy_final = 0.2, charge_rating = 0.2, discharge_rating = 0.2)
+
+        # the target is released, and nothing else about the unit is touched
+        released = interior_state(pinned)
+        @test isnan(released.energy_final)
+        @test released.energy_initial == pinned.energy_initial
+        @test released.energy_capacity == pinned.energy_capacity
+        @test released.charge_rating == pinned.charge_rating
+
+        # a unit with no target, and anything that is not a storage unit, is
+        # returned as it is
+        loose = Storage(; id = 3, node = 2, energy_capacity = 0.5)
+        @test interior_state(loose) === loose
+        @test interior_state(Node(; id = 1)) isa Node
     end
 
     @testset "a time coupled unit says so when there is no time" begin

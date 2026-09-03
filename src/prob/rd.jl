@@ -655,6 +655,7 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
         committed = first:min(first + step - 1, steps)
         kept      = window_indices(state, :time, first:last)
         w         = window(state, :time, first:last)
+        last < steps && _open_window_end!(w)
 
         nm = reuse && held !== nothing && _same_shape(state, before, kept) ?
              update_model!(held, w) :
@@ -728,6 +729,27 @@ end
 
 solve_rolling_horizon(file::AbstractString, P::Type, F::Type, optimizer; kwargs...) =
     solve_rolling_horizon(parse_file(file), P, F, optimizer; kwargs...)
+
+"""
+    _open_window_end!(w)
+
+Release every end-of-horizon target in the window `w`, whose last time step is
+not the last time step of the problem, see [`interior_state`](@ref).
+
+The alternative — leaving the target in every window — is the workaround this
+package exists without: it asks each batch to arrive at a level someone guessed,
+because the batches have no other way to agree. They do have one here, and it is
+the state `initial_state` carries, so the target belongs to the window that
+actually closes the horizon and to no other.
+"""
+function _open_window_end!(w::NetworkData)
+    net = network(w)
+    for (i, c) in collect(nodes(net)); net.node[i] = interior_state(c) end
+    for (e, c) in collect(edges(net)); net.edge[e] = interior_state(c) end
+    for (u, c) in collect(units(net)); net.unit[u] = interior_state(c) end
+
+    return nothing
+end
 
 """
     _closed_period_ids(nm, state, kept, settled)

@@ -733,7 +733,8 @@ end
 const ROLLING_PRICES = [10.0, 10.0, 10.0, 200.0]
 
 "a radial network over `length(prices)` steps whose expensive generator is priced per step"
-function rolling_network(prices = ROLLING_PRICES; energy = 0.4, extra_dims = ())
+function rolling_network(prices = ROLLING_PRICES; energy = 0.4, energy_final = NaN,
+                        extra_dims = ())
     dim = Dimension(:time => length(prices), extra_dims...)
 
     I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
@@ -747,6 +748,7 @@ function rolling_network(prices = ROLLING_PRICES; energy = 0.4, extra_dims = ())
                        cost = nw_vector(dim, :time, [[0.0, c] for c in prices])),
         3 => FixedLoad(; id = 3, node = 2, pd = 1.0, qd = 0.0),
         4 => Storage(; id = 4, node = 2, energy_capacity = energy, energy_initial = energy,
+                     energy_final = energy_final,
                      charge_rating = 0.0, discharge_rating = 0.5,
                      charge_efficiency = 1.0, discharge_efficiency = 1.0))
 
@@ -1439,6 +1441,41 @@ peak_only(per_peak = 50.0) =
         quiet(() -> solve_rd(peak_rolling_network(), LPFFormulation, OPTIMIZER;
                              redispatch = Redispatch(; overload = 500.0),
                              horizon = 2, step = 1))
+    end
+
+
+    # The battery starts on 0.4 and is asked to hand back 0.2, so only half of it
+    # is spendable — and, being unable to charge, it can only spend it once. The
+    # dear step is the last, which is where it goes:
+    #
+    #   20 + 10(0.5) + 10(0.5) + 10(0.5) + 200(0.5 - 0.2) = 95
+    @testset "only the window that closes the horizon carries the energy target" begin
+        whole = quiet(() -> solve_rd(rolling_network(; energy_final = 0.2),
+                                     LPFFormulation, OPTIMIZER))
+        @test whole["objective"] ≈ 95.0 atol = 1e-4
+        @test nw_solution(whole, 4)["unit"]["4"]["es"] ≈ 0.2 atol = 1e-6
+
+        # rolled with the whole horizon in view, the roll reproduces it exactly:
+        # the three windows that do not reach the end hold their energy rather
+        # than being asked to arrive at 0.2 three times over
+        rolled = quiet(() -> solve_rd(rolling_network(; energy_final = 0.2),
+                                      LPFFormulation, OPTIMIZER; horizon = 4, step = 1))
+        @test rolled["objective"] ≈ 95.0 atol = 1e-4
+        @test discharge(rolled, 1:3) ≈ [0.0, 0.0, 0.0] atol = 1e-6
+        @test discharge(rolled, 4:4) ≈ [0.2] atol = 1e-6
+        @test nw_solution(rolled, 4)["unit"]["4"]["es"] ≈ 0.2 atol = 1e-6
+    end
+
+    @testset "a lookahead too short to see a target can walk past it" begin
+        # two steps of lookahead cannot see the dear step, so the first window
+        # spends the battery in the cheap one — and the window that does carry
+        # the target is then asked for energy that is gone. The fix is a longer
+        # lookahead, not a target pinned into every window: that is the stitching
+        # this package has `initial_state` instead of.
+        rolled = solve_rd(rolling_network(; energy_final = 0.2), LPFFormulation, OPTIMIZER;
+                          horizon = 2, step = 2)
+
+        @test rolled["termination_status"] != JuMP.LOCALLY_SOLVED
     end
 
 end

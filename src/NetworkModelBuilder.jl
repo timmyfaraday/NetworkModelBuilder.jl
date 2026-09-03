@@ -151,7 +151,7 @@ module NetworkModelBuilder
     export variable_edge_overload!
     export constraint_unit_injection!, susceptance, phase_shift
     export variable_storage_active!, variable_storage_reactive!
-    export constraint_storage_cycles!
+    export constraint_storage_cycles!, constraint_storage_final_energy!
     export variable_slack_volume!
     export variable_edge_series_current, variable_two_winding!
     export constraint_two_winding_limits!
@@ -175,7 +175,8 @@ module NetworkModelBuilder
     export solution_overload_peak
 
     # export — the rolling horizon
-    export window, window_indices, initial_state, solve_rolling_horizon
+    export window, window_indices, initial_state, interior_state
+    export solve_rolling_horizon
     export same_topology, same_structure, structure_gates, structure_varies
 
     # export — problems

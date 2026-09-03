@@ -1,6 +1,6 @@
 name = "NetworkModelBuilder"
 uuid = "c0b1e2d0-7be9-4b96-b5bf-fa53d4ca50b6"
-version = "0.6.0"
+version = "0.9.0"
 authors = ["Tom Van Acker"]
 
 [deps]

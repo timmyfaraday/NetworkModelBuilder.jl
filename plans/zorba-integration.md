@@ -58,7 +58,7 @@ If any repo is materially ahead of its reference commit, re-verify §2 before tr
 1. **Clone all three.** Put them side by side; several instructions below assume sibling directories, and nothing assumes a specific parent.
 2. **Python.** Zorba needs 3.12+ and `uv`. It resolves `read-antares`, `sma-opt`, `sma-load-flow` and `python_commons` from a private Azure Artifacts feed — see `[[tool.uv.index]]` in Zorba's `pyproject.toml`. **You need credentials for that feed.** Without them Zorba will not install at all, and that is the first thing to confirm, not the last.
 3. **Julia.** Install ≥1.10 (`juliaup` is the easy route). No Julia is needed to *read* this plan, but M1-2 onward cannot start without it.
-4. **Solver.** `HiGHS.jl` on the Julia side — see §8. No licence needed.
+4. **Solvers.** `HiGHS.jl` for development and CI, no licence needed. **The target machine also has Xpress**, which is what Zorba runs in production and what validation should use — see §8, and wire it in M1-2 rather than discovering it at validation time.
 5. **Depending on NMB from Zorba's Julia project.** Prefer pinning the published package by revision rather than a local path, so CI and a developer machine resolve identically:
 
    ```julia
@@ -76,6 +76,7 @@ Do all four. Each has caught something in the past.
 2. `python -m pytest` in Zorba → expect green.
 3. `lint-imports` in Zorba → expect green. You will be changing the layers it checks.
 4. **Confirm you can reach a real study.** M1-1 needs one, via `get_study_by_name` / `get_frank_study`. ⚠️ Study data is not in the repository, and whether it is reachable from your environment is unverified. **If it is not, stop and raise it** — without a golden dataset there is no way to validate this migration, and every task after M1-1 depends on it.
+5. **Confirm Xpress works from Python.** Run something that solves through `sma_opt` with `solver_name = "xpress"`. You need this working before M1-2 tries to reach the same licence from Julia, so that a failure there is a Julia-wiring problem and not an environment one.
 
 ### 1.4 Ownership, and why it matters
 
@@ -164,6 +165,8 @@ Because `parse_zorba` / `write_zorba` work on **directories of Arrow files**, th
 - **B — in-process `juliacall`.** Lower per-call latency, but adds a Julia runtime to every forked worker and a second dependency resolver to CI.
 
 **Recommendation: build A first.** It is strictly simpler, it is the design the adapter was written for, and it removes the single largest risk in the original plan (35 forked workers each holding a Julia runtime). Treat B as an optimisation to reach for only if A's measured wall-clock is unacceptable — see task M1-3.
+
+A third point in A's favour, now that the target machine has an Xpress licence: **a subprocess inherits the environment**, so whatever already makes Xpress work for Zorba's Python workers makes it work for the Julia child, with no licence-marshalling code at all. See §8.2.
 
 ---
 
@@ -266,10 +269,11 @@ Work the tasks in order within each migration. M1 and M2 are independent after M
 **Do:**
 1. Add a pinned Julia project under `julia/` in the Zorba repo: `Project.toml` + **committed** `Manifest.toml`, depending on `NetworkModelBuilder` (pinned by revision — see §1.2), `Arrow`, and a solver (`HiGHS` — see the solver note in §8). Pin the Julia version too, in CI and in a `.julia-version` or equivalent, so a developer machine and the pipeline agree.
 2. Write `julia/run_redispatch.jl`: reads an input directory, calls `parse_zorba` → `solve_zorba` → `zorba_tables` → `write_zorba`, writes an output directory. Take input/output paths and settings as CLI args or a small JSON side-car. Exit non-zero with a readable message on solver failure.
-3. Write `src/tools/julia_bridge.py`: a thin Python wrapper that materialises polars frames to Arrow in a temp dir, invokes Julia via `subprocess`, reads the results back with polars, and raises a clear Python exception on failure. Put the Julia executable path behind an env var with a sensible default.
-4. Add Julia setup to `azure-pipelines.yaml`, including a cache for the Julia depot so precompile is not paid on every run.
+3. Write `src/tools/julia_bridge.py`: a thin Python wrapper that materialises polars frames to Arrow in a temp dir, invokes Julia via `subprocess`, reads the results back with polars, and raises a clear Python exception on failure. Put the Julia executable path behind an env var with a sensible default. **Pass the parent environment through to the child** rather than constructing a clean one — that is what carries the Xpress licence across for free, see §8.2.
+4. **Wire Xpress, and prove it now.** Add `Xpress.jl` to the Julia project and make the solver selectable per call (env var or CLI flag), defaulting to HiGHS. Get one toy study to solve through Xpress from Julia. ⚠️ This is the step most likely to need environment work — the Xpress libraries arrive via the `xpresslibs` Python wheel and `Xpress.jl` looks for `XPRESSDIR`. Do it here, where the only thing at stake is a five-node network, rather than at M1-5 where it would block validation.
+5. Add Julia setup to `azure-pipelines.yaml`, including a cache for the Julia depot so precompile is not paid on every run. **Keep CI on HiGHS** — assume the agent has no Xpress licence, and make the Xpress path skip cleanly rather than fail when one is absent.
 
-**Acceptance:** a five-node toy study round-trips Python → Julia → Python and returns sane flows; CI is green from a clean image; cold-cache precompile time is measured and recorded.
+**Acceptance:** a five-node toy study round-trips Python → Julia → Python and returns sane flows **under both solvers**; CI is green from a clean image with HiGHS alone; cold-cache precompile time is measured and recorded.
 
 ---
 
@@ -279,8 +283,11 @@ Work the tasks in order within each migration. M1 and M2 are independent after M
 
 **Do:**
 1. Time a full year at daily granularity through the bridge, against the linopy baseline on the same machine.
-2. Try, in order: (a) one Julia process solving all batches, using NMB's own rolling horizon (`solve_zorba(...; horizon, step, reuse = true, warm_start = true)`) — model reuse across windows may beat naive batching outright; (b) Julia-side threading over batches; (c) several Julia subprocesses from Python.
-3. Record wall-clock and peak memory for each.
+2. **Hold the solver fixed across the comparison.** The baseline's production default is Xpress ✅, so timing linopy+Xpress against NMB+HiGHS would measure two things at once and attribute both to the bridge. Run the headline comparison **Xpress against Xpress**, and record HiGHS separately as its own data point — it is useful to know what CI and development will feel like, but it is not the number that decides this gate.
+3. Try, in order: (a) one Julia process solving all batches, using NMB's own rolling horizon (`solve_zorba(...; horizon, step, reuse = true, warm_start = true)`) — model reuse across windows may beat naive batching outright; (b) Julia-side threading over batches; (c) several Julia subprocesses from Python.
+4. Record wall-clock and peak memory for each.
+
+⚠️ **Watch the licence under parallelism.** Zorba runs up to 35 workers today; how many concurrent Xpress sessions the licence permits is not something this plan can tell you. If option (b) or (c) hits a licence ceiling, that is a real constraint on the design and not a bug to work around — surface it.
 
 **Acceptance:** a written comparison, and an explicit decision. **If no configuration lands within a factor the human accepts, stop and report rather than proceeding.** Note that option (a) has no equivalent in the current code and may make the comparison favourable in a way the original estimate did not assume.
 
@@ -301,7 +308,7 @@ Work the tasks in order within each migration. M1 and M2 are independent after M
 #### **M1-5 — Numerical validation** · ~1 week
 
 **Do:**
-1. Run the M1-1 harness across the golden dataset, both backends.
+1. Run the M1-1 harness across the golden dataset, both backends, **both on Xpress** — see §8.3. Matching the solver removes one of the two reasons the runs can disagree, so what is left is the model difference you are trying to measure.
 2. Compare **`flow_mw`, `overload_mw` and the objective**. Treat `phase_deg` as unconstrained by the comparison — the node phase variables are degenerate wherever the LP has ties, and a different solver will land on a different vertex. `phase_shift_deg` is meaningful only where it is uniquely determined; check it as a distribution, not row-by-row.
 3. For every material difference, determine which implementation is right rather than tuning until they agree. NMB's exact radians (after M1-0, both are exact) and its angle limits make it the more defensible of the two.
 4. Re-run the full pipeline — `run_make_frank_border_safe` → `get_nm1_flows_for_safe_borders` — and diff the reported horizontal-grid statistics, not just solver output. Downstream N-1 consumes these.
@@ -400,6 +407,8 @@ These were each confirmed against source. They will cost you a day each if you m
 
 ## 7. Validation protocol (applies to M1-5 and M2-3)
 
+**Run both sides on Xpress.** It is what the baseline uses in production, and holding the solver fixed means a difference you find is a modelling difference rather than two solvers picking different optima — see §8.3.
+
 Compare in this order, and stop at the first that disagrees:
 
 1. **Feasibility** — both solve, same termination status.
@@ -415,11 +424,44 @@ Report max, p99 and mean absolute error, not just max — a single degenerate ro
 
 ## 8. Solver
 
-NMB takes any JuMP optimizer. Zorba currently reaches HiGHS and Xpress through `sma_opt`.
+NMB takes any JuMP optimizer. Zorba reaches HiGHS and Xpress through `sma_opt`, and **the target machine has an Xpress licence** — so both are genuinely available and they are for different jobs.
 
-- **Use `HiGHS.jl` for the LP work.** It is open, matches `highspy` already in Zorba's dependency set, and needs no licence plumbing.
-- The test suite uses Ipopt because it exercises the nonlinear IVR formulation too; you do not need Ipopt for the linearized path.
-- ⚠️ **Xpress:** `Xpress.jl` exists, but the licence handling in `Zorba: src/stages/small_zone_reliability/redispatch_solver/process_executor.py` (`xpress_license`, env-var marshalling to workers) has no equivalent on the Julia side and would need re-doing. Do not attempt this unless HiGHS proves inadequate, and raise it with the human first.
+### 8.1 Use both, deliberately
+
+| Job | Solver | Why |
+|---|---|---|
+| Day-to-day development | **HiGHS.jl** | No licence, fast to install, nothing to marshal. Iterate here. |
+| CI | **HiGHS.jl** | ⚠️ A pipeline agent almost certainly has no Xpress licence. Assume it does not until shown otherwise, and keep the suite runnable without one. |
+| **Validation** (M1-5, M2-3) | **Xpress** | It is what the baseline runs — see §8.3. This is the one place the choice materially changes the answer. |
+| Production | Whichever M1-3 measures as faster | Decide on evidence, not preference. |
+
+The NMB test suite uses Ipopt because it also exercises the nonlinear IVR formulation; you need neither Ipopt nor Xpress for the linearized path.
+
+### 8.2 Wiring `Xpress.jl` — the likely friction point
+
+Verified about Zorba's current setup:
+
+- `DEFAULT_SOLVER_NAME = "xpress"` in both sweep scripts ✅ — Xpress is the production default, not a fallback.
+- The licence travels as an environment variable whose key is `SmaOptGlobals.get_environ_key("xpress_license")`, marshalled to forked workers alongside `solver_name`, `temp_dir` and `PATH` ✅ (`Zorba: src/stages/small_zone_reliability/redispatch_solver/process_executor.py`).
+- `requirements.txt` pins `xpress==9.8.1` **and `xpresslibs==9.8.1`** ✅.
+
+That last line is the one to think about. **The Xpress shared libraries arrive through a Python wheel**, not necessarily a system-wide install, whereas `Xpress.jl` expects to find them via `XPRESSDIR` (or an installation in a standard location). ⚠️ Neither the wheel's library layout nor whether `Xpress.jl` can be pointed at it was verifiable where this plan was written — **check it early, in M1-2, not at validation time.**
+
+Concretely, in M1-2:
+
+1. Locate the libraries the `xpresslibs` wheel installs inside the Python environment.
+2. Try `Xpress.jl` against them, setting `XPRESSDIR` (and `XPAUTH_PATH` for the licence file) accordingly.
+3. If that does not work, a separate system Xpress install of the same major version is the fallback — raise it rather than fighting it, since it is an environment question, not a code one.
+
+**The file-based bridge makes the licence part easy**, and this is a second reason to prefer design A from §2.3: a subprocess inherits the parent's environment, so whatever already makes Xpress work for Zorba's Python workers makes it work for the Julia child, with no marshalling code at all. Have `julia_bridge.py` pass the environment through rather than constructing a clean one, and make the solver selectable per call so validation can force Xpress while development stays on HiGHS.
+
+### 8.3 Why the solver matters for validation specifically
+
+§7 says to compare flows rather than phase angles, because node phase variables are degenerate wherever the LP has ties and a different solver lands on a different vertex. **Running Xpress on both sides removes one of the two reasons the two runs can disagree.** What is left is the model difference, which is what you are actually trying to measure.
+
+It does not remove degeneracy — NMB and linopy build genuinely different formulations, so even one solver can pick different optima. But an unexplained difference is much cheaper to chase when the solver is not one of the candidate causes.
+
+So: **validate with Xpress on both sides.** If a difference then persists, it is a modelling difference and belongs in the written explanation §7 asks for.
 
 ---
 
@@ -456,6 +498,11 @@ lint-imports
 uv sync
 ```
 *Zorba — needs credentials for the private Azure Artifacts feed. If this fails, fix it before anything else.*
+
+```bash
+julia --project=julia -e 'using Xpress, JuMP; m = Model(Xpress.Optimizer); @variable(m, x >= 1); @objective(m, Min, x); optimize!(m); @show termination_status(m), value(x)'
+```
+*Zorba's `julia/` project, once M1-2 exists — the smallest thing that proves Xpress is reachable from Julia. Expect `OPTIMAL, 1.0`. If it cannot find the libraries, that is §8.2.*
 
 ---
 

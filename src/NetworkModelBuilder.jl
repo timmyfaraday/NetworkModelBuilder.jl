@@ -11,6 +11,7 @@
 # v0.3.0 - component hierarchy                                                 #
 # v0.4.0 - the linearized formulation                                          #
 # v0.5.0 - the redispatch problem                                              #
+# v0.6.0 - priced congestion, periods, the dc link and tabular input           #
 ################################################################################
 
 module NetworkModelBuilder

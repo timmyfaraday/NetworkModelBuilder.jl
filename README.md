@@ -1,5 +1,6 @@
 <a href="https://github.com/timmyfaraday/NetworkModelBuilder.jl/actions?query=workflow%3ACI"><img src="https://github.com/timmyfaraday/NetworkModelBuilder.jl/workflows/CI/badge.svg"></img></a>
 <a href="https://timmyfaraday.github.io/NetworkModelBuilder.jl/"><img src="https://github.com/timmyfaraday/NetworkModelBuilder.jl/workflows/Documentation/badge.svg"></img></a>
+<a href="https://timmyfaraday.github.io/NetworkModelBuilder.jl/dev/"><img src="https://img.shields.io/badge/docs-dev-blue.svg"></img></a>
 
 # NetworkModelBuilder.jl
 

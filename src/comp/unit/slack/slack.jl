@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.7.0 - energy not served and spill                                         #
+# v0.8.0 - a slack unit takes a side in the preventive-corrective split        #
 ################################################################################
 
 ################################################################################
@@ -265,6 +266,20 @@ dispatch_cost(nm::NetworkModel, ::Type{T}, u::Int; nw::Int) where {T<:AbstractSl
 
 redispatch_cost(nm::NetworkModel, ::Type{T}, u::Int; nw::Int) where {T<:AbstractSlackUnit} =
     slack_cost(nm, T, u; nw)
+
+"""
+    redispatch_controls(nm, T)
+
+The volume of a **preventive** slack unit, held equal across the contingencies.
+
+A slack unit is a measure like any other and takes a side in the preventive and
+corrective split, see [`Redispatch`](@ref): load shed ahead of an outage that may
+not come is not the same decision as load shed after one that did, and the second
+is worth more precisely because it is never paid for a state that did not occur.
+Which one a problem means is a statement about how it is posed, so it is set on
+the setup rather than on the unit.
+"""
+redispatch_controls(::NetworkModel, ::Type{T}) where {T<:AbstractSlackUnit} = (:psl,)
 
 ################################################################################
 # Slack unit — solution                                                        #

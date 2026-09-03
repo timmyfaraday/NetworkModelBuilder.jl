@@ -104,6 +104,20 @@ which is a non-negative charge per unit of volume for both types. It enters an
 expression in both: a slack unit has no market schedule to move away from, so
 every per unit it takes is the intervention itself.
 
+## Preventive or corrective
+
+A slack unit is a measure, so it takes a side in the split a
+[`Redispatch`](@ref) makes: its volume is what
+[`redispatch_controls`](@ref) holds equal across the contingencies where it is
+preventive.
+
+Load shed ahead of an outage that may not come and load shed after one that did
+are not the same decision, and the second is worth more precisely because it is
+never paid for a state that did not occur. Which one a problem means is a
+statement about how it is posed rather than a property of the unit, so it is set
+on the setup — `Redispatch(; control = :corrective)`, or an `exception` for one
+unit.
+
 ## What they replace
 
 A bounded, priced slack on the node balance is what these are, whatever else it

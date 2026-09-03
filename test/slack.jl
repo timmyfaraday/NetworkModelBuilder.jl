@@ -209,4 +209,42 @@ end
         # 1000 · 0.5 of lost load plus 10 · 0.5 of the generator moving down
         @test result["objective"] ≈ 505.0 atol = 1e-4
     end
+
+    @testset "a slack unit takes a side in the preventive-corrective split" begin
+        # two paths to the load, the second of which a contingency takes out; the
+        # load can only be served in full while both stand
+        dim = Dimension(:contingency => 2)
+        I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
+                                   2 => Node(; id = 2))
+        E = Dict{Int,AbstractEdge}(
+            1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, rate_a = 0.5),
+            2 => Branch(; id = 2, terminals = [1, 2], r = 0.0, x = 0.1, rate_a = 0.5,
+                        status = nw_vector(dim, (n, c) -> n == 1)))
+        U = Dict{Int,AbstractUnit}(
+            1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
+                           pg = 1.0, cost = [0.0, 10.0]),
+            2 => FixedLoad(; id = 2, node = 2, pd = 1.0, qd = 0.0),
+            3 => EnergyNotServed(; id = 3, node = 2, cost = 1000.0))
+        data = NetworkData(Network(I, E, U; dim); baseMVA = 100.0)
+
+        @test redispatch_controls(instantiate_model(data, RedispatchProblem,
+                                                    LPFFormulation),
+                                  EnergyNotServed) == (:psl,)
+
+        # preventive: one volume serves both states, so the shed decided for the
+        # outage is shed in the base case too
+        preventive = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
+                                          redispatch = Redispatch(; monitored = [1, 2])))
+        @test nw_solution(preventive, 1)["unit"]["3"]["psl"] ≈
+              nw_solution(preventive, 2)["unit"]["3"]["psl"] atol = 1e-6
+
+        # corrective: the load is shed only in the state that needs it, which is
+        # the cheaper of the two and is why the distinction is worth having
+        corrective = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
+                                          redispatch = Redispatch(; monitored = [1, 2],
+                                                                    control = :corrective)))
+        @test nw_solution(corrective, 1)["unit"]["3"]["psl"] ≈ 0.0 atol = 1e-6
+        @test nw_solution(corrective, 2)["unit"]["3"]["psl"] > 0.4
+        @test corrective["objective"] < preventive["objective"]
+    end
 end

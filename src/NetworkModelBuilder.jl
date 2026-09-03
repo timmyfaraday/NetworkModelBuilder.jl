@@ -121,7 +121,7 @@ module NetworkModelBuilder
     # export — components, unit
     export AbstractGenerator, Generator, generation_cost, marginal_cost
     export AbstractLoad, FixedLoad, FlexibleLoad, demand, power_factor_ratio
-    export AbstractStorage, Storage
+    export AbstractStorage, Storage, inflow, storage_cycles
     export AbstractSlackUnit, EnergyNotServed, Spill, slack_sign, slack_cost
     export AbstractShunt, Shunt
 
@@ -151,13 +151,14 @@ module NetworkModelBuilder
     export variable_edge_overload!
     export constraint_unit_injection!, susceptance, phase_shift
     export variable_storage_active!, variable_storage_reactive!
+    export constraint_storage_cycles!
     export variable_slack_volume!
     export variable_edge_series_current, variable_two_winding!
     export constraint_two_winding_limits!
     export time_step, require_time_dimension
     export objective, objective_generation_cost, network_weight, default_weight
     export network_cost, minimize_network_cost, dispatch_cost
-    export horizon_cost, period_weight
+    export horizon_cost, period_cost, component_period_cost, period_weight
     export objective_redispatch_cost
 
     # export — solution

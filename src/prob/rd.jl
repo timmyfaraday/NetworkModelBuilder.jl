@@ -324,14 +324,18 @@ end
     horizon_cost(nm)
     horizon_cost(nm, ids)
 
-What the peak overloads of `nm` cost, as a JuMP expression or `0.0`.
+What a redispatch pays over a period: whatever its components charge per period
+through [`period_cost`](@ref), plus what the peak overloads cost.
 
 ```math
 c^{\\text{peak}} \\sum_{n} w^{\\text{p}}_{n} \\sum_{e} \\hat{o}_{e,n}
 ```
 
-summed over the first network index of every period and every monitored edge,
-with ``w^{\\text{p}}`` the [`period_weight`](@ref). The duration of a step is
+is the second of the two, summed over the first network index of every period and
+every monitored edge, with ``w^{\\text{p}}`` the [`period_weight`](@ref). It is
+charged to no component at all, for the same reason [`overload_cost`](@ref) is:
+an overload is the rating of an edge going unmet, and that is what the problem
+pays for not solving the thing it was posed. The duration of a step is
 deliberately absent — a peak is a power, not an energy, and multiplying it by an
 hour would make a day of quarter-hours cost a quarter of a day of hours for the
 same worst flow. The probability of a contingency is deliberately present, for
@@ -342,11 +346,22 @@ is.
 `ids` restricts the sum to the periods lying **entirely** within it, which is
 what [`solve_rolling_horizon`](@ref) charges a committed step.
 """
-horizon_cost(nm::NetworkModel{P,F}) where {P<:RedispatchProblem,F} =
-    _overload_peak_cost(nm, nothing)
+function horizon_cost(nm::NetworkModel{P,F}) where {P<:RedispatchProblem,F}
+    total = JuMP.AffExpr(0.0)
+    JuMP.add_to_expression!(total, component_period_cost(nm, nothing))
+    JuMP.add_to_expression!(total, _overload_peak_cost(nm, nothing))
 
-horizon_cost(nm::NetworkModel{P,F}, ids::AbstractVector{Int}) where {P<:RedispatchProblem,F} =
-    _overload_peak_cost(nm, ids)
+    return total
+end
+
+function horizon_cost(nm::NetworkModel{P,F}, settled::AbstractVector{Int}
+                     ) where {P<:RedispatchProblem,F}
+    total = JuMP.AffExpr(0.0)
+    JuMP.add_to_expression!(total, component_period_cost(nm, settled))
+    JuMP.add_to_expression!(total, _overload_peak_cost(nm, settled))
+
+    return total
+end
 
 function _overload_peak_cost(nm::NetworkModel, ids)
     price = overload_price(nm)

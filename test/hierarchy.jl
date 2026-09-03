@@ -202,6 +202,52 @@ function price_network(prices; extra::Dict{Int,AbstractUnit} = Dict{Int,Abstract
     return NetworkData(Network(I, E, U; dim); name = "prices", baseMVA = 100.0)
 end
 
+"""
+A storage unit whose energy comes partly from outside the model, registered from
+here the way an extension package would register it — which is the whole point
+of the [`inflow`](@ref) hook: a reservoir overrides one line rather than the
+state of charge balance.
+"""
+Base.@kwdef struct InflowStorage <: AbstractStorage
+    id                   ::Int
+    name                 ::String                   = ""
+    node                 ::Int
+    ps                   ::NetworkQuantity{Float64} = 0.0
+    qs                   ::NetworkQuantity{Float64} = 0.0
+    energy_capacity      ::NetworkQuantity{Float64} = 0.0
+    energy_initial       ::Float64                  = 0.0
+    charge_rating        ::NetworkQuantity{Float64} = 0.0
+    discharge_rating     ::NetworkQuantity{Float64} = 0.0
+    charge_efficiency    ::Float64                  = 1.0
+    discharge_efficiency ::Float64                  = 1.0
+    max_cycles_per_period::Float64                  = Inf
+    cost_throughput      ::NetworkQuantity{Float64} = 0.0
+    cost_cycle           ::Float64                  = 0.0
+    net_inflow           ::NetworkQuantity{Float64} = 0.0
+    qmin                 ::NetworkQuantity{Float64} = 0.0
+    qmax                 ::NetworkQuantity{Float64} = 0.0
+    cost_up              ::NetworkQuantity{Float64} = 0.0
+    cost_dn              ::NetworkQuantity{Float64} = 0.0
+    status               ::NetworkQuantity{Bool}    = true
+    ext                  ::Dict{Symbol,Any}         = Dict{Symbol,Any}()
+end
+
+register_unit_type!(InflowStorage)
+
+NetworkModelBuilder.inflow(st::InflowStorage, nm::NetworkModel, n::Int) =
+    nw_value(nm, st.net_inflow, n)
+
+"a two step network, cheap then dear, and nothing between the two but a battery"
+function arbitrage_network(battery)
+    return price_network([10.0, 100.0]; extra = Dict{Int,AbstractUnit}(3 => battery))
+end
+
+"the charge, discharge and state of charge of unit 3 over `steps` of a result"
+storage_path(result, steps) =
+    ([nw_solution(result, n)["unit"]["3"]["psc"] for n in steps],
+     [nw_solution(result, n)["unit"]["3"]["psd"] for n in steps],
+     [nw_solution(result, n)["unit"]["3"]["es"]  for n in steps])
+
 const PRICES = [10.0, 100.0, 50.0]
 
 @testset "units that couple network indices" begin
@@ -304,6 +350,172 @@ const PRICES = [10.0, 100.0, 50.0]
         without = quiet(() -> solve_model(price_network(PRICES), OptimalPowerFlowProblem,
                                           IVRFormulation, OPTIMIZER))
         @test result["objective"] <= without["objective"] + 1e-6
+    end
+
+
+    # The two step network costs 10(0.2) + 100(0.2) = 22 with no battery. One that
+    # charges 0.2 in the cheap step and gives it back in the dear one leaves the
+    # generator 0.4 and 0.0 to make, which is 4 — a gain of 18 for 0.2 pu moved,
+    # or 90 per pu. Every number below is that 90 against a price.
+    @testset "a battery pays for what it moves" begin
+        plain = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
+                        charge_rating = 0.2, discharge_rating = 0.2)
+        free  = quiet(() -> solve_model(arbitrage_network(plain), OptimalPowerFlowProblem,
+                                        LPFFormulation, OPTIMIZER))
+        psc, psd, _ = storage_path(free, 1:2)
+        @test psc[1] ≈ 0.2 atol = 1e-6
+        @test psd[2] ≈ 0.2 atol = 1e-6
+        @test free["objective"] ≈ 4.0 atol = 1e-4
+
+        # a throughput price below 90 per pu leaves the arbitrage worth doing and
+        # simply charges for it
+        cheap = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
+                        charge_rating = 0.2, discharge_rating = 0.2, cost_throughput = 50.0)
+        result = quiet(() -> solve_model(arbitrage_network(cheap), OptimalPowerFlowProblem,
+                                         LPFFormulation, OPTIMIZER))
+        @test storage_path(result, 1:2)[2][2] ≈ 0.2 atol = 1e-6
+        @test result["objective"] ≈ 4.0 + 50.0 * 0.2 atol = 1e-4
+
+        # above it the battery is better off doing nothing at all
+        dear = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
+                       charge_rating = 0.2, discharge_rating = 0.2, cost_throughput = 100.0)
+        idle = quiet(() -> solve_model(arbitrage_network(dear), OptimalPowerFlowProblem,
+                                       LPFFormulation, OPTIMIZER))
+        @test storage_path(idle, 1:2)[2][2] < 1e-6
+        @test idle["objective"] ≈ 22.0 atol = 1e-4
+    end
+
+    @testset "a battery pays per cycle, which is not per unit of energy" begin
+        # 0.2 pu out of a capacity of 0.5 is 0.4 of a cycle, so a price of 20 per
+        # cycle is 40 per pu — below the 90 the arbitrage is worth
+        cheap  = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
+                         charge_rating = 0.2, discharge_rating = 0.2, cost_cycle = 20.0)
+        result = quiet(() -> solve_model(arbitrage_network(cheap), OptimalPowerFlowProblem,
+                                         LPFFormulation, OPTIMIZER))
+        @test storage_path(result, 1:2)[2][2] ≈ 0.2 atol = 1e-6
+        @test result["objective"] ≈ 4.0 + 20.0 * 0.4 atol = 1e-4
+
+        # and 100 per cycle is 200 per pu, which is not
+        dear = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
+                       charge_rating = 0.2, discharge_rating = 0.2, cost_cycle = 100.0)
+        idle = quiet(() -> solve_model(arbitrage_network(dear), OptimalPowerFlowProblem,
+                                       LPFFormulation, OPTIMIZER))
+        @test storage_path(idle, 1:2)[2][2] < 1e-6
+        @test idle["objective"] ≈ 22.0 atol = 1e-4
+
+        # the charge is a period cost, so it reaches the objective through the
+        # horizon term rather than through any one network index
+        nm = instantiate_model(arbitrage_network(cheap), OptimalPowerFlowProblem,
+                               LPFFormulation)
+        @test JuMP.coefficient(horizon_cost(nm), _NMB.var(nm, :psd, 3; nw = 2)) ≈ 20.0 / 0.5
+        @test JuMP.coefficient(network_cost(nm, 2), _NMB.var(nm, :psd, 3; nw = 2)) ≈ 0.0
+        @test period_cost(nm, Storage, 3; nw = 1) isa JuMP.AbstractJuMPScalar
+        @test period_cost(nm, FixedLoad, 2; nw = 1) == 0.0
+    end
+
+    @testset "a cycle limit is written once per period" begin
+        # a limit of 0.2 cycles on a capacity of 0.5 is 0.1 pu·h of discharge
+        limited = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
+                          charge_rating = 0.2, discharge_rating = 0.2,
+                          max_cycles_per_period = 0.2)
+        result  = quiet(() -> solve_model(arbitrage_network(limited),
+                                          OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
+        @test sum(storage_path(result, 1:2)[2]) ≈ 0.1 atol = 1e-6
+
+        # with no limit the same battery moves twice as much
+        plain = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
+                        charge_rating = 0.2, discharge_rating = 0.2)
+        free  = quiet(() -> solve_model(arbitrage_network(plain), OptimalPowerFlowProblem,
+                                        LPFFormulation, OPTIMIZER))
+        @test sum(storage_path(free, 1:2)[2]) ≈ 0.2 atol = 1e-6
+
+        # an infinite limit is the absence of a row, not a row with an infinite
+        # right hand side
+        loose = instantiate_model(arbitrage_network(plain), OptimalPowerFlowProblem,
+                                  LPFFormulation)
+        @test !haskey(_NMB.registered_constraints(loose), (1, :storage_cycles, 3))
+        tight = instantiate_model(arbitrage_network(limited), OptimalPowerFlowProblem,
+                                  LPFFormulation)
+        @test haskey(_NMB.registered_constraints(tight), (1, :storage_cycles, 3))
+    end
+
+    @testset "the periods are what a cycle limit is per" begin
+        # four steps, cheap-dear in each half, grouped into two days: the battery
+        # gets its 0.1 pu·h of discharge in each of them rather than once
+        limited = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
+                          charge_rating = 0.2, discharge_rating = 0.2,
+                          max_cycles_per_period = 0.2)
+        data = price_network([10.0, 100.0, 10.0, 100.0];
+                             extra = Dict{Int,AbstractUnit}(3 => limited))
+        dim_meta(dimension(data), :time)[:period_length] = 2
+
+        result = quiet(() -> solve_model(data, OptimalPowerFlowProblem, LPFFormulation,
+                                         OPTIMIZER))
+        psd = storage_path(result, 1:4)[2]
+        @test sum(psd[1:2]) ≈ 0.1 atol = 1e-6
+        @test sum(psd[3:4]) ≈ 0.1 atol = 1e-6
+
+        # ungrouped, the same data is one period and the halves share one limit
+        loose = quiet(() -> solve_model(
+            price_network([10.0, 100.0, 10.0, 100.0];
+                          extra = Dict{Int,AbstractUnit}(3 => limited)),
+            OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
+        @test sum(storage_path(loose, 1:4)[2]) ≈ 0.1 atol = 1e-6
+    end
+
+    @testset "a storage unit says when it is free to cycle against negative prices" begin
+        plain = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
+                        charge_rating = 0.2, discharge_rating = 0.2)
+
+        # nothing is priced below zero, so nothing is said
+        @test_logs min_level = Logging.Warn instantiate_model(
+            arbitrage_network(plain), OptimalPowerFlowProblem, LPFFormulation)
+
+        # a generator that pays to run, and a battery that pays nothing to cycle
+        paid = price_network([-10.0, 100.0]; extra = Dict{Int,AbstractUnit}(3 => plain))
+        @test_logs (:warn,) match_mode = :any instantiate_model(
+            paid, OptimalPowerFlowProblem, LPFFormulation)
+
+        # a cycle limit, a throughput price or a cycle price each settle it
+        for priced in (Storage(; id = 3, node = 2, energy_capacity = 0.5,
+                               charge_rating = 0.2, discharge_rating = 0.2,
+                               max_cycles_per_period = 1.0),
+                       Storage(; id = 3, node = 2, energy_capacity = 0.5,
+                               charge_rating = 0.2, discharge_rating = 0.2,
+                               cost_throughput = 1.0),
+                       Storage(; id = 3, node = 2, energy_capacity = 0.5,
+                               charge_rating = 0.2, discharge_rating = 0.2,
+                               cost_cycle = 1.0))
+            @test_logs min_level = Logging.Warn instantiate_model(
+                price_network([-10.0, 100.0]; extra = Dict{Int,AbstractUnit}(3 => priced)),
+                OptimalPowerFlowProblem, LPFFormulation)
+        end
+    end
+
+    @testset "energy may arrive from outside the model" begin
+        # a plain battery has no inflow, and the hook says so
+        nm = instantiate_model(arbitrage_network(
+                 Storage(; id = 3, node = 2, energy_capacity = 0.5,
+                         charge_rating = 0.2, discharge_rating = 0.2)),
+             OptimalPowerFlowProblem, LPFFormulation)
+        @test inflow(unit(nm, 3; nw = 1), nm, 1) == 0.0
+
+        # a subtype that overrides one line gets the whole balance for free:
+        # 0.05 pu·h arrives every step, is held through the cheap one and given
+        # back in the dear one
+        river = InflowStorage(; id = 3, node = 2, energy_capacity = 0.5,
+                              energy_initial = 0.0, charge_rating = 0.0,
+                              discharge_rating = 0.2, net_inflow = 0.05)
+        data   = price_network(PRICES; extra = Dict{Int,AbstractUnit}(3 => river))
+        result = quiet(() -> solve_model(data, OptimalPowerFlowProblem, LPFFormulation,
+                                         OPTIMIZER))
+
+        _, psd, es = storage_path(result, 1:3)
+        @test psd ≈ [0.0, 0.10, 0.05] atol = 1e-6
+        @test es  ≈ [0.05, 0.0, 0.0]  atol = 1e-6
+
+        # nothing of the inflow is lost or invented over the horizon
+        @test sum(psd) ≈ 3 * 0.05 atol = 1e-6
     end
 
     @testset "a time coupled unit says so when there is no time" begin

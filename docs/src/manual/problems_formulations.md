@@ -90,6 +90,8 @@ network_cost
 minimize_network_cost
 dispatch_cost
 horizon_cost
+period_cost
+component_period_cost
 network_weight
 period_weight
 default_weight

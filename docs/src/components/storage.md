@@ -22,6 +22,9 @@ Storage
 | ``p^{\text{sd,max}}_{u}`` | `discharge_rating` | discharge power limit | pu |
 | ``\eta^{\text{c}}_{u}`` | `charge_efficiency` | one-way charge efficiency, in ``(0,1]`` | |
 | ``\eta^{\text{d}}_{u}`` | `discharge_efficiency` | one-way discharge efficiency, in ``(0,1]`` | |
+| ``k^{\text{max}}_{u}`` | `max_cycles_per_period` | equivalent full cycles allowed per period | |
+| ``c^{\text{tp}}_{u}`` | `cost_throughput` | price of one per unit discharged | currency/pu/h |
+| ``c^{\text{cyc}}_{u}`` | `cost_cycle` | price of one equivalent full cycle | currency/cycle |
 | ``q^{\text{min}}_{u}``, ``q^{\text{max}}_{u}`` | `qmin`, `qmax` | reactive power limits | pu |
 | | `status` | in service | |
 
@@ -64,13 +67,74 @@ The state of charge, carried from one time step to the next:
 ```math
 e_{u,n} = e_{u,n-1} + \Delta t_{n}
           \left( \eta^{\text{c}}_{u} p^{\text{sc}}_{u,n}
-                 - p^{\text{sd}}_{u,n} / \eta^{\text{d}}_{u} \right)
+                 - p^{\text{sd}}_{u,n} / \eta^{\text{d}}_{u}
+                 + p^{\text{in}}_{u,n} \right)
 ```
 
 with the first step of each horizon starting from ``e^{0}_{u}``. The horizon runs
 along `:time` with every other coordinate held fixed, so a problem with a
 contingency dimension gives each contingency its own trajectory from the same
 starting energy.
+
+``p^{\text{in}}`` is [`inflow`](@ref) and is zero for a `Storage`. It is in the
+balance rather than absent from it so that a unit whose energy comes partly from
+outside the model — a reservoir fed by rain — overrides one method rather than the whole loop. A coupling constraint
+duplicated to add one term is a coupling constraint that will drift.
+
+```@docs
+inflow
+```
+
+### The cycle limit
+
+A unit that carries a finite `max_cycles_per_period` gets one row per period:
+
+```math
+\sum_{n \in \mathcal{P}} \Delta t_{n} \, p^{\text{sd}}_{u,n}
+    \le k^{\text{max}}_{u} \, e^{\text{max}}_{u}
+```
+
+with the period ``\mathcal{P}`` running over the `:time` coordinates grouped
+with the index, see [`period_ids`](@ref), and every other coordinate held fixed.
+A `:time` dimension with no grouping gives one period spanning the horizon, and
+the limit is then a limit over the whole problem.
+
+An infinite limit — the default — is the **absence** of a row rather than a row
+with an infinite right hand side.
+
+```@docs
+storage_cycles
+constraint_storage_cycles!
+```
+
+!!! note "Why the discharge side"
+    One cycle is one energy capacity delivered. Counting the charge side instead
+    would make a lossy unit appear to cycle more than it did, and counting both
+    would count every cycle twice. This is also the definition a warranty is
+    written in, and the one that makes the count independent of the capacity.
+
+!!! warning "A battery that is free to cycle"
+    A unit with no cycle limit and no price on what it moves, in a problem where
+    some generation is priced below zero, will charge and discharge as often as
+    its ratings allow — and the trajectory it returns is then an artefact of the
+    solver rather than an answer. The package warns when it finds that
+    combination. Give the unit a limit or a price; either settles it.
+
+## Cost
+
+| what | field | where it is paid |
+|:-----|:------|:-----------------|
+| moving energy | `cost_throughput` | [`dispatch_cost`](@ref), once per network index |
+| turning a cycle | `cost_cycle` | [`period_cost`](@ref), once per period |
+| leaving a market schedule | `cost_up`, `cost_dn` | [`redispatch_cost`](@ref), once per network index |
+
+The first two measure different wear and a unit may carry either or both: a
+battery that discharges half its capacity twice pays for one cycle, while the
+throughput price charges it for the whole of what it moved either way. The
+throughput price is also in `redispatch_cost`, because degradation does not care
+why the energy moved — a battery asked to relieve a congestion wears exactly as
+much as one following a schedule, and `cost_up` and `cost_dn` price the
+*deviation* rather than the movement.
 
 !!! note "Charging and discharging at once"
     Nothing forbids ``p^{\text{sc}}_{u}`` and ``p^{\text{sd}}_{u}`` from both

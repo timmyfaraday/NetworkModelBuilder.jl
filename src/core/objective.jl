@@ -198,6 +198,62 @@ function horizon_cost end
 horizon_cost(::NetworkModel{P,F}) where {P,F} = 0.0
 horizon_cost(::NetworkModel{P,F}, ::AbstractVector{Int}) where {P,F} = 0.0
 
+"a dispatch problem pays whatever its components charge per period"
+horizon_cost(nm::NetworkModel{P,F}) where {P<:AbstractDispatchProblem,F} =
+    component_period_cost(nm, nothing)
+
+horizon_cost(nm::NetworkModel{P,F}, settled::AbstractVector{Int}
+            ) where {P<:AbstractDispatchProblem,F} =
+    component_period_cost(nm, settled)
+
+"""
+    period_cost(nm, T, id; nw)
+
+What component `id` of type `T` costs over the **period** beginning at network
+index `nw`, as a JuMP expression or a number.
+
+The period counterpart of [`dispatch_cost`](@ref), and the reason both exist is
+that some charges do not divide into indices. A price per unit of energy a
+battery moves is per index and belongs on `dispatch_cost`; a price per *cycle*
+is a charge on a quantity defined over a whole period and belongs here, where
+[`horizon_cost`](@ref) pays it once per period rather than once per hour.
+
+Called only at the first network index of each period, see
+[`is_first_period_id`](@ref), and zero for anything that does not say otherwise.
+"""
+period_cost(::NetworkModel, ::Type{T}, ::Int; nw::Int) where {T<:AbstractComponent} = 0.0
+
+"""
+    component_period_cost(nm, settled)
+
+The sum of [`period_cost`](@ref) over every registered edge and unit type and
+every period of `nm`, each weighted by its [`period_weight`](@ref).
+
+`settled` restricts the sum to the periods lying entirely within it, as
+[`horizon_cost`](@ref) describes; `nothing` takes every period. A problem with no
+`:time` dimension has no periods and pays nothing here.
+"""
+function component_period_cost(nm::NetworkModel, settled)
+    has_dim(nm, :time) || return 0.0
+
+    total = JuMP.AffExpr(0.0)
+
+    for n in nw_ids(nm)
+        is_first_period_id(nm, n, :time) || continue
+        settled === nothing || all(in(settled), period_ids(nm, n, :time)) || continue
+
+        w = period_weight(nm, n, :time)
+        for T in edge_types(), id in ids(nm, T; nw = n)
+            JuMP.add_to_expression!(total, w, period_cost(nm, T, id; nw = n))
+        end
+        for T in unit_types(), id in ids(nm, T; nw = n)
+            JuMP.add_to_expression!(total, w, period_cost(nm, T, id; nw = n))
+        end
+    end
+
+    return total
+end
+
 """
     minimize_network_cost(nm)
 

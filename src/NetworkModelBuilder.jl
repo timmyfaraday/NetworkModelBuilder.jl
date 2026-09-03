@@ -12,6 +12,7 @@
 # v0.4.0 - the linearized formulation                                          #
 # v0.5.0 - the redispatch problem                                              #
 # v0.6.0 - priced congestion, periods, the dc link and tabular input           #
+# v0.7.0 - the asset model                                                     #
 ################################################################################
 
 module NetworkModelBuilder
@@ -56,6 +57,7 @@ module NetworkModelBuilder
     include("comp/unit/load/fixed_load.jl")
     include("comp/unit/load/flexible_load.jl")
     include("comp/unit/storage/storage.jl")
+    include("comp/unit/slack/slack.jl")
     include("comp/unit/shunt/shunt.jl")
 
     # include — core, depending on the components
@@ -108,6 +110,7 @@ module NetworkModelBuilder
 
     # export — components, node
     export Node, NodeType, PQ, PV, REF, ISOLATED, reference_nodes
+    export nodal_price, reactive_price, current_prices
 
     # export — components, edge
     export AbstractBranch, Branch, Cable, OverheadLine
@@ -119,7 +122,8 @@ module NetworkModelBuilder
     # export — components, unit
     export AbstractGenerator, Generator, generation_cost, marginal_cost
     export AbstractLoad, FixedLoad, FlexibleLoad, demand, power_factor_ratio
-    export AbstractStorage, Storage
+    export AbstractStorage, Storage, inflow, storage_cycles
+    export AbstractSlackUnit, EnergyNotServed, Spill, slack_sign, slack_cost
     export AbstractShunt, Shunt
 
     # export — component registries
@@ -148,11 +152,14 @@ module NetworkModelBuilder
     export variable_edge_overload!
     export constraint_unit_injection!, susceptance, phase_shift
     export variable_storage_active!, variable_storage_reactive!
+    export constraint_storage_cycles!, constraint_storage_final_energy!
+    export variable_slack_volume!
     export variable_edge_series_current, variable_two_winding!
     export constraint_two_winding_limits!
     export time_step, require_time_dimension
     export objective, objective_generation_cost, network_weight, default_weight
-    export network_cost, minimize_network_cost
+    export network_cost, minimize_network_cost, dispatch_cost
+    export horizon_cost, period_cost, component_period_cost, period_weight
     export objective_redispatch_cost
 
     # export — solution
@@ -165,10 +172,12 @@ module NetworkModelBuilder
     export is_monitored, monitored_edges, overload_price, overload_cost
     export control_mode, is_preventive, is_corrective
     export redispatch_controls, redispatch_cost, redispatch_price
-    export constraint_redispatch_control
+    export constraint_redispatch_control, constraint_overload_peak
+    export solution_overload_peak
 
     # export — the rolling horizon
-    export window, window_indices, initial_state, solve_rolling_horizon
+    export window, window_indices, initial_state, interior_state
+    export solve_rolling_horizon
     export same_topology, same_structure, structure_gates, structure_varies
 
     # export — problems

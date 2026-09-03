@@ -178,11 +178,76 @@ overload_cost
 variable_edge_overload!
 ```
 
-!!! note "A charge on the peak is not this"
-    Pricing the *worst* overload of a day rather than each hour of it is a cost
-    that spans network indices, and [`network_cost`](@ref) has one term per
-    index. That needs a hook the objective does not have yet; it is not a field
-    this type is missing.
+## A charge on the peak
+
+`per_energy` prices every per unit of overload the same, whenever it happens. An
+overload that is small and constant and one that is brief and severe then cost
+the same, and they are not the same event: the second is what a rating exists to
+prevent. `per_peak` is what says so — a charge on the **worst** overload of a
+period rather than on each index of it.
+
+```julia
+dim = Dimension(:time => 8760)
+dim_meta(dim, :time)[:period_length] = 24        # the periods are days
+
+solve_rd(set_dimension(data, dim), LPFFormulation, HiGHS.Optimizer;
+         redispatch = Redispatch(; overload = OverloadPrice(; per_energy = 500.0,
+                                                              per_peak   = 15_000.0)))
+```
+
+Every monitored edge gets one non-negative peak per period, `ô_e`, bounded from
+below by its overload at each index of that period and priced from above, so the
+objective pulls it down onto the largest of them and no binary is needed to make
+the maximum tight. The period is [`period_ids`](@ref): the `:time` coordinates
+grouped with the index, every other coordinate held fixed, so a problem posed
+over contingencies gets one peak per period *per contingency*. With no grouping
+declared there is one period spanning the horizon, and the charge is on the
+worst overload of the problem.
+
+```@docs
+constraint_overload_peak
+solution_overload_peak
+```
+
+### Where the charge is paid
+
+A peak belongs to no single network index, and [`network_cost`](@ref) has one
+term per index. It is paid through [`horizon_cost`](@ref) instead, a second term
+[`minimize_network_cost`](@ref) adds unweighted:
+
+```math
+\min\quad \sum_{n} w_{n} \, c_{n} \;+\; c^{\text{h}} .
+```
+
+The weight it does carry is [`period_weight`](@ref), which is
+[`network_weight`](@ref) with `:time` left out. Both halves of that matter. The
+duration of a step is dropped because a peak is a power and not an energy —
+weighting it by an hour would make a day of quarter-hours cost a quarter of what
+a day of hours costs for the same worst flow. The probability of a contingency
+is kept because a peak reached only in a contingency is expected to cost what it
+costs times how likely that contingency is, which is the same argument
+[`default_weight`](@ref) makes for every other cost.
+
+### What a roll reports
+
+A window models more indices than it commits, so a peak over a period longer
+than the commit step belongs to no window cleanly.
+[`solve_rolling_horizon`](@ref) charges a period exactly when a window both
+**saw it whole** and **committed it whole**, and charges it nothing otherwise:
+
+| `horizon` | `step` | `period_length` | what the roll reports |
+|:----------|:-------|:----------------|:----------------------|
+| 48        | 24     | 24              | every day, once, exactly |
+| 24        | 1      | 24              | nothing, with a warning  |
+| 24        | 24     | 24              | every day, once, exactly |
+
+Prorating the alternative would be inventing a number: a peak is not a rate and
+does not divide into hours. Charging it in the window that closes the period
+would be worse still, since that window may hold only the last hour of the
+period and its "peak" would be that hour's overload. So a roll whose windows
+never close a period reports the peak charge nowhere, says so once, and puts
+`horizon["closed"]` — the number of periods it did charge — in the result. Give
+it a `horizon` of at least one period and a `step` that closes one.
 
 ## Contingencies, preventively and correctively
 
@@ -407,6 +472,12 @@ original problem, so [`nw_solution`](@ref) reaches a step by the index it has
 there. Its `"objective"` is the cost of the **committed** steps only; a window's
 own objective prices its lookahead too, and is reported apart under
 `"horizon"`, with what each window covered and committed.
+
+`"dual_status"` is `FEASIBLE_POINT` only where **every** window returned duals,
+since a roll is as priced as its least priced window and a committed step whose
+window gave none has no [`nodal_price`](@ref). `"horizon"` also carries
+`"closed"`, the number of periods a period-spanning cost was actually charged
+for, see [What a roll reports](@ref).
 
 The roll is not redispatch-specific — [`solve_rolling_horizon`](@ref) takes the
 problem type as an argument and rolls an [Optimal power flow](@ref) just as

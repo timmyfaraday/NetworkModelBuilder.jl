@@ -597,6 +597,121 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         @test occursin("overload at 500.0 per pu",
                        sprint(show, Redispatch(; overload = 500.0)))
         @test !occursin("overload", sprint(show, Redispatch()))
+
+        # the peak price is a second, independent price on the same setup
+        @test_throws ArgumentError OverloadPrice(; per_energy = 1.0, per_peak = -1.0)
+        @test_throws ArgumentError OverloadPrice(; per_energy = 1.0, per_peak = Inf)
+        @test OverloadPrice(; per_energy = 1.0).per_peak == 0.0
+        @test occursin("150.0 per pu of peak",
+                       sprint(show, OverloadPrice(; per_energy = 0.0, per_peak = 150.0)))
+        @test occursin("and 150.0 per pu of peak",
+                       sprint(show, Redispatch(; overload = OverloadPrice(; per_energy = 0.0,
+                                                                            per_peak = 150.0))))
+        @test !occursin("of peak", sprint(show, Redispatch(; overload = 500.0)))
+    end
+
+    # A day of two hours behind the constraint. The market runs generator 1 up to
+    # the load in both, so the branch carries 1.0 and 0.6 against a rating of 0.5
+    # and overloads by 0.5 and 0.1. Relief costs 110 per pu, as above, and the
+    # peak is priced at 150 — which is worth paying for the first hour and not the
+    # second, since bringing the peak below 0.1 means relieving both.
+    #
+    #   one period  : relieve 0.4 in the first hour, 110(0.4) + 150(0.1) = 59
+    #   two periods : every hour is its own peak, 110(0.5) + 110(0.1)    = 66
+    peak_setup(per_peak = 150.0) =
+        Redispatch(; overload = OverloadPrice(; per_energy = 0.0, per_peak))
+
+    function peak_network(; period::Union{Nothing,Int} = nothing)
+        dim = Dimension(:time => 2)
+        period === nothing || (dim_meta(dim, :time)[:period_length] = period)
+
+        return radial_network(; dim, rate = 0.5, pd = NetworkVector([1.0, 0.6]),
+                                pg_market = NetworkVector([1.0, 0.6]))
+    end
+
+    @testset "the worst overload of a period can be priced" begin
+        result = quiet(() -> solve_rd(peak_network(), LPFFormulation, OPTIMIZER;
+                                      redispatch = peak_setup()))
+
+        @test result["termination_status"] == JuMP.LOCALLY_SOLVED
+        @test nw_solution(result, 1)["edge"]["1"]["overload"] ≈ 0.1 atol = 1e-6
+        @test nw_solution(result, 2)["edge"]["1"]["overload"] ≈ 0.1 atol = 1e-6
+        @test result["objective"] ≈ 110 * 0.4 + 150 * 0.1 atol = 1e-4
+    end
+
+    @testset "the periods are what the peak is worst over" begin
+        # the same system cut into two periods of one hour: each hour is then its
+        # own peak, and relieving it is worth 150 against a cost of 110
+        result = quiet(() -> solve_rd(peak_network(; period = 1), LPFFormulation,
+                                      OPTIMIZER; redispatch = peak_setup()))
+
+        @test nw_solution(result, 1)["edge"]["1"]["overload"] ≈ 0.0 atol = 1e-6
+        @test nw_solution(result, 2)["edge"]["1"]["overload"] ≈ 0.0 atol = 1e-6
+        @test result["objective"] ≈ 110 * 0.5 + 110 * 0.1 atol = 1e-4
+    end
+
+    @testset "the peak belongs to the first index of its period" begin
+        nm = instantiate_model(peak_network(), RedispatchProblem, LPFFormulation;
+                               ext = Dict{Symbol,Any}(:redispatch => peak_setup()))
+
+        # one variable per edge per period, registered where the period starts
+        @test haskey(_NMB.var(nm; nw = 1), :olp)
+        @test !haskey(_NMB.var(nm; nw = 2), :olp)
+        @test JuMP.lower_bound(_NMB.var(nm, :olp, 1; nw = 1)) == 0.0
+        @test !JuMP.has_upper_bound(_NMB.var(nm, :olp, 1; nw = 1))
+
+        # and one row per index of the period, bounding the peak from below
+        @test haskey(_NMB.registered_constraints(nm), (1, :overload_peak, (1, 1)))
+        @test haskey(_NMB.registered_constraints(nm), (1, :overload_peak, (1, 2)))
+
+        # and the solution reads it back under the same key
+        quiet(() -> optimize_model!(nm, OPTIMIZER))
+        peaks = solution_overload_peak(nm)
+        @test length(peaks) == 1
+        @test peaks[(1, 1)] ≈ 0.1 atol = 1e-6
+    end
+
+    @testset "a peak that is not priced is not written" begin
+        # a plain per-energy price leaves the model exactly as it was
+        nm = instantiate_model(peak_network(), RedispatchProblem, LPFFormulation;
+                               ext = Dict{Symbol,Any}(:redispatch => Redispatch(; overload = 500.0)))
+        @test !haskey(_NMB.var(nm; nw = 1), :olp)
+        @test horizon_cost(nm) == 0.0
+
+        # a hard rating writes neither, and so does a problem with no peak at all
+        hard = instantiate_model(peak_network(), RedispatchProblem, LPFFormulation)
+        @test horizon_cost(hard) == 0.0
+
+        opf = quiet(() -> instantiate_model(case("case5"), OptimalPowerFlowProblem,
+                                            LPFFormulation))
+        @test horizon_cost(opf) == 0.0
+        @test horizon_cost(opf, [1]) == 0.0
+    end
+
+    @testset "a peak charge needs periods to be worst over" begin
+        err = try
+            instantiate_model(radial_network(), RedispatchProblem, LPFFormulation;
+                              ext = Dict{Symbol,Any}(:redispatch => peak_setup()))
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("`:time` dimension", err.msg)
+    end
+
+    @testset "a peak carries the probability of its state, not the length of an hour" begin
+        # quarter hours in two contingencies of unequal probability: the weight of
+        # a network index carries both, the weight of a period only the second
+        dim = Dimension(:time => [Dict{Symbol,Any}(:weight => 0.25) for _ in 1:2],
+                        :contingency => [Dict{Symbol,Any}(:weight => w) for w in (0.9, 0.1)])
+        nm  = instantiate_model(radial_network(; dim), RedispatchProblem, LPFFormulation)
+
+        for n in nw_ids(nm)
+            p = dim_prop(nm, n, :contingency, :weight, 1.0)
+            @test network_weight(nm, n) ≈ 0.25 * p
+            @test period_weight(nm, n) ≈ p
+            @test period_weight(nm, n, :contingency) ≈ 0.25
+        end
     end
 end
 
@@ -618,7 +733,8 @@ end
 const ROLLING_PRICES = [10.0, 10.0, 10.0, 200.0]
 
 "a radial network over `length(prices)` steps whose expensive generator is priced per step"
-function rolling_network(prices = ROLLING_PRICES; energy = 0.4, extra_dims = ())
+function rolling_network(prices = ROLLING_PRICES; energy = 0.4, energy_final = NaN,
+                        extra_dims = ())
     dim = Dimension(:time => length(prices), extra_dims...)
 
     I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
@@ -632,6 +748,7 @@ function rolling_network(prices = ROLLING_PRICES; energy = 0.4, extra_dims = ())
                        cost = nw_vector(dim, :time, [[0.0, c] for c in prices])),
         3 => FixedLoad(; id = 3, node = 2, pd = 1.0, qd = 0.0),
         4 => Storage(; id = 4, node = 2, energy_capacity = energy, energy_initial = energy,
+                     energy_final = energy_final,
                      charge_rating = 0.0, discharge_rating = 0.5,
                      charge_efficiency = 1.0, discharge_efficiency = 1.0))
 
@@ -640,6 +757,33 @@ end
 
 "the discharge of the battery at every time step of a result"
 discharge(result, steps) = [nw_solution(result, n)["unit"]["4"]["psd"] for n in steps]
+
+
+# Four hours behind the constraint, every one of them overloading by 0.5, and
+# each pair of them a period. Relieving 1 pu costs 110 and has to be bought in
+# both hours of a period before that period's peak moves at all, so at 50 per pu
+# of peak nothing is relieved and each period simply pays 50(0.5) = 25.
+function peak_rolling_network()
+    dim = Dimension(:time => 4)
+    dim_meta(dim, :time)[:period_length] = 2
+
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
+                               2 => Node(; id = 2))
+    E = Dict{Int,AbstractEdge}(
+        1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, rate_a = 0.5))
+    U = Dict{Int,AbstractUnit}(
+        1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
+                       pg = 1.0, cost = [0.0, 10.0]),
+        2 => Generator(; id = 2, node = 2, pmax = 5.0, qmin = -5.0, qmax = 5.0,
+                       pg = 0.0, cost = [0.0, 100.0]),
+        3 => FixedLoad(; id = 3, node = 2, pd = 1.0, qd = 0.0))
+
+    return NetworkData(Network(I, E, U; dim); name = "peak", baseMVA = 100.0)
+end
+
+"a redispatch that prices only the worst overload of a period"
+peak_only(per_peak = 50.0) =
+    Redispatch(; overload = OverloadPrice(; per_energy = 0.0, per_peak))
 
 @testset "rolling horizon" begin
 
@@ -1267,4 +1411,71 @@ discharge(result, steps) = [nw_solution(result, n)["unit"]["4"]["psd"] for n in 
         @test all(haskey(w, "objective") for w in windows)
         @test result["solve_time"] ≈ sum(w["solve_time"] for w in windows)
     end
+
+    @testset "a roll pays for the periods it closes whole" begin
+        # solved in one piece the two periods cost 25 each
+        whole = quiet(() -> solve_rd(peak_rolling_network(), LPFFormulation, OPTIMIZER;
+                                     redispatch = peak_only()))
+        @test whole["objective"] ≈ 50.0 atol = 1e-4
+
+        # a window that sees a whole period and commits it reports the same
+        rolled = quiet(() -> solve_rd(peak_rolling_network(), LPFFormulation, OPTIMIZER;
+                                      redispatch = peak_only(), horizon = 2, step = 2))
+        @test rolled["horizon"]["closed"] == 2
+        @test rolled["objective"] ≈ 50.0 atol = 1e-4
+    end
+
+    @testset "a roll that never closes a period charges none of it, and says so" begin
+        # committing one hour of a two hour period closes nothing: the peak is in
+        # every window's own objective and in none of the cost the roll reports,
+        # which is the honest answer — a peak is not a rate and cannot be prorated
+        rolled = @test_logs (:warn,) match_mode = :any solve_rd(
+            peak_rolling_network(), LPFFormulation, OPTIMIZER;
+            redispatch = peak_only(), horizon = 2, step = 1)
+
+        @test rolled["horizon"]["closed"] == 0
+        @test rolled["objective"] ≈ 0.0 atol = 1e-4
+
+        # nothing warns where there is no peak to leave unpriced
+        @test rolled["termination_status"] == JuMP.LOCALLY_SOLVED
+        quiet(() -> solve_rd(peak_rolling_network(), LPFFormulation, OPTIMIZER;
+                             redispatch = Redispatch(; overload = 500.0),
+                             horizon = 2, step = 1))
+    end
+
+
+    # The battery starts on 0.4 and is asked to hand back 0.2, so only half of it
+    # is spendable — and, being unable to charge, it can only spend it once. The
+    # dear step is the last, which is where it goes:
+    #
+    #   20 + 10(0.5) + 10(0.5) + 10(0.5) + 200(0.5 - 0.2) = 95
+    @testset "only the window that closes the horizon carries the energy target" begin
+        whole = quiet(() -> solve_rd(rolling_network(; energy_final = 0.2),
+                                     LPFFormulation, OPTIMIZER))
+        @test whole["objective"] ≈ 95.0 atol = 1e-4
+        @test nw_solution(whole, 4)["unit"]["4"]["es"] ≈ 0.2 atol = 1e-6
+
+        # rolled with the whole horizon in view, the roll reproduces it exactly:
+        # the three windows that do not reach the end hold their energy rather
+        # than being asked to arrive at 0.2 three times over
+        rolled = quiet(() -> solve_rd(rolling_network(; energy_final = 0.2),
+                                      LPFFormulation, OPTIMIZER; horizon = 4, step = 1))
+        @test rolled["objective"] ≈ 95.0 atol = 1e-4
+        @test discharge(rolled, 1:3) ≈ [0.0, 0.0, 0.0] atol = 1e-6
+        @test discharge(rolled, 4:4) ≈ [0.2] atol = 1e-6
+        @test nw_solution(rolled, 4)["unit"]["4"]["es"] ≈ 0.2 atol = 1e-6
+    end
+
+    @testset "a lookahead too short to see a target can walk past it" begin
+        # two steps of lookahead cannot see the dear step, so the first window
+        # spends the battery in the cheap one — and the window that does carry
+        # the target is then asked for energy that is gone. The fix is a longer
+        # lookahead, not a target pinned into every window: that is the stitching
+        # this package has `initial_state` instead of.
+        rolled = solve_rd(rolling_network(; energy_final = 0.2), LPFFormulation, OPTIMIZER;
+                          horizon = 2, step = 2)
+
+        @test rolled["termination_status"] != JuMP.LOCALLY_SOLVED
+    end
+
 end

@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.3.0 - component hierarchy                                                 #
 # v0.5.0 - the redispatch problem                                              #
+# v0.7.0 - cycle limits, the throughput cost, the inflow hook and the end target#
 ################################################################################
 
 ################################################################################
@@ -25,6 +26,29 @@ with a negative lower bound does too — but that what it can do at one network
 index depends on what it did at the others. Its state of charge is carried from
 one time step to the next, which makes it the second component, with
 [`FlexibleLoad`](@ref), whose constraints span network indices.
+
+# What a subtype has to carry
+
+Everything but the state of charge balance is written against fields rather than
+against [`Storage`](@ref), so a subtype gets the variables, the injection, the
+cycle limit, the energy target, the costs, the redispatch split, the solution
+and the rolling horizon by declaring them:
+
+| field | what reads it |
+|:------|:--------------|
+| `id`, `name`, `node`, `status`, `ext` | every component |
+| `ps`, `qs` | the power flow setpoint and the market schedule |
+| `energy_capacity`, `energy_initial`, `energy_final` | the state of charge and its ends |
+| `charge_rating`, `discharge_rating` | the bounds on the charge and discharge |
+| `charge_efficiency`, `discharge_efficiency` | the balance |
+| `max_cycles_per_period` | [`constraint_storage_cycles!`](@ref) |
+| `cost_throughput`, `cost_cycle` | [`dispatch_cost`](@ref), [`period_cost`](@ref) |
+| `cost_up`, `cost_dn` | [`redispatch_cost`](@ref) |
+| `qmin`, `qmax` | the reactive power, where the formulation has any |
+
+What a subtype adds on top is its own, and the one thing it is expected to
+override is [`inflow`](@ref), for energy that reaches the unit from outside the
+model.
 """
 abstract type AbstractStorage <: AbstractUnit end
 
@@ -50,9 +74,22 @@ and forbidding it outright would need a binary.
   **market schedule** a [`RedispatchProblem`](@ref) moves away from.
 - `energy_capacity`: the usable energy capacity [pu·h].
 - `energy_initial`: the energy held before the first time step [pu·h].
+- `energy_final`: the energy the unit must hold after the last time step [pu·h].
+  `NaN`, the default, means *no target*, and the horizon ends wherever the
+  dispatch leaves it.
 - `charge_rating`, `discharge_rating`: the power limits [pu].
 - `charge_efficiency`, `discharge_efficiency`: the one-way efficiencies, in
   `(0, 1]`.
+- `max_cycles_per_period`: the equivalent full cycles the unit may turn in one
+  period [-], see [`storage_cycles`](@ref). `Inf`, the default, leaves it free to
+  cycle as often as the ratings allow.
+- `cost_throughput`: the price of moving one per unit through the unit
+  [currency/pu/h], charged on what it discharges. This is degradation, so it is
+  paid in a dispatch and in a redispatch alike and whatever the reason the
+  energy moved.
+- `cost_cycle`: the price of one equivalent full cycle [currency/cycle], charged
+  once per period rather than once per network index — a cost that spans network
+  indices, see [`period_cost`](@ref).
 - `qmin`, `qmax`: the reactive power limits [pu].
 - `cost_up`, `cost_dn`: the price of injecting one per unit more and one per
   unit less than the market schedule, in a [`RedispatchProblem`](@ref)
@@ -65,38 +102,52 @@ and forbidding it outright would need a binary.
 - `ext`: free-form storage.
 """
 Base.@kwdef struct Storage <: AbstractStorage
-    id                  ::Int
-    name                ::String                    = ""
-    node                ::Int
-    ps                  ::NetworkQuantity{Float64}  = 0.0
-    qs                  ::NetworkQuantity{Float64}  = 0.0
-    energy_capacity     ::NetworkQuantity{Float64}  = 0.0
-    energy_initial      ::Float64                   = 0.0
-    charge_rating       ::NetworkQuantity{Float64}  = 0.0
-    discharge_rating    ::NetworkQuantity{Float64}  = 0.0
-    charge_efficiency   ::Float64                   = 1.0
-    discharge_efficiency::Float64                   = 1.0
-    qmin                ::NetworkQuantity{Float64}  = 0.0
-    qmax                ::NetworkQuantity{Float64}  = 0.0
-    cost_up             ::NetworkQuantity{Float64}  = 0.0
-    cost_dn             ::NetworkQuantity{Float64}  = 0.0
-    status              ::NetworkQuantity{Bool}     = true
-    ext                 ::Dict{Symbol,Any}          = Dict{Symbol,Any}()
+    id                   ::Int
+    name                 ::String                    = ""
+    node                 ::Int
+    ps                   ::NetworkQuantity{Float64}  = 0.0
+    qs                   ::NetworkQuantity{Float64}  = 0.0
+    energy_capacity      ::NetworkQuantity{Float64}  = 0.0
+    energy_initial       ::Float64                   = 0.0
+    energy_final         ::Float64                   = NaN
+    charge_rating        ::NetworkQuantity{Float64}  = 0.0
+    discharge_rating     ::NetworkQuantity{Float64}  = 0.0
+    charge_efficiency    ::Float64                   = 1.0
+    discharge_efficiency ::Float64                   = 1.0
+    max_cycles_per_period::Float64                   = Inf
+    cost_throughput      ::NetworkQuantity{Float64}  = 0.0
+    cost_cycle           ::Float64                   = 0.0
+    qmin                 ::NetworkQuantity{Float64}  = 0.0
+    qmax                 ::NetworkQuantity{Float64}  = 0.0
+    cost_up              ::NetworkQuantity{Float64}  = 0.0
+    cost_dn              ::NetworkQuantity{Float64}  = 0.0
+    status               ::NetworkQuantity{Bool}     = true
+    ext                  ::Dict{Symbol,Any}          = Dict{Symbol,Any}()
 
     function Storage(id, name, node, ps, qs, energy_capacity, energy_initial,
-                     charge_rating, discharge_rating, charge_efficiency,
-                     discharge_efficiency, qmin, qmax, cost_up, cost_dn, status, ext)
+                     energy_final, charge_rating, discharge_rating, charge_efficiency,
+                     discharge_efficiency, max_cycles_per_period, cost_throughput,
+                     cost_cycle, qmin, qmax, cost_up, cost_dn, status, ext)
         0 < charge_efficiency <= 1 ||
             throw(ArgumentError("storage $id has a charge efficiency outside (0, 1]"))
         0 < discharge_efficiency <= 1 ||
             throw(ArgumentError("storage $id has a discharge efficiency outside (0, 1]"))
         all_nw(>=(0), energy_capacity) ||
             throw(ArgumentError("storage $id has a negative energy capacity"))
+        isnan(energy_final) || energy_final >= 0 ||
+            throw(ArgumentError("storage $id has a negative energy target"))
+        max_cycles_per_period >= 0 ||
+            throw(ArgumentError("storage $id has a negative cycle limit"))
+        all_nw(>=(0), cost_throughput) ||
+            throw(ArgumentError("storage $id has a negative throughput cost, which pays the problem to cycle it"))
+        cost_cycle >= 0 ||
+            throw(ArgumentError("storage $id has a negative cycle cost, which pays the problem to cycle it"))
         all_nw(<=, qmin, qmax) ||
             throw(ArgumentError("storage $id has qmin above qmax"))
         return new(id, name, node, ps, qs, energy_capacity, energy_initial,
-                   charge_rating, discharge_rating, charge_efficiency,
-                   discharge_efficiency, qmin, qmax, cost_up, cost_dn, status, ext)
+                   energy_final, charge_rating, discharge_rating, charge_efficiency,
+                   discharge_efficiency, max_cycles_per_period, cost_throughput,
+                   cost_cycle, qmin, qmax, cost_up, cost_dn, status, ext)
     end
 end
 
@@ -221,10 +272,14 @@ e_{u,n} = e_{u,n-1} + \\Delta t_{n} \\left( \\eta^{\\text{c}}_{u} p^{\\text{sc}}
           - p^{\\text{sd}}_{u,n} / \\eta^{\\text{d}}_{u} \\right),
 ```
 
-with the first step of each horizon starting from `energy_initial`. The horizon
-runs along `:time` with every other coordinate of the network index held fixed,
-so a problem with a contingency dimension gives each contingency its own
+with the first step of each horizon starting from `energy_initial`, and
+``p^{\\text{in}}`` whatever [`inflow`](@ref) arrives from outside the model. The
+horizon runs along `:time` with every other coordinate of the network index held
+fixed, so a problem with a contingency dimension gives each contingency its own
 trajectory from the same starting energy.
+
+The cycle limit of every unit that carries one is written here too, once per
+period, see [`constraint_storage_cycles!`](@ref).
 """
 function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
                                  ) where {P<:AbstractDispatchProblem,F<:AbstractFormulationType,
@@ -245,13 +300,235 @@ function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
 
             balance[(u, n)] = constrain!(nm, :storage_balance, u, JuMP.@build_constraint(
                 es[u] == start + dt * (st.charge_efficiency * psc[u] -
-                                       psd[u] / st.discharge_efficiency)); nw = n)
+                                       psd[u] / st.discharge_efficiency +
+                                       inflow(st, nm, n))); nw = n)
         end
     end
 
     nm.ext[:storage_balance] = balance
 
+    constraint_storage_cycles!(nm, T)
+    constraint_storage_final_energy!(nm, T)
+    _warn_free_cycling(nm, T)
+
     return nothing
+end
+
+"""
+    constraint_storage_final_energy!(nm, T)
+
+Pin every storage unit that carries an `energy_final` to it at the last `:time`
+coordinate,
+
+```math
+e_{u,n} = e^{\\text{f}}_{u} \\quad \\text{at the last } n \\text{ along } \\texttt{:time},
+```
+
+with every other coordinate held fixed, so a problem with a contingency
+dimension asks each contingency to arrive at the same place.
+
+It is a **pin**, not a floor: a target the ratings cannot reach makes the problem
+infeasible, which is the honest answer to a question that has none. A unit
+without a target — `NaN`, the default — gets no row.
+"""
+function constraint_storage_final_energy!(nm::NetworkModel, ::Type{T}) where {T<:AbstractStorage}
+    target = Dict{Tuple{Int,Int},Any}()
+
+    for n in nw_ids(nm)
+        is_last_id(nm, n, :time) || continue
+
+        for u in ids(nm, T; nw = n)
+            st = unit(nm, u; nw = n)::T
+            isnan(st.energy_final) && continue
+
+            target[(u, n)] = constrain!(nm, :storage_final, u, JuMP.@build_constraint(
+                var(nm, :es, u; nw = n) == st.energy_final); nw = n)
+        end
+    end
+
+    isempty(target) || (nm.ext[:storage_final] = target)
+
+    return nothing
+end
+
+"""
+    inflow(st, nm, n)
+
+The power arriving in storage unit `st` from outside the model at network index
+`n` [pu], and zero for a unit that has none.
+
+A battery is filled by the grid and by nothing else, so the balance above is
+complete without this. A reservoir is not: rain and rivers put energy into it
+that no node balance ever sees, and a subtype whose energy comes partly from
+outside overrides this one line rather than the whole balance. It is here rather
+than on the subtype for exactly that reason — a coupling constraint duplicated
+to add one term is a coupling constraint that will drift.
+
+It is a **power**, entering the balance where the charge and discharge do and
+weighted by the same time step, so an inflow given as a
+[`NetworkVector`](@ref) over `:time` is a natural inflow profile.
+"""
+inflow(::AbstractStorage, ::NetworkModel, ::Int) = 0.0
+
+"""
+    storage_cycles(nm, st, u, window)
+
+The equivalent full cycles storage unit `u` turns over `window`, as a JuMP
+expression,
+
+```math
+\\frac{1}{e^{\\text{max}}_{u}} \\sum_{n \\in \\mathcal{P}} \\Delta t_{n} \\, p^{\\text{sd}}_{u,n} .
+```
+
+One cycle is one energy capacity **discharged**, which is the definition a
+warranty is written in and the one that makes the count independent of the
+capacity. The discharge side is what counts because it is what the unit
+delivers: counting the charge side instead would make a lossy unit appear to
+cycle more than it did, and counting both would count every cycle twice.
+
+Zero for a unit with no capacity, which has no cycle to speak of.
+"""
+function storage_cycles(nm::NetworkModel, st::AbstractStorage, u::Int, window)
+    capacity = nw_value(nm, st.energy_capacity, first(window))
+    iszero(capacity) && return 0.0
+
+    return JuMP.@expression(nm.model,
+        sum(time_step(nm, m) * var(nm, :psd, u; nw = m)
+            for m in window if haskey(var(nm, :psd; nw = m), u); init = 0.0) / capacity)
+end
+
+"""
+    constraint_storage_cycles!(nm, T)
+
+Hold every storage unit that carries one to its cycle limit, once per period,
+
+```math
+\\sum_{n \\in \\mathcal{P}} \\Delta t_{n} \\, p^{\\text{sd}}_{u,n}
+    \\le k^{\\text{max}}_{u} \\, e^{\\text{max}}_{u} ,
+```
+
+with the period `𝒫` running over the `:time` coordinates grouped with the index,
+see [`period_ids`](@ref), and every other coordinate held fixed — so a problem
+posed over contingencies gets one limit per period *per contingency*, and a
+`:time` dimension with no grouping gives one limit over the whole horizon.
+
+Written only for a unit whose `max_cycles_per_period` is finite. A limit of
+infinity is not a row with an infinite right hand side; it is the absence of a
+row, and a solver handed the first would be given a constraint it can never use.
+"""
+function constraint_storage_cycles!(nm::NetworkModel, ::Type{T}) where {T<:AbstractStorage}
+    limit = Dict{Tuple{Int,Int},Any}()
+
+    for n in nw_ids(nm)
+        is_first_period_id(nm, n, :time) || continue
+        window = period_ids(nm, n, :time)
+
+        for u in ids(nm, T; nw = n)
+            st = unit(nm, u; nw = n)::T
+            isfinite(st.max_cycles_per_period) || continue
+
+            capacity = nw_value(nm, st.energy_capacity, n)
+            limit[(u, n)] = constrain!(nm, :storage_cycles, u, JuMP.@build_constraint(
+                sum(time_step(nm, m) * var(nm, :psd, u; nw = m)
+                    for m in window if haskey(var(nm, :psd; nw = m), u); init = 0.0) <=
+                st.max_cycles_per_period * capacity); nw = n)
+        end
+    end
+
+    isempty(limit) || (nm.ext[:storage_cycles] = limit)
+
+    return nothing
+end
+
+"""
+    _warn_free_cycling(nm, T)
+
+Warn where a storage unit may cycle for nothing.
+
+SmaLoadFlow makes a cycle limit mandatory as soon as negative prices are enabled,
+and it is right to: a unit that pays nothing to move energy, in a problem where
+some generation is cheaper than free, will charge and discharge as often as its
+ratings allow, and the trajectory it returns is then an artefact of the solver
+rather than an answer. The guard is a warning here rather than an error because
+the model is still well posed — the cycling is bounded by the ratings — and
+because what counts as a negative price is a property of the data, which the
+package does not otherwise legislate about.
+
+The scan over the generation costs runs only where a free-cycling unit was found
+first, so a problem that priced its storage pays nothing for this.
+"""
+function _warn_free_cycling(nm::NetworkModel, ::Type{T}) where {T<:AbstractStorage}
+    n = nw_id_default(nm)
+    free = any(ids(nm, T; nw = n)) do u
+        st = unit(nm, u; nw = n)::T
+        return !isfinite(st.max_cycles_per_period) && iszero(st.cost_cycle) &&
+               all_nw(iszero, st.cost_throughput)
+    end
+    free && _has_negative_price(nm, n) || return nothing
+
+    @warn "a storage unit is free to cycle — no `max_cycles_per_period`, no " *
+          "`cost_throughput` and no `cost_cycle` — in a problem where some generation is " *
+          "priced below zero, so nothing stops it from charging and discharging as often " *
+          "as its ratings allow; give it a cycle limit or a price"
+
+    return nothing
+end
+
+"whether any generator of `nm` carries a negative cost coefficient"
+function _has_negative_price(nm::NetworkModel, n::Int)
+    for T in unit_types()
+        T <: AbstractGenerator || continue
+        for u in ids(nm, T; nw = n)
+            g = unit(nm, u; nw = n)::T
+            all_nw(c -> all(>=(0), @view c[2:end]), g.cost) || return true
+        end
+    end
+
+    return false
+end
+
+################################################################################
+# Storage — cost                                                               #
+################################################################################
+
+"""
+    dispatch_cost(nm, T, u; nw)
+
+What storage unit `u` costs at network index `nw`,
+`c^{\\text{tp}}_{u} p^{\\text{sd}}_{u}`.
+
+Degradation, priced on what the unit delivers. It is a per-index cost like any
+other, so the objective weights it by the weight of its index — with a `:weight`
+of the step duration, a price per per unit becomes a price per per-unit-hour
+without this having to know it. Zero unless `cost_throughput` was given.
+"""
+function dispatch_cost(nm::NetworkModel, ::Type{T}, u::Int; nw::Int) where {T<:AbstractStorage}
+    haskey(var(nm; nw), :psd) || return 0.0
+    st = unit(nm, u; nw)::T
+    iszero(st.cost_throughput) && return 0.0
+
+    return JuMP.@expression(nm.model, st.cost_throughput * var(nm, :psd, u; nw))
+end
+
+"""
+    period_cost(nm, T, u; nw)
+
+What storage unit `u` costs over the period beginning at network index `nw`,
+`c^{\\text{cyc}}_{u}` times the [`storage_cycles`](@ref) it turns in it.
+
+A charge per cycle is not a charge per unit of energy in different units. It
+prices the *turning* rather than the moving, so a unit that discharges half its
+capacity twice pays for one cycle while `cost_throughput` charges it for the
+whole of what it moved either way. Both are real, they measure different wear,
+and a unit may carry either or both.
+"""
+function period_cost(nm::NetworkModel, ::Type{T}, u::Int; nw::Int) where {T<:AbstractStorage}
+    haskey(var(nm; nw), :psd) || return 0.0
+    st = unit(nm, u; nw)::T
+    iszero(st.cost_cycle) && return 0.0
+
+    return JuMP.@expression(nm.model,
+        st.cost_cycle * storage_cycles(nm, st, u, period_ids(nm, nw, :time)))
 end
 
 ################################################################################
@@ -424,15 +701,22 @@ end
     redispatch_cost(nm, T, u; nw)
 
 What storage unit `u` costs at network index `nw`,
-`c^{\\uparrow}_{u} p^{\\uparrow}_{u} + c^{\\downarrow}_{u} p^{\\downarrow}_{u}`.
-Zero unless `cost_up` and `cost_dn` were given.
+`c^{\\uparrow}_{u} p^{\\uparrow}_{u} + c^{\\downarrow}_{u} p^{\\downarrow}_{u}`
+plus its throughput, see [`dispatch_cost`](@ref). Zero unless one of the three
+prices was given.
+
+The throughput is in both because degradation does not care why the energy
+moved: a battery asked to relieve a congestion wears exactly as much as one
+following a market schedule, and the volumes priced by `cost_up` and `cost_dn`
+are the deviation rather than the movement.
 """
 function redispatch_cost(nm::NetworkModel, ::Type{T}, u::Int; nw::Int) where {T<:AbstractStorage}
     haskey(var(nm; nw), :psup) || return 0.0
     st = unit(nm, u; nw)::T
 
     return JuMP.@expression(nm.model,
-        st.cost_up * var(nm, :psup, u; nw) + st.cost_dn * var(nm, :psdn, u; nw))
+        st.cost_up * var(nm, :psup, u; nw) + st.cost_dn * var(nm, :psdn, u; nw) +
+        st.cost_throughput * var(nm, :psd, u; nw))
 end
 
 """
@@ -450,6 +734,36 @@ redispatch_controls(::NetworkModel, ::Type{T}) where {T<:AbstractStorage} =
 ################################################################################
 # Storage — across windows                                                     #
 ################################################################################
+
+"""
+    interior_state(st)
+
+The storage unit `st` with its end-of-horizon target released.
+
+The counterpart of [`initial_state`](@ref), and the two are what make a rolling
+horizon mean the same thing as the problem it is rolling. One carries the start
+of a window forward from the window before it; this holds the *end* back, for a
+window whose last time step is not the last time step of the problem.
+
+Without it every window would be asked to arrive at `energy_final`, which is
+[`EnergyGuide`-style stitching](@ref Storage) by another name: a target invented
+for each batch because the batches do not talk to each other. They do talk here,
+through `initial_state`, so only the window that actually reaches the end of the
+horizon carries the target.
+"""
+interior_state(st::Storage) =
+    isnan(st.energy_final) ? st :
+    Storage(; id = st.id, name = st.name, node = st.node, ps = st.ps, qs = st.qs,
+            energy_capacity = st.energy_capacity, energy_initial = st.energy_initial,
+            energy_final = NaN,
+            charge_rating = st.charge_rating, discharge_rating = st.discharge_rating,
+            charge_efficiency = st.charge_efficiency,
+            discharge_efficiency = st.discharge_efficiency,
+            max_cycles_per_period = st.max_cycles_per_period,
+            cost_throughput = st.cost_throughput, cost_cycle = st.cost_cycle,
+            qmin = st.qmin, qmax = st.qmax,
+            cost_up = st.cost_up, cost_dn = st.cost_dn,
+            status = st.status, ext = st.ext)
 
 """
     initial_state(st, nm, n)
@@ -473,9 +787,12 @@ function initial_state(st::Storage, nm::NetworkModel, n::Int)
     return Storage(; id = st.id, name = st.name, node = st.node, ps = st.ps, qs = st.qs,
                    energy_capacity = st.energy_capacity,
                    energy_initial = JuMP.value(var(nm, :es, st.id; nw = n)),
+                   energy_final = st.energy_final,
                    charge_rating = st.charge_rating, discharge_rating = st.discharge_rating,
                    charge_efficiency = st.charge_efficiency,
                    discharge_efficiency = st.discharge_efficiency,
+                   max_cycles_per_period = st.max_cycles_per_period,
+                   cost_throughput = st.cost_throughput, cost_cycle = st.cost_cycle,
                    qmin = st.qmin, qmax = st.qmax,
                    cost_up = st.cost_up, cost_dn = st.cost_dn,
                    status = st.status, ext = st.ext)

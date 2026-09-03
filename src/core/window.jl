@@ -193,6 +193,24 @@ and the next one inherits. Only the second survives the roll.
 """
 initial_state(c::AbstractComponent, ::NetworkModel, ::Int) = c
 
+"""
+    interior_state(component)
+
+`component` as a window that does **not** reach the end of the horizon should
+see it, with every end-of-horizon target released.
+
+The counterpart of [`initial_state`](@ref), and the pair is what makes a rolling
+horizon ask the same question the problem it is rolling asks. `initial_state`
+carries the start of a window forward from the one before it; this holds the end
+back, because a window's last time step is the horizon's last time step only for
+the window that closes it.
+
+Returned unchanged unless the type says otherwise. A [`Storage`](@ref) unit with
+an `energy_final` has a method; nothing else in the package aims at anything, so
+nothing else needs one.
+"""
+interior_state(c::AbstractComponent) = c
+
 ################################################################################
 # Whether two network indices give the same model                              #
 ################################################################################

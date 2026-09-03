@@ -475,7 +475,7 @@ own objective prices its lookahead too, and is reported apart under
 
 `"dual_status"` is `FEASIBLE_POINT` only where **every** window returned duals,
 since a roll is as priced as its least priced window and a committed step whose
-window gave none has no [`nodal_price`](@ref). `"horizon"` also carries
+window gave none has no [`active_nodal_price`](@ref). `"horizon"` also carries
 `"closed"`, the number of periods a period-spanning cost was actually charged
 for, see [What a roll reports](@ref).
 

@@ -91,15 +91,16 @@ prices(result, n = 1) = [nw_solution(result, n)["node"]["$i"]["lambda"] for i in
                                LPFFormulation)
 
         # a model that has not been solved has no duals to report
-        @test nodal_price(nm, 1) === nothing
+        @test active_nodal_price(nm, 1) === nothing
 
         quiet(() -> optimize_model!(nm, OPTIMIZER))
-        @test nodal_price(nm, 1) ≈ 10.0  atol = 1e-4
-        @test nodal_price(nm, 2) ≈ 100.0 atol = 1e-4
-        @test nodal_price(nm, 2; nw = 1) ≈ nw_solution(nm.sol)["node"]["2"]["lambda"]
+        @test active_nodal_price(nm, 1) ≈ 10.0  atol = 1e-4
+        @test active_nodal_price(nm, 2) ≈ 100.0 atol = 1e-4
+        @test active_nodal_price(nm, 2; nw = 1) ≈
+              nw_solution(nm.sol)["node"]["2"]["lambda"]
 
         # and a node the model does not hold has no price rather than an error
-        @test nodal_price(nm, 99) === nothing
+        @test active_nodal_price(nm, 99) === nothing
     end
 
     @testset "a redispatch prices the measures it would have to take" begin
@@ -185,24 +186,24 @@ prices(result, n = 1) = [nw_solution(result, n)["node"]["$i"]["lambda"] for i in
     @testset "the accessors agree with the solution under both formulations" begin
         nm = instantiate_model(priced_network(; rate = 0.4), OptimalPowerFlowProblem,
                                IVRFormulation)
-        @test nodal_price(nm, 1) === nothing
-        @test reactive_price(nm, 1) === nothing
-        @test current_prices(nm, 1) === nothing
+        @test active_nodal_price(nm, 1) === nothing
+        @test reactive_nodal_price(nm, 1) === nothing
+        @test nodal_prices(nm, 1) === nothing
 
         quiet(() -> optimize_model!(nm, OPTIMIZER))
         node = nw_solution(nm.sol)["node"]
 
-        @test nodal_price(nm, 1) ≈ 10.0  atol = 1e-4
-        @test nodal_price(nm, 2) ≈ 100.0 atol = 1e-4
-        @test reactive_price(nm, 2) ≈ 0.0 atol = 1e-6
-        @test current_prices(nm, 2) == (node["2"]["lambda"], node["2"]["lambda_q"])
-        @test nodal_price(nm, 99) === nothing
+        @test active_nodal_price(nm, 1) ≈ 10.0  atol = 1e-4
+        @test active_nodal_price(nm, 2) ≈ 100.0 atol = 1e-4
+        @test reactive_nodal_price(nm, 2) ≈ 0.0 atol = 1e-6
+        @test nodal_prices(nm, 2) == (node["2"]["lambda"], node["2"]["lambda_q"])
+        @test active_nodal_price(nm, 99) === nothing
 
         # a linearized formulation has no reactive power to price, and says so
         # rather than answering zero
         lpf = instantiate_model(priced_network(), OptimalPowerFlowProblem, LPFFormulation)
         err = try
-            reactive_price(lpf, 1)
+            reactive_nodal_price(lpf, 1)
         catch e
             e
         end

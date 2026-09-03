@@ -328,7 +328,7 @@ constraint_node_voltage_limits(::NetworkModel{P,F}; nw::Int = 0
 ################################################################################
 
 """
-    nodal_price(nm, i; nw)
+    active_nodal_price(nm, i; nw)
 
 The marginal cost of one more per unit **withdrawn** at node `i` at network
 index `nw` [currency/pu/h], or `nothing` where the solve provided no duals.
@@ -353,9 +353,9 @@ rather than left to the caller.
 
 Under an [`IVRFormulation`](@ref) the balance is Kirchhoff's current law, so its
 two duals price a per unit of **current** rather than of energy — see
-[`current_prices`](@ref) for how the active and reactive price are recovered from
-them. `nodal_price` returns the active one either way, so it means the same thing
-in both formulations, and [`reactive_price`](@ref) returns the other half, which
+[`nodal_prices`](@ref) for how the active and reactive price are recovered from
+them. `active_nodal_price` returns the active one either way, so it means the same thing
+in both formulations, and [`reactive_nodal_price`](@ref) returns the other half, which
 a linearized formulation cannot produce at all.
 
 # When there is none
@@ -369,10 +369,10 @@ the result of [`build_solution`](@ref) says which case a result is in.
 Note that a [`LoadFlowProblem`](@ref) has a zero objective, so every price in one
 is zero. That is correct and says only that nothing was being minimized.
 """
-function nodal_price end
+function active_nodal_price end
 
-function nodal_price(nm::NetworkModel{P,F}, i::Int; nw::Int = nw_id_default(nm)
-                    ) where {P,F<:LPFFormulation}
+function active_nodal_price(nm::NetworkModel{P,F}, i::Int; nw::Int = nw_id_default(nm)
+                           ) where {P,F<:LPFFormulation}
     JuMP.has_duals(nm.model) || return nothing
 
     balance = get(con(nm; nw), :node_balance, nothing)
@@ -381,50 +381,50 @@ function nodal_price(nm::NetworkModel{P,F}, i::Int; nw::Int = nw_id_default(nm)
     return _balance_price(balance[i])
 end
 
-function nodal_price(nm::NetworkModel{P,F}, i::Int; nw::Int = nw_id_default(nm)
-                    ) where {P,F<:IVRFormulation}
-    λ = current_prices(nm, i; nw)
+function active_nodal_price(nm::NetworkModel{P,F}, i::Int; nw::Int = nw_id_default(nm)
+                           ) where {P,F<:IVRFormulation}
+    λ = nodal_prices(nm, i; nw)
 
     return λ === nothing ? nothing : first(λ)
 end
 
-function nodal_price(::NetworkModel{P,F}, ::Int; nw::Int = 0) where {P,F}
-    error("`nodal_price` is not defined for formulation `$F`; it needs a node balance " *
-          "whose duals can be resolved into a price for active power, and `$F` writes none.")
+function active_nodal_price(::NetworkModel{P,F}, ::Int; nw::Int = 0) where {P,F}
+    error("`active_nodal_price` is not defined for formulation `$F`; it needs a node " *
+          "balance whose duals resolve into a price for active power, and `$F` writes none.")
 end
 
 """
-    reactive_price(nm, i; nw)
+    reactive_nodal_price(nm, i; nw)
 
 The marginal cost of one more per unit of **reactive** power withdrawn at node
 `i` at network index `nw`, or `nothing` where the solve provided no duals.
 
-The other half of [`current_prices`](@ref), and something only a formulation
+The other half of [`nodal_prices`](@ref), and something only a formulation
 that carries reactive power has: a [`LPFFormulation`](@ref) drops it, so there is
 nothing there to price and asking says so rather than answering zero.
 """
-function reactive_price end
+function reactive_nodal_price end
 
-function reactive_price(nm::NetworkModel{P,F}, i::Int; nw::Int = nw_id_default(nm)
-                       ) where {P,F<:IVRFormulation}
-    λ = current_prices(nm, i; nw)
+function reactive_nodal_price(nm::NetworkModel{P,F}, i::Int; nw::Int = nw_id_default(nm)
+                             ) where {P,F<:IVRFormulation}
+    λ = nodal_prices(nm, i; nw)
 
     return λ === nothing ? nothing : last(λ)
 end
 
-reactive_price(::NetworkModel{P,F}, ::Int; nw::Int = 0
-              ) where {P,F<:AbstractLinearizedFormulation} =
+reactive_nodal_price(::NetworkModel{P,F}, ::Int; nw::Int = 0
+                    ) where {P,F<:AbstractLinearizedFormulation} =
     error("reactive power plays no part in a linearized formulation, so a node has no " *
-          "reactive price in one; `nodal_price` gives the active price it does have.")
+          "reactive price in one; `active_nodal_price` gives the one it does have.")
 
-reactive_price(::NetworkModel{P,F}, ::Int; nw::Int = 0) where {P,F} =
-    error("`reactive_price` is not defined for formulation `$F`; it needs a node balance " *
-          "in which reactive power appears.")
+reactive_nodal_price(::NetworkModel{P,F}, ::Int; nw::Int = 0) where {P,F} =
+    error("`reactive_nodal_price` is not defined for formulation `$F`; it needs a node " *
+          "balance in which reactive power appears.")
 
 """
-    current_prices(nm, i; nw)
+    nodal_prices(nm, i; nw)
 
-The active and reactive price at node `i` as a pair, recovered from the two duals
+Both prices of node `i` as the pair `(active, reactive)`, recovered from the two duals
 of the current balance, or `nothing` where they cannot be.
 
 The balance of an [`IVRFormulation`](@ref) is in current, so what its rows price
@@ -451,9 +451,11 @@ prices projected onto the current axes,
 and inverting that rotation gives both back:
 
 ```math
-\\lambda^{\\text{p}} = \\frac{v^{\\text{r}} \\lambda^{\\text{r}} + v^{\\text{i}} \\lambda^{\\text{i}}}{|v|^{2}},
+\\lambda^{\\text{p}} = \\frac{v^{\\text{r}} \\lambda^{\\text{r}}
+                        + v^{\\text{i}} \\lambda^{\\text{i}}}{|v|^{2}},
 \\qquad
-\\lambda^{\\text{q}} = \\frac{v^{\\text{i}} \\lambda^{\\text{r}} - v^{\\text{r}} \\lambda^{\\text{i}}}{|v|^{2}} .
+\\lambda^{\\text{q}} = \\frac{v^{\\text{i}} \\lambda^{\\text{r}}
+                        - v^{\\text{r}} \\lambda^{\\text{i}}}{|v|^{2}} .
 ```
 
 Reading ``\\lambda^{\\text{r}}`` as the nodal price is the mistake this exists to
@@ -465,8 +467,8 @@ It needs the solved **voltage** as well as the duals, so it is `nothing` whereve
 either is missing, and at a node whose voltage solved to zero, where the rotation
 has nothing to rotate about.
 """
-function current_prices(nm::NetworkModel{P,F}, i::Int; nw::Int = nw_id_default(nm)
-                       ) where {P,F<:IVRFormulation}
+function nodal_prices(nm::NetworkModel{P,F}, i::Int; nw::Int = nw_id_default(nm)
+                     ) where {P,F<:IVRFormulation}
     (JuMP.has_duals(nm.model) && JuMP.has_values(nm.model)) || return nothing
 
     real = get(con(nm; nw), :node_balance_real, nothing)
@@ -478,12 +480,21 @@ function current_prices(nm::NetworkModel{P,F}, i::Int; nw::Int = nw_id_default(n
                          JuMP.value(var(nm, :vr, i; nw)), JuMP.value(var(nm, :vi, i; nw)))
 end
 
+nodal_prices(::NetworkModel{P,F}, ::Int; nw::Int = 0
+            ) where {P,F<:AbstractLinearizedFormulation} =
+    error("a linearized formulation carries no reactive power, so a node has only the " *
+          "one price in one; `active_nodal_price` gives it.")
+
+nodal_prices(::NetworkModel{P,F}, ::Int; nw::Int = 0) where {P,F} =
+    error("`nodal_prices` is not defined for formulation `$F`; it needs a node balance " *
+          "in which both active and reactive power appear.")
+
 """
     _balance_price(ref)
 
 The price a node balance row carries, which is minus the dual reported for it.
 
-One place for the sign, so that [`nodal_price`](@ref) and
+One place for the sign, so that [`active_nodal_price`](@ref) and
 [`solution_node`](@ref) cannot drift apart on it.
 """
 _balance_price(ref) = -JuMP.dual(ref)
@@ -495,7 +506,7 @@ The active and reactive price behind the real and imaginary current prices `lr`
 and `li` at a node holding the voltage `vr + j vi`, or `nothing` where that
 voltage is zero.
 
-One place for the rotation, so that [`current_prices`](@ref) and
+One place for the rotation, so that [`nodal_prices`](@ref) and
 [`solution_node`](@ref) cannot drift apart on it.
 """
 function _rotate_price(lr, li, vr, vi)
@@ -524,7 +535,7 @@ function solution_node(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblem
 
         # the balance is in current here, so `lambda_real` and `lambda_imag` price
         # a per unit of current; `lambda` and `lambda_q` are the power prices
-        # behind them, see `current_prices`
+        # behind them, see `nodal_prices`
         duals && haskey(real, i) || continue
         lr, li = _balance_price(real[i]), _balance_price(imag[i])
         sol["$i"]["lambda_real"] = lr

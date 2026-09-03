@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.3.0 - component hierarchy                                                 #
 # v0.5.0 - the redispatch problem                                              #
+# v0.7.0 - an energy limit per period                                          #
 ################################################################################
 
 ################################################################################
@@ -40,6 +41,9 @@ A unit `(u, i)` that injects active and reactive power into its node.
   problem.
 - `vg`: the voltage magnitude setpoint [pu] carried through from the input data;
   the setpoint that is actually enforced is the one on the node.
+- `max_energy_per_period`: the most energy the generator may produce in one
+  period [pu·h], see [`period_ids`](@ref). `Inf`, the default, leaves it bounded
+  only by `pmax` at each step.
 - `cost`: the coefficients of the generation cost polynomial in **ascending**
   order and in per unit, so that the cost is
   `sum(cost[k] * pg^(k-1) for k in eachindex(cost))` [currency/h].
@@ -50,27 +54,37 @@ A unit `(u, i)` that injects active and reactive power into its node.
 - `status`: whether the generator is in service.
 - `ext`: free-form storage.
 
-Every field but `id`, `name`, `node` and `ext` may be given as a
-[`NetworkVector`](@ref). Note that a network dependent `cost` is a
+Every field but `id`, `name`, `node`, `max_energy_per_period` and `ext` may be
+given as a [`NetworkVector`](@ref). The energy limit is one number per period
+rather than one per network index, so it is not among them. Note that a network dependent `cost` is a
 `NetworkVector{Vector{Float64}}`: the plain `Vector{Float64}` is the polynomial,
 not a profile.
 """
 Base.@kwdef struct Generator <: AbstractGenerator
-    id     ::Int
-    name   ::String                          = ""
-    node   ::Int
-    pg     ::NetworkQuantity{Float64}        = 0.0
-    qg     ::NetworkQuantity{Float64}        = 0.0
-    pmin   ::NetworkQuantity{Float64}        = 0.0
-    pmax   ::NetworkQuantity{Float64}        = Inf
-    qmin   ::NetworkQuantity{Float64}        = -Inf
-    qmax   ::NetworkQuantity{Float64}        = Inf
-    vg     ::NetworkQuantity{Float64}        = 1.0
-    cost   ::NetworkQuantity{Vector{Float64}} = [0.0]
-    cost_up::NetworkQuantity{Float64}        = NaN
-    cost_dn::NetworkQuantity{Float64}        = NaN
-    status ::NetworkQuantity{Bool}           = true
-    ext    ::Dict{Symbol,Any}                = Dict{Symbol,Any}()
+    id                   ::Int
+    name                 ::String                           = ""
+    node                 ::Int
+    pg                   ::NetworkQuantity{Float64}         = 0.0
+    qg                   ::NetworkQuantity{Float64}         = 0.0
+    pmin                 ::NetworkQuantity{Float64}         = 0.0
+    pmax                 ::NetworkQuantity{Float64}         = Inf
+    qmin                 ::NetworkQuantity{Float64}         = -Inf
+    qmax                 ::NetworkQuantity{Float64}         = Inf
+    vg                   ::NetworkQuantity{Float64}         = 1.0
+    max_energy_per_period::Float64                          = Inf
+    cost                 ::NetworkQuantity{Vector{Float64}} = [0.0]
+    cost_up              ::NetworkQuantity{Float64}         = NaN
+    cost_dn              ::NetworkQuantity{Float64}         = NaN
+    status               ::NetworkQuantity{Bool}            = true
+    ext                  ::Dict{Symbol,Any}                 = Dict{Symbol,Any}()
+
+    function Generator(id, name, node, pg, qg, pmin, pmax, qmin, qmax, vg,
+                       max_energy_per_period, cost, cost_up, cost_dn, status, ext)
+        max_energy_per_period >= 0 ||
+            throw(ArgumentError("generator $id has a negative energy limit"))
+        return new(id, name, node, pg, qg, pmin, pmax, qmin, qmax, vg,
+                   max_energy_per_period, cost, cost_up, cost_dn, status, ext)
+    end
 end
 
 register_unit_type!(Generator)
@@ -207,6 +221,64 @@ function _constraint_generator_power(nm::NetworkModel, ::Type{T}, nw::Int) where
     for u in ids(nm, T; nw)
         power[u] = constraint_unit_power!(nm, u, pg[u], qg[u]; nw)
     end
+
+    return nothing
+end
+
+################################################################################
+# Generator — constraints across network indices                               #
+################################################################################
+
+"""
+    constraint_unit_coupling(nm, T)
+
+Hold every generator that carries one to its energy limit, once per period,
+
+```math
+\\sum_{n \\in \\mathcal{P}} \\Delta t_{n} \\, p^{\\text{g}}_{u,n}
+    \\le E^{\\text{max}}_{u} ,
+```
+
+with the period `𝒫` running over the `:time` coordinates grouped with the index,
+see [`period_ids`](@ref), and every other coordinate held fixed — so a problem
+posed over contingencies gets one limit per period *per contingency*, and a
+`:time` dimension with no grouping gives one limit over the whole horizon.
+
+This is what a fuel allocation, a water licence or an emissions allowance looks
+like once it reaches the model: a bound on the *energy* of a period that says
+nothing about how the generator spends it within one. `pmax` cannot express it —
+a plant that may run flat out for four hours of a day and not at all for the
+other twenty has the same `pmax` as one that may run all day.
+
+The sum is over the net output, so a generator with a negative `pmin` has what it
+absorbs counted against what it produced. A limit of infinity — the default — is
+the absence of a row rather than a row with an infinite right hand side.
+"""
+function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
+                                 ) where {P<:AbstractDispatchProblem,F<:AbstractFormulationType,
+                                          T<:AbstractGenerator}
+    any(c -> c isa T && isfinite(c.max_energy_per_period), values(units(network(nm)))) ||
+        return nothing
+    require_time_dimension(nm, T)
+
+    limit = Dict{Tuple{Int,Int},Any}()
+
+    for n in nw_ids(nm)
+        is_first_period_id(nm, n, :time) || continue
+        window = period_ids(nm, n, :time)
+
+        for u in ids(nm, T; nw = n)
+            g = unit(nm, u; nw = n)::T
+            isfinite(g.max_energy_per_period) || continue
+
+            limit[(u, n)] = constrain!(nm, :generator_energy, u, JuMP.@build_constraint(
+                sum(time_step(nm, m) * var(nm, :pg, u; nw = m)
+                    for m in window if haskey(var(nm, :pg; nw = m), u); init = 0.0) <=
+                g.max_energy_per_period); nw = n)
+        end
+    end
+
+    isempty(limit) || (nm.ext[:generator_energy] = limit)
 
     return nothing
 end

@@ -393,7 +393,8 @@ function storage_cycles(nm::NetworkModel, st::AbstractStorage, u::Int, window)
     iszero(capacity) && return 0.0
 
     return JuMP.@expression(nm.model,
-        sum(time_step(nm, m) * var(nm, :psd, u; nw = m) for m in window; init = 0.0) / capacity)
+        sum(time_step(nm, m) * var(nm, :psd, u; nw = m)
+            for m in window if haskey(var(nm, :psd; nw = m), u); init = 0.0) / capacity)
 end
 
 """
@@ -428,7 +429,8 @@ function constraint_storage_cycles!(nm::NetworkModel, ::Type{T}) where {T<:Abstr
 
             capacity = nw_value(nm, st.energy_capacity, n)
             limit[(u, n)] = constrain!(nm, :storage_cycles, u, JuMP.@build_constraint(
-                sum(time_step(nm, m) * var(nm, :psd, u; nw = m) for m in window; init = 0.0) <=
+                sum(time_step(nm, m) * var(nm, :psd, u; nw = m)
+                    for m in window if haskey(var(nm, :psd; nw = m), u); init = 0.0) <=
                 st.max_cycles_per_period * capacity); nw = n)
         end
     end

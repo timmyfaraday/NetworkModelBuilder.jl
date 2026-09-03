@@ -249,6 +249,30 @@ storage_path(result, steps) =
      [nw_solution(result, n)["unit"]["3"]["psd"] for n in steps],
      [nw_solution(result, n)["unit"]["3"]["es"]  for n in steps])
 
+"""
+A two node network whose cheap generator carries an energy limit, with an
+expensive one behind the load to pick up whatever the limit will not let it
+produce. The linearized formulation is lossless, so every number below is exact.
+"""
+function allocation_network(prices, limit; period::Union{Nothing,Int} = nothing)
+    dim = Dimension(:time => length(prices))
+    period === nothing || (dim_meta(dim, :time)[:period_length] = period)
+
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
+                               2 => Node(; id = 2))
+    E = Dict{Int,AbstractEdge}(1 => Branch(; id = 1, terminals = [1, 2],
+                                           r = 0.0, x = 0.01))
+    U = Dict{Int,AbstractUnit}(
+        1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
+                       max_energy_per_period = limit,
+                       cost = nw_vector(dim, [[0.0, p] for p in prices])),
+        2 => Generator(; id = 2, node = 2, pmax = 5.0, qmin = -5.0, qmax = 5.0,
+                       cost = [0.0, 200.0]),
+        3 => FixedLoad(; id = 3, node = 2, pd = 0.20, qd = 0.05))
+
+    return NetworkData(Network(I, E, U; dim); name = "allocation", baseMVA = 100.0)
+end
+
 const PRICES = [10.0, 100.0, 50.0]
 
 @testset "units that couple network indices" begin
@@ -584,10 +608,64 @@ const PRICES = [10.0, 100.0, 50.0]
         @test interior_state(Node(; id = 1)) isa Node
     end
 
+
+    # Four steps of 0.2 pu, cheap-dear-cheap-dear at 10 and 100, with a generator
+    # at 200 behind the load to make up whatever the limit will not allow.
+    #
+    #   no limit        : 10(.2) + 100(.2) + 10(.2) + 100(.2)            = 44
+    #   0.3 per horizon : the 0.3 goes to the two cheap steps, 200 pays for
+    #                     0.2 + 0.1 + 0.2 of the rest                     = 103
+    #   0.3 per day     : 0.3 in each half, 200 pays for 0.1 in each      = 64
+    @testset "a generator can be given an energy limit per period" begin
+        prices = [10.0, 100.0, 10.0, 100.0]
+        cheap(result) = [nw_solution(result, n)["unit"]["1"]["pg"] for n in 1:4]
+
+        free = quiet(() -> solve_model(allocation_network(prices, Inf),
+                                       OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
+        @test cheap(free) ≈ [0.2, 0.2, 0.2, 0.2] atol = 1e-6
+        @test free["objective"] ≈ 44.0 atol = 1e-4
+
+        # one period spanning the horizon: the allowance goes to the cheap steps
+        loose = quiet(() -> solve_model(allocation_network(prices, 0.3),
+                                        OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
+        pg = cheap(loose)
+        @test sum(pg) ≈ 0.3 atol = 1e-6
+        @test pg[2] < 1e-6
+        @test pg[4] < 1e-6
+        @test loose["objective"] ≈ 103.0 atol = 1e-4
+
+        # grouped into two days, it gets the same allowance in each of them
+        grouped = quiet(() -> solve_model(allocation_network(prices, 0.3; period = 2),
+                                          OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
+        pg = cheap(grouped)
+        @test sum(pg[1:2]) ≈ 0.3 atol = 1e-6
+        @test sum(pg[3:4]) ≈ 0.3 atol = 1e-6
+        @test grouped["objective"] ≈ 64.0 atol = 1e-4
+
+        # one row per limited generator per period, and none for the others
+        nm = instantiate_model(allocation_network(prices, 0.3; period = 2),
+                               OptimalPowerFlowProblem, LPFFormulation)
+        @test haskey(_NMB.registered_constraints(nm), (1, :generator_energy, 1))
+        @test haskey(_NMB.registered_constraints(nm), (3, :generator_energy, 1))
+        @test !haskey(_NMB.registered_constraints(nm), (2, :generator_energy, 1))
+        @test !haskey(_NMB.registered_constraints(nm), (1, :generator_energy, 2))
+
+        # an infinite limit is the absence of a row, not a row against infinity
+        open = instantiate_model(allocation_network(prices, Inf), OptimalPowerFlowProblem,
+                                 LPFFormulation)
+        @test !haskey(_NMB.registered_constraints(open), (1, :generator_energy, 1))
+
+        @test_throws ArgumentError Generator(; id = 1, node = 1,
+                                             max_energy_per_period = -1.0)
+        @test Generator(; id = 1, node = 1).max_energy_per_period == Inf
+    end
+
     @testset "a time coupled unit says so when there is no time" begin
         for cmp in (FlexibleLoad(; id = 3, node = 2, pd_nominal = 0.1, pd_max = 0.2),
                     Storage(; id = 3, node = 2, energy_capacity = 0.5,
-                            charge_rating = 0.2, discharge_rating = 0.2))
+                            charge_rating = 0.2, discharge_rating = 0.2),
+                    Generator(; id = 3, node = 2, pmax = 1.0,
+                              max_energy_per_period = 0.5))
             I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF), 2 => Node(; id = 2))
             E = Dict{Int,AbstractEdge}(1 => Branch(; id = 1, terminals = [1, 2],
                                                    r = 0.001, x = 0.01))

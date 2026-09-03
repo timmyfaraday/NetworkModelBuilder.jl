@@ -41,7 +41,7 @@ build_model!(nm::NetworkModel{P,F}) where {P<:RedispatchProblem,F<:LPFFormulatio
     _build_redispatch!(nm)
 
 The body both formulations share, the optimal power flow builder plus
-[`constraint_redispatch_control`](@ref).
+[`constraint_redispatch_control`](@ref) and [`constraint_overload_peak`](@ref).
 
 Every call in it is a dispatch point, so the definition of the problem says
 nothing about the formulation it is being built in, and nothing about which
@@ -65,6 +65,7 @@ function _build_redispatch!(nm::NetworkModel)
     constraint_edge_coupling(nm)
     constraint_unit_coupling(nm)
     constraint_redispatch_control(nm)
+    constraint_overload_peak(nm)
 
     objective(nm)
 
@@ -147,6 +148,84 @@ function _control_variable(nm::NetworkModel, key::Symbol, id::Int, n::Int)
     entry = container[key]
 
     return haskey(entry, id) ? entry[id] : nothing
+end
+
+################################################################################
+# Redispatch — the peak of a period                                            #
+################################################################################
+
+"""
+    constraint_overload_peak(nm)
+
+Bound the peak overload of every monitored edge over every period from below by
+the overload it carries at each network index of that period,
+
+```math
+o_{e,m} \\le \\hat{o}_{e,n} \\quad \\forall m \\in \\mathcal{P}(n) ,
+```
+
+with the period `𝒫` running over the `:time` coordinates grouped with `n`, see
+[`period_ids`](@ref), and every other coordinate held fixed — so a problem posed
+over contingencies as well gets one peak per period *per contingency*, which is
+what makes each contingency a self-contained day.
+
+The peak variable belongs to the first network index of its period, which is
+where a quantity that spans indices has to be registered to survive a rebuild;
+nothing else about it is per index. It is bounded from below and priced from
+above, so the objective pulls it down onto the largest overload of the period
+and no binary is needed to make the maximum tight.
+
+A no-op unless the setup carries an [`OverloadPrice`](@ref) with a non-zero
+`per_peak`, since a peak nothing pays for is a free variable and a row per index
+for nothing.
+"""
+function constraint_overload_peak(nm::NetworkModel)
+    price = overload_price(nm)
+    price === nothing && return nothing
+    iszero(price.per_peak) && return nothing
+    has_dim(nm, :time) ||
+        throw(ArgumentError("a `per_peak` overload price charges the worst overload of a " *
+                            "period, but this problem has no `:time` dimension for periods " *
+                            "to group; give it one with " *
+                            "`set_dimension(data, Dimension(:time => n))`"))
+
+    peak = Dict{Tuple{Int,Int},Any}()
+
+    for n in nw_ids(nm)
+        is_first_period_id(nm, n, :time) || continue
+        window = period_ids(nm, n, :time)
+        monitored = _overloaded_edges(nm, window)
+        isempty(monitored) && continue
+
+        variable_container!(nm, :olp; nw = n)
+        for e in monitored
+            olp = variable!(nm, :olp, e; nw = n, base_name = "$(n)_olp[$e]",
+                            start = 0.0, lower = 0.0)
+            for m in window
+                haskey(var(nm; nw = m), :ol) || continue
+                ol = var(nm, :ol; nw = m)
+                haskey(ol, e) || continue
+
+                peak[(e, m)] = constrain!(nm, :overload_peak, (e, m),
+                                          JuMP.@build_constraint(ol[e] <= olp); nw = n)
+            end
+        end
+    end
+
+    nm.ext[:overload_peak] = peak
+
+    return nothing
+end
+
+"the edges carrying an overload variable at any network index of `window`, sorted"
+function _overloaded_edges(nm::NetworkModel, window)
+    found = Int[]
+    for m in window
+        haskey(var(nm; nw = m), :ol) || continue
+        union!(found, keys(var(nm, :ol; nw = m)))
+    end
+
+    return sort!(found)
 end
 
 ################################################################################
@@ -239,6 +318,74 @@ function overload_cost(nm::NetworkModel; nw::Int = nw_id_default(nm))
     return JuMP.@expression(nm.model,
                             price.per_energy *
                             sum(ol[e] for e in sort!(collect(keys(ol))); init = 0.0))
+end
+
+"""
+    horizon_cost(nm)
+    horizon_cost(nm, ids)
+
+What the peak overloads of `nm` cost, as a JuMP expression or `0.0`.
+
+```math
+c^{\\text{peak}} \\sum_{n} w^{\\text{p}}_{n} \\sum_{e} \\hat{o}_{e,n}
+```
+
+summed over the first network index of every period and every monitored edge,
+with ``w^{\\text{p}}`` the [`period_weight`](@ref). The duration of a step is
+deliberately absent — a peak is a power, not an energy, and multiplying it by an
+hour would make a day of quarter-hours cost a quarter of a day of hours for the
+same worst flow. The probability of a contingency is deliberately present, for
+the same reason [`network_cost`](@ref) carries it: a peak reached only in a
+contingency is expected to cost what it costs times how likely that contingency
+is.
+
+`ids` restricts the sum to the periods lying **entirely** within it, which is
+what [`solve_rolling_horizon`](@ref) charges a committed step.
+"""
+horizon_cost(nm::NetworkModel{P,F}) where {P<:RedispatchProblem,F} =
+    _overload_peak_cost(nm, nothing)
+
+horizon_cost(nm::NetworkModel{P,F}, ids::AbstractVector{Int}) where {P<:RedispatchProblem,F} =
+    _overload_peak_cost(nm, ids)
+
+function _overload_peak_cost(nm::NetworkModel, ids)
+    price = overload_price(nm)
+    price === nothing && return 0.0
+    iszero(price.per_peak) && return 0.0
+
+    total = JuMP.AffExpr(0.0)
+
+    for n in nw_ids(nm)
+        haskey(var(nm; nw = n), :olp) || continue
+        ids === nothing || all(in(ids), period_ids(nm, n, :time)) || continue
+
+        olp = var(nm, :olp; nw = n)
+        c   = price.per_peak * period_weight(nm, n, :time)
+        for e in sort!(collect(keys(olp)))
+            JuMP.add_to_expression!(total, c, olp[e])
+        end
+    end
+
+    return total
+end
+
+"""
+    solution_overload_peak(nm)
+
+The peak overload of every monitored edge in every period of a solved model,
+keyed by `(edge, first network index of the period)`.
+"""
+function solution_overload_peak(nm::NetworkModel)
+    peaks = Dict{Tuple{Int,Int},Float64}()
+
+    for n in nw_ids(nm)
+        haskey(var(nm; nw = n), :olp) || continue
+        for (e, v) in var(nm, :olp; nw = n)
+            peaks[(e, n)] = JuMP.value(v)
+        end
+    end
+
+    return peaks
 end
 
 ################################################################################
@@ -486,6 +633,7 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
     held     = nothing
     before   = Int[]
     rebuilt  = 0
+    closes   = 0
 
     for first in 1:step:steps
         last      = min(first + horizon - 1, steps)
@@ -520,11 +668,17 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
         push!(windows, record)
 
         # keep what the window committed, under the network indices it came from
+        settled = Int[]
         for m in nw_ids(nm)
             coordinates(nm, m).time in 1:length(committed) || continue
             solution["$(kept[m])"] = nm.sol["solution"]["nw"]["$m"]
             cost += network_weight(nm, m) * _value(network_cost(nm, m))
+            push!(settled, m)
         end
+
+        # and pay for the periods this window both saw whole and committed whole
+        closed = _closed_period_ids(nm, state, kept, settled)
+        isempty(closed) || (cost += _value(horizon_cost(nm, closed)); closes += 1)
 
         first + step <= steps || break
 
@@ -535,6 +689,8 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
         warm_start && (reuse ? _shift_starts!(nm, step) :
                                (previous = _overlap_values(nm, kept, step)))
     end
+
+    _warn_unpriced_periods(held, closes)
 
     result = Dict{String,Any}(
         "name"               => data.name,
@@ -547,7 +703,7 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
         "solve_time"         => elapsed,
         "objective"          => cost,
         "horizon"            => Dict{String,Any}("horizon" => horizon, "step" => step,
-                                                 "built"   => rebuilt,
+                                                 "built"   => rebuilt, "closed" => closes,
                                                  "window"  => windows))
 
     isempty(solution) || (result["solution"] = Dict{String,Any}("nw" => solution))
@@ -557,6 +713,50 @@ end
 
 solve_rolling_horizon(file::AbstractString, P::Type, F::Type, optimizer; kwargs...) =
     solve_rolling_horizon(parse_file(file), P, F, optimizer; kwargs...)
+
+"""
+    _closed_period_ids(nm, state, kept, settled)
+
+The network indices of the window `nm` whose period it both **holds whole** and
+committed in full, sorted.
+
+Two things have to be true before a period-spanning cost may be charged to a
+committed step, and only one of them can be seen from inside the window. That
+the period was committed in full is `settled`. That the window ever saw the
+whole period is not: a window renumbers what it cut, so its own last coordinate
+of a period is its last coordinate of *the part it holds*, which is why the
+length is compared against the period of the original problem. A window that saw
+three hours of a day and committed all three has not closed that day.
+"""
+function _closed_period_ids(nm::NetworkModel, state::NetworkData, kept::Vector{Int},
+                            settled::Vector{Int})
+    has_dim(nm, :time) || return Int[]
+
+    closed = Int[]
+    for m in settled
+        is_last_period_id(nm, m, :time) || continue
+        here = period_ids(nm, m, :time)
+        length(here) == length(period_ids(state, kept[m], :time)) || continue
+        all(in(settled), here) || continue
+        append!(closed, here)
+    end
+
+    return sort!(unique!(closed))
+end
+
+"warn where a roll carries a period-spanning cost that no window ever closed"
+function _warn_unpriced_periods(nm, closes::Int)
+    (nm === nothing || closes > 0) && return nothing
+    price = overload_price(nm)
+    (price === nothing || iszero(price.per_peak)) && return nothing
+
+    @warn "no window both saw a whole period and committed it, so the peak overload " *
+          "charge is in the objective of every window and in none of the cost this roll " *
+          "reports; a `horizon` of at least one period and a `step` that closes one is " *
+          "what makes a peak chargeable across a roll"
+
+    return nothing
+end
 
 """
     _rolling_state(data)

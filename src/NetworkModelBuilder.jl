@@ -157,6 +157,7 @@ module NetworkModelBuilder
     export time_step, require_time_dimension
     export objective, objective_generation_cost, network_weight, default_weight
     export network_cost, minimize_network_cost, dispatch_cost
+    export horizon_cost, period_weight
     export objective_redispatch_cost
 
     # export — solution
@@ -169,7 +170,8 @@ module NetworkModelBuilder
     export is_monitored, monitored_edges, overload_price, overload_cost
     export control_mode, is_preventive, is_corrective
     export redispatch_controls, redispatch_cost, redispatch_price
-    export constraint_redispatch_control
+    export constraint_redispatch_control, constraint_overload_peak
+    export solution_overload_peak
 
     # export — the rolling horizon
     export window, window_indices, initial_state, solve_rolling_horizon

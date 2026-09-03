@@ -89,7 +89,9 @@ objective_generation_cost
 network_cost
 minimize_network_cost
 dispatch_cost
+horizon_cost
 network_weight
+period_weight
 default_weight
 ```
 

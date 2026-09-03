@@ -15,10 +15,10 @@
 ################################################################################
 
 """
-    OverloadPrice(; per_energy)
+    OverloadPrice(; per_energy, per_peak)
 
-What exceeding the rating of a monitored edge costs, per per-unit of excess at
-one network index.
+What exceeding the rating of a monitored edge costs: per per-unit of excess at
+one network index, and per per-unit of the worst excess of a period.
 
 Giving a [`Redispatch`](@ref) one of these turns the rating from a bound the
 problem may not cross into a quantity the problem pays for: an infeasible
@@ -35,24 +35,43 @@ priced two ways is two questions about one set of data.
 - `per_energy`: the cost of one per-unit of overload at one network index, which
   the objective weights like any other per-index cost — so with a `:weight` of
   the step duration it is a cost per per-unit-hour.
+- `per_peak`: the cost of one per-unit of the **worst** overload of a period,
+  charged once per period per state of the world. Zero, the default, writes no
+  peak at all.
 
-A charge on the *worst* overload of a period rather than on each index is a cost
-that spans network indices, which [`network_cost`](@ref) has no term for; it
-waits on that hook rather than on this type.
+The two price different things and are meant to be used together or apart. An
+overload that is small but constant and one that is brief but severe cost the
+same per energy and are not the same event; a peak charge is what says so. It is
+a cost that spans network indices, so it is paid through
+[`horizon_cost`](@ref) rather than [`network_cost`](@ref) — unweighted by the
+duration of a step, since a peak is not a rate, and weighted by the probability
+of the contingency it occurs in, see [`period_weight`](@ref).
+
+A non-zero `per_peak` needs a `:time` dimension to hold the periods, and the
+periods themselves are declared on that dimension, see [`period_ids`](@ref).
+With no grouping declared there is one period spanning the whole horizon, and a
+peak charge is then a charge on the worst overload of the problem.
 """
 Base.@kwdef struct OverloadPrice
     per_energy::Float64
+    per_peak  ::Float64 = 0.0
 
-    function OverloadPrice(per_energy)
-        per_energy >= 0 ||
-            throw(ArgumentError("an overload price of $per_energy is negative, which pays the problem to overload an edge"))
-        isfinite(per_energy) ||
-            throw(ArgumentError("an overload price of $per_energy is not a way to write a hard rating, leave `overload` at `nothing` for that"))
-        return new(per_energy)
+    function OverloadPrice(per_energy, per_peak)
+        for (name, price) in ((:per_energy, per_energy), (:per_peak, per_peak))
+            price >= 0 ||
+                throw(ArgumentError("an overload price of $price is negative, which pays the problem to overload an edge"))
+            isfinite(price) ||
+                throw(ArgumentError("an overload price of $price is not a way to write a hard rating, leave `overload` at `nothing` for that"))
+        end
+        return new(per_energy, per_peak)
     end
 end
 
-Base.show(io::IO, op::OverloadPrice) = print(io, "OverloadPrice(", op.per_energy, " per pu)")
+function Base.show(io::IO, op::OverloadPrice)
+    print(io, "OverloadPrice(", op.per_energy, " per pu")
+    iszero(op.per_peak) || print(io, ", ", op.per_peak, " per pu of peak")
+    print(io, ")")
+end
 
 """
     Redispatch(; monitored, control, exception, overload)
@@ -134,7 +153,11 @@ function Base.show(io::IO, rd::Redispatch)
                              "$(length(rd.monitored)) edge(s) monitored",
           ", ", rd.control)
     isempty(rd.exception) || print(io, " with $(length(rd.exception)) exception(s)")
-    rd.overload === nothing || print(io, ", overload at ", rd.overload.per_energy, " per pu")
+    if rd.overload !== nothing
+        print(io, ", overload at ", rd.overload.per_energy, " per pu")
+        iszero(rd.overload.per_peak) ||
+            print(io, " and ", rd.overload.per_peak, " per pu of peak")
+    end
     print(io, ")")
 end
 

@@ -62,6 +62,33 @@ default_weight(dim::Dimension, name::Symbol) =
     name === :contingency ? 1 / dim_length(dim, :contingency) : 1.0
 
 """
+    period_weight(nm, n[, name])
+
+The weight a **period** of dimension `name` holding network index `n` carries:
+the product of the `:weight` of every coordinate of `n` *except* the one along
+`name`.
+
+[`network_weight`](@ref) is the wrong weight for a cost that spans a period,
+because the weight of a network index carries the duration of a time step and a
+quantity that is not a rate has no business being multiplied by an hour. What
+such a cost can and must carry is the weight of the *state of the world* it sits
+in: a peak reached only in a contingency costs what it costs times the
+probability of that contingency, for exactly the reason
+[`default_weight`](@ref) gives. Leaving `name` out of the product is what
+separates the two.
+"""
+function period_weight(nm::NetworkModel, n::Int, name::Symbol = :time)
+    dim = dimension(nm)
+    w   = 1.0
+    for other in dim_names(dim)
+        other === name && continue
+        w *= dim_prop(dim, n, other, :weight, default_weight(dim, other))
+    end
+
+    return w
+end
+
+"""
     objective(nm)
 
 Set the objective selected by the problem type of `nm`.
@@ -143,20 +170,51 @@ function network_cost(nm::NetworkModel{P,F}, n::Int) where {P<:OptimalPowerFlowP
 end
 
 """
+    horizon_cost(nm)
+    horizon_cost(nm, ids)
+
+The objective contribution that belongs to no single network index, as a JuMP
+expression or a number, and zero for a problem that has none.
+
+[`network_cost`](@ref) prices one network index and
+[`minimize_network_cost`](@ref) weights it by that index's weight. A cost over a
+*period* — the worst overload of a day, a charge per storage cycle — has no
+index to be attributed to and no weight that is right for it, because the
+quantity is not a rate. This is where it goes instead, added to the objective
+unweighted: what weighting a period-spanning cost does deserve is
+[`period_weight`](@ref), and applying it is the business of whatever writes the
+term, not of the sum that holds it.
+
+The second form is what a **rolling horizon** reports. A window models more
+network indices than it commits, so a period-spanning cost belongs to a
+committed step only where the whole period is inside it: `ids` is the set of
+network indices a caller is willing to pay for, and the answer is the part of
+the horizon cost whose periods lie entirely within it. A period the roll never
+closes is never charged, which is the honest answer rather than a prorated one —
+a peak is not a rate and cannot be cut into hours.
+"""
+function horizon_cost end
+
+horizon_cost(::NetworkModel{P,F}) where {P,F} = 0.0
+horizon_cost(::NetworkModel{P,F}, ::AbstractVector{Int}) where {P,F} = 0.0
+
+"""
     minimize_network_cost(nm)
 
 Set the objective to the weighted sum of [`network_cost`](@ref) over every
-network index,
+network index, plus whatever [`horizon_cost`](@ref) spans them,
 
 ```math
-\\min\\quad \\sum_{n \\in \\mathcal{N}} w_{n} \\, c_{n} ,
+\\min\\quad \\sum_{n \\in \\mathcal{N}} w_{n} \\, c_{n} + c^{\\text{h}} ,
 ```
 
-with `w_n` the weight of network index `n`, see [`network_weight`](@ref).
+with `w_n` the weight of network index `n`, see [`network_weight`](@ref). The
+second term is zero for every problem that does not write one.
 """
 minimize_network_cost(nm::NetworkModel) =
     JuMP.@objective(nm.model, Min,
-        sum(network_weight(nm, n) * network_cost(nm, n) for n in nw_ids(nm); init = 0.0))
+        sum(network_weight(nm, n) * network_cost(nm, n) for n in nw_ids(nm); init = 0.0) +
+        horizon_cost(nm))
 
 """
     objective_generation_cost(nm)

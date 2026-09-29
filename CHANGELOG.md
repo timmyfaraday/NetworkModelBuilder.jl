@@ -10,6 +10,15 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+## [0.9.7] - 2026-09-29
+
+### Added
+
+- `test/powermodels.jl`: a live cross-check against PowerModels.jl v0.21 on
+  `case14` (load flow, optimal power flow in both formulations), alongside
+  the existing frozen-value regression tests rather than instead of them.
+  PowerModels.jl is a test-only dependency, like Ipopt and HiGHS.
+
 ## [0.9.6] - 2026-09-29
 
 ### Added

@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.9.1 - a bare case file name is found from the bundled test data           #
 ################################################################################
 
 @testset "matpower" begin
@@ -80,8 +81,16 @@
         @test edge(net, 6).ta ≈ deg2rad(-1.0)
     end
 
+    @testset "a bare case file name resolves from anywhere" begin
+        cd(BASE_DIR) do  # a freshly-`]dev`'d user's REPL starts here, not in test/data/matpower/
+            data = quiet(() -> parse_file("case14.m"))
+            @test data.name == "case14"
+        end
+    end
+
     @testset "errors" begin
         @test_throws ArgumentError parse_file("nowhere.json")
         @test_throws ArgumentError parse_matpower(joinpath(@__DIR__, "data", "nothing.m"))
+        @test_throws ArgumentError parse_matpower("truly-nowhere.m")
     end
 end

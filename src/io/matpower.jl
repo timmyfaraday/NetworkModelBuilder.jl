@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.9.1 - a bare case file name is found from the bundled test data           #
 ################################################################################
 
 ################################################################################
@@ -42,6 +43,10 @@ component records where it came from in `ext[:source_id]`.
 All quantities are converted to per unit on `baseMVA` and all angles to radians.
 Bus types are corrected against the generators actually in service, with a
 warning where the file and the generators disagree.
+
+A `path` that does not exist and is not absolute is also looked up among the
+bundled case files under `test/data/matpower/`, so `"case14.m"` resolves from
+any working directory.
 """
 function parse_matpower(path::AbstractString)
     mp = _read_matpower(path)
@@ -54,6 +59,10 @@ end
 ################################################################################
 
 function _read_matpower(path::AbstractString)
+    if !isfile(path) && !isabspath(path)
+        bundled = joinpath(BASE_DIR, "test", "data", "matpower", path)
+        isfile(bundled) && (path = bundled)
+    end
     isfile(path) || throw(ArgumentError("`$path` is not a file"))
     txt = read(path, String)
 

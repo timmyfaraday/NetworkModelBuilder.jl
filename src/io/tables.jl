@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.6.0 - initial implementation                                              #
+# v0.9.2 - a column-length mismatch is a clear error, not a BoundsError        #
 ################################################################################
 
 ################################################################################
@@ -34,6 +35,19 @@ _column(tbl, c::Symbol) = getproperty(tbl, c)
 
 "the number of rows of a table"
 _nrows(tbl) = (cols = _columns(tbl); isempty(cols) ? 0 : length(_column(tbl, first(cols))))
+
+"throw if the columns of `tbl` disagree on how many rows they have"
+function _check_lengths(tbl, table::AbstractString)
+    cols = _columns(tbl)
+    isempty(cols) && return nothing
+
+    lens = [length(_column(tbl, c)) for c in cols]
+    allequal(lens) ||
+        throw(ArgumentError("the `$table` table has columns of unequal length: " *
+                            join(("`$c` has $l" for (c, l) in zip(cols, lens)), ", ")))
+
+    return nothing
+end
 
 "whether a cell holds nothing, which is how a table says *take the default*"
 _blank(x) = x === missing || x === nothing
@@ -157,6 +171,8 @@ function _parse_components(tbl, family::Symbol, ::Type{S}, lookup, fields,
     kind = :component in cols ? _column(tbl, :component) : nothing
     kind === nothing && default === nothing &&
         throw(ArgumentError("the `$family` table has no `component` column, which is what names the type of each row"))
+
+    _check_lengths(tbl, string(family))
 
     out  = Dict{Int,S}()
     data = [c for c in cols if c !== :id && c !== :component]
@@ -290,6 +306,8 @@ function _parse_profiles(tbl, dim::Dimension)
                                 "`family`, `id`, `field`, `nw` and `value`"))
     end
 
+    _check_lengths(tbl, "profile")
+
     family = _column(tbl, :family)
     ids    = _column(tbl, :id)
     fld    = _column(tbl, :field)
@@ -359,6 +377,8 @@ function _parse_dimension(tbl)
         c in cols ||
             throw(ArgumentError("the `dimension` table has no `$c` column"))
     end
+
+    _check_lengths(tbl, "dimension")
 
     names  = _column(tbl, :name)
     coords = _column(tbl, :coordinate)

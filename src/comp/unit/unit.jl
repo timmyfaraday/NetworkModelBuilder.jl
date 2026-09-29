@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.9.4 - registering a unit type is safe from concurrent threads             #
 ################################################################################
 
 ################################################################################
@@ -14,6 +15,7 @@
 ################################################################################
 
 const _UNIT_TYPES = DataType[]
+const _UNIT_TYPES_LOCK = ReentrantLock()
 
 """
     register_unit_type!(T)
@@ -23,7 +25,9 @@ Record the concrete unit type `T` so that [`variable_unit`](@ref),
 [`register_edge_type!`](@ref) for the rationale.
 """
 function register_unit_type!(::Type{T}) where {T<:AbstractUnit}
-    T in _UNIT_TYPES || push!(_UNIT_TYPES, T)
+    lock(_UNIT_TYPES_LOCK) do
+        T in _UNIT_TYPES || push!(_UNIT_TYPES, T)
+    end
     return nothing
 end
 

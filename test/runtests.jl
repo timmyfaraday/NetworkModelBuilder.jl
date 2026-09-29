@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.9.4 - the thread-safety regression tests                                  #
 ################################################################################
 
 using Test
@@ -49,5 +50,6 @@ quiet(f) = Logging.with_logger(f, Logging.NullLogger())
     include("price.jl")
     include("multinetwork.jl")
     include("multiterminal.jl")
+    include("thread_safety.jl")
     include("docs.jl")
 end

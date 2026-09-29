@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
 # v0.6.0 - the overload of an edge is reported                                 #
+# v0.9.4 - registering an edge type is safe from concurrent threads            #
 ################################################################################
 
 ################################################################################
@@ -15,6 +16,7 @@
 ################################################################################
 
 const _EDGE_TYPES = DataType[]
+const _EDGE_TYPES_LOCK = ReentrantLock()
 
 """
     register_edge_type!(T)
@@ -28,7 +30,9 @@ type â€” a three-winding transformer, a multi-terminal HVDC converter station â€
 registers it once and every problem picks it up.
 """
 function register_edge_type!(::Type{T}) where {T<:AbstractEdge}
-    T in _EDGE_TYPES || push!(_EDGE_TYPES, T)
+    lock(_EDGE_TYPES_LOCK) do
+        T in _EDGE_TYPES || push!(_EDGE_TYPES, T)
+    end
     return nothing
 end
 

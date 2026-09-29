@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.6.0 - initial implementation                                              #
 # v0.9.2 - a column-length mismatch is a clear error, not a BoundsError        #
+# v0.9.3 - an all-empty table set warns instead of silently building nothing   #
 ################################################################################
 
 # The radial network of `test/rd.jl` written as tables: the market ran generator
@@ -165,6 +166,17 @@ radial_tables() = (node = TBL_NODE, edge = TBL_EDGE, unit = TBL_UNIT)
             edge = (id = [1, 2], component = ["Branch"], terminals = [[1, 2], [2, 3]]))
         @test_throws ArgumentError parse_tables(; base...,
             unit = (id = [1, 2], component = ["Generator", "Generator"], node = [1]))
+    end
+
+    @testset "an empty network is unusual enough to say so" begin
+        @test_logs (:warn, r"empty network") match_mode = :any parse_tables(
+            node = (id = Int[], type = String[]),
+            edge = (id = Int[], component = String[], terminals = Vector{Int}[]),
+            unit = (id = Int[], component = String[], node = Int[]))
+
+        # one empty table alone is the ordinary "no edges" case, not a warning
+        @test_logs parse_tables(; radial_tables()...,
+            edge = (id = Int[], component = String[], terminals = Vector{Int}[]))
     end
 
     @testset "a profile is what varies over the network index" begin

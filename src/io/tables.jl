@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.6.0 - initial implementation                                              #
 # v0.9.2 - a column-length mismatch is a clear error, not a BoundsError        #
+# v0.9.3 - an all-empty table set warns instead of silently building nothing   #
 ################################################################################
 
 ################################################################################
@@ -153,6 +154,9 @@ function parse_tables(; node, edge, unit,
     U = _parse_components(unit, :unit, AbstractUnit, lookup, fields, d, nothing)
 
     _unused_profiles(fields)
+
+    isempty(I) && isempty(E) && isempty(U) &&
+        @warn "parse_tables built an empty network; check that the node, edge and unit tables were not all filtered or joined away"
 
     return NetworkData(Network(I, E, U; dim = d); name, baseMVA = Float64(baseMVA))
 end

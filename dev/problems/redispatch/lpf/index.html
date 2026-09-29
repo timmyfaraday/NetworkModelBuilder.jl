@@ -15,7 +15,34 @@ p_{u} &amp;= p^{\text{sd}}_{u} - p^{\text{sc}}_{u},
 p_{u} &amp;= -g^{\text{s}}_{u} &amp; &amp;&amp; \forall u \in U^{\text{sh}}
 \end{aligned}\]</p><h3 id="Across-network-indices"><a class="docs-heading-anchor" href="#Across-network-indices">Across network indices</a><a id="Across-network-indices-1"></a><a class="docs-heading-anchor-permalink" href="#Across-network-indices" title="Permalink"></a></h3><p>The state of charge, the energy of a flexible load, and the preventive equalities — identical to the <a href="../ivr/#Redispatch-in-the-IVR-formulation">IVR formulation</a> but for which variables a phase shifter contributes: the angle <span>$ta_{e}$</span> here, the pair <span>$(t^{\text{r}}_{e}, t^{\text{i}}_{e})$</span> there.</p><h2 id="A-worked-example"><a class="docs-heading-anchor" href="#A-worked-example">A worked example</a><a id="A-worked-example-1"></a><a class="docs-heading-anchor-permalink" href="#A-worked-example" title="Permalink"></a></h2><p>A two-node radial network, a cheap generator at the far end of a branch rated 0.5, a load of 1.0 and an expensive generator behind the constraint. The market ran the cheap unit to 1.0, which the branch cannot carry, so 0.5 has to be moved from one side of it to the other:</p><p class="math-container">\[p^{\downarrow}_{1} = 0.5, \quad p^{\uparrow}_{2} = 0.5,
 \qquad
-\text{objective} = 0.5 \cdot 100 + 0.5 \cdot 10 = 55\]</p><p>at the marginal costs of 100 and 10 that stand in for the redispatch prices. The test suite asserts exactly this, and the same network meshed with a phase shifter in parallel gives an objective of <strong>zero</strong> — the free control clears the corridor on its own.</p><pre><code class="language-julia hljs">using NetworkModelBuilder, HiGHS
+\text{objective} = 0.5 \cdot 100 + 0.5 \cdot 10 = 55\]</p><p>at the marginal costs of 100 and 10 that stand in for the redispatch prices. The test suite asserts exactly this, and the same network meshed with a phase shifter in parallel gives an objective of <strong>zero</strong> — the free control clears the corridor on its own.</p><pre><code class="language-julia hljs">using NetworkModelBuilder, HiGHS, JuMP
 
-result = solve_rd(data, LPFFormulation, HiGHS.Optimizer;
-                  redispatch = Redispatch(; monitored = [1]))</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../ivr/">« IVR formulation</a><a class="docs-footer-nextpage" href="../../../components/hierarchy/">The hierarchy »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Tuesday 29 September 2026 19:05">Tuesday 29 September 2026</span>. Using Julia version 1.13.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+data = parse_tables(
+    node = (id        = [1, 2],
+            type      = [&quot;REF&quot;, &quot;PQ&quot;]),
+    edge = (id        = [1],
+            component = [&quot;Branch&quot;],
+            terminals = [[1, 2]],
+            r         = [0.0],
+            x         = [0.1],
+            rate_a    = [0.5]),
+    unit = (id        = [1, 2, 3],
+            component = [&quot;Generator&quot;, &quot;Generator&quot;, &quot;FixedLoad&quot;],
+            node      = [1, 2, 2],
+            pg        = [1.0, 0.0, missing],
+            cost      = [[0.0, 10.0], [0.0, 100.0], missing],
+            pd        = [missing, missing, 1.0]))
+
+result = solve_rd(data, LPFFormulation,
+                  optimizer_with_attributes(HiGHS.Optimizer, &quot;output_flag&quot; =&gt; true);
+                  redispatch = Redispatch(; monitored = [1]))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Dict{String, Any} with 10 entries:
+  &quot;baseMVA&quot;            =&gt; 100.0
+  &quot;name&quot;               =&gt; &quot;unnamed&quot;
+  &quot;problem_type&quot;       =&gt; RedispatchProblem
+  &quot;termination_status&quot; =&gt; OPTIMAL
+  &quot;objective&quot;          =&gt; 55.0
+  &quot;primal_status&quot;      =&gt; FEASIBLE_POINT
+  &quot;dual_status&quot;        =&gt; FEASIBLE_POINT
+  &quot;formulation_type&quot;   =&gt; LPFFormulation
+  &quot;solve_time&quot;         =&gt; 0.245989
+  &quot;solution&quot;           =&gt; Dict{String, Any}(&quot;nw&quot;=&gt;Dict{String, Any}(&quot;1&quot;=&gt;Dict{S…</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../ivr/">« IVR formulation</a><a class="docs-footer-nextpage" href="../../../components/hierarchy/">The hierarchy »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Tuesday 29 September 2026 19:40">Tuesday 29 September 2026</span>. Using Julia version 1.13.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

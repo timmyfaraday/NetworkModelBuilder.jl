@@ -10,6 +10,19 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+## [0.9.6] - 2026-09-29
+
+### Added
+
+- Every complete example in the documentation now runs in CI, as a
+  `test/docs.jl` check and as Documenter `@example` blocks, so a broken one
+  (like 0.9.1's) fails the build instead of going unnoticed.
+
+### Fixed
+
+- The redispatch LPF example referenced an undefined `data`; it now builds
+  the two-node network its own surrounding prose describes.
+
 ## [0.9.5] - 2026-09-29
 
 ### Added

@@ -107,10 +107,11 @@ solver where every cost is linear. On case14:
 
 Against 198 and 294 for the same problem in the IVR formulation.
 
-```julia
-using NetworkModelBuilder, HiGHS
+```@example opf-lpf
+using NetworkModelBuilder, HiGHS, JuMP
 
-result = solve_opf("case14.m", LPFFormulation, HiGHS.Optimizer)
+result = solve_opf("case14.m", LPFFormulation,
+                   optimizer_with_attributes(HiGHS.Optimizer, "output_flag" => true))
 ```
 
 ## Validation

@@ -108,9 +108,26 @@ test suite asserts exactly this, and the same network meshed with a phase
 shifter in parallel gives an objective of **zero** — the free control clears the
 corridor on its own.
 
-```julia
-using NetworkModelBuilder, HiGHS
+```@example rd-lpf
+using NetworkModelBuilder, HiGHS, JuMP
 
-result = solve_rd(data, LPFFormulation, HiGHS.Optimizer;
+data = parse_tables(
+    node = (id        = [1, 2],
+            type      = ["REF", "PQ"]),
+    edge = (id        = [1],
+            component = ["Branch"],
+            terminals = [[1, 2]],
+            r         = [0.0],
+            x         = [0.1],
+            rate_a    = [0.5]),
+    unit = (id        = [1, 2, 3],
+            component = ["Generator", "Generator", "FixedLoad"],
+            node      = [1, 2, 2],
+            pg        = [1.0, 0.0, missing],
+            cost      = [[0.0, 10.0], [0.0, 100.0], missing],
+            pd        = [missing, missing, 1.0]))
+
+result = solve_rd(data, LPFFormulation,
+                  optimizer_with_attributes(HiGHS.Optimizer, "output_flag" => true);
                   redispatch = Redispatch(; monitored = [1]))
 ```

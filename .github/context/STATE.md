@@ -24,7 +24,7 @@ gap #9 of `plans/GAP_CLOSURE_PLAN.md`, v0.10.2).
 
 ## Branches
 
-- `main`, `0519076` on `origin/main` before this session's v0.10.2 commit/push.
+- `main`, `cbe34bd` on `origin/main`. No other branches in flight.
 - Next free decision id: **D12**.
 
 ## In progress

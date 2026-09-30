@@ -10,6 +10,25 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-09-30
+
+### Added
+
+- `solution_tables(data, result)`: a tidy view of a `result` alongside
+  `nw_solution` — one `NamedTuple` of plain columns per family of the
+  extended graph (`node`, `edge`, `unit`), every dimension `data` is posed
+  over becoming its own column, an edge's row per terminal rather than per
+  edge, and a column no component or network index ever reports at all
+  dropped rather than kept `missing` throughout. For a caller who wants every
+  node or edge at once rather than one value at a time, e.g.
+  `DataFrame(tables.node)` with DataFrames.jl, no new dependency of this
+  package's own (gap #9 of `plans/GAP_CLOSURE_PLAN.md`).
+- `docs/src/manual/concepts.md`: a "concepts for newcomers" page working one
+  small network through `LoadFlowProblem`, `OptimalPowerFlowProblem` and
+  `RedispatchProblem`, and through both formulations, then showing
+  `nw_solution` and `solution_tables` side by side — plus a short, honest
+  comparison to SmaLoadFlow's `PowerSystem`/`SolveOptions`/`RunResultXr`.
+
 ## [0.10.1] - 2026-09-30
 
 ### Changed

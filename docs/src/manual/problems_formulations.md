@@ -102,6 +102,7 @@ default_weight
 ```@docs
 build_solution
 nw_solution
+solution_tables
 print_summary
 solution
 ```

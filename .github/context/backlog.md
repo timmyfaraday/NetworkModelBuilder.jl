@@ -8,8 +8,6 @@ older ones: git has them). Next id: **B5**.
 
 ## Next
 
-- [ ] B2 · API ergonomics / onboarding curve vs. SmaLoadFlow (gap #9, P2/Large) · Tom · 2026-09-30
-
 ## Later
 
 - [ ] B3 · No parallel-throughput option for long-horizon solves (gap #10, P2/Large) · Tom · 2026-09-30
@@ -23,3 +21,5 @@ older ones: git has them). Next id: **B5**.
   adapted for Julia/GitHub/solo maintainer · Tom · 2026-09-30
 - [x] B1 · Central include/export file is a growing manual-edit tax (gap #8) · Tom · 2026-09-30
   - `src/comp/` auto-discovered by `_include_dir`, each component exports its own names — see D10.
+- [x] B2 · API ergonomics / onboarding curve vs. SmaLoadFlow (gap #9) · Tom · 2026-09-30
+  - `solution_tables` alongside `nw_solution`, plus a `concepts.md` newcomer page — see D11.

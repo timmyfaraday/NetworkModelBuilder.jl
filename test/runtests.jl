@@ -10,6 +10,7 @@
 # v0.9.4 - the thread-safety regression tests                                  #
 # v0.9.7 - the PowerModels.jl live cross-check                                 #
 # v0.10.0 - the security tables test                                           #
+# v0.10.2 - the solution tables test                                           #
 ################################################################################
 
 using Test
@@ -56,6 +57,7 @@ quiet(f) = Logging.with_logger(f, Logging.NullLogger())
     include("price.jl")
     include("multinetwork.jl")
     include("multiterminal.jl")
+    include("solution_tables.jl")
     include("thread_safety.jl")
     include("docs.jl")
 end

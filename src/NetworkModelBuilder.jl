@@ -16,6 +16,7 @@
 # v0.8.0 - the zorba adapter                                                   #
 # v0.10.0 - the security screening output, towards the zorba dashboard         #
 # v0.10.1 - src/comp/ is auto-included; its exports moved into it              #
+# v0.10.2 - exports solution_tables                                            #
 ################################################################################
 
 module NetworkModelBuilder
@@ -125,7 +126,7 @@ module NetworkModelBuilder
     export objective_redispatch_cost
 
     # export — solution
-    export build_solution, nw_solution, print_summary, solution
+    export build_solution, nw_solution, print_summary, solution, solution_tables
 
     # export — the redispatch problem
     export Redispatch, OverloadPrice, redispatch_setup

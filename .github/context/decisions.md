@@ -62,6 +62,15 @@ How to use this file:
   Parquet-capable package, so this was not a choice between Arrow and Parquet2, only whether to add
   Parquet2 at all.
 
+## Results access
+
+- **`solution_tables` is a `NamedTuple`-of-columns addition alongside `nw_solution`, not a
+  replacement for it** (D11): the nested `Dict` stays the PowerModels.jl-familiar default. An
+  edge's row is per **terminal**, not per edge, since an edge may have any number of them; every
+  dimension `data` is posed over becomes its own column; a column no component or network index
+  reports at all is dropped rather than kept `missing` throughout. No new dependency —
+  `DataFrame(tables.node)` works for a caller who already has DataFrames.jl.
+
 ## Validation against a reference implementation
 
 - **PowerModels.jl is a live cross-check (`test/powermodels.jl`), run alongside the existing
@@ -146,4 +155,11 @@ and export lines by hand; verified the public API is unchanged (`names(NetworkMo
 identical before and after) and every existing subtype-ordering dependency already followed the
 "file named like its directory loads first" pattern, so no behavior changed, only where the
 include/export statements live.
+Changes: new.
+
+### D11 — `solution_tables` is a tidy NamedTuple view alongside `nw_solution`, edge rows per terminal
+Date: 2026-09-30 · Decided by: Tom Van Acker · Area: Results access
+Why: closes gap #9 of `plans/GAP_CLOSURE_PLAN.md` — result access was a stringly-typed nested
+`Dict` with no autocomplete, type safety or easy whole-table access; adding a tidy view alongside
+it (not replacing it) gives that without a new dependency or changing what a `result` carries.
 Changes: new.

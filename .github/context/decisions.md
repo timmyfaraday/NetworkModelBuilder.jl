@@ -40,6 +40,23 @@ How to use this file:
   realistically overlap. CI sets `JULIA_NUM_THREADS=4` specifically so the regression test can't
   silently pass without real concurrency.
 
+## Dashboard output
+
+- **`security_tables` is built generically against `Network`/`Dimension`/`nw_solution`, not as
+  part of the Zorba adapter** (D9): an N-1 security screening is a question about any grid this
+  package can solve, not something only a `parse_zorba` study can ask — "coordinate 1 of
+  `:contingency` is the base case" is already a package-wide convention (`src/prob/rd.jl`), not a
+  Zorba-only one. A Zorba-built study needs no special case; it already carries the right names.
+- **`security_tables`/`write_security_tables` use a specific dashboard's own file and column
+  names directly** (`frank_safe_borders`/`nm1_max_flows`/`nm1_min_flows`), **rather than NMB's own,
+  more neutral ones** (D9): chosen for zero-friction interop with that one consumer, at the cost of
+  baking another team's naming into NMB's public API. See `plans/dashboard-output-mapping.md` for
+  the full correspondence and the options for revisiting this later.
+- **Parquet2 is a new weak dependency, gated the same way Arrow is** (D9): Arrow.jl implements only
+  the Arrow IPC format, not Parquet — there is no way to write a literal `.parquet` file without a
+  Parquet-capable package, so this was not a choice between Arrow and Parquet2, only whether to add
+  Parquet2 at all.
+
 ## Validation against a reference implementation
 
 - **PowerModels.jl is a live cross-check (`test/powermodels.jl`), run alongside the existing
@@ -107,4 +124,11 @@ Changes: new.
 Date: 2026-09-29 · Decided by: Tom Van Acker · Area: Documentation
 Why: every "complete, runnable" quick-start example failed from the repo root (a normal user's
 starting point); the fallback fixes all of them without changing behavior for paths that resolve.
+Changes: new.
+
+### D9 — `security_tables` is general and dashboard-shaped: Parquet2, and GRIP's own names
+Date: 2026-09-30 · Decided by: Tom Van Acker · Area: Dashboard output
+Why: an N-1 screening isn't Zorba-specific, and matching a real dashboard's own file/column names
+and format (Parquet, which Arrow.jl cannot write) lets its output be plugged in directly, at the
+cost of one new dependency and one team's naming baked into NMB's public API.
 Changes: new.

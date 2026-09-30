@@ -9,6 +9,7 @@
 # v0.1.0 - initial implementation                                              #
 # v0.9.4 - the thread-safety regression tests                                  #
 # v0.9.7 - the PowerModels.jl live cross-check                                 #
+# v0.10.0 - the security tables test                                           #
 ################################################################################
 
 using Test
@@ -18,6 +19,7 @@ using Markdown
 using Arrow
 using Ipopt
 using JuMP
+using Parquet2
 import PowerModels   # `using` would export `parse_file`, `ids`, ... over this package's own
 
 using NetworkModelBuilder
@@ -50,6 +52,7 @@ quiet(f) = Logging.with_logger(f, Logging.NullLogger())
     include("dc_link.jl")
     include("slack.jl")
     include("zorba.jl")
+    include("dashboard.jl")
     include("price.jl")
     include("multinetwork.jl")
     include("multiterminal.jl")

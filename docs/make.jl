@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.3.0 - component hierarchy                                                 #
+# v0.10.0 - adds the dashboard manual page                                     #
 ################################################################################
 
 using Documenter
@@ -29,6 +30,7 @@ makedocs(
             "The linearized formulation" => "manual/linearized.md",
             "Tabular input"             => "manual/tabular_input.md",
             "The Zorba adapter"         => "manual/zorba.md",
+            "Security screening output" => "manual/dashboard.md",
             "Extending the package"     => "manual/extending.md",
         ],
         "Problems" => [

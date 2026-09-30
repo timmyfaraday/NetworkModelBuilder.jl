@@ -19,3 +19,4 @@ cause → Fix → Verification per item — the shape `GAP_CLOSURE_PLAN.md` alre
 | --- | --- | --- |
 | `GAP_CLOSURE_PLAN.md` | in progress (7/11 gaps closed) | D1, D2, D4-D8 |
 | `zorba-integration.md` | Julia side complete; Python side tracked in Zorba's own repo | — |
+| `dashboard-output-mapping.md` | reference, not a plan to close; revisit when GRIP unifies its naming | D9 |

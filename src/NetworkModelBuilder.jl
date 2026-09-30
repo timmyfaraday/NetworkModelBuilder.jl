@@ -14,6 +14,7 @@
 # v0.6.0 - priced congestion, periods, the dc link and tabular input           #
 # v0.7.0 - the asset model                                                     #
 # v0.8.0 - the zorba adapter                                                   #
+# v0.10.0 - the security screening output, towards the zorba dashboard         #
 ################################################################################
 
 module NetworkModelBuilder
@@ -75,6 +76,7 @@ module NetworkModelBuilder
     include("io/tables.jl")
     include("io/matpower.jl")
     include("io/zorba.jl")
+    include("io/dashboard.jl")
 
     # export — paths
     export BASE_DIR
@@ -192,5 +194,8 @@ module NetworkModelBuilder
     # export — the zorba adapter
     export ZorbaLink, ZorbaStudy
     export parse_zorba, zorba_study, solve_zorba, zorba_tables, write_zorba
+
+    # export — security screening output, e.g. towards a dashboard
+    export security_tables, write_security_tables
 
 end

@@ -53,3 +53,15 @@ facts `(unverified)` and remove the marker once checked.
   `main` and on tags.
 - `/runs/` and `/scratch/` are gitignored (NMB's own simulation output, and agent/scratch working
   output, respectively) — don't expect either to survive a fresh clone.
+- A `[weakdeps]` + `[extras]`/`[targets]` package (e.g. Arrow, PowerModels, and now Parquet2) is
+  **not** written into the main `Manifest.toml` by a plain `Pkg.resolve()`/`Pkg.instantiate()` —
+  neither Arrow nor PowerModels appear there today despite being used every test run. `Pkg.test()`
+  resolves `[extras]`/`[targets]` into its own temporary test environment each time instead. Don't
+  expect (or try to force) a new test-only weak dependency to show up in the committed
+  `Manifest.toml`; adding it to `Project.toml` alone is enough, and `Pkg.test()` fetches it in
+  running the suite (found by Tom Van Acker, 2026-09-30, adding Parquet2).
+- `run_in_terminal` output redirected to a file with PowerShell's `*>` (or `>`) is UTF-16LE with a
+  BOM by default on this PowerShell 5.1 — `grep_search`/plain `Select-String` on that file can
+  silently return zero matches even though the text is there. Read it with `Get-Content -Path ...
+  -Encoding Unicode | Select-String ...` instead (found by Tom Van Acker, 2026-09-30, capturing a
+  `Pkg.test()` run to a log file).

@@ -29,3 +29,16 @@ again get retired.
 - **Grep the actual pattern across the whole codebase before trusting a plan's stated count.** Gap
   #6's plan named 3 "complete, runnable" doc examples; `grep "using NetworkModelBuilder"` across
   `docs/src/**/*.md` found 5. Confirmed Tom Van Acker.
+- **After mechanically computing a padded string (e.g. the 80-column header lines), re-verify the
+  length in the file after writing it, not just at computation time.** Building v0.10.0's
+  `security_tables`, a PowerShell one-liner correctly computed three changelog header lines at 80
+  characters each, but retyping them into `create_file`/`replace_string_in_file` calls silently
+  dropped one trailing space in three separate files — caught only by grepping every touched file
+  for `^#.*#$` and checking `.Line.Length -eq 80` after the fact. Trust the write, not the
+  computation. (unconfirmed)
+- **A hand-built solver-result `Dict` for testing a solution-reading function must use the same
+  units the real solution uses (per-unit on `baseMVA`), not the display units the function
+  outputs.** `security_tables`'s test fixture set `"p"` entries directly to the intended MW values
+  (10.0, -5.0, …); the function correctly multiplies by `baseMVA` to convert per-unit to MW, so
+  every assertion was off by exactly 100×. Caught by running the tests, not by reading the code —
+  the fixture "looked" right. (unconfirmed)

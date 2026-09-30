@@ -10,6 +10,23 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-30
+
+### Added
+
+- `security_tables`: the flow of every edge, at every time step and every
+  contingency but the base case, plus the two tables that reduce those to the
+  worst case in either direction across contingency, together with which one
+  attained it. Works on any `NetworkData` posed over a `:contingency`
+  dimension, not only one `parse_zorba` built — towards feeding a dashboard's
+  N-1 security screening directly from a solved model.
+- `write_security_tables`: writes what `security_tables` returned as Parquet,
+  one file per table. Parquet2 is a new weak dependency, gated the same way
+  Arrow already is.
+- `docs/src/manual/dashboard.md` and `plans/dashboard-output-mapping.md`: the
+  manual page for the new output, and a reference mapping it against a real
+  GRIP/Zorba-dashboard run's own file and column names.
+
 ## [0.9.7] - 2026-09-29
 
 ### Added

@@ -1,0 +1,31 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "python3 .github/hooks/scripts/session_start.py",
+        "windows": "python .github\\hooks\\scripts\\session_start.py",
+        "cwd": ".",
+        "timeout": 15
+      }
+    ],
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "python3 .github/hooks/scripts/guard.py",
+        "windows": "python .github\\hooks\\scripts\\guard.py",
+        "cwd": ".",
+        "timeout": 10
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python3 .github/hooks/scripts/stop_check.py",
+        "windows": "python .github\\hooks\\scripts\\stop_check.py",
+        "cwd": ".",
+        "timeout": 20
+      }
+    ]
+  }
+}

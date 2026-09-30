@@ -1,0 +1,110 @@
+# Decisions
+
+The rules that still constrain NMB. Read the section for the area you are touching before
+changing it.
+
+How to use this file:
+- A new decision gets the next free id (**D9**), goes in the Log at the bottom, and is written by
+  the `record-decision` skill. `Decided by` is a person's username, never an agent.
+- A decision that changes a rule below edits the rule in place and cites the new id. The old
+  wording goes to the archive line of the id it came from.
+- Ids exist for commits, PRs and this file. They do not go in docstrings or code comments.
+
+---
+
+## Versioning and releases
+
+- **Gap-closure items are tackled one at a time: plan → user review → implement** (D1). Each item
+  bumps the patch digit only (`version = "0.9.x"` in `Project.toml`); no git tag per bump. Tag and
+  push are the user's call, asked for every time, not assumed from a prior approval.
+- **`CHANGELOG.md` follows Keep a Changelog, backfilled from per-file changelog headers, not raw
+  commit timing** (D3): the per-file `# vX.Y.Z - <what changed>` header comments are the author's
+  own retrospective record of which version a change belongs to, and outrank `git log` dates when
+  the two disagree (`Project.toml` often didn't move for 20+ commits at a time).
+
+## Code conventions
+
+- **Every `src/`/`test/` file carries an 80-column box header ending in a Changelog section**
+  (D2). A new version line is added, not a rewrite of existing ones.
+- **A generic-purpose test dependency is `import`ed, never `using`d, in `test/runtests.jl`** (D5):
+  `using` exports the dependency's own names into the shared test namespace, and a name collision
+  with NMB's own exports breaks unrelated test files with a confusing `UndefVarError`. Solver
+  packages (Ipopt, HiGHS) are low-risk and stay `using`d — they only export their own `Optimizer`
+  type.
+
+## Concurrency
+
+- **Each mutable registry (`_EDGE_TYPES`, `_UNIT_TYPES`, `_MODELS`) gets its own `ReentrantLock`,
+  wrapping only the check-then-push in its `register_*!` function** (D4). Read functions
+  (`edge_types()`, `unit_types()`) stay lock-free — already `copy()`-safe, and reads/writes don't
+  realistically overlap. CI sets `JULIA_NUM_THREADS=4` specifically so the regression test can't
+  silently pass without real concurrency.
+
+## Validation against a reference implementation
+
+- **PowerModels.jl is a live cross-check (`test/powermodels.jl`), run alongside the existing
+  frozen-value tests, not instead of them** (D6): frozen tests catch NMB's own regressions, the
+  live one catches divergence from PowerModels' current behavior. PowerModels is a test-only
+  dependency (`[extras]`/`[targets]`, like Ipopt and HiGHS).
+
+## Documentation
+
+- **A "complete example" (a fenced block with `using NetworkModelBuilder`) is executed twice**
+  (D7): as a Documenter `@example <name>` block (so a broken one fails `docs/make.jl`) and swept a
+  second time by `test/docs.jl` (so it fails the test suite too, independent of a docs build).
+- **A bare Matpower filename (e.g. `"case14.m"`) resolves against the package's own bundled
+  `test/data/matpower/` when it isn't found relative to the working directory** (D8), in
+  `_read_matpower`. This makes doc quick-starts work from any cwd without changing behavior for
+  any path that already resolves.
+
+---
+
+## Log
+
+New decisions, newest at the bottom.
+
+### D1 — Gap-closure items are tackled one at a time, patch-digit bump, no per-bump tag
+Date: 2026-09-29 · Decided by: Tom Van Acker · Area: Versioning and releases
+Why: keeps each change small and reviewable; tagging isn't needed until a real release is cut.
+Changes: new.
+
+### D2 — Every src/test file carries an 80-column box header with a Changelog section
+Date: 2026-09-29 · Decided by: Tom Van Acker · Area: Code conventions
+Why: pre-existing convention across the whole codebase; kept explicit so new files match it.
+Changes: new (documents existing practice).
+
+### D3 — CHANGELOG.md backfilled from per-file changelog headers, not commit timing
+Date: 2026-09-29 · Decided by: Tom Van Acker · Area: Versioning and releases
+Why: `Project.toml`'s version field jumped 0.6.0 → 0.9.0 in one commit; per-file headers are the
+more reliable record of which version a change belongs to.
+Changes: new.
+
+### D4 — One ReentrantLock per mutable registry, colocated, guarding only check-then-push
+Date: 2026-09-29 · Decided by: Tom Van Acker · Area: Concurrency
+Why: fixed a real `ConcurrencyViolationError` reproduced under 56-thread concurrent registration;
+read functions were already safe and don't need locking.
+Changes: new.
+
+### D5 — Generic-purpose test dependencies are imported, not used, in test/runtests.jl
+Date: 2026-09-29 · Decided by: Tom Van Acker · Area: Code conventions
+Why: `using PowerModels` broke two unrelated test files via a name collision on `parse_file`/
+`ids`/`solve_opf`; `import` + qualified calls avoids the shared-namespace risk entirely.
+Changes: new.
+
+### D6 — PowerModels.jl live cross-check runs alongside frozen-value tests, not instead of them
+Date: 2026-09-29 · Decided by: Tom Van Acker · Area: Validation against a reference implementation
+Why: frozen tests catch NMB's own regressions; a live check catches divergence from PowerModels'
+current behavior — the two catch different things.
+Changes: new.
+
+### D7 — Complete doc examples run twice: Documenter @example and the test/docs.jl sweep
+Date: 2026-09-29 · Decided by: Tom Van Acker · Area: Documentation
+Why: a redispatch LPF example had referenced an undefined variable for months, undetected, because
+nothing had ever executed it; two independent execution paths make that harder to happen again.
+Changes: new.
+
+### D8 — Bare Matpower filenames fall back to the package's own bundled test fixtures
+Date: 2026-09-29 · Decided by: Tom Van Acker · Area: Documentation
+Why: every "complete, runnable" quick-start example failed from the repo root (a normal user's
+starting point); the fallback fixes all of them without changing behavior for paths that resolve.
+Changes: new.

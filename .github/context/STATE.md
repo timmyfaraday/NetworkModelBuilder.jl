@@ -5,7 +5,7 @@ the security-tables / dashboard-output feature towards v0.10.0).
 
 ## Where NMB stands
 
-- v0.10.0, committed (`d1bddbd`) but **not pushed**: `security_tables` / `write_security_tables`
+- v0.10.0, committed and pushed (`efc271c`): `security_tables` / `write_security_tables`
   (new `src/io/dashboard.jl`), a new Parquet2 weak dependency
   (`ext/NetworkModelBuilderParquetExt.jl`), `test/dashboard.jl`, a new manual page
   (`docs/src/manual/dashboard.md`) and a reference mapping
@@ -18,7 +18,7 @@ the security-tables / dashboard-output feature towards v0.10.0).
 
 ## Branches
 
-- `main`, `d1bddbd` (D9) is the tip, one commit ahead of `origin/main`. No other branches in flight.
+- `main`, `efc271c` (D9) is the tip, matching `origin/main`. No other branches in flight.
 - Next free decision id: **D10**.
 
 ## In progress
@@ -28,8 +28,7 @@ the security-tables / dashboard-output feature towards v0.10.0).
 
 ## Next
 
-1. Push `d1bddbd` to `origin/main` — ask before doing it, per the usual operational-safety rule.
-2. Pick up `plans/GAP_CLOSURE_PLAN.md` gap #8 (central include/export file tax) when ready — see
+1. Pick up `plans/GAP_CLOSURE_PLAN.md` gap #8 (central include/export file tax) when ready — see
    `backlog.md` B1.
 
 ## Blocked / waiting

@@ -4,7 +4,7 @@ The rules that still constrain NMB. Read the section for the area you are touchi
 changing it.
 
 How to use this file:
-- A new decision gets the next free id (**D9**), goes in the Log at the bottom, and is written by
+- A new decision gets the next free id (**D11**), goes in the Log at the bottom, and is written by
   the `record-decision` skill. `Decided by` is a person's username, never an agent.
 - A decision that changes a rule below edits the rule in place and cites the new id. The old
   wording goes to the archive line of the id it came from.
@@ -24,6 +24,11 @@ How to use this file:
 
 ## Code conventions
 
+- **`src/comp/{node,edge,unit}/` is included by walking the directory tree, not by naming every
+  file in `src/NetworkModelBuilder.jl`** (D10): the file named like its own directory loads first
+  in each one (see `domain-invariants.instructions.md`). Each component file exports its own
+  public names next to their definition instead of a central list. A new component type needs no
+  edit to the central file — only its own, in the right folder.
 - **Every `src/`/`test/` file carries an 80-column box header ending in a Changelog section**
   (D2). A new version line is added, not a rewrite of existing ones.
 - **A generic-purpose test dependency is `import`ed, never `using`d, in `test/runtests.jl`** (D5):
@@ -131,4 +136,14 @@ Date: 2026-09-30 · Decided by: Tom Van Acker · Area: Dashboard output
 Why: an N-1 screening isn't Zorba-specific, and matching a real dashboard's own file/column names
 and format (Parquet, which Arrow.jl cannot write) lets its output be plugged in directly, at the
 cost of one new dependency and one team's naming baked into NMB's public API.
+Changes: new.
+
+### D10 — `src/comp/` is auto-included by directory walk; each component exports its own names
+Date: 2026-09-30 · Decided by: Tom Van Acker · Area: Code conventions
+Why: closes gap #8 of `plans/GAP_CLOSURE_PLAN.md` — `src/NetworkModelBuilder.jl` was the most
+churned file in the repo (~39% of commits) purely from listing every new component type's include
+and export lines by hand; verified the public API is unchanged (`names(NetworkModelBuilder)`
+identical before and after) and every existing subtype-ordering dependency already followed the
+"file named like its directory loads first" pattern, so no behavior changed, only where the
+include/export statements live.
 Changes: new.

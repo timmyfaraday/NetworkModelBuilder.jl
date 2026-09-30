@@ -10,6 +10,20 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-09-30
+
+### Changed
+
+- `src/NetworkModelBuilder.jl` no longer lists every file under `src/comp/` or
+  every name a component exports: a new `_include_dir` helper walks
+  `comp/node/`, `comp/edge/` and `comp/unit/` (the file named like its own
+  directory loading first in each one), and each component file now exports
+  its own public names next to their definition. Adding a new edge or unit
+  type needs no edit to the central file at all now — only its own file, in
+  the right folder (gap #8 of `plans/GAP_CLOSURE_PLAN.md`). Purely internal:
+  the public API is unchanged, verified by comparing `names(NetworkModelBuilder)`
+  before and after.
+
 ## [0.10.0] - 2026-09-30
 
 ### Added

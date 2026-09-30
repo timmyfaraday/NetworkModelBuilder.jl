@@ -1,4 +1,4 @@
-################################################################################
+﻿################################################################################
 # NetworkModelBuilder.jl                                                       #
 # A Julia package to build optimization models for power system problems.      #
 # See http://github.com/timmyfaraday/NetworkModelBuilder.jl                    #
@@ -8,7 +8,14 @@
 # Changelog:                                                                   #
 # v0.3.0 - component hierarchy                                                 #
 # v0.6.0 - the rating of a monitored edge may hold an overload                 #
+# v0.10.1 - exports its own public names                                       #
 ################################################################################
+
+export susceptance
+export constraint_pi_section!, constraint_edge_rating!
+export constraint_edge_angle_difference!
+export constraint_linear_flow!, constraint_linear_limits!
+export variable_edge_overload!, variable_edge_series_current
 
 ################################################################################
 # The π-equivalent                                                             #

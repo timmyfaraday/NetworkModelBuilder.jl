@@ -1,4 +1,4 @@
-################################################################################
+﻿################################################################################
 # NetworkModelBuilder.jl                                                       #
 # A Julia package to build optimization models for power system problems.      #
 # See http://github.com/timmyfaraday/NetworkModelBuilder.jl                    #
@@ -8,7 +8,16 @@
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
 # v0.9.4 - registering a unit type is safe from concurrent threads             #
+# v0.10.1 - exports its own public names                                       #
 ################################################################################
+
+export register_unit_type!, unit_types
+export variable_unit, variable_unit_injection
+export variable_unit_injection_current, variable_unit_injection_power
+export constraint_unit, constraint_unit_coupling
+export constraint_unit_injection!, constraint_unit_power!
+export solution_unit, solution_unit!
+export time_step, require_time_dimension
 
 ################################################################################
 # Unit — registry                                                              #

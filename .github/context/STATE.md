@@ -1,35 +1,35 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-09-30 by Tom Van Acker (adding
-the security-tables / dashboard-output feature towards v0.10.0).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-09-30 by Tom Van Acker (closing
+gap #8 of `plans/GAP_CLOSURE_PLAN.md`, v0.10.1).
 
 ## Where NMB stands
 
-- v0.10.0, committed and pushed (`efc271c`): `security_tables` / `write_security_tables`
-  (new `src/io/dashboard.jl`), a new Parquet2 weak dependency
-  (`ext/NetworkModelBuilderParquetExt.jl`), `test/dashboard.jl`, a new manual page
-  (`docs/src/manual/dashboard.md`) and a reference mapping
-  (`plans/dashboard-output-mapping.md`). Full suite green: 2465 tests (2436 + 29 new),
-  `docs/make.jl` builds clean.
-- All P0/P1 gap-closure items (#1-7) from `plans/GAP_CLOSURE_PLAN.md` stay closed; P2/P3
-  (#8-11) untouched — see `backlog.md`.
+- v0.10.1 in the working tree, **not yet committed**: `src/comp/{node,edge,unit}/` is now
+  auto-included by a `_include_dir` directory walk instead of ~19 explicit lines in
+  `src/NetworkModelBuilder.jl`, and each component file exports its own public names next to their
+  definition. Public API verified unchanged (`names(NetworkModelBuilder)` identical before/after,
+  258 names). Full suite green: 2465 tests, `docs/make.jl` builds clean. See `git status --short`.
+- v0.10.0 (`security_tables`/`write_security_tables`) committed and pushed at `efc271c`/`4adad89`.
+- All P0/P1 gap-closure items (#1-7) from `plans/GAP_CLOSURE_PLAN.md` stay closed; #8 now closed
+  too (D10); #9-11 untouched — see `backlog.md`.
 - Only tag in git history is `v0.6.0`; later versions are real untagged `Project.toml` states
   (see `decisions.md`).
 
 ## Branches
 
-- `main`, `efc271c` (D9) is the tip, matching `origin/main`. No other branches in flight.
-- Next free decision id: **D10**.
+- `main`, `4adad89` on `origin/main`, with the v0.10.1 gap #8 changes above uncommitted on top.
+- Next free decision id: **D11**.
 
 ## In progress
 
-- Nothing in progress. D9 (`security_tables`/`write_security_tables`, GRIP naming, Parquet2) is
-  confirmed by Tom, implemented, tested, documented and committed.
+- Gap #8 (D10) is implemented, verified and confirmed by Tom (plan reviewed and approved,
+  including the `domain-invariants.instructions.md` addition — logged as SC2). Not yet committed.
 
 ## Next
 
-1. Pick up `plans/GAP_CLOSURE_PLAN.md` gap #8 (central include/export file tax) when ready — see
-   `backlog.md` B1.
+1. Commit and push the v0.10.1 changes (D10) — ask before `git push`, per the usual rule.
+2. Pick up gap #9 (API ergonomics vs. SmaLoadFlow, P2/Large) when ready — see `backlog.md` B2.
 
 ## Blocked / waiting
 

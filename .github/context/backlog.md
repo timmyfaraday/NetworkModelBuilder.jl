@@ -8,8 +8,6 @@ older ones: git has them). Next id: **B5**.
 
 ## Next
 
-- [ ] B1 · Central include/export file is a growing manual-edit tax (gap #8, P2/Medium) · Tom · 2026-09-30
-  - See `plans/GAP_CLOSURE_PLAN.md` gap #8 for the evidence and options.
 - [ ] B2 · API ergonomics / onboarding curve vs. SmaLoadFlow (gap #9, P2/Large) · Tom · 2026-09-30
 
 ## Later
@@ -23,3 +21,5 @@ older ones: git has them). Next id: **B5**.
 
 - [x] B0 · Adopt this `.github/` agent setup, ported from a colleague's FlowBasedDomains repo and
   adapted for Julia/GitHub/solo maintainer · Tom · 2026-09-30
+- [x] B1 · Central include/export file is a growing manual-edit tax (gap #8) · Tom · 2026-09-30
+  - `src/comp/` auto-discovered by `_include_dir`, each component exports its own names — see D10.

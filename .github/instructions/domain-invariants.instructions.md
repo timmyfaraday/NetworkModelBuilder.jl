@@ -28,6 +28,10 @@ These hold today and are relied on across the package. Changing one needs a deci
   or constraint relative to its parent.
 - **One file per component** holds its struct, its variables and its constraints together — no
   `src/form/` directory; a formulation is methods spread over component files, not a place.
+- **Within `src/comp/`, the file named like its own directory loads first** — `branch/branch.jl`
+  before `cable.jl`/`overhead_line.jl`, `transformer/transformer.jl` before its siblings — because
+  `NetworkModelBuilder.jl` includes `src/comp/` by walking the directory tree, not by naming each
+  file. A sibling needing a different order needs its own explicit `include`.
 - **Registration is the only way a type participates**: `register_edge_type!` /
   `register_unit_type!` / `register_model!`, each guarded by its own `ReentrantLock`. Read
   functions (`edge_types()`, `unit_types()`) return a `copy()` and stay lock-free.

@@ -1,4 +1,4 @@
-################################################################################
+﻿################################################################################
 # NetworkModelBuilder.jl                                                       #
 # A Julia package to build optimization models for power system problems.      #
 # See http://github.com/timmyfaraday/NetworkModelBuilder.jl                    #
@@ -9,7 +9,14 @@
 # v0.1.0 - initial implementation                                              #
 # v0.6.0 - the overload of an edge is reported                                 #
 # v0.9.4 - registering an edge type is safe from concurrent threads            #
+# v0.10.1 - exports its own public names                                       #
 ################################################################################
+
+export register_edge_type!, edge_types
+export variable_edge, variable_edge_terminal_current
+export variable_edge_terminal_flow, variable_edge_terminal_power
+export constraint_edge, constraint_edge_limits, constraint_edge_coupling
+export solution_edge, solution_edge!
 
 ################################################################################
 # Edge — registry                                                              #

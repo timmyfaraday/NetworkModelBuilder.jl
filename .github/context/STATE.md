@@ -2,7 +2,8 @@
 
 Overwrite, don't append. Keep under 80 lines. Last updated: 2026-09-30 by Tom Van Acker (seeded
 while adopting this agent setup, from `plans/GAP_CLOSURE_PLAN.md`, `CHANGELOG.md` and prior
-session history).
+session history; same-day `/probe-environment` run verified Julia/git/docs gates and found the
+hooks inert — F1).
 
 ## Where NMB stands
 
@@ -13,9 +14,9 @@ session history).
   Documenter `@example` blocks), and `test/powermodels.jl` live-cross-checks against
   PowerModels.jl v0.21 alongside the existing frozen-value tests.
 - Only P2/P3 (structural/organizational, gaps #8-11) remain, none started — see `backlog.md`.
-- Full suite: ~2400 tests, ~2-3 minutes, fully offline. Only tag in git history is `v0.6.0`;
-  0.7.0-0.9.7 are real `Project.toml` states that were never tagged (a deliberate choice, not an
-  oversight — see `decisions.md`).
+- Full suite: 2436 tests, ~3 minutes, fully offline (see `environment.md`). Only tag in git
+  history is `v0.6.0`; 0.7.0-0.9.7 are real `Project.toml` states that were never tagged (a
+  deliberate choice, not an oversight — see `decisions.md`).
 
 ## Branches
 
@@ -24,8 +25,11 @@ session history).
 
 ## In progress
 
-- Adopting this `.github/` agent setup, 2026-09-30: ported from a colleague's FlowBasedDomains
-  (fbd) repo and adapted for Julia/GitHub/solo maintainer (fbd is Python/Azure-DevOps/team-owned).
+- `.github/` agent setup adopted 2026-09-30 (B0 done). Same-day `/probe-environment` run confirmed
+  Julia/git/docs-build gates but found the SessionStart/PreToolUse/Stop hooks never fire on this
+  VS Code build (no `.git/agent-session/`, no `.git/agent-hooks.log`) — see `setup-feedback.md` F1
+  and `environment.md`. `STATE.md` injection etc. rely on the prose fallback in
+  `copilot-instructions.md` for now.
 
 ## Next
 

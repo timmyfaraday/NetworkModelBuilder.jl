@@ -30,4 +30,12 @@ Owner: **Tom Van Acker**.
 ## Log
 
 Format: `- F<n> · YYYY-MM-DD · <user> · <what happened> · cost: <turns/result> · status: open`
-Next id: **F1**.
+Next id: **F2**.
+
+- F1 · 2026-09-30 · Tom Van Acker · `probe-environment` found the SessionStart/PreToolUse/Stop
+  hooks have never fired: no `.git/agent-session/` dir, no `.git/agent-hooks.log`, and this
+  session got no SessionStart-injected `STATE.md` context. `agent-hooks.json`'s schema matches
+  Claude Code's hook config, not a known VS Code Copilot Chat feature · cost: all 3 hooks silently
+  inert since the setup was created — `STATE.md` auto-injection, the AI-attribution/setup-file
+  guard and the wrap-up nag all rely on the prose fallback in `copilot-instructions.md` only ·
+  status: open

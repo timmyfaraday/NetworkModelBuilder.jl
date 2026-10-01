@@ -1,7 +1,7 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-01 by Tom Van Acker (synced
-`test-zorba-run` with `main`; corrected stale D12 push status below).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-01 by Tom Van Acker (Xpress
+false-INFEASIBLE finding on the Zorba pipeline, see `lessons.md`).
 
 ## Where NMB stands
 
@@ -39,7 +39,12 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-01 by Tom Va
 
 ## In progress
 
-- Nothing in progress.
+- Zorba three-step redispatch pipeline (`test-zorba-run` branch, `scripts/`, not on `main`):
+  diagnosing why step 3 (internal-BE redispatch) reports hour 61 `INFEASIBLE` under Xpress.
+  Confirmed it is a false positive — HiGHS solves the identical model `OPTIMAL` — see `lessons.md`.
+  Next: investigate Xpress scaling/tolerance controls (option chosen over rescaling the model or a
+  standing HiGHS cross-check). `scripts/Project.toml`/`Manifest.toml` have an uncommitted,
+  stashed HiGHS addition from this diagnosis on `test-zorba-run`.
 
 ## Next
 

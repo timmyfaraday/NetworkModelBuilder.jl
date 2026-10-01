@@ -42,3 +42,15 @@ again get retired.
   (10.0, -5.0, …); the function correctly multiplies by `baseMVA` to convert per-unit to MW, so
   every assertion was off by exactly 100×. Caught by running the tests, not by reading the code —
   the fixture "looked" right. (unconfirmed)
+- **Cross-check an unexpected `INFEASIBLE` with a second, independent solver before trusting it —
+  especially when the model mixes very different coefficient magnitudes.** The Zorba three-step
+  redispatch pipeline (`test-zorba-run` branch) had Xpress report hour 61 of the internal-BE
+  redispatch step genuinely `INFEASIBLE` (its own unscaled-infeasibility check agreed, ~20 min to
+  prove) with a phase shifter's angle held preventive. Pinning that angle at one specific, in-range
+  value — a strict subset of the "free" case — solved `OPTIMAL`: a feasible point inside a
+  supposedly-infeasible region is a contradiction. HiGHS then solved the identical, unchanged model
+  `OPTIMAL` in under a minute. Likely a scaling artifact: the model ties ~0.1–0.5 rad angle bounds
+  by equality across ~80 contingency coordinates in the same LP as 477,000–4,770,000 $/pu price
+  coefficients. `JuMP.compute_conflict!` did not help — it returned `NO_CONFLICT_EXISTS` on a
+  confirmed-infeasible model, twice. Confirmed Tom Van Acker.
+

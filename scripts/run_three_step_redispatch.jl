@@ -98,7 +98,7 @@ const HORIZON_CB = 8   # step 2 — cross-border, 13 contingency events
 const STEP_CB    = 8
 const HORIZON_BE = 1   # step 3 — internal BE, 81 contingency events
 const STEP_BE    = 1
-const RUN_ID    = "_week1_freeze_fix"
+const RUN_ID    = "_week1_price_rescale"
 const OUT_DIR   = joinpath(@__DIR__, "..", "runs", RUN_ID)
 const OPTIMIZER = Xpress.Optimizer
 
@@ -109,24 +109,28 @@ const OPTIMIZER = Xpress.Optimizer
 # `SteeringPlanData._load_thermal_generators!`). Storage is cheaper over these
 # 24 hours (<=137.5 $/MWh, <=13,753 $/pu). A last-resort overload price has to
 # clear that ceiling by enough that every cheaper redispatch measure is used up
-# first — 10x the thermal ceiling (477,000 $/pu) is that deliberate multiple,
-# not a round guess; revisit if the underlying cost data changes materially.
-const OVERLOAD_PRICE = OverloadPrice(; per_energy = 477_000.0)
+# first. This used to be a 10x multiple (477,000 $/pu) — Xpress's default
+# SCALING/PRESOLVE combination gave a false INFEASIBLE on at least one hour of
+# step 3 with that value in the LP alongside PST angles of O(0.1) (confirmed
+# against HiGHS and against re-solving with SCALING=0; see lessons.md). 3x is
+# still a comfortable, unambiguous margin over every real redispatch cost at a
+# much smaller absolute scale; revisit if the underlying cost data changes
+# materially or this margin turns out not to be enough on other data.
+const OVERLOAD_PRICE = OverloadPrice(; per_energy = 3 * 47_700.0)
 
 # Shedding real demand is a more severe measure than a monitored line running hot
 # (`OVERLOAD_PRICE`), so it has to clear that price by a wide margin, not sit below
-# or at it — the same deliberate 10x multiple `OVERLOAD_PRICE` itself uses over the
-# thermal ceiling above: 10 * 477,000 = 4,770,000 $/pu, so the solver exhausts
-# redispatch and priced overload alike before shedding a single per-unit of load.
-const LOAD_SHEDDING_PRICE = 10 * OVERLOAD_PRICE.per_energy
+# or at it — 4x `OVERLOAD_PRICE` so the solver exhausts redispatch and priced
+# overload alike before shedding a single per-unit of load.
+const LOAD_SHEDDING_PRICE = 4 * OVERLOAD_PRICE.per_energy
 
 # Dumping surplus generation (`add_spillage!`) is real TSO practice — curtailment — and,
 # unlike load shedding, interrupts no customer, so it stays strictly cheaper than
 # `LOAD_SHEDDING_PRICE`: shedding real demand remains the true last resort. But it still has to
 # clear `OVERLOAD_PRICE` by enough that thermal redispatch and priced line overloads are
-# exhausted first, so it sits at the midpoint of the two on the same deliberate-multiple scale:
-# 5 * OVERLOAD_PRICE = 2,385,000 $/pu, half of `LOAD_SHEDDING_PRICE`.
-const SPILLAGE_PRICE = 5 * OVERLOAD_PRICE.per_energy
+# exhausted first, so it sits at the midpoint of the two: 2 * OVERLOAD_PRICE, half of
+# `LOAD_SHEDDING_PRICE`.
+const SPILLAGE_PRICE = 2 * OVERLOAD_PRICE.per_energy
 
 ################################################################################
 # Helpers                                                                    #

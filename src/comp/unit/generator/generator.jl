@@ -1,4 +1,4 @@
-################################################################################
+﻿################################################################################
 # NetworkModelBuilder.jl                                                       #
 # A Julia package to build optimization models for power system problems.      #
 # See http://github.com/timmyfaraday/NetworkModelBuilder.jl                    #
@@ -9,7 +9,11 @@
 # v0.3.0 - component hierarchy                                                 #
 # v0.5.0 - the redispatch problem                                              #
 # v0.7.0 - an energy limit per period                                          #
+# v0.10.1 - exports its own public names                                       #
 ################################################################################
+
+export AbstractGenerator, Generator
+export generation_cost, marginal_cost, redispatch_price
 
 ################################################################################
 # Generator — data                                                             #

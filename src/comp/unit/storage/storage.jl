@@ -1,4 +1,4 @@
-################################################################################
+﻿################################################################################
 # NetworkModelBuilder.jl                                                       #
 # A Julia package to build optimization models for power system problems.      #
 # See http://github.com/timmyfaraday/NetworkModelBuilder.jl                    #
@@ -9,7 +9,12 @@
 # v0.3.0 - component hierarchy                                                 #
 # v0.5.0 - the redispatch problem                                              #
 # v0.7.0 - cycle limits, the throughput cost, the inflow hook and the end target#
+# v0.10.1 - exports its own public names                                       #
 ################################################################################
+
+export AbstractStorage, Storage, inflow, storage_cycles
+export variable_storage_active!, variable_storage_reactive!
+export constraint_storage_cycles!, constraint_storage_final_energy!
 
 ################################################################################
 # Storage — data                                                               #

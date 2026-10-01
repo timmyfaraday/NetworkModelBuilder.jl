@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.5.0 - initial implementation                                              #
+# v0.9.6 - every complete example in the docs runs in CI                       #
 ################################################################################
 
 # Julia's stdlib Markdown parser, the one Documenter builds the site with, wants
@@ -51,6 +52,34 @@ function broken_tables(file)
     return broken
 end
 
+# A complete example is a fenced ```julia block, or a Documenter ```@example
+# block, that imports the package itself rather than continuing one shown
+# earlier on the same page — the latter reads naturally in prose but was never
+# executed, which is exactly how a bad bare filename (`"case14.m"`) went
+# unnoticed until someone happened to run it from the wrong directory.
+
+"the language or directive on a fence-opening line, or an empty string"
+_fence_lang(l) = (m = match(r"^\s*```(\S*)", l); m === nothing ? "" : m.captures[1])
+
+"the fenced code blocks of `file` that read like a complete, runnable example"
+function complete_examples(file)
+    examples, lang, block, fenced = String[], "", String[], false
+    for l in readlines(file)
+        if occursin(r"^\s*(```|~~~)", l)
+            if fenced && lang in ("julia", "@example")
+                code = join(block, "\n")
+                occursin("using NetworkModelBuilder", code) && push!(examples, code)
+            end
+            empty!(block)
+            fenced = !fenced
+            fenced && (lang = _fence_lang(l))
+        else
+            fenced && push!(block, l)
+        end
+    end
+    return examples
+end
+
 @testset "docs" begin
 
     @testset "every table renders as a table" begin
@@ -76,6 +105,24 @@ end
 
         @test is_alignment_row("|:--|----------:|")
         @test !is_alignment_row("| x | 1 |")
+    end
+
+    @testset "every complete example runs" begin
+        found = false
+        for (root, _, files) in walkdir(DOCS_SRC), f in sort(files)
+            endswith(f, ".md") || continue
+            file = joinpath(root, f)
+            for (i, code) in enumerate(complete_examples(file))
+                found = true
+                @testset "$(relpath(file, DOCS_SRC))#$i" begin
+                    quiet(() -> redirect_stdout(devnull) do
+                        include_string(Module(), code)
+                    end)
+                    @test true
+                end
+            end
+        end
+        @test found
     end
 
 end

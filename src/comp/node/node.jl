@@ -1,4 +1,4 @@
-################################################################################
+﻿################################################################################
 # NetworkModelBuilder.jl                                                       #
 # A Julia package to build optimization models for power system problems.      #
 # See http://github.com/timmyfaraday/NetworkModelBuilder.jl                    #
@@ -8,7 +8,15 @@
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
 # v0.2.0 - network dependent data stored per component                         #
+# v0.10.1 - exports its own public names                                       #
 ################################################################################
+
+export Node, NodeType, PQ, PV, REF, ISOLATED, reference_nodes
+export active_nodal_price, reactive_nodal_price, nodal_prices
+export variable_node_voltage
+export constraint_node_balance, constraint_node_voltage_reference
+export constraint_node_voltage_setpoint, constraint_node_voltage_limits
+export solution_node
 
 ################################################################################
 # Node — data                                                                  #

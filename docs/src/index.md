@@ -16,10 +16,11 @@ and every unit injects through the same variable pair. All the dimensions of a
 problem — time, contingencies, harmonics, scenarios — are aggregated under a
 single **network index** `n`.
 
-```julia
-using NetworkModelBuilder, Ipopt
+```@example quickstart
+using NetworkModelBuilder, Ipopt, JuMP
 
-result = solve_lf("case14.m", IVRFormulation, Ipopt.Optimizer)
+result = solve_lf("case14.m", IVRFormulation,
+                  optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 5))
 print_summary(result)
 ```
 

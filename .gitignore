@@ -1,5 +1,6 @@
 /Manifest.toml
 /runs/
+/scratch/
 *.dbl
 docs/build/
 docs/site/

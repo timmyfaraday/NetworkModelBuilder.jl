@@ -1,4 +1,4 @@
-################################################################################
+﻿################################################################################
 # NetworkModelBuilder.jl                                                       #
 # A Julia package to build optimization models for power system problems.      #
 # See http://github.com/timmyfaraday/NetworkModelBuilder.jl                    #
@@ -8,7 +8,10 @@
 # Changelog:                                                                   #
 # v0.3.0 - component hierarchy                                                 #
 # v0.6.0 - the energy balance runs per period                                  #
+# v0.10.1 - exports its own public names                                       #
 ################################################################################
+
+export FlexibleLoad, power_factor_ratio
 
 ################################################################################
 # FlexibleLoad — data                                                          #

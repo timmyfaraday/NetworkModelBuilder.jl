@@ -1,4 +1,4 @@
-################################################################################
+﻿################################################################################
 # NetworkModelBuilder.jl                                                       #
 # A Julia package to build optimization models for power system problems.      #
 # See http://github.com/timmyfaraday/NetworkModelBuilder.jl                    #
@@ -8,7 +8,11 @@
 # Changelog:                                                                   #
 # v0.7.0 - energy not served and spill                                         #
 # v0.8.0 - a slack unit takes a side in the preventive-corrective split        #
+# v0.10.1 - exports its own public names                                       #
 ################################################################################
+
+export AbstractSlackUnit, EnergyNotServed, Spill
+export slack_sign, slack_cost, variable_slack_volume!
 
 ################################################################################
 # Slack unit — data                                                            #

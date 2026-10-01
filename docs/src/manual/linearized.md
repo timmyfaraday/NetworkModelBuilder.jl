@@ -115,10 +115,11 @@ The model is checked against PowerModels.jl v0.21's `DCPPowerModel`:
 A linearized model needs no nonlinear solver. Any LP solver will do for a load
 flow or a linear cost, and a QP solver for a quadratic one:
 
-```julia
-using NetworkModelBuilder, HiGHS
+```@example linearized
+using NetworkModelBuilder, HiGHS, JuMP
 
-result = solve_opf("case14.m", LPFFormulation, HiGHS.Optimizer)
+result = solve_opf("case14.m", LPFFormulation,
+                   optimizer_with_attributes(HiGHS.Optimizer, "output_flag" => true))
 ```
 
 The test suite asserts the model class directly rather than relying on a

@@ -1,2 +1,25 @@
 {
+  "search.exclude": {
+    "docs/build": true,
+    "docs/site": true,
+    "docs/.documenter": true,
+    "runs/": true,
+    "scratch/": true,
+    "Manifest.toml": true,
+    "docs/Manifest.toml": true,
+    "**/*.dbl": true
+  },
+  "chat.tools.terminal.autoApprove": {
+    "git status": true,
+    "git log": true,
+    "git diff": true,
+    "git show": true,
+    "git branch": true,
+    "cd": true,
+    "Set-Location": true,
+    "julia --version": true,
+    "juliaup status": true,
+    "julia --project=. -e \"using Pkg; Pkg.test()\"": true,
+    "julia --project=docs docs/make.jl": true
+  }
 }

@@ -9,6 +9,7 @@
 # v0.1.0 - initial implementation                                              #
 # v0.6.0 - a directory of tables is a network too                              #
 # v0.8.0 - a directory of zorba tables is one as well                          #
+# v0.10.0 - the security tables writer                                         #
 ################################################################################
 
 ################################################################################
@@ -116,4 +117,23 @@ Needs the Arrow package loaded, see [`parse_arrow`](@ref) for why.
 function write_zorba(args...; kwargs...)
     throw(ArgumentError("writing Arrow needs the Arrow package: run `using Arrow` and " *
                         "try again. `zorba_tables` returns plain columns without it."))
+end
+
+"""
+    write_security_tables(dir, tables)
+
+Write what [`security_tables`](@ref) returned to `dir`, one Parquet file per
+table: `frank_safe_borders.parquet`, `nm1_max_flows.parquet` and
+`nm1_min_flows.parquet` — a specific dashboard's own nm1 output names, adopted
+directly so this can be plugged into it with no relabelling. Returns the paths
+written.
+
+A caller that wants different file names reads the table it wants under its
+own, e.g. `write_security_tables(dir, (; flows = tables.frank_safe_borders))`.
+
+Needs the Parquet2 package loaded: run `using Parquet2` and try again.
+"""
+function write_security_tables(args...; kwargs...)
+    throw(ArgumentError("writing Parquet needs the Parquet2 package: run `using Parquet2` " *
+                        "and try again. `security_tables` returns plain columns without it."))
 end

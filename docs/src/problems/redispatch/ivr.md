@@ -106,9 +106,10 @@ changer — see [`redispatch_controls`](@ref).
 Nonconvex and quadratically constrained, as the optimal power flow is, with a
 *linear* objective in place of a quadratic one. Needs a nonlinear solver.
 
-```julia
-using NetworkModelBuilder, Ipopt
+```@example rd-ivr
+using NetworkModelBuilder, Ipopt, JuMP
 
-result = solve_rd("case5.m", IVRFormulation, Ipopt.Optimizer;
+result = solve_rd("case5.m", IVRFormulation,
+                  optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 5);
                   redispatch = Redispatch(; monitored = [7]))
 ```

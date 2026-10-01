@@ -7,6 +7,8 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.3.0 - component hierarchy                                                 #
+# v0.10.0 - adds the dashboard manual page                                     #
+# v0.10.2 - adds the concepts-for-newcomers page                               #
 ################################################################################
 
 using Documenter
@@ -23,12 +25,14 @@ makedocs(
     pages = [
         "Home" => "index.md",
         "Manual" => [
+            "Concepts for newcomers"    => "manual/concepts.md",
             "The extended graph"        => "manual/extended_graph.md",
             "The network index"         => "manual/network_index.md",
             "Problems and formulations" => "manual/problems_formulations.md",
             "The linearized formulation" => "manual/linearized.md",
             "Tabular input"             => "manual/tabular_input.md",
             "The Zorba adapter"         => "manual/zorba.md",
+            "Security screening output" => "manual/dashboard.md",
             "Extending the package"     => "manual/extending.md",
         ],
         "Problems" => [

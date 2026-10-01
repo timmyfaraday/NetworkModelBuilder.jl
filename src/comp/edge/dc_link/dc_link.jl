@@ -1,4 +1,4 @@
-################################################################################
+﻿################################################################################
 # NetworkModelBuilder.jl                                                       #
 # A Julia package to build optimization models for power system problems.      #
 # See http://github.com/timmyfaraday/NetworkModelBuilder.jl                    #
@@ -7,7 +7,10 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.6.0 - initial implementation                                              #
+# v0.10.1 - exports its own public names                                       #
 ################################################################################
+
+export AbstractDCLink, DCLink, transfer_loss, transfer_limits
 
 ################################################################################
 # DC link — data                                                               #

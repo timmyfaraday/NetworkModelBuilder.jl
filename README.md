@@ -163,6 +163,10 @@ changes — `src/prob/rd.jl` is the worked example.
 | multinetwork | the data dictionary replicated per `nw` | one graph; only what varies is a `NetworkVector` |
 | dimensions | `nw` ids, flat | `Dimension` over named axes, with index arithmetic |
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
+
 ## Acknowledgements
 
 The design owes its structure to

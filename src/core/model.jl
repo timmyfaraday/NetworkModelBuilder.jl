@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
 # v0.2.0 - network dependent data stored per component                         #
+# v0.9.4 - registering a model is safe from concurrent threads                 #
 ################################################################################
 
 ################################################################################
@@ -62,6 +63,7 @@ end
 ################################################################################
 
 const _MODELS = Vector{Tuple{Any,Any}}()
+const _MODELS_LOCK = ReentrantLock()
 
 """
     register_model!(P, F)
@@ -71,7 +73,9 @@ formulation type `F`, so that an unsupported combination can report what is
 available.
 """
 function register_model!(P, F)
-    (P, F) in _MODELS || push!(_MODELS, (P, F))
+    lock(_MODELS_LOCK) do
+        (P, F) in _MODELS || push!(_MODELS, (P, F))
+    end
     return nothing
 end
 

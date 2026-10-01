@@ -27,25 +27,16 @@ false-INFEASIBLE finding on the Zorba pipeline, see `lessons.md`).
 
 ## Branches
 
-- `main` is in sync with `origin/main` at `5318428` (D12) — already pushed (this was stale here;
-  see `setup-feedback.md` F2).
-- `test-zorba-run` (standalone `scripts/` env running the three-step redispatch pipeline against
-  real steering-plan data) merged up to date with `main` and pushed: `6cd0af1`. Conflicts resolved
-  in main's favor for `.github/copilot-instructions.md`/`.vscode/settings.json` (branch's own
-  Sept-15 versions predated this setup); dropped the branch's now-superseded
-  `.github/agents/`/`.github/clean-code.instructions.md`/`.github/prompts/`. `scripts/` itself
-  untouched. Full suite (2502 tests) and `docs/make.jl` verified green post-merge.
+- `main` is 3 commits ahead of `origin/main` (`c966558`) recording the Zorba investigation's
+  lessons below — not yet pushed; `git log --oneline -1` has the real local hash.
+- `test-zorba-run` merged up to date with `main` at `6cd0af1`, plus one local commit (`4ef3472`,
+  not pushed) that rescales step 3's last-resort prices to fix a false Xpress `INFEASIBLE` at hour
+  61 — see `lessons.md`. Validated on the real full week: all three steps `OPTIMAL`, all 168 hours.
 - Next free decision id: **D13**.
 
 ## In progress
 
-- Zorba three-step redispatch pipeline (`test-zorba-run` branch, `scripts/`, not on `main`): step 3
-  (internal-BE redispatch) reported hour 61 `INFEASIBLE` under Xpress — confirmed false (HiGHS
-  solves it `OPTIMAL`) and now root-caused: either `PRESOLVE=0` or `SCALING=0` as an Xpress
-  optimizer attribute fixes it, matching HiGHS's objective, no regression on an already-working
-  hour — see `lessons.md`. Not yet applied to `run_three_step_redispatch.jl` or re-run across the
-  full week. `scripts/Project.toml`/`Manifest.toml` have an uncommitted, stashed HiGHS addition
-  from this diagnosis on `test-zorba-run`.
+- Nothing in progress.
 
 ## Next
 

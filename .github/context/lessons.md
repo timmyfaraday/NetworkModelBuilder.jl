@@ -49,16 +49,28 @@ again get retired.
   prove) with a phase shifter's angle held preventive. Pinning that angle at one specific, in-range
   value — a strict subset of the "free" case — solved `OPTIMAL`: a feasible point inside a
   supposedly-infeasible region is a contradiction. HiGHS then solved the identical, unchanged model
-  `OPTIMAL` in under a minute. Likely a scaling artifact: the model ties ~0.1–0.5 rad angle bounds
-  by equality across ~80 contingency coordinates in the same LP as 477,000–4,770,000 $/pu price
-  coefficients. `JuMP.compute_conflict!` did not help — it returned `NO_CONFLICT_EXISTS` on a
-  confirmed-infeasible model, twice. **Fix**: either `PRESOLVE=0` or `SCALING=0` as an Xpress
-  optimizer attribute resolves it — both independently gave `OPTIMAL` matching HiGHS's objective to
-  ~7 significant figures, on both the broken hour and (regression-checked) an already-working one,
-  with no behavior change, just a modest slowdown (worst case +32s on a ~20s solve). FICO's own
-  docs (`chapter3.html`, "Infeasibility, Unboundedness and Instability") name this exact symptom —
-  "Problem instability generally manifests in either long run times or spurious infeasibilities" —
-  and recommend objective/matrix coefficients not exceed a 1e6 ratio; this model's PST angle bounds
-  (~0.1–0.5 rad) next to its 477,000–4,770,000 $/pu overload/shedding prices exceed that by ~50x.
-  Confirmed Tom Van Acker.
+  `OPTIMAL` in under a minute. Root cause: this model's last-resort prices (overload/shedding/
+  spillage, 477,000–4,770,000 $/pu) sat next to phase-shifter angle bounds of O(0.1–0.5) in the same
+  LP — FICO's own docs name this exact symptom ("problem instability generally manifests in either
+  long run times or spurious infeasibilities") and recommend coefficients not exceed a 1e6 ratio.
+  `JuMP.compute_conflict!` did not help — it returned `NO_CONFLICT_EXISTS` on a confirmed-infeasible
+  model, twice. **First "fix" tried, and retracted**: `PRESOLVE=0` or `SCALING=0` as an Xpress
+  attribute both independently resolved hour 61 (matching HiGHS) with no regression found at the
+  time — but re-running the *real* full week surfaced a second, different false `INFEASIBLE` at a
+  completely different window (step 2, hours 17–24) that only appeared with `reuse=true`'s carried-
+  over solver state, not in an isolated re-solve of that window. `PRESOLVE=0` fixed that too but at
+  ~30x the solve time (not viable at scale); a lighter `SCALING=16` (Curtis-Reid) fixed it at ~6x the
+  time — still a real cost, and never confirmed against hour 61 itself under step 3's own real
+  reuse path. Toggling Xpress attributes was fixing one window while risking another, because the
+  bug tracks solver-internal state, not each window's own data. **Actual fix**: rescale the model's
+  own last-resort prices down instead of fighting the solver — same strict ordering (redispatch <
+  overload < spillage < shedding) at smaller multiples (3x/2x/4x the thermal ceiling instead of
+  10x/5x/10x, i.e. 143,100/286,200/572,400 $/pu instead of 477,000/2,385,000/4,770,000), plain
+  `Xpress.Optimizer` with no attribute overrides. Confirmed on the real full week, not just a
+  single window: all three steps `OPTIMAL` across all 168 hours, and ~2.4x *faster* overall
+  (every window got easier to solve, not just the one that used to fail). **Lesson: prefer fixing
+  the model's own numerics over tuning solver attributes to tolerate bad ones — a solver-attribute
+  fix validated on the one window that was known to fail is not validated against the rest of the
+  model, because the fix can change behavior through carried-over solver state that single-window
+  testing never exercises.** Confirmed Tom Van Acker.
 

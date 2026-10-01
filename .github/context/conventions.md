@@ -39,10 +39,10 @@ them.
 
 ## Specs and run prompts
 
-- Specs (gap write-ups, integration handoffs) go in `plans/`; shape in `plans/README.md` and the
-  `new-spec` skill.
-- Agent-run prompts and reports go in `context/agent-runs/`, not `plans/` and not the top-level
-  `runs/` (which holds NMB's own simulation output, unrelated).
+- Specs (gap write-ups, integration handoffs) go in `context/knowledge/plan/`; shape in
+  `context/knowledge/plan/README.md` and the `new-spec` skill.
+- Agent-run prompts and reports go in `context/agent-runs/`, not `context/knowledge/plan/` and not
+  the top-level `runs/` (which holds NMB's own simulation output, unrelated).
 - Decision ids are global and sequential; the next free one is in `STATE.md`.
 
 ## Docs

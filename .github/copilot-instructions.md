@@ -14,8 +14,8 @@ The repo carries its own memory. Use it instead of re-deriving things from the c
   it in context, read it first.
 - `context/INDEX.md`: one line per context file saying when to open it. Open only what the task
   needs.
-- Detailed specs live in `plans/` (e.g. `GAP_CLOSURE_PLAN.md`); `context/decisions.md` holds the
-  lasting rules those specs produced.
+- Detailed specs live in `context/knowledge/plan/` (e.g. `GAP_CLOSURE_PLAN.md`);
+  `context/decisions.md` holds the lasting rules those specs produced.
 
 ## Hard rules
 

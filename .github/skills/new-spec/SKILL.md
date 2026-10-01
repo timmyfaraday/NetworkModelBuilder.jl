@@ -5,7 +5,8 @@ argument-hint: what it should achieve
 ---
 # Write a spec
 
-Read `plans/README.md` (the shape) and `.github/context/lessons.md` first.
+Read `.github/context/knowledge/plan/README.md` (the shape) and `.github/context/lessons.md`
+first.
 
 ## Before writing
 
@@ -27,9 +28,10 @@ Read `plans/README.md` (the shape) and `.github/context/lessons.md` first.
 
 ## After writing
 
-1. A new item in the active plan (e.g. `plans/GAP_CLOSURE_PLAN.md`): add a numbered section
-   following its existing shape. A standalone effort: `plans/<slug>.md`, added to the index table
-   in `plans/README.md`.
+1. A new item in the active plan (e.g. `.github/context/knowledge/plan/GAP_CLOSURE_PLAN.md`): add
+   a numbered section following its existing shape. A standalone effort:
+   `.github/context/knowledge/plan/<slug>.md`, added to the index table in
+   `.github/context/knowledge/plan/README.md`.
 2. Show the user a summary: decisions, commit order, open points.
 3. When the user accepts: run `record-decision` for each decision, update `STATE.md` (next free
    id, In progress).

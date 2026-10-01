@@ -58,10 +58,11 @@ out/
 
 Those are a specific dashboard's own file and column names, adopted directly so
 its output can be plugged in with no relabelling — see
-`plans/dashboard-output-mapping.md` in the repository for where they came from
-and why. A caller that wants different names reads the table it wants under its
-own, the same way `write_security_tables` always works — one file per entry of
-the `NamedTuple` it is given, under that entry's own key:
+`.github/context/knowledge/plan/dashboard-output-mapping.md` in the repository
+for where they came from and why. A caller that wants different names reads the
+table it wants under its own, the same way `write_security_tables` always works
+— one file per entry of the `NamedTuple` it is given, under that entry's own
+key:
 
 ```julia
 write_security_tables("out", (; flows = tables.frank_safe_borders))

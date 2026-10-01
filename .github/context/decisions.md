@@ -22,6 +22,16 @@ How to use this file:
   own retrospective record of which version a change belongs to, and outrank `git log` dates when
   the two disagree (`Project.toml` often didn't move for 20+ commits at a time).
 
+## Project memory layout
+
+- **Specs/plans live in `context/knowledge/plan/`, not a top-level `plans/`** (D12): all of
+  project memory now lives under one root, `.github/context/`; `knowledge/` holds longer-form
+  reference material, a category `context-files.instructions.md` already named before this gave it
+  a real directory. Content is unchanged, only location — every cross-reference to `plans/...` was
+  updated to `context/knowledge/plan/...`; historical mentions (`CHANGELOG.md`, this file's own
+  Log, `setup-changelog.md`, a tag's own pinned reference commit) were left as the accurate record
+  of what was true at the time.
+
 ## Code conventions
 
 - **`src/comp/{node,edge,unit}/` is included by walking the directory tree, not by naming every
@@ -55,8 +65,9 @@ How to use this file:
 - **`security_tables`/`write_security_tables` use a specific dashboard's own file and column
   names directly** (`frank_safe_borders`/`nm1_max_flows`/`nm1_min_flows`), **rather than NMB's own,
   more neutral ones** (D9): chosen for zero-friction interop with that one consumer, at the cost of
-  baking another team's naming into NMB's public API. See `plans/dashboard-output-mapping.md` for
-  the full correspondence and the options for revisiting this later.
+  baking another team's naming into NMB's public API. See
+  `context/knowledge/plan/dashboard-output-mapping.md` for the full correspondence and the options
+  for revisiting this later.
 - **Parquet2 is a new weak dependency, gated the same way Arrow is** (D9): Arrow.jl implements only
   the Arrow IPC format, not Parquet — there is no way to write a literal `.parquet` file without a
   Parquet-capable package, so this was not a choice between Arrow and Parquet2, only whether to add
@@ -162,4 +173,11 @@ Date: 2026-09-30 · Decided by: Tom Van Acker · Area: Results access
 Why: closes gap #9 of `plans/GAP_CLOSURE_PLAN.md` — result access was a stringly-typed nested
 `Dict` with no autocomplete, type safety or easy whole-table access; adding a tidy view alongside
 it (not replacing it) gives that without a new dependency or changing what a `result` carries.
+Changes: new.
+
+### D12 — Specs/plans move from a top-level `plans/` to `context/knowledge/plan/`
+Date: 2026-10-01 · Decided by: Tom Van Acker · Area: Project memory layout
+Why: keeps all project memory under one root (`.github/context/`) instead of split across that and
+a separate top-level `plans/`; `knowledge/` was already named as a context category in
+`context-files.instructions.md` before this gave it a real directory.
 Changes: new.

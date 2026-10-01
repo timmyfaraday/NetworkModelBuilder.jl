@@ -31,9 +31,9 @@ and a worked example if the diff between the two adaptations is useful.
 - `context/decisions.md`, `backlog.md`, `lessons.md`, `environment.md`, `conventions.md` *content*
   — NMB's own history, don't carry over
 - `context/STATE.md` — start fresh (empty / "nothing done yet")
-- `plans/` (NMB's spec location, referenced from `context/INDEX.md`) — don't carry over the
-  content; check whether the new repo already has its own equivalent before creating
-  `context/specs/` from scratch
+- `context/knowledge/plan/` (NMB's spec location, referenced from `context/INDEX.md`) — don't
+  carry over the content; check whether the new repo already has its own equivalent before
+  creating `context/specs/` from scratch
 
 **Config that needs one edit each:**
 - `.github/hooks/scripts/hook_config.json` — change `setup_owner` to the new repo's owner; adjust

@@ -15,6 +15,6 @@
 | `templates/` | Shapes for specs and run prompts (used by the `new-spec` and `new-run-prompt` skills). |
 | `archive/` | Only to resolve an old decision id. |
 
-Detailed specs (gap write-ups, integration handoffs) live in `plans/` at the repo root, not under
-`context/` — see `plans/README.md`. NMB's own simulation output lives in the top-level `runs/`,
+Detailed specs (gap write-ups, integration handoffs) live in `context/knowledge/plan/` — see
+`context/knowledge/plan/README.md`. NMB's own simulation output lives in the top-level `runs/`,
 unrelated to `context/agent-runs/`.

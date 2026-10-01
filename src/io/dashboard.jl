@@ -52,9 +52,10 @@ Returns `(; frank_safe_borders, nm1_max_flows, nm1_min_flows)`, each a
 | `time_id`   | the label of the time step, see the `time_id` keyword              |
 | `flow_mw`   | the active power into the first terminal, in MW                    |
 
-The names are a specific dashboard's own — see `plans/dashboard-output-mapping.md`
-— adopted directly so a straight [`write_security_tables`](@ref) needs no
-relabelling to be read where that dashboard expects it.
+The names are a specific dashboard's own — see
+`.github/context/knowledge/plan/dashboard-output-mapping.md` — adopted directly
+so a straight [`write_security_tables`](@ref) needs no relabelling to be read
+where that dashboard expects it.
 
 `frank_safe_borders` has one row per edge, time step and contingency — the base
 case is never one of them, since there is nothing to screen for in a state

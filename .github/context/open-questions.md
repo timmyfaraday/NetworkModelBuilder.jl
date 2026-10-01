@@ -6,7 +6,8 @@ the answer as a decision (if it changes a rule) and delete the question. Next id
 Format: `### Q<n> · <question>` then who can settle it, what depends on it, and the options.
 
 ### Q1 · Chunked-parallel rolling horizon, or document the trade-off?
-Owner: Tom (not yet settled). Depends on: `plans/GAP_CLOSURE_PLAN.md` gap #10, backlog B3.
+Owner: Tom (not yet settled). Depends on: `context/knowledge/plan/GAP_CLOSURE_PLAN.md` gap #10,
+backlog B3.
 `solve_rolling_horizon` is inherently sequential — each window needs the previous window's solved
 state (`initial_state`) — while SmaLoadFlow gets throughput on long horizons via OS-level
 multiprocessing, cutting one horizon into independent batches and approximating the coupling at

@@ -22,7 +22,8 @@ The agent keeps `context/` up to date as part of each task.
 - **Finish with `/wrap-up`.** If you forget, the Stop hook asks the agent once to do it.
 - **Decisions**: when you decide something, say so plainly ("let's go with X"); the agent records
   it with `/record-decision` and cites the id in the commit.
-- **Useful skills**: `/new-spec` (writes into `plans/`), `/pr-description`, `/setup-review`,
+- **Useful skills**: `/new-spec` (writes into `context/knowledge/plan/`), `/pr-description`,
+  `/setup-review`,
   `/probe-environment`, `/new-run-prompt` and `/review-run-report` (for a task handed to an
   unattended/overnight agent run).
 - **Before asking the agent to re-explain something**, check `context/INDEX.md`; point it at the

@@ -2,7 +2,7 @@
 
 Every change to the setup (instructions, skills, hooks, settings), newest at the bottom.
 Format: `- SC<n> · YYYY-MM-DD · approved by <user> · <what changed> · why: <feedback ids or reason>`.
-Next id: **SC3**.
+Next id: **SC4**.
 
 - SC1 · 2026-09-30 · approved by Tom Van Acker · Initial setup, ported from a colleague's
   FlowBasedDomains (fbd) repo and adapted for Julia/GitHub/solo maintainer: `copilot-instructions`,
@@ -14,3 +14,7 @@ Next id: **SC3**.
   documenting that a `src/comp/` subdirectory's file named like the directory itself loads first ·
   why: closing gap #8 (`plans/GAP_CLOSURE_PLAN.md`) makes `src/comp/` auto-discovered by directory
   walk, turning this existing naming habit into a load-bearing rule that needed writing down.
+- SC3 · 2026-10-01 · approved by Tom Van Acker · `copilot-instructions.md` and `new-spec/SKILL.md`:
+  updated their `plans/` path references to `context/knowledge/plan/` · why: D12 moved specs/plans
+  from a top-level `plans/` to `context/knowledge/plan/`; these two setup files are the only ones
+  under the setup-files protocol that named the old path.

@@ -1,7 +1,7 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-01 by Tom Van Acker (moving
-specs/plans from `plans/` to `context/knowledge/plan/`, D12).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-01 by Tom Van Acker (synced
+`test-zorba-run` with `main`; corrected stale D12 push status below).
 
 ## Where NMB stands
 
@@ -27,18 +27,23 @@ specs/plans from `plans/` to `context/knowledge/plan/`, D12).
 
 ## Branches
 
-- `main` is one commit ahead of `origin/main` (`baa6c97`) with the D12 reorg above — not yet
-  pushed; `git log --oneline -1` has the real local hash.
+- `main` is in sync with `origin/main` at `5318428` (D12) — already pushed (this was stale here;
+  see `setup-feedback.md` F2).
+- `test-zorba-run` (standalone `scripts/` env running the three-step redispatch pipeline against
+  real steering-plan data) merged up to date with `main` and pushed: `6cd0af1`. Conflicts resolved
+  in main's favor for `.github/copilot-instructions.md`/`.vscode/settings.json` (branch's own
+  Sept-15 versions predated this setup); dropped the branch's now-superseded
+  `.github/agents/`/`.github/clean-code.instructions.md`/`.github/prompts/`. `scripts/` itself
+  untouched. Full suite (2502 tests) and `docs/make.jl` verified green post-merge.
 - Next free decision id: **D13**.
 
 ## In progress
 
-- Nothing in progress. D12 is implemented and committed locally; push on request.
+- Nothing in progress.
 
 ## Next
 
-1. Push the D12 commit when asked.
-2. Gap #10 (parallel rolling-horizon throughput) and #11 (bus factor) remain — see `backlog.md`.
+1. Gap #10 (parallel rolling-horizon throughput) and #11 (bus factor) remain — see `backlog.md`.
 
 ## Blocked / waiting
 

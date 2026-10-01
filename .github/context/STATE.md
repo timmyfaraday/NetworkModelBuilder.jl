@@ -39,12 +39,13 @@ false-INFEASIBLE finding on the Zorba pipeline, see `lessons.md`).
 
 ## In progress
 
-- Zorba three-step redispatch pipeline (`test-zorba-run` branch, `scripts/`, not on `main`):
-  diagnosing why step 3 (internal-BE redispatch) reports hour 61 `INFEASIBLE` under Xpress.
-  Confirmed it is a false positive — HiGHS solves the identical model `OPTIMAL` — see `lessons.md`.
-  Next: investigate Xpress scaling/tolerance controls (option chosen over rescaling the model or a
-  standing HiGHS cross-check). `scripts/Project.toml`/`Manifest.toml` have an uncommitted,
-  stashed HiGHS addition from this diagnosis on `test-zorba-run`.
+- Zorba three-step redispatch pipeline (`test-zorba-run` branch, `scripts/`, not on `main`): step 3
+  (internal-BE redispatch) reported hour 61 `INFEASIBLE` under Xpress — confirmed false (HiGHS
+  solves it `OPTIMAL`) and now root-caused: either `PRESOLVE=0` or `SCALING=0` as an Xpress
+  optimizer attribute fixes it, matching HiGHS's objective, no regression on an already-working
+  hour — see `lessons.md`. Not yet applied to `run_three_step_redispatch.jl` or re-run across the
+  full week. `scripts/Project.toml`/`Manifest.toml` have an uncommitted, stashed HiGHS addition
+  from this diagnosis on `test-zorba-run`.
 
 ## Next
 

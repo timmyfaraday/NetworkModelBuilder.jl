@@ -52,5 +52,13 @@ again get retired.
   `OPTIMAL` in under a minute. Likely a scaling artifact: the model ties ~0.1–0.5 rad angle bounds
   by equality across ~80 contingency coordinates in the same LP as 477,000–4,770,000 $/pu price
   coefficients. `JuMP.compute_conflict!` did not help — it returned `NO_CONFLICT_EXISTS` on a
-  confirmed-infeasible model, twice. Confirmed Tom Van Acker.
+  confirmed-infeasible model, twice. **Fix**: either `PRESOLVE=0` or `SCALING=0` as an Xpress
+  optimizer attribute resolves it — both independently gave `OPTIMAL` matching HiGHS's objective to
+  ~7 significant figures, on both the broken hour and (regression-checked) an already-working one,
+  with no behavior change, just a modest slowdown (worst case +32s on a ~20s solve). FICO's own
+  docs (`chapter3.html`, "Infeasibility, Unboundedness and Instability") name this exact symptom —
+  "Problem instability generally manifests in either long run times or spurious infeasibilities" —
+  and recommend objective/matrix coefficients not exceed a 1e6 ratio; this model's PST angle bounds
+  (~0.1–0.5 rad) next to its 477,000–4,770,000 $/pu overload/shedding prices exceed that by ~50x.
+  Confirmed Tom Van Acker.
 

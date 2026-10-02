@@ -2,11 +2,15 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B5**.
+older ones: git has them). Next id: **B6**.
 
 ## Now
 
 ## Next
+
+- [ ] B5 · A `Switch` edge type (children: busbar switch, circuit breaker), replacing near-zero-impedance couplers · Tom · 2026-10-02
+  - Trigger: start as soon as the year-scale Zorba work is finished; the agent should raise it then,
+    unprompted. See D13. Until it exists the Zorba pipeline floors line reactance at 1e-5.
 
 ## Later
 

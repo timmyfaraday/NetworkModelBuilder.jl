@@ -32,7 +32,7 @@ false-INFEASIBLE finding on the Zorba pipeline, see `lessons.md`).
 - `test-zorba-run` is merged up to date with `main` at `6cd0af1`, plus 5 local commits, none pushed:
   the price rescale (`4ef3472`, now known not to be the real fix), hour ids/`select_hours` (`20d88dc`),
   chunked parallel step 1 over the year (`f7571aa`), and the N-1 screen (`e100616`).
-- Next free decision id: **D13**.
+- Next free decision id: **D14**.
 
 ## In progress
 
@@ -46,7 +46,9 @@ false-INFEASIBLE finding on the Zorba pipeline, see `lessons.md`).
 
 ## Next
 
-1. Gap #10 (parallel rolling-horizon throughput) and #11 (bus factor) remain — see `backlog.md`.
+1. When the year-scale Zorba work is finished, raise B5 (the `Switch` edge type) with Tom without
+   being asked — he asked to be triggered. See D13.
+2. Gap #10 (parallel rolling-horizon throughput) and #11 (bus factor) remain — see `backlog.md`.
 
 ## Blocked / waiting
 

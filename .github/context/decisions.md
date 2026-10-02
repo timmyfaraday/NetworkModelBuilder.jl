@@ -82,6 +82,13 @@ How to use this file:
   reports at all is dropped rather than kept `missing` throughout. No new dependency —
   `DataFrame(tables.node)` works for a caller who already has DataFrames.jl.
 
+## Component model
+
+- **A bus coupler, or any other device that only connects or disconnects, is a `Switch`: a subtype of
+  the edge with its own children, such as a busbar switch and a circuit breaker — not a branch with
+  a near-zero impedance** (D13). Not built yet. Until it is, the Zorba pipeline floors the
+  reactance of every line at 1e-5 as a stopgap (`scripts/SteeringPlanData.jl`, on `test-zorba-run`).
+
 ## Validation against a reference implementation
 
 - **PowerModels.jl is a live cross-check (`test/powermodels.jl`), run alongside the existing
@@ -181,3 +188,11 @@ Why: keeps all project memory under one root (`.github/context/`) instead of spl
 a separate top-level `plans/`; `knowledge/` was already named as a context category in
 `context-files.instructions.md` before this gave it a real directory.
 Changes: new.
+
+### D13 — A bus coupler is a `Switch`, a subtype of the edge, not a near-zero-impedance branch
+Date: 2026-10-02 · Decided by: Tom Van Acker · Area: Component model
+Why: the Zorba data models 21 busbar couplers as branches with reactance 1e-7 (susceptance 1e7
+against ~60 for a line), and that coefficient range made Xpress return false `INFEASIBLE` and false
+`OPTIMAL` solutions that violated node balance by up to 32 pu. A switch has no impedance to get
+wrong and can be open or closed. Its children would include a busbar switch and a circuit breaker.
+Changes: new. Not implemented; the pipeline floors reactance at 1e-5 meanwhile.

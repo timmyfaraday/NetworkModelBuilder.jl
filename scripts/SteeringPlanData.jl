@@ -14,7 +14,7 @@ using NetworkModelBuilder
 export load_network, country, cross_border, internal_be,
        cross_border_edges, internal_be_edges, freeze_dispatch, exclude_all_storage!,
        restrict_to_belgium!, add_load_shedding!, load_shedding_ids,
-       add_spillage!, spillage_ids
+       add_spillage!, spillage_ids, hour_ids, hour_positions, select_hours
 
 ################################################################################
 # Reading the tables                                                          #
@@ -332,6 +332,10 @@ Every quantity is converted to per unit on `baseMVA`, following the convention
 `src/io/matpower.jl` uses: a power in MW is divided by it, a price per MW is
 multiplied by it. Reactances and angles in the source data are already per unit
 and radians respectively and are carried through unchanged.
+
+The hour identifiers of `hours` are kept in `data.ext[:hour_ids]`, see
+[`hour_ids`](@ref), so a data set cut down to some of them later still knows
+which hours of the year it holds.
 """
 function load_network(dir::AbstractString; hours::UnitRange{Int} = 1:8760,
                       baseMVA::Float64 = 100.0)
@@ -353,7 +357,58 @@ function load_network(dir::AbstractString; hours::UnitRange{Int} = 1:8760,
     u = _load_storage!(U, u, dir, dim, hours, baseMVA)
     _load_fixed_loads!(U, u, node_ids, net_position, neighbour_pg, dim, baseMVA)
 
-    return NetworkData(Network(I, E, U; dim); name = "steering_plan", baseMVA)
+    return NetworkData(Network(I, E, U; dim); name = "steering_plan", baseMVA,
+                       ext = Dict{Symbol,Any}(:hour_ids => collect(hours)))
+end
+
+################################################################################
+# Hours of the year                                                           #
+################################################################################
+
+"""
+    hour_ids(data) -> Vector{Int}
+
+The hour of the year behind every `:time` coordinate of `data`, in order.
+
+`1:8760` for a full year as [`load_network`](@ref) returns it, and the hours
+kept for a data set cut down by [`select_hours`](@ref). A report writes these
+rather than the position along `:time`, which means something different in every
+cut.
+"""
+hour_ids(data::NetworkData) =
+    get(() -> collect(1:dim_length(dimension(data), :time)), data.ext, :hour_ids)::Vector{Int}
+
+"""
+    hour_positions(data, hours) -> Vector{Int}
+
+The position along `:time` of each of the hours of the year `hours` in `data`.
+"""
+function hour_positions(data::NetworkData, hours::AbstractVector{Int})
+    index = Dict(h => k for (k, h) in enumerate(hour_ids(data)))
+
+    return map(hours) do h
+        haskey(index, h) || throw(ArgumentError("hour $h is not part of this data set"))
+        index[h]
+    end
+end
+
+"""
+    select_hours(data, hours) -> NetworkData
+
+`data` cut down to the hours of the year `hours`, in the order given.
+
+This is [`window`](@ref) along `:time`, which keeps every profile as it was at
+those hours, with the hour identifiers carried along so [`hour_ids`](@ref) still
+reports the hour of the year rather than a position. It is what lets the year be
+loaded once and handed out in pieces: no hour of this pipeline depends on
+another, so a piece solves exactly as it would inside the whole.
+"""
+function select_hours(data::NetworkData, hours::AbstractVector{Int})
+    cut = window(data, :time, hour_positions(data, hours))
+    ext = deepcopy(cut.ext)
+    ext[:hour_ids] = collect(Int, hours)
+
+    return NetworkData(network(cut); name = cut.name, baseMVA = baseMVA(cut), ext)
 end
 
 ################################################################################
@@ -400,18 +455,24 @@ internal_be_edges(data::NetworkData) =
 _fields(c::T) where {T} = NamedTuple{fieldnames(T)}(map(f -> getfield(c, f), fieldnames(T)))
 
 """
-    freeze_dispatch(data, result) -> NetworkData
+    freeze_dispatch(data, result; positions = 1:dim_length(data, :time)) -> NetworkData
 
 `data` with every [`Generator`](@ref)'s `pg`, every [`Storage`](@ref)'s `ps` and
-every [`PhaseShifter`](@ref)'s `ta` replaced by their solved values in `result`,
-read hour by hour from network indices `1:dim_length(data, :time)`.
+every [`PhaseShifter`](@ref)'s `ta` replaced by their solved values in `result`.
 
-That range is the **base case** of `result` only because `result` is assumed to
-have been solved over a `Dimension(:time => T, :contingency => K)` built in
-that order: with `:time` varying fastest, its `contingency = 1` coordinates are
-exactly network indices `1:T`, see [`Dimension`](@ref). Everything in this
-module builds its contingency dimensions that way, so the assumption holds for
-any `result` this pipeline produces.
+`positions[i]` is the position along `:time` in `data` of the `i`-th hour
+`result` solved, so a `result` that only covered some of the hours of `data` —
+the ones a screen kept — freezes just those, and every other hour keeps the
+dispatch `data` already has. The default is a `result` over every hour of
+`data`, in order.
+
+The solved values are read from network indices `1:length(positions)` of
+`result`. That range is the **base case** of `result` only because `result` is
+assumed to have been solved over a `Dimension(:time => T, :contingency => K)`
+built in that order: with `:time` varying fastest, its `contingency = 1`
+coordinates are exactly network indices `1:T`, see [`Dimension`](@ref).
+Everything in this module builds its contingency dimensions that way, so the
+assumption holds for any `result` this pipeline produces.
 
 A [`Storage`](@ref) unit that was out of service throughout `result` (e.g.
 [`exclude_all_storage!`](@ref) applied before it was solved) keeps its own
@@ -431,26 +492,33 @@ original non-zero dispatch — a raw imbalance equal to the network's *entire*
 excluded storage fleet at that hour, restated as apparently having nowhere
 near enough shed/spill headroom to close it.
 """
-function freeze_dispatch(data::NetworkData, result::Dict{String,Any})
+function freeze_dispatch(data::NetworkData, result::Dict{String,Any};
+                         positions::AbstractVector{Int} = 1:dim_length(dimension(data), :time))
     dim = dimension(data)
-    T   = dim_length(dim, :time)
 
     return set_dimension(data, dim; apply! = function (net, _)
         for (u, c) in net.unit
             if c isa Generator
-                pg = [nw_solution(result, t)["unit"]["$u"]["pg"] for t in 1:T]
+                pg = nw_values(dim, c.pg)
+                for (i, t) in enumerate(positions)
+                    pg[t] = nw_solution(result, i)["unit"]["$u"]["pg"]
+                end
                 net.unit[u] = Generator(; _fields(c)..., pg = nw_vector(dim, :time, pg))
             elseif c isa Storage
-                ps = map(1:T) do t
-                    sol = nw_solution(result, t)["unit"]
-                    haskey(sol, "$u") ? sol["$u"]["psd"] - sol["$u"]["psc"] : nw_value(dim, c.ps, t)
+                ps = nw_values(dim, c.ps)
+                for (i, t) in enumerate(positions)
+                    sol = nw_solution(result, i)["unit"]
+                    haskey(sol, "$u") && (ps[t] = sol["$u"]["psd"] - sol["$u"]["psc"])
                 end
                 net.unit[u] = Storage(; _fields(c)..., ps = nw_vector(dim, :time, ps))
             end
         end
         for (e, c) in net.edge
             c isa PhaseShifter || continue
-            ta = [nw_solution(result, t)["edge"]["$e"]["tap"]["ta"] for t in 1:T]
+            ta = nw_values(dim, c.ta)
+            for (i, t) in enumerate(positions)
+                ta[t] = nw_solution(result, i)["edge"]["$e"]["tap"]["ta"]
+            end
             net.edge[e] = PhaseShifter(; _fields(c)..., ta = nw_vector(dim, :time, ta))
         end
     end)

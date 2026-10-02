@@ -284,7 +284,8 @@ function congestion_report(data::NetworkData, result::Dict{String,Any})
                       Tuple{Int,Int,Float64,Float64,Float64}}[]
     haskey(result, "solution") || return DataFrame(rows)
 
-    net  = network(data)
+    net   = network(data)
+    hours = hour_ids(data)
     for e in ids(net, AbstractEdge)
         rate = edges(net)[e].rate_a
         isfinite(rate) || continue
@@ -293,7 +294,7 @@ function congestion_report(data::NetworkData, result::Dict{String,Any})
             term = nw_solution(result, n)["edge"]["$e"]["terminal"]
             flow = maximum(abs(t["p"]) for t in values(term))
             flow > rate + 1e-6 &&
-                push!(rows, (edge = e, hour = n, flow_pu = flow, rate_a_pu = rate,
+                push!(rows, (edge = e, hour = hours[n], flow_pu = flow, rate_a_pu = rate,
                              overload_pu = flow - rate))
         end
     end
@@ -325,15 +326,16 @@ function redispatch_volumes(data::NetworkData, result::Dict{String,Any})
                       Tuple{Int,String,Int,Float64,Float64}}[]
     haskey(result, "solution") || return DataFrame(rows)
 
+    hours = hour_ids(data)
     for n in nw_ids(data; contingency = 1)
         _solved(result, n) || continue
         sol = nw_solution(result, n)
         for (u, entry) in sol["unit"]
             if haskey(entry, "pgup")
-                push!(rows, (unit = parse(Int, u), type = entry["type"], hour = n,
+                push!(rows, (unit = parse(Int, u), type = entry["type"], hour = hours[n],
                              up = entry["pgup"], down = entry["pgdn"]))
             elseif haskey(entry, "psup")
-                push!(rows, (unit = parse(Int, u), type = entry["type"], hour = n,
+                push!(rows, (unit = parse(Int, u), type = entry["type"], hour = hours[n],
                              up = entry["psup"], down = entry["psdn"]))
             end
         end
@@ -361,8 +363,9 @@ function overload_report(data::NetworkData, result::Dict{String,Any}, events::Ve
                       Tuple{Int,String,Int,Int,Union{Missing,String},Union{Missing,Symbol},Float64}}[]
     haskey(result, "solution") || return DataFrame(rows)
 
-    dim = dimension(data)
-    net = network(data)
+    dim   = dimension(data)
+    net   = network(data)
+    hours = hour_ids(data)
     for n in nw_ids(data)
         _solved(result, n) || continue
         c   = coordinates(dim, n)
@@ -373,7 +376,7 @@ function overload_report(data::NetworkData, result::Dict{String,Any}, events::Ve
             ov > 1e-6 || continue
             e  = parse(Int, e_str)
             ev = c.contingency == 1 ? missing : events[c.contingency - 1]
-            push!(rows, (edge = e, name = edges(net)[e].name, hour = c.time,
+            push!(rows, (edge = e, name = edges(net)[e].name, hour = hours[c.time],
                          contingency = c.contingency,
                          outaged_event = ismissing(ev) ? missing : ev.label,
                          outaged_category = ismissing(ev) ? missing : ev.category,
@@ -405,6 +408,7 @@ function load_shedding_report(data::NetworkData, result::Dict{String,Any},
                       Tuple{Int,Int,Int,Union{Missing,String},Union{Missing,Symbol},Float64}}[]
     haskey(result, "solution") || return DataFrame(rows)
 
+    hours = hour_ids(data)
     dim = dimension(data)
     net = network(data)
     for n in nw_ids(data)
@@ -416,7 +420,7 @@ function load_shedding_report(data::NetworkData, result::Dict{String,Any},
             shed = sol["$u"]["pgup"]
             shed > 1e-6 || continue
             ev = c.contingency == 1 ? missing : events[c.contingency - 1]
-            push!(rows, (node = units(net)[u].node, hour = c.time, contingency = c.contingency,
+            push!(rows, (node = units(net)[u].node, hour = hours[c.time], contingency = c.contingency,
                          outaged_event = ismissing(ev) ? missing : ev.label,
                          outaged_category = ismissing(ev) ? missing : ev.category,
                          shed_pu = shed))
@@ -449,6 +453,7 @@ function spillage_report(data::NetworkData, result::Dict{String,Any},
                       Tuple{Int,Int,Int,Union{Missing,String},Union{Missing,Symbol},Float64}}[]
     haskey(result, "solution") || return DataFrame(rows)
 
+    hours = hour_ids(data)
     dim = dimension(data)
     net = network(data)
     for n in nw_ids(data)
@@ -460,7 +465,7 @@ function spillage_report(data::NetworkData, result::Dict{String,Any},
             spilled = sol["$u"]["pgdn"]
             spilled > 1e-6 || continue
             ev = c.contingency == 1 ? missing : events[c.contingency - 1]
-            push!(rows, (node = units(net)[u].node, hour = c.time, contingency = c.contingency,
+            push!(rows, (node = units(net)[u].node, hour = hours[c.time], contingency = c.contingency,
                          outaged_event = ismissing(ev) ? missing : ev.label,
                          outaged_category = ismissing(ev) ? missing : ev.category,
                          spilled_pu = spilled))

@@ -42,35 +42,34 @@ again get retired.
   (10.0, -5.0, …); the function correctly multiplies by `baseMVA` to convert per-unit to MW, so
   every assertion was off by exactly 100×. Caught by running the tests, not by reading the code —
   the fixture "looked" right. (unconfirmed)
-- **Cross-check an unexpected `INFEASIBLE` with a second, independent solver before trusting it —
-  especially when the model mixes very different coefficient magnitudes.** The Zorba three-step
-  redispatch pipeline (`test-zorba-run` branch) had Xpress report hour 61 of the internal-BE
-  redispatch step genuinely `INFEASIBLE` (its own unscaled-infeasibility check agreed, ~20 min to
-  prove) with a phase shifter's angle held preventive. Pinning that angle at one specific, in-range
-  value — a strict subset of the "free" case — solved `OPTIMAL`: a feasible point inside a
-  supposedly-infeasible region is a contradiction. HiGHS then solved the identical, unchanged model
-  `OPTIMAL` in under a minute. Root cause: this model's last-resort prices (overload/shedding/
-  spillage, 477,000–4,770,000 $/pu) sat next to phase-shifter angle bounds of O(0.1–0.5) in the same
-  LP — FICO's own docs name this exact symptom ("problem instability generally manifests in either
-  long run times or spurious infeasibilities") and recommend coefficients not exceed a 1e6 ratio.
-  `JuMP.compute_conflict!` did not help — it returned `NO_CONFLICT_EXISTS` on a confirmed-infeasible
-  model, twice. **First "fix" tried, and retracted**: `PRESOLVE=0` or `SCALING=0` as an Xpress
-  attribute both independently resolved hour 61 (matching HiGHS) with no regression found at the
-  time — but re-running the *real* full week surfaced a second, different false `INFEASIBLE` at a
-  completely different window (step 2, hours 17–24) that only appeared with `reuse=true`'s carried-
-  over solver state, not in an isolated re-solve of that window. `PRESOLVE=0` fixed that too but at
-  ~30x the solve time (not viable at scale); a lighter `SCALING=16` (Curtis-Reid) fixed it at ~6x the
-  time — still a real cost, and never confirmed against hour 61 itself under step 3's own real
-  reuse path. Toggling Xpress attributes was fixing one window while risking another, because the
-  bug tracks solver-internal state, not each window's own data. **Actual fix**: rescale the model's
-  own last-resort prices down instead of fighting the solver — same strict ordering (redispatch <
-  overload < spillage < shedding) at smaller multiples (3x/2x/4x the thermal ceiling instead of
-  10x/5x/10x, i.e. 143,100/286,200/572,400 $/pu instead of 477,000/2,385,000/4,770,000), plain
-  `Xpress.Optimizer` with no attribute overrides. Confirmed on the real full week, not just a
-  single window: all three steps `OPTIMAL` across all 168 hours, and ~2.4x *faster* overall
-  (every window got easier to solve, not just the one that used to fail). **Lesson: prefer fixing
-  the model's own numerics over tuning solver attributes to tolerate bad ones — a solver-attribute
-  fix validated on the one window that was known to fail is not validated against the rest of the
-  model, because the fix can change behavior through carried-over solver state that single-window
-  testing never exercises.** Confirmed Tom Van Acker.
+- **A solver status is a claim, not a result: cross-check an unexpected `INFEASIBLE` with a second
+  solver, and check an `OPTIMAL` primal vector against the model's own constraints.** The Zorba
+  three-step redispatch pipeline (`test-zorba-run`) had Xpress report hour 61 of step 3 `INFEASIBLE`
+  (~20 min to "prove"); pinning a phase shifter inside its range — a strict subset of the free case —
+  solved `OPTIMAL`, and HiGHS solved the unchanged model `OPTIMAL` in under a minute. The same model
+  also returned `OPTIMAL` vectors that violate node balance by up to 32 pu — visible only through
+  `JuMP.primal_feasibility_report(model; atol = 1e-5)`; the status and objective looked normal. On
+  week 1 step 2, 8 of 21 windows were affected. `JuMP.compute_conflict!` returned `NO_CONFLICT_EXISTS`
+  on a confirmed-infeasible model, so it is no help here. (unconfirmed)
+- **The root cause was 21 busbar-coupler edges with reactance 1e-7, not the prices or Xpress's
+  settings.** A coupler has susceptance 1e7 against ~60 for an ordinary line, so the matrix spans
+  [1, 1e7]; FICO's docs name this symptom ("long run times or spurious infeasibilities"). Flooring the
+  reactance at 1e-5 removed every violation (0 of 21 windows) and solved hour 61 in 6.3 s *with the
+  original prices*, default settings and no other change. It moves monitored flows little (week 1, 79
+  outage cases: 99th percentile 0.22 % of rating, maximum 2.2 %, none above 10 %); a floor of 1e-4
+  moves them up to 17 % and is too coarse. Two earlier "fixes" were wrong and are retracted: Xpress
+  `SCALING=0`/`PRESOLVE=0` fixed hour 61 but broke a different window under `reuse=true` (the bug
+  tracks solver state, so a fix checked only on the known-bad window proves nothing about the rest),
+  and rescaling the last-resort prices only reduced how often the trouble showed. Look for the
+  extreme coefficient in the *constraint matrix* (`Coefficient range` in the solver log) before
+  touching prices or solver attributes. (unconfirmed)
+- **A per-edge lookup of "which event contains this edge" silently drops every event after the
+  first.** The pipeline's `with_contingencies` used `findfirst(ev -> id in ev.edges, events)`, so an
+  edge listed by several events (a line that is both a simple N-1 and part of a busbar group) went out
+  only in the first one. 34 of 79 internal events and 2 of 13 cross-border events were affected, and 10
+  busbar events lost *every* edge, i.e. modelled no outage at all. It showed up only because an
+  independent closed-form flow calculation matched NMB's load flow to 1e-9 pu for 12 events and was
+  off by 46 pu for the two with a shared edge. Validate a second implementation against the first on
+  the real data, not a toy case. Every redispatch result produced before the fix understates the N-1
+  severity of those events. (unconfirmed)
 

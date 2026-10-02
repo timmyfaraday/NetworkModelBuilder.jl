@@ -27,16 +27,22 @@ false-INFEASIBLE finding on the Zorba pipeline, see `lessons.md`).
 
 ## Branches
 
-- `main` is 3 commits ahead of `origin/main` (`c966558`) recording the Zorba investigation's
-  lessons below — not yet pushed; `git log --oneline -1` has the real local hash.
-- `test-zorba-run` merged up to date with `main` at `6cd0af1`, plus one local commit (`4ef3472`,
-  not pushed) that rescales step 3's last-resort prices to fix a false Xpress `INFEASIBLE` at hour
-  61 — see `lessons.md`. Validated on the real full week: all three steps `OPTIMAL`, all 168 hours.
+- `main` is 4 commits ahead of `origin/main` (`c966558`) recording the Zorba investigation's
+  lessons — not yet pushed; `git log --oneline -1` has the real local hash.
+- `test-zorba-run` is merged up to date with `main` at `6cd0af1`, plus 5 local commits, none pushed:
+  the price rescale (`4ef3472`, now known not to be the real fix), hour ids/`select_hours` (`20d88dc`),
+  chunked parallel step 1 over the year (`f7571aa`), and the N-1 screen (`e100616`).
 - Next free decision id: **D13**.
 
 ## In progress
 
-- Nothing in progress.
+- Year-scale Zorba pipeline (`test-zorba-run`, `scripts/`): step 1 (year, 137 s on 48 threads) and the
+  N-1 screen are done. Open, awaiting Tom: (1) a coupler reactance floor of 1e-5 is the root cause of
+  every Xpress false `INFEASIBLE`/`OPTIMAL` seen — apply it in the loader and restore the original
+  prices?; (2) `with_contingencies` drops every edge after its first event — fix, then re-run the
+  week-1 baseline, since results so far understate N-1 severity and 8 of 21 step-2 windows held
+  constraint-violating "optimal" vectors; (3) the screen skips only ~3% of the year's hours, so
+  integrate it or not. See `lessons.md`.
 
 ## Next
 

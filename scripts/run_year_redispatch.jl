@@ -16,7 +16,14 @@
 # scripts/run_year_redispatch.jl`. Settings are read from the environment:    #
 #   NMB_HOURS ("1:168"), NMB_RUN_ID, NMB_CHUNK_HOURS (24), NMB_NTASKS         #
 #   (threads), NMB_XPRESS_THREADS (2, threads Xpress uses within one solve),  #
-#   NMB_RESUME ("0"; "1" skips the chunks already done).                      #
+#   NMB_RESUME ("0"; "1" skips the chunks already done), NMB_MERGE ("1";      #
+#   "0" writes the chunks only, no merged files).                             #
+#                                                                             #
+# More threads in one process stop paying off at a handful of tasks: the      #
+# garbage collector and the allocator are shared. To use the whole machine    #
+# run many one-thread processes, each on its own range of hours with a shared #
+# NMB_RUN_ID and NMB_MERGE=0, then one last run over the full range with      #
+# NMB_RESUME=1, which finds every chunk done and only merges them.            #
 ################################################################################
 
 haskey(ENV, "XPRESSDIR") || (ENV["XPRESSDIR"] = raw"C:\xpressmp")
@@ -59,6 +66,7 @@ const CHUNK_HOURS    = parse(Int, get(ENV, "NMB_CHUNK_HOURS", "24"))
 const NTASKS         = parse(Int, get(ENV, "NMB_NTASKS", string(Threads.nthreads())))
 const XPRESS_THREADS = parse(Int, get(ENV, "NMB_XPRESS_THREADS", "2"))
 const RESUME         = get(ENV, "NMB_RESUME", "0") == "1"
+const MERGE          = get(ENV, "NMB_MERGE", "1") == "1"
 
 # step 2 rolls over 8 hours at a time, step 3 one hour at a time; with no coupling
 # between hours the grouping changes nothing but how often a model is rebuilt
@@ -111,16 +119,18 @@ println("[setup] ", length(events), " event(s) resolved: ", length(cb_contingenc
 excluded_table(excluded) = DataFrame(label = getproperty.(excluded, :label),
                                      category = getproperty.(excluded, :category),
                                      edges = [join(ev.edges, ";") for ev in excluded])
-write_csv(joinpath(OUT_DIR, "00_contingencies", "events.csv"), event_report)
-write_csv(joinpath(OUT_DIR, "02_cross_border_redispatch", "excluded_bridge_edges.csv"), excluded_table(cb_excluded))
-write_csv(joinpath(OUT_DIR, "03_internal_redispatch", "excluded_bridge_edges.csv"), excluded_table(be_excluded))
+if MERGE
+    write_csv(joinpath(OUT_DIR, "00_contingencies", "events.csv"), event_report)
+    write_csv(joinpath(OUT_DIR, "02_cross_border_redispatch", "excluded_bridge_edges.csv"), excluded_table(cb_excluded))
+    write_csv(joinpath(OUT_DIR, "03_internal_redispatch", "excluded_bridge_edges.csv"), excluded_table(be_excluded))
+end
 
 const ROW_FIELDS = (:first_hour, :last_hour,
                     :step1_status, :step1_s,
                     :step2_status, :step2_solver, :step2_first_status, :step2_first_violation,
-                    :step2_violation, :step2_s,
+                    :step2_violation, :step2_s, :step2_solve_s,
                     :step3_status, :step3_solver, :step3_first_status, :step3_first_violation,
-                    :step3_violation, :step3_s,
+                    :step3_violation, :step3_s, :step3_solve_s,
                     :sound, :seconds, :error)
 
 chunk_dir(hours) = joinpath(OUT_DIR, "chunks",
@@ -182,6 +192,7 @@ function run_chunk(data::NetworkData, hours::Vector{Int})
         row[:step2_first_violation] = run2.first_violation
         row[:step2_violation]       = run2.worst_violation
         row[:step2_s]               = round(time() - t, digits = 1)
+        row[:step2_solve_s]         = round(result2["solve_time"], digits = 1)
         is_sound(run2) ||
             error("step 2 finished with status $(run2.status) and violation $(run2.worst_violation)")
 
@@ -216,6 +227,7 @@ function run_chunk(data::NetworkData, hours::Vector{Int})
         row[:step3_first_violation] = run3.first_violation
         row[:step3_violation]       = run3.worst_violation
         row[:step3_s]               = round(time() - t, digits = 1)
+        row[:step3_solve_s]         = round(result3["solve_time"], digits = 1)
         is_sound(run3) ||
             error("step 3 finished with status $(run3.status) and violation $(run3.worst_violation)")
 
@@ -284,6 +296,17 @@ for (c, r) in zip(todo, results)
                                           :sound => false, :error => first(r.message, 300)))
 end
 
+# one process of many sharing a run id leaves the merging to a last run over the full range
+if !MERGE
+    not_done = [c for c in todo if !isfile(joinpath(chunk_dir(c), "DONE"))]
+    println("[run] ", length(todo) - length(not_done), " of ", length(todo), " chunk(s) sound; ",
+            round(elapsed, digits = 1), " s, of which ",
+            round(Base.gc_num().total_time / 1e9, digits = 1), " s of garbage-collection pauses")
+    isempty(not_done) || error("[run] $(length(not_done)) chunk(s) are not sound, see $(joinpath(OUT_DIR, "chunks"))")
+    println("done — chunks written under ", joinpath(OUT_DIR, "chunks"))
+    exit(0)
+end
+
 merge_csv(chunks, "01_congestion.csv", joinpath(OUT_DIR, "01_market_lf", "congestion.csv"))
 for (step_dir, prefix, names) in (("02_cross_border_redispatch", "02_",
                                    ("summary", "redispatch_volumes", "overload")),
@@ -300,7 +323,8 @@ unsound = chunk_table[.!coalesce.(chunk_table.sound, false), :]
 retried = count(s -> !ismissing(s) && s == "fallback", chunk_table.step2_solver) +
           count(s -> !ismissing(s) && s == "fallback", chunk_table.step3_solver)
 println("[run] ", nrow(chunk_table) - nrow(unsound), " of ", nrow(chunk_table), " chunk(s) sound; ",
-        retried, " step(s) needed the fallback solver; ", round(elapsed, digits = 1), " s")
+        retried, " step(s) needed the fallback solver; ", round(elapsed, digits = 1), " s, of which ",
+        round(Base.gc_num().total_time / 1e9, digits = 1), " s of garbage-collection pauses")
 isempty(unsound) ||
     error("[run] $(nrow(unsound)) chunk(s) are not sound, see $(joinpath(OUT_DIR, "chunks.csv"))")
 

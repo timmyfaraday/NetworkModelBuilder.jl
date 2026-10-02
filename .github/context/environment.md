@@ -20,6 +20,12 @@ facts `(unverified)` and remove the marker once checked.
   runs fully offline once `Manifest.toml` is resolved: 2436 tests, `Test Summary` time 3m03.6s
   (~3m21s wall including precompilation) with `JULIA_NUM_THREADS=4` set first (found by Tom Van
   Acker, 2026-09-30).
+- Machine: 112 cores, 1 TB RAM. Many one-thread Julia processes run fine side by side: 73
+  `julia --project=scripts -t 1` started with `Start-Process ... -RedirectStandardOutput <abs path>
+  -PassThru` then `Wait-Process`, each ~1 GB in the load phase (solve-phase peak not measured);
+  Xpress's development licence did not limit them. Env vars set before each `Start-Process` are
+  inherited by that child. `julia -e '...'` loses its inner quotes in PowerShell: use a temp `.jl`
+  (found by Tom Van Acker, 2026-10-02).
 - `Pkg.activate(temp=true)` is ephemeral — gone by the next separate `julia` process invocation
   even after a clean exit. Use `Pkg.activate("C:/explicit/persistent/path")` (forward slashes) for
   any scratch environment reused across multiple terminal calls.

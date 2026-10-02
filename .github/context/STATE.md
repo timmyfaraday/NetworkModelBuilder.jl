@@ -1,7 +1,7 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-01 by Tom Van Acker (Xpress
-false-INFEASIBLE finding on the Zorba pipeline, see `lessons.md`).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-02 by Tom Van Acker (Zorba
+year run finished, 365 of 365 chunks sound).
 
 ## Where NMB stands
 
@@ -27,28 +27,34 @@ false-INFEASIBLE finding on the Zorba pipeline, see `lessons.md`).
 
 ## Branches
 
-- `main` is 4 commits ahead of `origin/main` (`c966558`) recording the Zorba investigation's
-  lessons — not yet pushed; `git log --oneline -1` has the real local hash.
-- `test-zorba-run` is merged up to date with `main` at `6cd0af1`, plus 5 local commits, none pushed:
-  the price rescale (`4ef3472`, now known not to be the real fix), hour ids/`select_hours` (`20d88dc`),
-  chunked parallel step 1 over the year (`f7571aa`), and the N-1 screen (`e100616`).
+- `main` is 5 commits ahead of `origin/main` (`c966558`) recording the Zorba work's lessons and
+  D13 — not yet pushed; `git log --oneline -1` has the real local hash. The context files are kept
+  current on `main` only; `test-zorba-run` lags them.
+- `test-zorba-run` is `6cd0af1` (a merge of `main`) plus 6 local commits, none pushed, all under
+  `scripts/`: the price rescale (`4ef3472`), phases 0-3 (`20d88dc`, `f7571aa`, `e100616`,
+  `f939763`: hour ids, parallel step 1, the N-1 screen, parallel steps 2-3 with the contingency fix,
+  the reactance floor and checked solves) and the driver's `NMB_MERGE` flag (`9a8b676`).
 - Next free decision id: **D14**.
 
 ## In progress
 
-- Year-scale Zorba pipeline (`test-zorba-run`, `scripts/`): step 1 (year, 137 s on 48 threads) and the
-  N-1 screen are done. Open, awaiting Tom: (1) a coupler reactance floor of 1e-5 is the root cause of
-  every Xpress false `INFEASIBLE`/`OPTIMAL` seen — apply it in the loader and restore the original
-  prices?; (2) `with_contingencies` drops every edge after its first event — fix, then re-run the
-  week-1 baseline, since results so far understate N-1 severity and 8 of 21 step-2 windows held
-  constraint-violating "optimal" vectors; (3) the screen skips only ~3% of the year's hours, so
-  integrate it or not. See `lessons.md`.
+- Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`): DONE. 365 of 365 daily
+  chunks `OPTIMAL` and violation-free, 0 on the HiGHS fallback, in 63 min as 73 one-thread processes
+  (`runs/_year_full`, gitignored). Reactance floor 1e-5 applied (D13), `with_contingencies` fixed, the
+  N-1 screen dropped (it skips ~3% of hours). The week reproduces the sequential baseline to solver
+  tolerance (objective rel diff 1e-12). Year totals: 129,109 step-1 congestion rows, 352,540 step-2 and
+  5,953,226 step-3 overload rows, 0 load-shedding rows, 635 spillage rows. Lessons: `lessons.md`.
+- Run it with processes, not threads: 7 threads in one process give 860 s per 24 h chunk, 7
+  processes 330-400 s, and 30 threads no more throughput than 7. Recipe in the header of
+  `scripts/run_year_redispatch.jl`. About 85% of a chunk's wall time is NMB's own per-window work
+  (B6), not the solver.
 
 ## Next
 
-1. When the year-scale Zorba work is finished, raise B5 (the `Switch` edge type) with Tom without
+1. The year-scale Zorba work is finished: raise B5 (the `Switch` edge type) with Tom now, without
    being asked — he asked to be triggered. See D13.
-2. Gap #10 (parallel rolling-horizon throughput) and #11 (bus factor) remain — see `backlog.md`.
+2. Q2 and Q3 (restore the original last-resort prices? retire `run_three_step_redispatch.jl`?).
+3. Gap #10 (parallel rolling-horizon throughput) and #11 (bus factor) remain — see `backlog.md`.
 
 ## Blocked / waiting
 

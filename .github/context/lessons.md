@@ -73,3 +73,16 @@ again get retired.
   the real data, not a toy case. Every redispatch result produced before the fix understates the N-1
   severity of those events. (unconfirmed)
 
+## Performance
+
+- **Threads inside one Julia process stop paying at a handful of tasks for NMB's per-window work;
+  separate one-thread processes keep scaling.** Zorba week 1, same 7 daily chunks: 7 threads in one
+  process 860 s per chunk; 7 processes 330-400 s. One 720-hour month on 30 threads had the same
+  throughput as the week on 7 (0.17 vs 0.19 h/s). The year as 73 processes took 63 min (chunks
+  327-911 s, mean 632 s, so some contention remains at 73). The Xpress solve is only ~15-20% of a
+  chunk (step 3: 137 s of 3,680 s on 30 threads); the rest is `update_model!` (~3 s/window),
+  `build_solution` (~1 s) and the agent's per-window feasibility check (~1.9 s), plus GC (13-20%
+  of wall). The cause (shared GC or allocator, a GC held up by threads inside a long Xpress call) is
+  not proven. Before building parallelism into a long run, time a one-chunk run alone, then at the
+  intended concurrency, as threads and as processes. (unconfirmed)
+

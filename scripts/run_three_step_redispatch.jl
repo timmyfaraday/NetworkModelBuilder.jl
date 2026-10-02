@@ -98,7 +98,7 @@ const HORIZON_CB = 8   # step 2 — cross-border, 13 contingency events
 const STEP_CB    = 8
 const HORIZON_BE = 1   # step 3 — internal BE, 81 contingency events
 const STEP_BE    = 1
-const RUN_ID    = "_week1_price_rescale"
+const RUN_ID    = "_week1_baseline_fixed"
 const OUT_DIR   = joinpath(@__DIR__, "..", "runs", RUN_ID)
 const OPTIMIZER = Xpress.Optimizer
 
@@ -149,7 +149,8 @@ multi-section line, a busbar's connected elements) that trip as one.
 A unit is overridden the exact same way an edge is, since a [`Generator`](@ref)
 carries the same `status` field an edge does — see
 [`ContingencyData.resolve_contingency_events`](@ref) for why a generator is the
-only unit type an `events` entry ever names.
+only unit type an `events` entry ever names. A component is out at *every*
+contingency whose event lists it, not only the first.
 
 Every component's existing `:time` profile is spread unchanged over every
 contingency, since `set_dimension` does not do this on its own: a `NetworkVector`
@@ -166,17 +167,17 @@ function with_contingencies(data::NetworkData, events::Vector{ContingencyEvent})
         end
         for (id, c) in net.edge
             spread = _spread_over(c, dim)
-            k = findfirst(ev -> id in ev.edges, events)
-            net.edge[id] = k === nothing ? spread :
+            ks = findall(ev -> id in ev.edges, events)
+            net.edge[id] = isempty(ks) ? spread :
                 typeof(spread)(; SteeringPlanData._fields(spread)...,
-                               status = nw_vector(dim, (n, coord) -> coord.contingency != k + 1))
+                               status = nw_vector(dim, (n, coord) -> !(coord.contingency - 1 in ks)))
         end
         for (id, c) in net.unit
             spread = _spread_over(c, dim)
-            k = findfirst(ev -> id in ev.units, events)
-            net.unit[id] = k === nothing ? spread :
+            ks = findall(ev -> id in ev.units, events)
+            net.unit[id] = isempty(ks) ? spread :
                 typeof(spread)(; SteeringPlanData._fields(spread)...,
-                               status = nw_vector(dim, (n, coord) -> coord.contingency != k + 1))
+                               status = nw_vector(dim, (n, coord) -> !(coord.contingency - 1 in ks)))
         end
     end)
 end

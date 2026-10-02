@@ -1,28 +1,41 @@
 ################################################################################
 # run_year_redispatch.jl                                                      #
-# The LongTermSteeringPlan redispatch pipeline over any range of hours of the #
-# year, solved in chunks of hours on Julia threads: no hour depends on        #
+# The LongTermSteeringPlan three-step redispatch pipeline over any range of   #
+# hours of the year:                                                          #
+#   1. load flow at market-cleared dispatch                                   #
+#   2. cross-border N-1 redispatch, reference = raw market data               #
+#   3. internal-BE N-1 redispatch, reference = step 2's solved dispatch       #
+#                                                                             #
+# It is solved in chunks of hours on Julia threads. No hour depends on        #
 # another here (storage is excluded, nothing ramps), so a chunk solves exactly#
-# as it would inside the whole.                                               #
-#                                                                              #
-# Run with several threads, e.g. `julia --project=scripts -t 16              #
+# as it would inside the whole, and a chunk runs all three steps for its hours#
+# before the next one starts. Each chunk writes its own files and a DONE      #
+# marker, so an interrupted run resumes where it stopped.                     #
+#                                                                             #
+# Run with several threads, e.g. `julia --project=scripts -t 48               #
 # scripts/run_year_redispatch.jl`. Settings are read from the environment:    #
 #   NMB_HOURS ("1:168"), NMB_RUN_ID, NMB_CHUNK_HOURS (24), NMB_NTASKS         #
-#   (threads), NMB_XPRESS_THREADS (1, threads Xpress uses within one solve).  #
-#                                                                              #
-# So far: 1. load flow at market-cleared dispatch.                            #
+#   (threads), NMB_XPRESS_THREADS (2, threads Xpress uses within one solve),  #
+#   NMB_RESUME ("0"; "1" skips the chunks already done).                      #
 ################################################################################
 
 haskey(ENV, "XPRESSDIR") || (ENV["XPRESSDIR"] = raw"C:\xpressmp")
 
+using CSV
+using DataFrames
 using NetworkModelBuilder
 using Xpress
-using DataFrames
 
 const MOI = NetworkModelBuilder.MOI
 
 include(joinpath(@__DIR__, "SteeringPlanData.jl"))
 using .SteeringPlanData
+
+include(joinpath(@__DIR__, "ContingencyData.jl"))
+using .ContingencyData
+
+include(joinpath(@__DIR__, "Contingencies.jl"))
+using .Contingencies
 
 include(joinpath(@__DIR__, "PipelineReports.jl"))
 using .PipelineReports
@@ -34,7 +47,8 @@ using .ParallelRun
 # Configuration                                                              #
 ################################################################################
 
-const DATA_DIR = raw"D:\TVA\LongTermSteeringPlan\Data\Clean"
+const DATA_DIR         = raw"D:\TVA\LongTermSteeringPlan\Data\Clean"
+const CONTINGENCY_XLSX = raw"O:\ESM\IPL\SMA\C_Studies\52_ZORBA\02_Input\LT_steering_data\LTSteering_Structuur_SMA_v3_EME.xlsx"
 
 const HOURS = let (a, b) = parse.(Int, split(get(ENV, "NMB_HOURS", "1:168"), ':'))
     a:b
@@ -43,62 +57,251 @@ const RUN_ID         = get(ENV, "NMB_RUN_ID", "_year_scratch")
 const OUT_DIR        = joinpath(@__DIR__, "..", "runs", RUN_ID)
 const CHUNK_HOURS    = parse(Int, get(ENV, "NMB_CHUNK_HOURS", "24"))
 const NTASKS         = parse(Int, get(ENV, "NMB_NTASKS", string(Threads.nthreads())))
-const XPRESS_THREADS = parse(Int, get(ENV, "NMB_XPRESS_THREADS", "1"))
+const XPRESS_THREADS = parse(Int, get(ENV, "NMB_XPRESS_THREADS", "2"))
+const RESUME         = get(ENV, "NMB_RESUME", "0") == "1"
+
+# step 2 rolls over 8 hours at a time, step 3 one hour at a time; with no coupling
+# between hours the grouping changes nothing but how often a model is rebuilt
+const HORIZON_CB = 8
+const STEP_CB    = 8
+const HORIZON_BE = 1
+const STEP_BE    = 1
+
+# a solution that breaks one of its own constraints by more than this is not trusted
+const VIOLATION_TOL = 1e-3
+
+# The costliest redispatch in the data is the thermal ceiling, 477 $/MWh = 47,700 $/pu
+# at `baseMVA = 100`. Each last-resort price clears the one below it: overloading a
+# monitored line costs 3x that ceiling, dumping surplus generation 2x that again, and
+# shedding real demand 4x the overload price, so demand is the very last thing to go.
+const OVERLOAD_PRICE      = OverloadPrice(; per_energy = 3 * 47_700.0)
+const LOAD_SHEDDING_PRICE = 4 * OVERLOAD_PRICE.per_energy
+const SPILLAGE_PRICE      = 2 * OVERLOAD_PRICE.per_energy
 
 Threads.nthreads() == 1 &&
     @warn "running on one thread: start Julia with `-t N` for the chunks to solve in parallel"
 
 ################################################################################
-# Step 1 — load flow at market-cleared dispatch                              #
+# Setup shared by every chunk                                                #
 ################################################################################
 
-"the load flow of `hours`, with its summary and the edges past their rating"
-function step1_chunk(data::NetworkData, hours::Vector{Int}, optimizer)
-    d      = select_hours(data, hours)
-    result = solve_lf(d, LPFFormulation, optimizer)
-
-    return (hours = extrema(hours), summary = solve_summary(result),
-            congestion = congestion_report(d, result))
-end
-
-println("[1/3] loading network data for hours $HOURS ...")
+println("[setup] loading network data for hours $HOURS ...")
 data = load_network(DATA_DIR; hours = HOURS, baseMVA = 100.0)
 
-chunks    = chunk_hours(collect(HOURS), CHUNK_HOURS)
-optimizer = xpress_optimizer(threads = XPRESS_THREADS)
+println("[setup] loading Elia's N-1 study contingency events ...")
+raw_events           = load_contingency_events(CONTINGENCY_XLSX)
+events, event_report = resolve_contingency_events(data, raw_events)
 
-println("[1/3] solving the load flow over $(length(chunks)) chunk(s) of up to $CHUNK_HOURS ",
-        "hour(s) on $NTASKS task(s) ...")
-elapsed = @elapsed results = parallel_map(h -> step1_chunk(data, h, optimizer), chunks;
-                                          ntasks = NTASKS)
+cb_events = filter(ev -> touches(cross_border, data, ev), events)
+be_events = filter(ev -> !touches(cross_border, data, ev), events)
 
-chunk_summary = DataFrame(first_hour = Int[], last_hour = Int[], termination_status = String[],
-                          objective = Float64[], solve_time = Float64[], n_overloads = Int[],
-                          error = String[])
-for (c, r) in zip(chunks, results)
-    if r isa Failed
-        push!(chunk_summary, (first(c), last(c), "ERROR", NaN, NaN, 0, first(r.message, 300)))
-    else
-        s = r.summary
-        push!(chunk_summary, (r.hours..., s.termination_status[1], s.objective[1],
-                              s.solve_time[1], nrow(r.congestion), ""))
+cb_monitored = sort!(unique(reduce(vcat, (ev.edges for ev in cb_events); init = Int[])))
+be_monitored = sort!(unique(reduce(vcat, (ev.edges for ev in be_events); init = Int[])))
+monitored_all = sort!(unique(vcat(cb_monitored, be_monitored)))
+
+# an event whose combined outage disconnects the graph cannot be redispatched around
+# and gets no contingency of its own, but its edges are still monitored
+cb_contingency, cb_excluded = contingency_events(network(data), cb_events)
+be_contingency, be_excluded = contingency_events(network(data), be_events)
+
+println("[setup] ", length(events), " event(s) resolved: ", length(cb_contingency), " cross-border and ",
+        length(be_contingency), " internal contingencies (", length(cb_excluded) + length(be_excluded),
+        " excluded as bridges)")
+
+excluded_table(excluded) = DataFrame(label = getproperty.(excluded, :label),
+                                     category = getproperty.(excluded, :category),
+                                     edges = [join(ev.edges, ";") for ev in excluded])
+write_csv(joinpath(OUT_DIR, "00_contingencies", "events.csv"), event_report)
+write_csv(joinpath(OUT_DIR, "02_cross_border_redispatch", "excluded_bridge_edges.csv"), excluded_table(cb_excluded))
+write_csv(joinpath(OUT_DIR, "03_internal_redispatch", "excluded_bridge_edges.csv"), excluded_table(be_excluded))
+
+const ROW_FIELDS = (:first_hour, :last_hour,
+                    :step1_status, :step1_s,
+                    :step2_status, :step2_solver, :step2_first_status, :step2_first_violation,
+                    :step2_violation, :step2_s,
+                    :step3_status, :step3_solver, :step3_first_status, :step3_first_violation,
+                    :step3_violation, :step3_s,
+                    :sound, :seconds, :error)
+
+chunk_dir(hours) = joinpath(OUT_DIR, "chunks",
+                            "h$(lpad(first(hours), 5, '0'))-$(lpad(last(hours), 5, '0'))")
+
+"whether a checked solve is `OPTIMAL` and breaks none of its own constraints"
+is_sound(run) = run.status == string(MOI.OPTIMAL) && run.worst_violation <= VIOLATION_TOL
+
+"`summary` of a solve with the hours it covered in front"
+summary_of(hours, result) =
+    hcat(DataFrame(first_hour = first(hours), last_hour = last(hours)), solve_summary(result))
+
+################################################################################
+# One chunk: all three steps for its hours                                   #
+################################################################################
+
+"""
+    run_chunk(data, hours) -> Dict
+
+Run the three steps for `hours` and write what they found under `chunk_dir(hours)`.
+The chunk is redone whole if it is run again, never patched. A step that does not
+come back sound stops the chunk there, since the next step reads its answer.
+"""
+function run_chunk(data::NetworkData, hours::Vector{Int})
+    started = time()
+    dir     = chunk_dir(hours)
+    isdir(dir) && rm(dir; recursive = true)
+    mkpath(dir)
+
+    T   = length(hours)
+    row = Dict{Symbol,Any}(:first_hour => first(hours), :last_hour => last(hours), :sound => false)
+
+    try
+        d1 = select_hours(data, hours)
+
+        # step 1 — load flow at market-cleared dispatch
+        t = time()
+        result1 = solve_lf(d1, LPFFormulation, xpress_optimizer(threads = XPRESS_THREADS))
+        write_csv(joinpath(dir, "01_congestion.csv"), congestion_report(d1, result1))
+        row[:step1_status] = string(result1["termination_status"])
+        row[:step1_s]      = round(time() - t, digits = 1)
+        result1["termination_status"] == MOI.OPTIMAL ||
+            error("step 1 finished with status $(row[:step1_status])")
+
+        # step 2 — cross-border N-1 redispatch, storage excluded
+        t   = time()
+        d2  = with_contingencies(exclude_all_storage!(d1), cb_contingency)
+        rd2 = Redispatch(; monitored = cb_monitored, control = :preventive, overload = OVERLOAD_PRICE)
+        run2 = solve_checked(d2, rd2; horizon = min(HORIZON_CB, T), step = min(STEP_CB, T),
+                             primary = xpress_model(threads = XPRESS_THREADS), fallback = highs_model(),
+                             tol = VIOLATION_TOL)
+        result2 = run2.result
+        write_csv(joinpath(dir, "02_summary.csv"), summary_of(hours, result2))
+        write_csv(joinpath(dir, "02_redispatch_volumes.csv"), redispatch_volumes(d2, result2))
+        write_csv(joinpath(dir, "02_overload.csv"), overload_report(d2, result2, cb_contingency))
+        row[:step2_status]          = run2.status
+        row[:step2_solver]          = run2.solver
+        row[:step2_first_status]    = run2.first_status
+        row[:step2_first_violation] = run2.first_violation
+        row[:step2_violation]       = run2.worst_violation
+        row[:step2_s]               = round(time() - t, digits = 1)
+        is_sound(run2) ||
+            error("step 2 finished with status $(run2.status) and violation $(run2.worst_violation)")
+
+        # step 3 — internal-BE N-1 redispatch, reference = step 2's dispatch
+        t  = time()
+        d3 = freeze_dispatch(d1, result2)
+        d3 = restrict_to_belgium!(d3)
+        # with every non-BE unit pinned and storage gone the balance can come up short
+        # or long at some hour; these are the relief valves, last resort and corrective
+        d3 = add_load_shedding!(d3; price = LOAD_SHEDDING_PRICE)
+        shed_ids = load_shedding_ids(d3)
+        d3 = add_spillage!(d3; price = SPILLAGE_PRICE)
+        spill_ids = spillage_ids(d3)
+        d3 = with_contingencies(d3, be_contingency)
+        exception = Dict{Tuple{Symbol,Int},Symbol}((:unit, id) => :corrective
+                                                   for id in vcat(shed_ids, spill_ids))
+        rd3  = Redispatch(; monitored = monitored_all, control = :preventive, exception,
+                          overload = OVERLOAD_PRICE)
+        run3 = solve_checked(d3, rd3; horizon = min(HORIZON_BE, T), step = min(STEP_BE, T),
+                             primary = xpress_model(threads = XPRESS_THREADS), fallback = highs_model(),
+                             tol = VIOLATION_TOL)
+        result3 = run3.result
+        write_csv(joinpath(dir, "03_summary.csv"), summary_of(hours, result3))
+        write_csv(joinpath(dir, "03_redispatch_volumes.csv"), redispatch_volumes(d3, result3))
+        write_csv(joinpath(dir, "03_overload.csv"), overload_report(d3, result3, be_contingency))
+        write_csv(joinpath(dir, "03_load_shedding.csv"),
+                  load_shedding_report(d3, result3, shed_ids, be_contingency))
+        write_csv(joinpath(dir, "03_spillage.csv"), spillage_report(d3, result3, spill_ids, be_contingency))
+        row[:step3_status]          = run3.status
+        row[:step3_solver]          = run3.solver
+        row[:step3_first_status]    = run3.first_status
+        row[:step3_first_violation] = run3.first_violation
+        row[:step3_violation]       = run3.worst_violation
+        row[:step3_s]               = round(time() - t, digits = 1)
+        is_sound(run3) ||
+            error("step 3 finished with status $(run3.status) and violation $(run3.worst_violation)")
+
+        row[:sound] = true
+    catch e
+        row[:error] = first(sprint(showerror, e), 300)
     end
+
+    row[:seconds] = round(time() - started, digits = 1)
+    write_chunk_row(dir, row)
+    row[:sound] && write(joinpath(dir, "DONE"), "")
+
+    println("[chunk $(first(hours))-$(last(hours))] ", row[:sound] ? "sound" : "NOT SOUND",
+            " in $(row[:seconds]) s",
+            haskey(row, :step2_solver) && row[:step2_solver] == "fallback" ? ", step 2 on the fallback solver" : "",
+            haskey(row, :step3_solver) && row[:step3_solver] == "fallback" ? ", step 3 on the fallback solver" : "",
+            haskey(row, :error) ? ": $(row[:error])" : "")
+
+    return row
 end
 
-solved     = [r.congestion for r in results if !(r isa Failed)]
-congestion = isempty(solved) ? DataFrame() : vcat(solved...)
-nrow(congestion) > 0 && sort!(congestion, [:edge, :hour])
+"write the one-row `chunk.csv` of a chunk with every field present, empty where a step never ran"
+function write_chunk_row(dir::AbstractString, row::Dict{Symbol,Any})
+    write_csv(joinpath(dir, "chunk.csv"),
+              DataFrame([k => [get(row, k, missing)] for k in ROW_FIELDS]))
 
-dir1 = joinpath(OUT_DIR, "01_market_lf")
-write_csv(joinpath(dir1, "chunks.csv"), chunk_summary)
-write_csv(joinpath(dir1, "congestion.csv"), congestion)
+    return nothing
+end
 
-bad = chunk_summary[chunk_summary.termination_status .!= string(MOI.OPTIMAL), :]
-println("[1/3] ", nrow(chunk_summary) - nrow(bad), " of ", nrow(chunk_summary),
-        " chunk(s) OPTIMAL in ", round(elapsed, digits = 1), " s; ", nrow(congestion),
-        " (edge, hour) overload(s) over ",
-        nrow(congestion) > 0 ? length(unique(congestion.hour)) : 0, " hour(s)")
-isempty(bad) ||
-    error("[1/3] $(nrow(bad)) chunk(s) did not solve to OPTIMAL, see $(joinpath(dir1, "chunks.csv"))")
+"the files `name` of every chunk of `chunks`, concatenated into `out` under one header"
+function merge_csv(chunks, name::AbstractString, out::AbstractString)
+    mkpath(dirname(out))
+    open(out, "w") do io
+        wrote_header = false
+        for c in chunks
+            file = joinpath(chunk_dir(c), name)
+            isfile(file) || continue
+            for (k, line) in enumerate(eachline(file))
+                k == 1 && wrote_header && continue
+                println(io, line)
+            end
+            wrote_header = true
+        end
+    end
+
+    return nothing
+end
+
+################################################################################
+# Run                                                                        #
+################################################################################
+
+chunks = chunk_hours(collect(HOURS), CHUNK_HOURS)
+todo   = RESUME ? [c for c in chunks if !isfile(joinpath(chunk_dir(c), "DONE"))] : chunks
+
+println("[run] ", length(todo), " of ", length(chunks), " chunk(s) of up to $CHUNK_HOURS hour(s) to solve on ",
+        "$NTASKS task(s), $XPRESS_THREADS Xpress thread(s) each")
+elapsed = @elapsed results = parallel_map(h -> run_chunk(data, h), todo; ntasks = NTASKS)
+
+# a chunk whose task died without writing its own row still gets one
+for (c, r) in zip(todo, results)
+    r isa Failed || continue
+    dir = chunk_dir(c)
+    mkpath(dir)
+    write_chunk_row(dir, Dict{Symbol,Any}(:first_hour => first(c), :last_hour => last(c),
+                                          :sound => false, :error => first(r.message, 300)))
+end
+
+merge_csv(chunks, "01_congestion.csv", joinpath(OUT_DIR, "01_market_lf", "congestion.csv"))
+for (step_dir, prefix, names) in (("02_cross_border_redispatch", "02_",
+                                   ("summary", "redispatch_volumes", "overload")),
+                                  ("03_internal_redispatch", "03_",
+                                   ("summary", "redispatch_volumes", "overload", "load_shedding", "spillage")))
+    for name in names
+        merge_csv(chunks, "$prefix$name.csv", joinpath(OUT_DIR, step_dir, "$name.csv"))
+    end
+end
+merge_csv(chunks, "chunk.csv", joinpath(OUT_DIR, "chunks.csv"))
+
+chunk_table = CSV.read(joinpath(OUT_DIR, "chunks.csv"), DataFrame)
+unsound = chunk_table[.!coalesce.(chunk_table.sound, false), :]
+retried = count(s -> !ismissing(s) && s == "fallback", chunk_table.step2_solver) +
+          count(s -> !ismissing(s) && s == "fallback", chunk_table.step3_solver)
+println("[run] ", nrow(chunk_table) - nrow(unsound), " of ", nrow(chunk_table), " chunk(s) sound; ",
+        retried, " step(s) needed the fallback solver; ", round(elapsed, digits = 1), " s")
+isempty(unsound) ||
+    error("[run] $(nrow(unsound)) chunk(s) are not sound, see $(joinpath(OUT_DIR, "chunks.csv"))")
 
 println("done — outputs written under ", OUT_DIR)

@@ -239,7 +239,7 @@ Names are matched against edges (`Branch`, `PhaseShifter`, ...) by exact
 `.name`, and against generators by case-insensitive `.name` — a
 [`Generator`](@ref) is the one unit type this package lets an outage act on
 the same way it does an edge (it carries the same `status` field, see
-`with_contingencies` in `run_three_step_redispatch.jl`), which is what a busbar
+`with_contingencies` in `Contingencies.jl`), which is what a busbar
 group's generator element needs. A name that matches neither is left
 unresolved, which is expected for an asset this data slice has no table for
 (e.g. the HVDC link `ALEGRO`) or a generator whose sheet name does not follow
@@ -249,7 +249,7 @@ An event is dropped — absent from `events`, `status = :dropped` in `report` �
 only when *none* of its names resolved; an event with some names unresolved is
 kept with `status = :partial` and its own edges/units, and a fully-resolved
 event is `status = :ok`. Nothing here decides whether an event is a bridge/cut
-set on its own — that is `contingency_events` in `run_three_step_redispatch.jl`,
+set on its own — that is `contingency_events` in `Contingencies.jl`,
 run after this on the events this function keeps.
 
 A `:busbar` event's own label is checked against the node names too, but only

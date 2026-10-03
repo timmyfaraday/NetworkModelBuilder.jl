@@ -555,7 +555,7 @@ This pipeline used to carve out a handful of large-scale ITM batteries as a
 genuine redispatch resource. That exemption was removed once a week-scale run
 diagnosed storage state-of-charge depletion under the rolling horizon (98% of
 units down to <1% SoC by hour ~105, given the `energy_initial = 50%`
-assumption with no re-anchoring — see `run_three_step_redispatch.jl`): storage
+assumption with no re-anchoring — see the retired `run_three_step_redispatch.jl` in git history): storage
 cannot be trusted as a redispatch resource anywhere in this pipeline, so it is
 excluded everywhere it appears, step 2 included. Capping its ratings at
 `abs(ps)` instead of excluding it was rejected, as before: that would still
@@ -661,8 +661,8 @@ a `FixedLoad`" are the same set here; this adds one wherever `country(data, ·)
 node (`pd < 0`) has no demand there to shed. `pmin = pg = 0`, so `pgdn`'s own
 upper bound (`pg - pmin = 0`) pins the downward volume at zero regardless of
 price: this is one-directional shedding, not curtailment, because the
-infeasibility it targets is a shortfall, not a surplus (see
-`run_three_step_redispatch.jl`'s step 3 section for how that was checked).
+infeasibility it targets is a shortfall, not a surplus (see the step 3 section of the retired
+`run_three_step_redispatch.jl` in git history for how that was checked).
 `cost_dn = 0` reflects that the downward direction is inert, not priced.
 
 The new ids continue after the highest one already in use, and are recorded in

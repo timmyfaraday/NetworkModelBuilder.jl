@@ -18,6 +18,9 @@
 #   (threads), NMB_XPRESS_THREADS (2, threads Xpress uses within one solve),  #
 #   NMB_RESUME ("0"; "1" skips the chunks already done), NMB_MERGE ("1";      #
 #   "0" writes the chunks only, no merged files).                             #
+#   NMB_HORIZON_CB (8), NMB_STEP_CB (8), NMB_HORIZON_BE (1), NMB_STEP_BE (1): #
+#   hours a window of step 2 / step 3 sees and how many it commits; a chunk   #
+#   shorter than the horizon caps it, so set NMB_CHUNK_HOURS to at least it.  #
 #                                                                             #
 # More threads in one process stop paying off at a handful of tasks: the      #
 # garbage collector and the allocator are shared. To use the whole machine    #
@@ -68,12 +71,12 @@ const XPRESS_THREADS = parse(Int, get(ENV, "NMB_XPRESS_THREADS", "2"))
 const RESUME         = get(ENV, "NMB_RESUME", "0") == "1"
 const MERGE          = get(ENV, "NMB_MERGE", "1") == "1"
 
-# step 2 rolls over 8 hours at a time, step 3 one hour at a time; with no coupling
-# between hours the grouping changes nothing but how often a model is rebuilt
-const HORIZON_CB = 8
-const STEP_CB    = 8
-const HORIZON_BE = 1
-const STEP_BE    = 1
+# a window looks `HORIZON` hours ahead and commits `STEP` of them; with no coupling between
+# hours that changes only how big a model is and how often one is built
+const HORIZON_CB = parse(Int, get(ENV, "NMB_HORIZON_CB", "8"))
+const STEP_CB    = parse(Int, get(ENV, "NMB_STEP_CB", "8"))
+const HORIZON_BE = parse(Int, get(ENV, "NMB_HORIZON_BE", "1"))
+const STEP_BE    = parse(Int, get(ENV, "NMB_STEP_BE", "1"))
 
 # a solution that breaks one of its own constraints by more than this is not trusted
 const VIOLATION_TOL = 1e-3
@@ -128,10 +131,10 @@ end
 const ROW_FIELDS = (:first_hour, :last_hour,
                     :step1_status, :step1_s,
                     :step2_status, :step2_solver, :step2_first_status, :step2_first_violation,
-                    :step2_violation, :step2_s, :step2_solve_s,
+                    :step2_violation, :step2_s, :step2_solve_s, :step2_windows, :step2_built,
                     :step3_status, :step3_solver, :step3_first_status, :step3_first_violation,
-                    :step3_violation, :step3_s, :step3_solve_s,
-                    :sound, :seconds, :error)
+                    :step3_violation, :step3_s, :step3_solve_s, :step3_windows, :step3_built,
+                    :sound, :seconds, :maxrss_gb, :error)
 
 chunk_dir(hours) = joinpath(OUT_DIR, "chunks",
                             "h$(lpad(first(hours), 5, '0'))-$(lpad(last(hours), 5, '0'))")
@@ -193,6 +196,8 @@ function run_chunk(data::NetworkData, hours::Vector{Int})
         row[:step2_violation]       = run2.worst_violation
         row[:step2_s]               = round(time() - t, digits = 1)
         row[:step2_solve_s]         = round(result2["solve_time"], digits = 1)
+        row[:step2_windows]         = length(result2["horizon"]["window"])
+        row[:step2_built]           = result2["horizon"]["built"]
         is_sound(run2) ||
             error("step 2 finished with status $(run2.status) and violation $(run2.worst_violation)")
 
@@ -228,6 +233,8 @@ function run_chunk(data::NetworkData, hours::Vector{Int})
         row[:step3_violation]       = run3.worst_violation
         row[:step3_s]               = round(time() - t, digits = 1)
         row[:step3_solve_s]         = round(result3["solve_time"], digits = 1)
+        row[:step3_windows]         = length(result3["horizon"]["window"])
+        row[:step3_built]           = result3["horizon"]["built"]
         is_sound(run3) ||
             error("step 3 finished with status $(run3.status) and violation $(run3.worst_violation)")
 
@@ -236,7 +243,8 @@ function run_chunk(data::NetworkData, hours::Vector{Int})
         row[:error] = first(sprint(showerror, e), 300)
     end
 
-    row[:seconds] = round(time() - started, digits = 1)
+    row[:seconds]   = round(time() - started, digits = 1)
+    row[:maxrss_gb] = round(Sys.maxrss() / 2^30, digits = 1)
     write_chunk_row(dir, row)
     row[:sound] && write(joinpath(dir, "DONE"), "")
 

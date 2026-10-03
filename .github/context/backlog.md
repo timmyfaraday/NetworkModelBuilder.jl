@@ -20,7 +20,8 @@ older ones: git has them). Next id: **B7**.
 - [ ] B6 · Cut NMB's per-window overhead in rolling-horizon solves: ~85% of a Zorba chunk is
   `update_model!` (~3 s/window), `build_solution` (~1 s) and allocation/GC, not the solver · Tom · 2026-10-02
   - Measured, cause of the loss of thread scaling not proven. Profile one window under `-t 1` first.
-    Relates to B3.
+    Relates to B3. Longer windows do not help: the overhead follows the hour-states solved, not the
+    number of windows (`lessons.md`, Performance), so the target is the cost per hour-state.
 - [ ] B4 · Bus factor: solo maintainer, get a second reviewer/co-committer (gap #11, P3/Large) · Tom · 2026-09-30
 
 ## Done

@@ -51,11 +51,11 @@ Zorba prices restored, D14; year re-run started).
   priced overload dominating them. Reactance floor 1e-5 (D13), `with_contingencies` fixed, N-1
   screen dropped (skips ~3% of hours), `run_three_step_redispatch.jl` and the `_diag_*` scripts
   retired. See `lessons.md`.
-- Tom asked for 48 h windows committing 8 h in both steps. Now settings, defaults unchanged 8/8 and
-  1/1: `NMB_HORIZON_CB/STEP_CB/HORIZON_BE/STEP_BE`; the chunk must be at least as long as the
-  horizon. Probe `runs/_phase6_h48_probe` (one 48 h chunk, machine fully loaded): step 2 gives the
-  same objective (relative 1.7e-11) but takes 578 s wall / 290 s solver against ~123 s / 40 s for
-  the 8 h windows; step 3 was past 45 min and 20 GB. A clean week-1 timing run is next.
+- Tom asked for 48 h windows committing 8 h in both steps; tried, and worse. They are settings now
+  (`NMB_HORIZON_CB/STEP_CB/HORIZON_BE/STEP_BE`, defaults unchanged 8/8 and 1/1; the chunk must be at
+  least as long as the horizon). `runs/_phase6_h48_probe`, hours 1-48: same results (objectives
+  within 5e-11, identical overload rows) but 4,944 s against ~670 s, 27 GB, 6 builds per step; see
+  `lessons.md`. Awaiting Tom: keep 8/8 and 1/1 (recommended).
 - Run it with processes, not threads: 7 threads in one process give 860 s per 24 h chunk, 7
   processes 330-400 s, and 30 threads no more throughput than 7. Recipe in the header of
   `scripts/run_year_redispatch.jl`. About 85% of a chunk's wall time is NMB's own per-window work

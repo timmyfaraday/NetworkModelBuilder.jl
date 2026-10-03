@@ -87,4 +87,16 @@ again get retired.
   of wall). The cause (shared GC or allocator, a GC held up by threads inside a long Xpress call) is
   not proven. Before building parallelism into a long run, time a one-chunk run alone, then at the
   intended concurrency, as threads and as processes. (unconfirmed)
+- **A longer window buys nothing in the Zorba pipeline and costs in proportion to the hours it
+  solves.** Hours do not depend on each other there (storage excluded, nothing ramps), so a window
+  only adds model size and overlap. Hours 1-48, original prices, one process: 48 h windows committing
+  8 h in both steps gave the same answer as 8/8 (step 2) and 1/1 (step 3) — objectives equal to
+  1.7e-11 and 4.6e-11 relative, overload rows 1,576 and 20,054 in both, largest unit-hour volume
+  difference 5.8e-6 pu — but the chunk took 4,944 s against ~670 s for two 24 h chunks (7 processes
+  at once; ~1,230 s under the 73-process load), at 27 GB and 978 s of GC. Step 2: 579 s (solver
+  290 s) against ~83 s (20 s); step 3: 4,344 s (solver 1,926 s) against ~570 s (147 s). Step 3 alone
+  on hours 1-24: 1/1 276 s, 8/8 379 s, 24/24 395 s, 24/8 745 s (solver 62, 136, 122, 247 s). The time
+  outside the solver (214, 243, 273, 497 s) follows the hour-states processed, overlap included, not
+  the number of windows, so fewer windows saves nothing. Keep 8/8 and 1/1 unless a component couples
+  the hours again (storage back in). (unconfirmed)
 

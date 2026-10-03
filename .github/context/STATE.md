@@ -1,7 +1,7 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-03 by Tom Van Acker (original
-Zorba prices restored, D14; year re-run started).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-03 by Tom Van Acker (Zorba
+year work pushed; branch `b5-switch-edge` created for B5).
 
 ## Where NMB stands
 
@@ -27,19 +27,22 @@ Zorba prices restored, D14; year re-run started).
 
 ## Branches
 
-- `main` is 5 commits ahead of `origin/main` (`c966558`) recording the Zorba work's lessons and
-  D13 — not yet pushed; `git log --oneline -1` has the real local hash. The context files are kept
-  current on `main` only; `test-zorba-run` lags them.
-- `test-zorba-run` is `6cd0af1` (a merge of `main`) plus 9 local commits, none pushed, all under
-  `scripts/`: the price rescale (`4ef3472`), phases 0-3 (`20d88dc`, `f7571aa`, `e100616`,
-  `f939763`: hour ids, parallel step 1, the N-1 screen, parallel steps 2-3 with the contingency fix,
-  the reactance floor and checked solves), the driver's `NMB_MERGE` flag (`9a8b676`), and the
-  restored prices plus the retirement of the sequential script (`76a52ce`, D14), the `_diag_*`
-  deletion (`9fc06d4`) and the window/step settings (`3ea65d4`).
+- `main` and `test-zorba-run` were pushed to `origin` on 2026-10-03, nothing local ahead.
+  `git log --oneline -1` has the real hash. The context files are kept current on `main` only;
+  `test-zorba-run` lags them.
+- `test-zorba-run` is `6cd0af1` (a merge of `main`) plus 9 commits, all under `scripts/`: the price
+  rescale (`4ef3472`), phases 0-3 (`20d88dc`, `f7571aa`, `e100616`, `f939763`: hour ids, parallel
+  step 1, the N-1 screen, parallel steps 2-3 with the contingency fix, the reactance floor and
+  checked solves), the driver's `NMB_MERGE` flag (`9a8b676`), and the restored prices plus the
+  retirement of the sequential script (`76a52ce`, D14), the `_diag_*` deletion (`9fc06d4`) and the
+  window/step settings (`3ea65d4`).
+- `b5-switch-edge` is the branch for B5, created from `main` on 2026-10-03.
 - Next free decision id: **D15**.
 
 ## In progress
 
+- B5, the `Switch` edge type (D13), on branch `b5-switch-edge`: only the branch exists so far; no
+  design or code yet.
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`): run with the rescaled prices
   (`runs/_year_full`, gitignored): 365 of 365 daily chunks `OPTIMAL`, 0 fallback, 63 min as 73
   one-thread processes. Tom then restored the original prices (D14); week 1 with them is sound too
@@ -63,8 +66,8 @@ Zorba prices restored, D14; year re-run started).
 
 ## Next
 
-1. The year re-run is checked: start B5 (the `Switch` edge type) — Tom asked to be triggered
-   (D13); raised 2026-10-02 and 2026-10-03, not answered yet.
+1. B5: design the `Switch` edge type on `b5-switch-edge` (D13). When it exists, drop the 1e-5
+   reactance floor from `scripts/SteeringPlanData.jl` and re-run week 1 to compare.
 2. Gap #10 (parallel rolling-horizon throughput) and #11 (bus factor) remain — see `backlog.md`.
 
 ## Blocked / waiting

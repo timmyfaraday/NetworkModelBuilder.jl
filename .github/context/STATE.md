@@ -30,11 +30,12 @@ Zorba prices restored, D14; year re-run started).
 - `main` is 5 commits ahead of `origin/main` (`c966558`) recording the Zorba work's lessons and
   D13 — not yet pushed; `git log --oneline -1` has the real local hash. The context files are kept
   current on `main` only; `test-zorba-run` lags them.
-- `test-zorba-run` is `6cd0af1` (a merge of `main`) plus 7 local commits, none pushed, all under
+- `test-zorba-run` is `6cd0af1` (a merge of `main`) plus 9 local commits, none pushed, all under
   `scripts/`: the price rescale (`4ef3472`), phases 0-3 (`20d88dc`, `f7571aa`, `e100616`,
   `f939763`: hour ids, parallel step 1, the N-1 screen, parallel steps 2-3 with the contingency fix,
   the reactance floor and checked solves), the driver's `NMB_MERGE` flag (`9a8b676`), and the
-  restored prices plus the retirement of the sequential script (`76a52ce`, D14).
+  restored prices plus the retirement of the sequential script (`76a52ce`, D14), the `_diag_*`
+  deletion (`9fc06d4`) and the window/step settings (`3ea65d4`).
 - Next free decision id: **D15**.
 
 ## In progress
@@ -42,12 +43,19 @@ Zorba prices restored, D14; year re-run started).
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`): run with the rescaled prices
   (`runs/_year_full`, gitignored): 365 of 365 daily chunks `OPTIMAL`, 0 fallback, 63 min as 73
   one-thread processes. Tom then restored the original prices (D14); week 1 with them is sound too
-  (`runs/_phase5_week_orig`, 7 of 7, 444 s). The year is being re-run with them as
-  `runs/_year_orig_prices` (73 processes, then one merge run over 1:8760 with `NMB_RESUME=1`);
-  `_year_full` is the old result. Reactance floor 1e-5 (D13), `with_contingencies` fixed, N-1 screen
-  dropped (skips ~3% of hours), `run_three_step_redispatch.jl` retired. Rescaled-price year totals:
-  129,109 step-1 congestion rows, 352,540 step-2 and 5,953,226 step-3 overload rows, 0 load
-  shedding, 635 spillage. See `lessons.md`.
+  (`runs/_phase5_week_orig`, 7 of 7, 444 s). The year with them is DONE as `runs/_year_orig_prices`:
+  365 of 365 chunks sound, 0 fallback, 58 min (chunks 333-817 s, mean 616 s). Overload rows
+  341,787 (step 2) and 5,720,514 (step 3), 0 load shedding, 0 spillage; with the rescaled prices
+  (`_year_full`) 352,540, 5,953,226, 0 and 635. Step-1 congestion is 129,109 rows either way. The
+  summed objectives are ~3x larger (1.68e11 / 2.87e11 against 5.3e10 / 8.8e10), consistent with
+  priced overload dominating them. Reactance floor 1e-5 (D13), `with_contingencies` fixed, N-1
+  screen dropped (skips ~3% of hours), `run_three_step_redispatch.jl` and the `_diag_*` scripts
+  retired. See `lessons.md`.
+- Tom asked for 48 h windows committing 8 h in both steps. Now settings, defaults unchanged 8/8 and
+  1/1: `NMB_HORIZON_CB/STEP_CB/HORIZON_BE/STEP_BE`; the chunk must be at least as long as the
+  horizon. Probe `runs/_phase6_h48_probe` (one 48 h chunk, machine fully loaded): step 2 gives the
+  same objective (relative 1.7e-11) but takes 578 s wall / 290 s solver against ~123 s / 40 s for
+  the 8 h windows; step 3 was past 45 min and 20 GB. A clean week-1 timing run is next.
 - Run it with processes, not threads: 7 threads in one process give 860 s per 24 h chunk, 7
   processes 330-400 s, and 30 threads no more throughput than 7. Recipe in the header of
   `scripts/run_year_redispatch.jl`. About 85% of a chunk's wall time is NMB's own per-window work
@@ -55,8 +63,8 @@ Zorba prices restored, D14; year re-run started).
 
 ## Next
 
-1. When the year re-run is checked, start B5 (the `Switch` edge type) — Tom asked to be triggered
-   (D13); raised 2026-10-02, not answered yet.
+1. The year re-run is checked: start B5 (the `Switch` edge type) — Tom asked to be triggered
+   (D13); raised 2026-10-02 and 2026-10-03, not answered yet.
 2. Gap #10 (parallel rolling-horizon throughput) and #11 (bus factor) remain — see `backlog.md`.
 
 ## Blocked / waiting

@@ -1,7 +1,7 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-02 by Tom Van Acker (Zorba
-year run finished, 365 of 365 chunks sound).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-03 by Tom Van Acker (original
+Zorba prices restored, D14; year re-run started).
 
 ## Where NMB stands
 
@@ -30,20 +30,24 @@ year run finished, 365 of 365 chunks sound).
 - `main` is 5 commits ahead of `origin/main` (`c966558`) recording the Zorba work's lessons and
   D13 — not yet pushed; `git log --oneline -1` has the real local hash. The context files are kept
   current on `main` only; `test-zorba-run` lags them.
-- `test-zorba-run` is `6cd0af1` (a merge of `main`) plus 6 local commits, none pushed, all under
+- `test-zorba-run` is `6cd0af1` (a merge of `main`) plus 7 local commits, none pushed, all under
   `scripts/`: the price rescale (`4ef3472`), phases 0-3 (`20d88dc`, `f7571aa`, `e100616`,
   `f939763`: hour ids, parallel step 1, the N-1 screen, parallel steps 2-3 with the contingency fix,
-  the reactance floor and checked solves) and the driver's `NMB_MERGE` flag (`9a8b676`).
-- Next free decision id: **D14**.
+  the reactance floor and checked solves), the driver's `NMB_MERGE` flag (`9a8b676`), and the
+  restored prices plus the retirement of the sequential script (`76a52ce`, D14).
+- Next free decision id: **D15**.
 
 ## In progress
 
-- Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`): DONE. 365 of 365 daily
-  chunks `OPTIMAL` and violation-free, 0 on the HiGHS fallback, in 63 min as 73 one-thread processes
-  (`runs/_year_full`, gitignored). Reactance floor 1e-5 applied (D13), `with_contingencies` fixed, the
-  N-1 screen dropped (it skips ~3% of hours). The week reproduces the sequential baseline to solver
-  tolerance (objective rel diff 1e-12). Year totals: 129,109 step-1 congestion rows, 352,540 step-2 and
-  5,953,226 step-3 overload rows, 0 load-shedding rows, 635 spillage rows. Lessons: `lessons.md`.
+- Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`): run with the rescaled prices
+  (`runs/_year_full`, gitignored): 365 of 365 daily chunks `OPTIMAL`, 0 fallback, 63 min as 73
+  one-thread processes. Tom then restored the original prices (D14); week 1 with them is sound too
+  (`runs/_phase5_week_orig`, 7 of 7, 444 s). The year is being re-run with them as
+  `runs/_year_orig_prices` (73 processes, then one merge run over 1:8760 with `NMB_RESUME=1`);
+  `_year_full` is the old result. Reactance floor 1e-5 (D13), `with_contingencies` fixed, N-1 screen
+  dropped (skips ~3% of hours), `run_three_step_redispatch.jl` retired. Rescaled-price year totals:
+  129,109 step-1 congestion rows, 352,540 step-2 and 5,953,226 step-3 overload rows, 0 load
+  shedding, 635 spillage. See `lessons.md`.
 - Run it with processes, not threads: 7 threads in one process give 860 s per 24 h chunk, 7
   processes 330-400 s, and 30 threads no more throughput than 7. Recipe in the header of
   `scripts/run_year_redispatch.jl`. About 85% of a chunk's wall time is NMB's own per-window work
@@ -51,10 +55,9 @@ year run finished, 365 of 365 chunks sound).
 
 ## Next
 
-1. The year-scale Zorba work is finished: raise B5 (the `Switch` edge type) with Tom now, without
-   being asked — he asked to be triggered. See D13.
-2. Q2 and Q3 (restore the original last-resort prices? retire `run_three_step_redispatch.jl`?).
-3. Gap #10 (parallel rolling-horizon throughput) and #11 (bus factor) remain — see `backlog.md`.
+1. When the year re-run is checked, start B5 (the `Switch` edge type) — Tom asked to be triggered
+   (D13); raised 2026-10-02, not answered yet.
+2. Gap #10 (parallel rolling-horizon throughput) and #11 (bus factor) remain — see `backlog.md`.
 
 ## Blocked / waiting
 

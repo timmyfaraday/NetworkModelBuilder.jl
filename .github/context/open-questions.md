@@ -21,15 +21,3 @@ fix may be "document the trade-off," not "add parallelism."
 Evidence 2026-10-02: Zorba's independent daily chunks scaled with one-thread *processes* (7: 330-400 s
 per chunk) but not with threads in one process (7: 860 s; 30 threads: no gain), so option (B)'s
 "`Threads.@threads` over independent models" is weaker than it reads. See `lessons.md`, Performance.
-
-### Q2 · Restore the original last-resort prices in the Zorba pipeline?
-Owner: Tom (not yet settled). Depends on: `scripts/run_year_redispatch.jl`, `SteeringPlanData.jl`.
-The pipeline prices are 3x the thermal ceiling for overload, 2x that again for spillage and 4x the
-overload price for shedding — rescaled in `4ef3472` as a (wrong) fix for false INFEASIBLE. The real
-fix was the reactance floor (D13). Options: (A) restore the original 10x overload / 5x spillage /
-10x shedding; (B) keep the rescaled ones. The year run used (B): 0 load-shedding rows, 635 spillage rows.
-
-### Q3 · Retire `scripts/run_three_step_redispatch.jl`?
-Owner: Tom (not yet settled). The sequential reference script. The chunked driver reproduces its
-corrected week to solver tolerance (objective rel diff 1e-12), so it is no longer needed to validate
-with. Options: (A) delete it; (B) keep it as the sequential reference.

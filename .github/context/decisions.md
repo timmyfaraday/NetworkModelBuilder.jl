@@ -89,6 +89,13 @@ How to use this file:
   a near-zero impedance** (D13). Not built yet. Until it is, the Zorba pipeline floors the
   reactance of every line at 1e-5 as a stopgap (`scripts/SteeringPlanData.jl`, on `test-zorba-run`).
 
+## Zorba pipeline (`scripts/`)
+
+- **The last-resort prices are 10x the thermal ceiling for a monitored-line overload (477,000
+  $/pu), 5x that overload price for spillage and 10x for load shedding** (D14), not the 3x/2x/4x
+  rescaling tried while the false `INFEASIBLE` was being chased. The rescaling was never the fix;
+  the reactance floor was (D13).
+
 ## Validation against a reference implementation
 
 - **PowerModels.jl is a live cross-check (`test/powermodels.jl`), run alongside the existing
@@ -196,3 +203,11 @@ against ~60 for a line), and that coefficient range made Xpress return false `IN
 `OPTIMAL` solutions that violated node balance by up to 32 pu. A switch has no impedance to get
 wrong and can be open or closed. Its children would include a busbar switch and a circuit breaker.
 Changes: new. Not implemented; the pipeline floors reactance at 1e-5 meanwhile.
+
+### D14 — The Zorba pipeline's last-resort prices go back to 10x / 5x / 10x of the thermal ceiling
+Date: 2026-10-03 · Decided by: Tom Van Acker · Area: Zorba pipeline
+Why: the price rescale to 3x/2x/4x was a wrong fix for the false `INFEASIBLE`; with the reactance
+floor the original prices solve week 1 with 7 of 7 chunks `OPTIMAL`, no violation and no fallback,
+in the same time as the rescaled ones. Higher prices tolerate less overload (week 1: 127,368 step-3
+overload rows against 129,486).
+Changes: new. The year run made with the rescaled prices has to be re-run.

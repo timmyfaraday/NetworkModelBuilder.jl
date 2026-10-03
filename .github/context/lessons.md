@@ -62,7 +62,9 @@ again get retired.
   tracks solver state, so a fix checked only on the known-bad window proves nothing about the rest),
   and rescaling the last-resort prices only reduced how often the trouble showed. Look for the
   extreme coefficient in the *constraint matrix* (`Coefficient range` in the solver log) before
-  touching prices or solver attributes. (unconfirmed)
+  touching prices or solver attributes. Confirmed 2026-10-03: with the floor and the original prices
+  week 1 solves 7 of 7 chunks `OPTIMAL`, violation-free, no fallback, in the same time as with the
+  rescaled prices. (unconfirmed)
 - **A per-edge lookup of "which event contains this edge" silently drops every event after the
   first.** The pipeline's `with_contingencies` used `findfirst(ev -> id in ev.edges, events)`, so an
   edge listed by several events (a line that is both a simple N-1 and part of a busbar group) went out

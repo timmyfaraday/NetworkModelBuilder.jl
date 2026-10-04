@@ -42,8 +42,10 @@ spec drafted, decisions D15-D25 recorded on `b5-switch-edge`).
 ## In progress
 
 - B5, the `Switch` edge type (D13, D15-D25), on branch `b5-switch-edge`, ships as v0.11.0. The spec
-  is `knowledge/plan/switch-edge.md`, draft, awaiting Tom's review; no code yet. The branch holds
-  only memory files and the Juniper test dependency; the Zorba scripts stay on `test-zorba-run`.
+  is `knowledge/plan/switch-edge.md`; commit 1 of 9 is done (`9f88d73`: `variable!` takes
+  `binary`, an integer is its own structure gate). Next is commit 2, the `Switch` type. The Zorba
+  scripts stay on `test-zorba-run`. A single test file needs the preludes of `runtests.jl` and the
+  helpers of `hierarchy.jl`; `scratch/switch_spike/run_tests.jl <files in runtests order>` does it.
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`): run with the rescaled prices
   (`runs/_year_full`, gitignored): 365 of 365 daily chunks `OPTIMAL`, 0 fallback, 63 min as 73
   one-thread processes. Tom then restored the original prices (D14); week 1 with them is sound too

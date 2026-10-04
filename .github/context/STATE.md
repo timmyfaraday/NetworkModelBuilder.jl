@@ -29,7 +29,7 @@ of the Switch plan, islands, on `b5-switch-edge`).
 ## In progress
 
 - B5, the `Switch` edge type (D13, D15-D25), on branch `b5-switch-edge`, ships as v0.11.0; spec
-  `knowledge/plan/switch-edge.md`. Commits 1-5 of 9 are done: `variable!` takes `binary` and an
+  `knowledge/plan/switch-edge.md`. Commits 1-6 of 9 are done: `variable!` takes `binary` and an
   integer is a structure gate (`9f88d73`); the `Switch` type (`29a11b3`), with `cbc4ed3`, a fix so
   that a new component file is not missed by the compiled package; `islands`, `check_islands` and
   `constraint_node_voltage_anchor` (`28f65ea`, D22: `connects`/`can_open` are the edge hooks, a
@@ -37,11 +37,12 @@ of the Switch plan, islands, on `b5-switch-edge`).
   free-switch check); a held switch in the linearized formulation with loop rows (`5bd3e34`,
   D17/D21; `decide` tells `islands` whether the problem chooses, false in a power flow); a free
   switch in the linearized formulation (`e860f44`, D16: binary `zsw`, angle range and flow range
-  with `rate_a` as the big-M, no duals). Full suite last run at commit 3: 2622 with 1 timing
-  flake (B8). Next is commit 6, the current-based formulation (locked rows, free big-M rows,
-  Juniper). The Zorba scripts stay on `test-zorba-run`. To run one test file use
-  `scratch/switch_spike/run_tests.jl <files in runtests order>` (`hierarchy.jl` has helpers; it
-  imports HiGHS and Juniper, `runtests.jl` only HiGHS so far).
+  with `rate_a` as the big-M, no duals); both in the current-based formulation (`d2ebc72`, one
+  shared `constraint_edge`, big-M `M` and `C`, the rating row, Juniper in the tests). Full suite
+  last run at commit 3: 2622 with 1 timing flake (B8). Awaiting Tom: Q5, a loop of free switches
+  has no loop equation and can undercut a locked loop. Next is commit 7 (`redispatch_controls`,
+  `solution_edge!`). The Zorba scripts stay on `test-zorba-run`. To run one test file use
+  `scratch/switch_spike/run_tests.jl <files in runtests order>` (`hierarchy.jl` has helpers).
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`), done with the original
   prices (D14): `runs/_year_orig_prices`, 365 of 365 chunks sound, 0 fallback, 58 min; overload rows
   341,787 (step 2) and 5,720,514 (step 3), no load shedding or spillage (the rescaled-price run

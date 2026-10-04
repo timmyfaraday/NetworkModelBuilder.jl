@@ -5,25 +5,12 @@ spec drafted, decisions D15-D25 recorded on `b5-switch-edge`).
 
 ## Where NMB stands
 
-- Specs/plans moved from a top-level `plans/` to `context/knowledge/plan/` (D12) — content
-  unchanged, only location; every cross-reference updated. No code or package behavior touched, no
-  version bump.
-- v0.10.2 (D11): `solution_tables(data, result)` — a tidy `NamedTuple`-of-columns view alongside
-  `nw_solution`, edge rows per terminal, dimensions become columns, all-missing columns dropped —
-  plus `docs/src/manual/concepts.md` (a newcomer-facing page working one network through all three
-  problem types and both formulations, then `nw_solution` vs `solution_tables`, then a grounded
-  SmaLoadFlow comparison). Full suite green: 2501 tests (2465 + 36 new in `test/solution_tables.jl`).
-  `docs/make.jl` builds clean.
-- v0.10.1, committed and pushed (`7801238`): `src/comp/{node,edge,unit}/` is now
-  auto-included by a `_include_dir` directory walk instead of ~19 explicit lines in
-  `src/NetworkModelBuilder.jl`, and each component file exports its own public names next to their
-  definition. Public API verified unchanged (`names(NetworkModelBuilder)` identical before/after,
-  258 names).
-- v0.10.0 (`security_tables`/`write_security_tables`) committed and pushed at `efc271c`/`4adad89`.
-- All P0/P1 gap-closure items (#1-7) from `context/knowledge/plan/GAP_CLOSURE_PLAN.md` stay closed;
-  #8 (D10) and #9 (D11) now closed too; #10-11 untouched — see `backlog.md`.
-- Only tag in git history is `v0.6.0`; later versions are real untagged `Project.toml` states
-  (see `decisions.md`).
+- Specs/plans live in `context/knowledge/plan/` (D12).
+- v0.10.2 (D11): `solution_tables` and `docs/src/manual/concepts.md`. v0.10.1 (D10): `src/comp/` is
+  auto-included by a directory walk (`_include_dir`) and each component file exports its own names;
+  the public API was checked unchanged (258 names). v0.10.0: `security_tables`.
+- Gap-closure items #1-9 of `context/knowledge/plan/GAP_CLOSURE_PLAN.md` are closed; #10-11 are
+  open, see `backlog.md`. The only tag is `v0.6.0`; later versions are untagged `Project.toml` states.
 
 ## Branches
 
@@ -41,22 +28,17 @@ spec drafted, decisions D15-D25 recorded on `b5-switch-edge`).
 
 ## In progress
 
-- B5, the `Switch` edge type (D13, D15-D25), on branch `b5-switch-edge`, ships as v0.11.0. The spec
-  is `knowledge/plan/switch-edge.md`; commit 1 of 9 is done (`9f88d73`: `variable!` takes
-  `binary`, an integer is its own structure gate). Next is commit 2, the `Switch` type. The Zorba
-  scripts stay on `test-zorba-run`. A single test file needs the preludes of `runtests.jl` and the
-  helpers of `hierarchy.jl`; `scratch/switch_spike/run_tests.jl <files in runtests order>` does it.
-- Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`): run with the rescaled prices
-  (`runs/_year_full`, gitignored): 365 of 365 daily chunks `OPTIMAL`, 0 fallback, 63 min as 73
-  one-thread processes. Tom then restored the original prices (D14); week 1 with them is sound too
-  (`runs/_phase5_week_orig`, 7 of 7, 444 s). The year with them is DONE as `runs/_year_orig_prices`:
-  365 of 365 chunks sound, 0 fallback, 58 min (chunks 333-817 s, mean 616 s). Overload rows
-  341,787 (step 2) and 5,720,514 (step 3), 0 load shedding, 0 spillage; with the rescaled prices
-  (`_year_full`) 352,540, 5,953,226, 0 and 635. Step-1 congestion is 129,109 rows either way. The
-  summed objectives are ~3x larger (1.68e11 / 2.87e11 against 5.3e10 / 8.8e10), consistent with
-  priced overload dominating them. Reactance floor 1e-5 (D13), `with_contingencies` fixed, N-1
-  screen dropped (skips ~3% of hours), `run_three_step_redispatch.jl` and the `_diag_*` scripts
-  retired. See `lessons.md`.
+- B5, the `Switch` edge type (D13, D15-D25), on branch `b5-switch-edge`, ships as v0.11.0; spec
+  `knowledge/plan/switch-edge.md`. Commits 1-2 of 9 are done: `variable!` takes `binary` and an
+  integer is a structure gate (`9f88d73`); the `Switch` type (`29a11b3`), with `cbc4ed3`, a fix so
+  that a new component file is not missed by the compiled package. Full suite 2554 green. Next is
+  commit 3, `islands` and its checks. The Zorba scripts stay on `test-zorba-run`. To run one test
+  file use `scratch/switch_spike/run_tests.jl <files in runtests order>` (`hierarchy.jl` has helpers).
+- Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`), done with the original
+  prices (D14): `runs/_year_orig_prices`, 365 of 365 chunks sound, 0 fallback, 58 min; overload rows
+  341,787 (step 2) and 5,720,514 (step 3), no load shedding or spillage (the rescaled-price run
+  `_year_full` had 352,540, 5,953,226, 0 and 635). Reactance floor 1e-5 (D13), `with_contingencies`
+  fixed, N-1 screen dropped, the old script and `_diag_*` retired. See `lessons.md`.
 - Tom asked for 48 h windows committing 8 h in both steps; tried, and worse. They are settings now
   (`NMB_HORIZON_CB/STEP_CB/HORIZON_BE/STEP_BE`, defaults unchanged 8/8 and 1/1; the chunk must be at
   least as long as the horizon). `runs/_phase6_h48_probe`, hours 1-48: same results (objectives
@@ -69,7 +51,7 @@ spec drafted, decisions D15-D25 recorded on `b5-switch-edge`).
 
 ## Next
 
-1. B5: review `switch-edge.md`, then implement on `b5-switch-edge`. When it exists, drop the 1e-5
+1. B5: implement `switch-edge.md` on `b5-switch-edge`. When it exists, drop the 1e-5
    reactance floor from `scripts/SteeringPlanData.jl` and re-run week 1 to compare.
 2. Gap #10 (parallel rolling-horizon throughput) and #11 (bus factor) remain — see `backlog.md`.
 

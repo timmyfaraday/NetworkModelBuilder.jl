@@ -74,6 +74,14 @@ again get retired.
   off by 46 pu for the two with a shared edge. Validate a second implementation against the first on
   the real data, not a toy case. Every redispatch result produced before the fix understates the N-1
   severity of those events. (unconfirmed)
+- **A file added to a directory that is walked at load time is invisible to a package that loads
+  from its compiled cache.** Adding `src/comp/edge/switch/switch.jl` left `Switch` undefined and
+  unregistered: the cache tracks the files it included, a new one changes none of them, touching
+  `src/NetworkModelBuilder.jl` did not help (Julia compares content, not the time stamp) and
+  deleting `~/.julia/compiled/v1.12/NetworkModelBuilder` did. `include_dependency(path)` on every
+  walked directory fixes it: a file added to, then removed from, `src/comp/edge/switch/` was
+  noticed each time. Checked on Julia 1.12.5 only. When a new component "does nothing", look at
+  `names(NetworkModelBuilder)` and `edge_types()` before the code. (unconfirmed)
 
 ## Performance
 

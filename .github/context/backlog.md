@@ -2,7 +2,7 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B8**.
+older ones: git has them). Next id: **B9**.
 
 ## Now
 
@@ -26,6 +26,8 @@ older ones: git has them). Next id: **B8**.
 - [ ] B4 · Bus factor: solo maintainer, get a second reviewer/co-committer (gap #11, P3/Large) · Tom · 2026-09-30
 - [ ] B7 · Revisit closed switches as equality rows (D17) in the context of network reduction, where a
   closed switch would merge its nodes · Tom · 2026-10-04
+- [ ] B8 · `test/lf.jl:124` (`solve_time > 0.0`) fails now and then on Windows: `time()` has a coarse
+  resolution and case14 solves faster; seen once in a full run, passes alone. Likely `>= 0.0` · Tom · 2026-10-04
 
 ## Done
 

@@ -18,6 +18,7 @@
 # v0.10.1 - src/comp/ is auto-included; its exports moved into it              #
 # v0.10.2 - exports solution_tables                                            #
 # v0.11.0 - the component walk is a dependency of the compiled package         #
+# v0.11.0 - islands, and the check a model makes of them                       #
 ################################################################################
 
 module NetworkModelBuilder
@@ -66,6 +67,7 @@ module NetworkModelBuilder
     _include_dir("comp/unit")
 
     # include — core, depending on the components
+    include("core/island.jl")
     include("core/objective.jl")
     include("core/solution.jl")
 
@@ -111,8 +113,8 @@ module NetworkModelBuilder
     export set_dimension, replicate
     export network, dimension, baseMVA, topology, topologies, switchable, nw_id_default
     export nodes, edges, units, arcs, node, edge, unit
-    export node_arcs, node_units, edge_arcs, ids
-    export component_id, status, is_active, terminals, nterminals
+    export node_arcs, node_units, edge_arcs, ids, islands
+    export component_id, status, is_active, terminals, nterminals, connects, can_open
     export edge_id, terminal_id, node_id
 
     # export — model
@@ -120,6 +122,7 @@ module NetworkModelBuilder
     export registered_constraints
     export NetworkModel, problem_type, formulation_type
     export instantiate_model, build_model!, update_model!, optimize_model!, solve_model
+    export check_islands
     export register_model!, implemented_models
 
     # export — objective

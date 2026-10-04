@@ -12,6 +12,7 @@
 # v0.10.0 - the security tables test                                           #
 # v0.10.2 - the solution tables test                                           #
 # v0.11.0 - the switch test                                                    #
+# v0.11.0 - the islands test                                                   #
 ################################################################################
 
 using Test
@@ -53,6 +54,7 @@ quiet(f) = Logging.with_logger(f, Logging.NullLogger())
     include("rd.jl")
     include("dc_link.jl")
     include("switch.jl")
+    include("islands.jl")
     include("slack.jl")
     include("zorba.jl")
     include("dashboard.jl")

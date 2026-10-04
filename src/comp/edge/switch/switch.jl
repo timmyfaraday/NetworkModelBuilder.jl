@@ -33,10 +33,11 @@ own: a busbar coupler, a circuit breaker.
 Closed, it holds the voltage at its two nodes equal and lets any flow through;
 open, it lets none through and leaves the two voltages independent. That is all
 of its physics, and it is why a switch is a type of its own rather than a
-[`Branch`](@ref) with a very small impedance. The flow of a branch is the
-susceptance times an angle difference, and as the reactance goes to zero the
-susceptance goes to infinity: a coupler of reactance `1e-7` puts `1e7` in a
-matrix whose lines are around `60`, which a solver cannot be asked to weigh.
+[`Branch`](@ref) with a very small impedance. A switch has no reactance and no
+susceptance. A coupler loaded as a branch needs a reactance close to zero, and
+so a susceptance close to infinity: with a reactance of `1e-7` the matrix holds
+`1e7` among entries around `60`, which a solver cannot be asked to weigh. A
+switch has no impedance to choose, so there is nothing to round.
 
 A concrete switch carries `id`, `name`, `terminals` (exactly two), `lock`,
 `position`, `rate_a`, `angmin`, `angmax`, `status` and `ext`. Every field but
@@ -113,6 +114,19 @@ function _check_switch(id, terminals, position, rate_a, angmin, angmax)
 end
 
 register_edge_type!(Switch)
+
+"""
+    connects(dim, sw, n)
+    can_open(dim, sw, n)
+
+A switch connects its terminals unless it is locked open; a free switch counts as
+connecting because the problem may close it, and is the only kind the problem
+may open. See [`islands`](@ref).
+"""
+connects(dim::Dimension, sw::AbstractSwitch, n::Int) =
+    sw.lock === FREE || nw_value(dim, sw.position, n) == 1
+
+can_open(::Dimension, sw::AbstractSwitch, ::Int) = sw.lock === FREE
 
 """
     structure_gates(sw)

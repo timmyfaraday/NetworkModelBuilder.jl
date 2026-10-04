@@ -69,6 +69,25 @@ which topology a network index has is **derived** from the statuses of the
 components whose status varies, never looked up in a table indexed by ``n``. A
 problem without contingencies has one topology however many indices it spans.
 
+## Islands
+
+An edge in service does not always tie its two nodes together: a switch that is
+locked open carries nothing. The nodes that can still exchange power make an
+[`islands`](@ref), found from the topology with the edges that
+[`connects`](@ref), and a network usually has one.
+
+```@docs
+islands
+connects
+can_open
+check_islands
+```
+
+A model asks about them before it builds. An island that has units but nothing
+to supply them is refused with the nodes named, and an island that has a source
+but no reference node is anchored at its lowest node, see
+[An island without a reference node](@ref).
+
 ## Accessors
 
 ```@docs

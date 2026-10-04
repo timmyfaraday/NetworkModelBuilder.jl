@@ -135,13 +135,18 @@ direction the cycle crosses `s` (in the current-based formulation the same on `c
 Parallel switches then split evenly. A free switch writes no equality and needs none; the flows it
 reports in a closed loop may differ between solvers, and normalising them afterwards is not done.
 
-**Islands** (D22). `islands(data; nw)` returns the connected node sets at an index, an open locked
-switch and an out-of-service edge counting as absent and a free switch as present. In
-`instantiate_model`, once per distinct topology: an island with no `REF` node and no in-service
-generator, storage or slack unit is an `ArgumentError` naming its nodes; an island with a source but
-no `REF` node has its lowest node anchored (`va == 0`, `vi == 0` in the current-based formulation);
-and if opening every free switch creates an island that is not there with them closed, it is an
-`ArgumentError` listing those switches, unless `instantiate_model(...; islanding = :allow)`.
+**Islands** (D22). `islands(data; nw, without = ())` returns the connected node sets at an index; an
+edge counts as joining its terminals when `connects(dim, edge, n)` says so (every edge, except a
+switch locked open), an out-of-service edge counts as absent and a free switch as present
+(`can_open(dim, edge, n)`, true only for a free switch, names what the problem may open). In
+`instantiate_model` (`check_islands`), once per distinct topology and set of locked-open edges: an
+island with units but no `REF` node and no in-service generator, storage or unserved-energy unit
+(a `Spill` only absorbs, so it is not a source) is an `ArgumentError` naming its nodes; an island
+with a source but no `REF` node has its lowest node anchored by `constraint_node_voltage_anchor`
+(`va == 0`; `vi == 0` and `vr >= 0` in the current-based formulation), called from
+`constraint_node_voltage_reference`; and if opening every free switch splits an island, it is an
+`ArgumentError` naming the switches and the pieces, unless `instantiate_model(...; islanding =
+:allow)`. `islanding = :allow` leaves the first check in force.
 
 **Hooks.** `redispatch_controls(nm, ::Type{<:AbstractSwitch}) = (:zsw,)`: a preventive free switch
 is held equal across contingencies, a corrective one (by `Redispatch`'s `exception`) is not, and a

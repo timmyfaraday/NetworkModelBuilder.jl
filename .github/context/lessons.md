@@ -82,6 +82,12 @@ again get retired.
   walked directory fixes it: a file added to, then removed from, `src/comp/edge/switch/` was
   noticed each time. Checked on Julia 1.12.5 only. When a new component "does nothing", look at
   `names(NetworkModelBuilder)` and `edge_types()` before the code. (unconfirmed)
+- **After an edit that ends a Julia block (`end`, `return nothing`), read the edited lines back;
+  `get_errors` does not see a broken Julia file.** Five edits to `src/comp/node/node.jl` in one call
+  left one method without the `end` of its `for` loop, another with an extra `end`, and a call
+  inside a loop instead of after it. Two of the three still parsed, so the first symptom was a
+  misleading `UndefVarError` in a test, not a syntax error. Reading the result with `read_file`,
+  or `git diff` on the file, found all three at once. (unconfirmed)
 
 ## Performance
 

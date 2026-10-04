@@ -138,8 +138,11 @@ model rather than a number in it. See [`structure_gates`](@ref).
 structure_gates(::AbstractSwitch) = (:rate_a, :position)
 
 ################################################################################
-# Switch — the linearized formulation                                          #
+# Switch — what the problem makes of it                                        #
 ################################################################################
+
+"the formulations a switch has rows for"
+const _SwitchFormulation = Union{IVRFormulation,LPFFormulation}
 
 """
     _held(nm, sw)
@@ -153,11 +156,11 @@ _held(::NetworkModel{P}, sw::AbstractSwitch) where {P<:AbstractProblemType} =
 """
     variable_edge(nm, T; nw)
 
-A switch held where the data puts it needs no variables of its own under a
-[`LPFFormulation`](@ref): its flow is the terminal power every edge already has.
+A switch held where the data puts it needs no variables of its own: its flow is
+the terminal power or current every edge already has.
 """
 variable_edge(::NetworkModel{P,F}, ::Type{T}; nw::Int = 0
-             ) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractSwitch} = nothing
+             ) where {P<:AbstractProblemType,F<:_SwitchFormulation,T<:AbstractSwitch} = nothing
 
 """
     variable_edge(nm, T; nw)
@@ -170,7 +173,7 @@ mixed-integer program: one that has no duals, and so no nodal prices, see
 [`active_nodal_price`](@ref). A switch the problem holds has none.
 """
 function variable_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
-                      ) where {P<:AbstractDispatchProblem,F<:LPFFormulation,T<:AbstractSwitch}
+                      ) where {P<:AbstractDispatchProblem,F<:_SwitchFormulation,T<:AbstractSwitch}
     variable_container!(nm, :zsw; nw)
 
     for e in ids(nm, T; nw)
@@ -187,36 +190,49 @@ end
 """
     constraint_edge(nm, T; nw)
 
-The physics of every in-service switch, in the linearized formulation. What leaves
-one terminal arrives at the other, `p_{a^t} = -p_{a^f}`, and then, for a switch
-the problem holds at its position,
+The physics of every in-service switch. What leaves one terminal arrives at the
+other, `p_{a^t} = -p_{a^f}` in the linearized formulation and the same on both
+currents in the current-based one, and then, for a switch the problem holds at
+its position,
 
-| position | rows |
-|:---------|:-----|
-| open     | `p_{a^f} = 0` |
-| closed   | `v^a_i = v^a_j` |
+| position | linearized | current-based |
+|:---------|:-----------|:--------------|
+| open     | `p_{a^f} = 0` | `c^r_{a^f} = c^i_{a^f} = 0` |
+| closed   | `v^a_i = v^a_j` | `v^r_i = v^r_j`, `v^i_i = v^i_j` |
 
-and for a free switch in a dispatch problem, whose closed position `z` is a
-decision,
+For a free switch in a dispatch problem, whose closed position `z` is a decision,
+the linearized formulation has
 
 ```math
 \\theta^{\\text{min}}_{e} (1 - z_{e}) \\le v^{\\text{a}}_{i} - v^{\\text{a}}_{j}
 \\le \\theta^{\\text{max}}_{e} (1 - z_{e}),
 \\qquad
--s^{\\text{max}}_{e} z_{e} \\le p_{a^{\\text{f}}} \\le s^{\\text{max}}_{e} z_{e} .
+-s^{\\text{max}}_{e} z_{e} \\le p_{a^{\\text{f}}} \\le s^{\\text{max}}_{e} z_{e} ,
 ```
 
-Closed, the first pair is the angle equality and the second the rating; open, the
-first lets the angles part within the range the data allows and the second forces
-the flow to zero. The bound on the flow is what makes `s^max` a big-M, so a free
+and the current-based formulation has, for the real and the imaginary part of the
+voltage across it and of the current through it,
+
+```math
+\\left| v_{i} - v_{j} \\right| \\le M_{e} (1 - z_{e}),
+\\qquad
+\\left| c_{a^{\\text{f}}} \\right| \\le C_{e} z_{e},
+```
+
+with `M_e = 2 max(v^max_i, v^max_j)` and `C_e = s^max_e / min(v^min_i, v^min_j)`.
+
+Closed, the first of each pair is the equality of the angles or of the voltages;
+open, it lets them part. The second of each pair forces the flow to zero when open,
+and is the rating when closed. Both are big-M rows written with `s^max`, so a free
 switch must have a finite rating.
 
 A closed switch has no impedance, so its flow is whatever the node balances ask
 of it, and a loop of closed switches leaves the split between them undetermined.
-The angle equality is therefore written only for the switches of a spanning tree
-of each group of held closed switches, taken by ascending identifier. Each other
-held closed switch closes a loop with the tree instead, and gets the equation of
-that loop in place of its angle equality,
+The equality of angles or voltages is therefore written only for the switches of a
+spanning tree of each group of held closed switches, taken by ascending
+identifier. Each other held closed switch closes a loop with the tree instead, and
+gets the equation of that loop in place of its equality, on the power or on each
+current,
 
 ```math
 \\sum_{s \\in \\text{loop}} \\sigma_s \\, p_{a^{\\text{f}}_s} = 0 ,
@@ -225,31 +241,33 @@ that loop in place of its angle equality,
 with `σ_s = ±1` by the direction the loop runs through `s`. That is Kirchhoff's
 voltage law with every switch given the same impedance, so parallel switches share
 a flow equally, whichever solver is asked.
+
+A free switch is not part of a loop in that sense: it writes its big-M rows and no
+equation of a loop, because whether it closes one is the problem's to decide. A
+loop that the problem closes by choosing free switches is therefore left with no
+equation, and the problem may split its flow as suits it, which it may not do with
+a loop of locked switches. Where such a loop can close, the optimum of a model with
+free switches can be lower than that of every way of locking them.
 """
 function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
-                        ) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractSwitch}
-    va, p  = var(nm, :va; nw), var(nm, :p; nw)
+                        ) where {P<:AbstractProblemType,F<:_SwitchFormulation,T<:AbstractSwitch}
     switch = get!(() -> Dict{Int,Any}(), con(nm; nw), :switch)
     cycles = _switch_cycles(nm; nw)
 
     for e in ids(nm, T; nw)
         sw         = edge(nm, e; nw)::T
         a_fr, a_to = edge_arcs(nm, e; nw)
-        i, j       = a_fr.node, a_to.node
 
-        flow = constrain!(nm, :switch_flow, e,
-                          JuMP.@build_constraint(p[a_to] == -p[a_fr]); nw)
+        flow = _switch_flow!(nm, e, a_fr, a_to; nw)
 
         position = if !_held(nm, sw)
             _free_switch_rows!(nm, e, sw, a_fr, a_to; nw)
         elseif sw.position != 1
-            constrain!(nm, :switch_open, e, JuMP.@build_constraint(p[a_fr] == 0.0); nw)
+            _switch_open!(nm, e, a_fr; nw)
         elseif haskey(cycles, e)
-            loop = cycles[e]
-            constrain!(nm, :switch_loop, e, JuMP.@build_constraint(
-                sum(σ * p[first(edge_arcs(nm, f; nw))] for (f, σ) in loop; init = 0.0) == 0.0); nw)
+            _switch_loop!(nm, e, cycles[e]; nw)
         else
-            constrain!(nm, :switch_angle, e, JuMP.@build_constraint(va[i] == va[j]); nw)
+            _switch_equal!(nm, e, a_fr, a_to; nw)
         end
 
         switch[e] = (flow, position)
@@ -258,13 +276,51 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     return nothing
 end
 
-"the angle and flow rows of free switch `e`, see [`constraint_edge`](@ref)"
-function _free_switch_rows!(nm::NetworkModel, e::Int, sw::AbstractSwitch,
-                            a_fr::Arc, a_to::Arc; nw::Int)
+"the error a free switch without a finite rating is refused with"
+_require_rating(e::Int, sw::AbstractSwitch) =
     isfinite(sw.rate_a) ||
         throw(ArgumentError("switch $e is free and has no finite rating, which the rows " *
                             "that let a dispatch problem open it are written with; give " *
                             "it a `rate_a`, or lock it"))
+
+################################################################################
+# Switch — the linearized formulation                                          #
+################################################################################
+
+function _switch_flow!(nm::NetworkModel{P,F}, e::Int, a_fr::Arc, a_to::Arc; nw::Int
+                      ) where {P<:AbstractProblemType,F<:LPFFormulation}
+    p = var(nm, :p; nw)
+
+    return constrain!(nm, :switch_flow, e, JuMP.@build_constraint(p[a_to] == -p[a_fr]); nw)
+end
+
+function _switch_open!(nm::NetworkModel{P,F}, e::Int, a_fr::Arc; nw::Int
+                      ) where {P<:AbstractProblemType,F<:LPFFormulation}
+    p = var(nm, :p; nw)
+
+    return constrain!(nm, :switch_open, e, JuMP.@build_constraint(p[a_fr] == 0.0); nw)
+end
+
+function _switch_equal!(nm::NetworkModel{P,F}, e::Int, a_fr::Arc, a_to::Arc; nw::Int
+                       ) where {P<:AbstractProblemType,F<:LPFFormulation}
+    va   = var(nm, :va; nw)
+    i, j = a_fr.node, a_to.node
+
+    return constrain!(nm, :switch_angle, e, JuMP.@build_constraint(va[i] == va[j]); nw)
+end
+
+function _switch_loop!(nm::NetworkModel{P,F}, e::Int, loop; nw::Int
+                      ) where {P<:AbstractProblemType,F<:LPFFormulation}
+    p = var(nm, :p; nw)
+
+    return constrain!(nm, :switch_loop, e, JuMP.@build_constraint(
+        sum(σ * p[first(edge_arcs(nm, f; nw))] for (f, σ) in loop; init = 0.0) == 0.0); nw)
+end
+
+function _free_switch_rows!(nm::NetworkModel{P,F}, e::Int, sw::AbstractSwitch,
+                            a_fr::Arc, a_to::Arc; nw::Int
+                           ) where {P<:AbstractProblemType,F<:LPFFormulation}
+    _require_rating(e, sw)
 
     va, p, z = var(nm, :va; nw), var(nm, :p; nw), var(nm, :zsw, e; nw)
     i, j     = a_fr.node, a_to.node
@@ -305,6 +361,134 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_i
 
     return nothing
 end
+
+################################################################################
+# Switch — the current-based formulation                                       #
+################################################################################
+
+function _switch_flow!(nm::NetworkModel{P,F}, e::Int, a_fr::Arc, a_to::Arc; nw::Int
+                      ) where {P<:AbstractProblemType,F<:IVRFormulation}
+    cr, ci = var(nm, :cr; nw), var(nm, :ci; nw)
+
+    return (
+        constrain!(nm, :switch_flow, (e, :real),
+                   JuMP.@build_constraint(cr[a_to] == -cr[a_fr]); nw),
+        constrain!(nm, :switch_flow, (e, :imag),
+                   JuMP.@build_constraint(ci[a_to] == -ci[a_fr]); nw),
+    )
+end
+
+function _switch_open!(nm::NetworkModel{P,F}, e::Int, a_fr::Arc; nw::Int
+                      ) where {P<:AbstractProblemType,F<:IVRFormulation}
+    cr, ci = var(nm, :cr; nw), var(nm, :ci; nw)
+
+    return (
+        constrain!(nm, :switch_open, (e, :real), JuMP.@build_constraint(cr[a_fr] == 0.0); nw),
+        constrain!(nm, :switch_open, (e, :imag), JuMP.@build_constraint(ci[a_fr] == 0.0); nw),
+    )
+end
+
+function _switch_equal!(nm::NetworkModel{P,F}, e::Int, a_fr::Arc, a_to::Arc; nw::Int
+                       ) where {P<:AbstractProblemType,F<:IVRFormulation}
+    vr, vi = var(nm, :vr; nw), var(nm, :vi; nw)
+    i, j   = a_fr.node, a_to.node
+
+    return (
+        constrain!(nm, :switch_voltage, (e, :real), JuMP.@build_constraint(vr[i] == vr[j]); nw),
+        constrain!(nm, :switch_voltage, (e, :imag), JuMP.@build_constraint(vi[i] == vi[j]); nw),
+    )
+end
+
+function _switch_loop!(nm::NetworkModel{P,F}, e::Int, loop; nw::Int
+                      ) where {P<:AbstractProblemType,F<:IVRFormulation}
+    cr, ci = var(nm, :cr; nw), var(nm, :ci; nw)
+
+    return (
+        constrain!(nm, :switch_loop, (e, :real), JuMP.@build_constraint(
+            sum(σ * cr[first(edge_arcs(nm, f; nw))] for (f, σ) in loop; init = 0.0) == 0.0); nw),
+        constrain!(nm, :switch_loop, (e, :imag), JuMP.@build_constraint(
+            sum(σ * ci[first(edge_arcs(nm, f; nw))] for (f, σ) in loop; init = 0.0) == 0.0); nw),
+    )
+end
+
+function _free_switch_rows!(nm::NetworkModel{P,F}, e::Int, sw::AbstractSwitch,
+                            a_fr::Arc, a_to::Arc; nw::Int
+                           ) where {P<:AbstractProblemType,F<:IVRFormulation}
+    _require_rating(e, sw)
+
+    vr, vi = var(nm, :vr; nw), var(nm, :vi; nw)
+    cr, ci = var(nm, :cr; nw), var(nm, :ci; nw)
+    z      = var(nm, :zsw, e; nw)
+    i, j   = a_fr.node, a_to.node
+    ni, nj = node(nm, i; nw), node(nm, j; nw)
+
+    vmin = min(ni.vmin, nj.vmin)
+    vmin > 0 ||
+        throw(ArgumentError("switch $e is free and joins a node with a lower voltage limit " *
+                            "of $vmin, and the bound on its current is the rating over " *
+                            "that limit; give the nodes a positive `vmin`, or lock it"))
+    M = 2 * max(ni.vmax, nj.vmax)
+    C = sw.rate_a / vmin
+
+    return (
+        constrain!(nm, :switch_voltage_range, (e, :real, :max), JuMP.@build_constraint(
+            vr[i] - vr[j] <= M * (1 - z)); nw),
+        constrain!(nm, :switch_voltage_range, (e, :real, :min), JuMP.@build_constraint(
+            vr[i] - vr[j] >= -M * (1 - z)); nw),
+        constrain!(nm, :switch_voltage_range, (e, :imag, :max), JuMP.@build_constraint(
+            vi[i] - vi[j] <= M * (1 - z)); nw),
+        constrain!(nm, :switch_voltage_range, (e, :imag, :min), JuMP.@build_constraint(
+            vi[i] - vi[j] >= -M * (1 - z)); nw),
+        constrain!(nm, :switch_current_range, (e, :real, :max), JuMP.@build_constraint(
+            cr[a_fr] <= C * z); nw),
+        constrain!(nm, :switch_current_range, (e, :real, :min), JuMP.@build_constraint(
+            cr[a_fr] >= -C * z); nw),
+        constrain!(nm, :switch_current_range, (e, :imag, :max), JuMP.@build_constraint(
+            ci[a_fr] <= C * z); nw),
+        constrain!(nm, :switch_current_range, (e, :imag, :min), JuMP.@build_constraint(
+            ci[a_fr] >= -C * z); nw),
+    )
+end
+
+"""
+    constraint_edge_limits(nm, T; nw)
+
+The rating of every in-service switch that is closed or free, where it is finite,
+
+```math
+\\left( (v^{\\text{r}}_{i})^2 + (v^{\\text{i}}_{i})^2 \\right)
+\\left( (c^{\\text{r}}_{a^{\\text{f}}})^2 + (c^{\\text{i}}_{a^{\\text{f}}})^2 \\right)
+\\le (s^{\\text{max}}_{e})^2 .
+```
+
+One row on the first terminal is the whole rating: closed, the voltage is the same at
+both, and open, the current is zero. A free switch has it as well as the bounds that
+make `s^max` a big-M, so a model with one is nonconvex as well as mixed-integer.
+
+It is an equipment limit, so it holds whether or not the switch is monitored for
+congestion, and it is never priced.
+"""
+function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                               ) where {P<:AbstractDispatchProblem,F<:IVRFormulation,T<:AbstractSwitch}
+    vr, vi = var(nm, :vr; nw), var(nm, :vi; nw)
+    cr, ci = var(nm, :cr; nw), var(nm, :ci; nw)
+    limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :switch_limits)
+
+    for e in ids(nm, T; nw)
+        sw = edge(nm, e; nw)::T
+        (isfinite(sw.rate_a) && (!_held(nm, sw) || sw.position == 1)) || continue
+
+        a = first(edge_arcs(nm, e; nw))
+        limits[e] = constrain!(nm, :switch_rating, e, JuMP.@build_constraint(
+            (vr[a.node]^2 + vi[a.node]^2) * (cr[a]^2 + ci[a]^2) <= sw.rate_a^2); nw)
+    end
+
+    return nothing
+end
+
+################################################################################
+# Switch — the loops of closed switches                                        #
+################################################################################
 
 """
     _switch_cycles(nm; nw)

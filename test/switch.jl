@@ -121,11 +121,11 @@
 
 end
 
-# What a switch held at its position does to a linearized model: the same as the
-# nodes it joins being one node, or as the edge not being there, and no more than
-# that to a loop of them.
+# What a switch held at its position does to a model: the same as the nodes it
+# joins being one node, or as the edge not being there, and no more than that to a
+# loop of them. In both formulations.
 
-@testset "switch, held, in the linearized formulation" begin
+@testset "switch, held" begin
 
     br(id, i, j; kw...)   = Branch(; id, terminals = [i, j], r = 0.0, x = 0.1, kw...)
     sw(id, i, j; kw...)   = Switch(; id, terminals = [i, j], kw...)
@@ -173,19 +173,20 @@ end
             Dict(i => nd for (i, nd) in net.node if i != 14),
             Dict(u => (c.node == 14 ? rebuilt(c; node = 13) : c) for (u, c) in net.unit))
 
-        for solve in (d -> solve_opf(d, LPFFormulation, OPTIMIZER),
-                      d -> solve_lf(d, LPFFormulation, OPTIMIZER))
+        for F in (LPFFormulation, IVRFormulation),
+            solve in (d -> solve_opf(d, F, OPTIMIZER), d -> solve_lf(d, F, OPTIMIZER))
+
             ref = quiet(() -> solve(merged))
             r   = quiet(() -> solve(closed))
             @test r["termination_status"] == JuMP.LOCALLY_SOLVED
-            @test r["objective"] ≈ ref["objective"] rtol = 1e-8
-            @test all(isapprox(flow(r, e), flow(ref, e); atol = 1e-6) for e in keep)
+            @test r["objective"] ≈ ref["objective"] rtol = 1e-6
+            @test all(isapprox(flow(r, e), flow(ref, e); atol = 1e-5) for e in keep)
 
             ref = quiet(() -> solve(removed))
             r   = quiet(() -> solve(opened))
-            @test r["objective"] ≈ ref["objective"] rtol = 1e-8
-            @test all(isapprox(flow(r, e), flow(ref, e); atol = 1e-6) for e in keep)
-            @test abs(flow(r, e14)) < 1e-9
+            @test r["objective"] ≈ ref["objective"] rtol = 1e-6
+            @test all(isapprox(flow(r, e), flow(ref, e); atol = 1e-5) for e in keep)
+            @test abs(flow(r, e14)) < 1e-7
         end
     end
 
@@ -200,11 +201,27 @@ end
             @test flow(r, 3) ≈ 0.5 atol = 1e-6
         end
 
+        # and in the current-based formulation, where the loop row is on each current
+        r = quiet(() -> solve_opf(data, IVRFormulation, OPTIMIZER))
+        @test r["termination_status"] == JuMP.LOCALLY_SOLVED
+        @test flow(r, 2) ≈ 0.5 atol = 1e-5
+        @test flow(r, 3) ≈ 0.5 atol = 1e-5
+        current(e, part) = nw_solution(r)["edge"]["$e"]["terminal"]["1"][part]
+        @test current(2, "cr") ≈ current(3, "cr") atol = 1e-6
+        @test current(2, "ci") ≈ current(3, "ci") atol = 1e-6
+
         # one angle equality for the pair, and a loop row for the other switch
         nm   = instantiate_model(data, OptimalPowerFlowProblem, LPFFormulation)
         rows = Set((key, id) for (_, key, id) in keys(registered_constraints(nm))
                    if key in (:switch_angle, :switch_loop, :switch_open))
         @test rows == Set([(:switch_angle, 2), (:switch_loop, 3)])
+
+        # the same in current, a real row and an imaginary one for each
+        nm   = instantiate_model(data, OptimalPowerFlowProblem, IVRFormulation)
+        rows = Set((key, id) for (_, key, id) in keys(registered_constraints(nm))
+                   if key in (:switch_voltage, :switch_loop, :switch_open))
+        @test rows == Set([(:switch_voltage, (2, :real)), (:switch_voltage, (2, :imag)),
+                           (:switch_loop, (3, :real)), (:switch_loop, (3, :imag))])
     end
 
     @testset "three switches in a triangle split the flow by the length of the way" begin
@@ -219,19 +236,24 @@ end
 
         # a switch that runs from its second terminal to its first is the same loop
         data = toy([sw(1, 1, 2), sw(2, 3, 2), sw(3, 1, 3)], [gen(1, 1), load(2, 3)])
-        r    = solve_opf(data, LPFFormulation, OPTIMIZER)
-        @test flow(r, 3) ≈ 2 / 3 atol = 1e-6
-        @test flow(r, 1) ≈ 1 / 3 atol = 1e-6
-        @test flow(r, 2) ≈ -1 / 3 atol = 1e-6
+        for F in (LPFFormulation, IVRFormulation)
+            r = quiet(() -> solve_opf(data, F, OPTIMIZER))
+            @test flow(r, 3) ≈ 2 / 3 atol = 1e-5
+            @test flow(r, 1) ≈ 1 / 3 atol = 1e-5
+            @test flow(r, 2) ≈ -1 / 3 atol = 1e-5
+        end
     end
 
     @testset "an open switch writes no angle row, and a closed one no flow row" begin
         data = toy([br(1, 1, 2), sw(2, 2, 3; position = 0)], [gen(1, 1), load(2, 2)])
-        nm   = instantiate_model(data, OptimalPowerFlowProblem, LPFFormulation)
-        keys_ = Set(key for (_, key, _) in keys(registered_constraints(nm)))
 
-        @test :switch_open in keys_ && :switch_flow in keys_
-        @test :switch_angle ∉ keys_ && :switch_loop ∉ keys_
+        for (F, equal) in ((LPFFormulation, :switch_angle), (IVRFormulation, :switch_voltage))
+            nm    = instantiate_model(data, OptimalPowerFlowProblem, F)
+            keys_ = Set(key for (_, key, _) in keys(registered_constraints(nm)))
+
+            @test :switch_open in keys_ && :switch_flow in keys_
+            @test equal ∉ keys_ && :switch_loop ∉ keys_
+        end
     end
 
     @testset "the rating of a closed switch holds in a dispatch problem, not in a power flow" begin
@@ -239,20 +261,22 @@ end
         units = [gen(1, 1; cost = cheap), gen(2, 2; cost = dear, pg = 1.0), load(3, 2; pd = 2.0)]
         net(rate; position = 1) = toy([sw(1, 1, 2; rate_a = rate, position)], units; n = 2)
 
-        free  = solve_opf(net(Inf), LPFFormulation, OPTIMIZER)
-        tight = solve_opf(net(0.5), LPFFormulation, OPTIMIZER)
-        @test flow(free, 1) ≈ 2.0 atol = 1e-6
-        @test flow(tight, 1) ≈ 0.5 atol = 1e-6              # the dear one makes up the rest
-        @test nw_solution(tight)["unit"]["2"]["pg"] ≈ 1.5 atol = 1e-6
+        for F in (LPFFormulation, IVRFormulation)
+            free  = quiet(() -> solve_opf(net(Inf), F, OPTIMIZER))
+            tight = quiet(() -> solve_opf(net(0.5), F, OPTIMIZER))
+            @test flow(free, 1) ≈ 2.0 atol = 1e-5
+            @test flow(tight, 1) ≈ 0.5 atol = 1e-5              # the dear one makes up the rest
+            @test nw_solution(tight)["unit"]["2"]["pg"] ≈ 1.5 atol = 1e-5
 
-        # a power flow chooses nothing and has no rating, as for a branch
-        pf = solve_lf(net(0.5), LPFFormulation, OPTIMIZER)
-        @test flow(pf, 1) ≈ 1.0 atol = 1e-6
+            # a power flow chooses nothing and has no rating, as for a branch
+            pf = quiet(() -> solve_lf(net(0.5), F, OPTIMIZER))
+            @test flow(pf, 1) ≈ 1.0 atol = 1e-5
 
-        # open, there is nothing to limit
-        r = solve_opf(net(0.5; position = 0), LPFFormulation, OPTIMIZER)
-        @test abs(flow(r, 1)) < 1e-9
-        @test nw_solution(r)["unit"]["2"]["pg"] ≈ 2.0 atol = 1e-6
+            # open, there is nothing to limit
+            r = quiet(() -> solve_opf(net(0.5; position = 0), F, OPTIMIZER))
+            @test abs(flow(r, 1)) < 1e-7
+            @test nw_solution(r)["unit"]["2"]["pg"] ≈ 2.0 atol = 1e-5
+        end
     end
 
     @testset "a rolling horizon over a position that changes is every hour on its own" begin
@@ -268,33 +292,38 @@ end
         @test same_structure(data, 1, 2) && same_structure(data, 5, 6)
         @test !same_structure(data, 3, 4)
 
-        roll(; reuse) = quiet(() -> solve_rolling_horizon(data, OptimalPowerFlowProblem,
-                                                          LPFFormulation, OPTIMIZER;
-                                                          horizon = 2, step = 1, reuse))
-        whole  = quiet(() -> solve_opf(data, LPFFormulation, OPTIMIZER))
-        built  = roll(reuse = false)
-        reused = roll(reuse = true)
+        roll(F; reuse) = quiet(() -> solve_rolling_horizon(data, OptimalPowerFlowProblem,
+                                                           F, OPTIMIZER;
+                                                           horizon = 2, step = 1, reuse))
 
-        for result in (built, reused)
-            @test result["termination_status"] == JuMP.LOCALLY_SOLVED
-            @test result["objective"] ≈ whole["objective"] rtol = 1e-6
-            @test [nw_solution(result, n)["unit"]["2"]["pg"] for n in 1:6] ≈
-                  [0.0, 0.0, 0.0, 1.0, 1.0, 1.0] atol = 1e-6
+        for F in (LPFFormulation, IVRFormulation)
+            whole  = quiet(() -> solve_opf(data, F, OPTIMIZER))
+            built  = roll(F; reuse = false)
+            reused = roll(F; reuse = true)
+
+            for result in (built, reused)
+                @test result["termination_status"] == JuMP.LOCALLY_SOLVED
+                @test result["objective"] ≈ whole["objective"] rtol = 1e-6
+                @test [nw_solution(result, n)["unit"]["2"]["pg"] for n in 1:6] ≈
+                      [0.0, 0.0, 0.0, 1.0, 1.0, 1.0] atol = 1e-5
+            end
+
+            # one model served the windows that had the same shape, and no more
+            @test 1 < reused["horizon"]["built"] < built["horizon"]["built"]
         end
-
-        # one model served the windows that had the same shape, and no more
-        @test 1 < reused["horizon"]["built"] < built["horizon"]["built"]
     end
 
     @testset "a power flow holds a free switch where the data has it" begin
         data = toy([br(1, 1, 2), sw(2, 2, 3; lock = FREE, rate_a = 5.0), br(3, 1, 3)],
                    [gen(1, 1), load(2, 3)])
 
-        r = quiet(() -> solve_lf(data, LPFFormulation, OPTIMIZER))
-        @test r["termination_status"] == JuMP.LOCALLY_SOLVED
+        for F in (LPFFormulation, IVRFormulation)
+            r = quiet(() -> solve_lf(data, F, OPTIMIZER))
+            @test r["termination_status"] == JuMP.LOCALLY_SOLVED
 
-        nm = instantiate_model(data, LoadFlowProblem, LPFFormulation)
-        @test isempty(get(_NMB.var(nm), :zsw, Dict()))              # no decision to make
+            nm = instantiate_model(data, LoadFlowProblem, F)
+            @test isempty(get(_NMB.var(nm), :zsw, Dict()))          # no decision to make
+        end
     end
 
 end
@@ -302,12 +331,15 @@ end
 # What a free switch does to a dispatch problem: the position is a decision, and
 # the model that decides it is the first mixed-integer one in the package.
 
-@testset "switch, free, in the linearized formulation" begin
+@testset "switch, free" begin
 
     br(id, i, j; kw...)   = Branch(; id, terminals = [i, j], r = 0.0, x = 0.1, kw...)
     sw(id, i, j; kw...)   = Switch(; id, terminals = [i, j], kw...)
     gen(id, i; kw...)     = Generator(; id, node = i, pmax = 5.0, kw...)
     load(id, i; pd = 1.0) = FixedLoad(; id, node = i, pd)
+
+    "the active power into the first terminal of edge `e`"
+    flow(result, e) = nw_solution(result)["edge"]["$e"]["terminal"]["1"]["p"]
 
     exact = JuMP.optimizer_with_attributes(HiGHS.Optimizer, "output_flag" => false,
                                            "mip_rel_gap" => 0.0, "mip_abs_gap" => 0.0)
@@ -317,7 +349,7 @@ end
     # generator can send depends on which of them are closed, and the best setting
     # is not the one with all of them closed.
     "the loop, its three switches locked or free at `positions`, over `dim` if given"
-    function loop(locks, positions; dim = nothing, pd = 2.0)
+    function loop(locks, positions; dim = nothing, pd = 1.8)
         I = Dict{Int,AbstractNode}(i => Node(; id = i, type = i == 1 ? REF : PQ) for i in 1:3)
         E = Dict{Int,AbstractEdge}(
             1 => br(1, 1, 2; rate_a = 1.0),
@@ -395,23 +427,35 @@ end
         @test all(active_nodal_price(held, i) isa Float64 for i in 1:3)
     end
 
-    @testset "a free switch needs a rating to be opened with" begin
-        data = NetworkData(Network(
-            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF), 2 => Node(; id = 2)),
-            Dict{Int,AbstractEdge}(1 => br(1, 1, 2), 2 => sw(2, 1, 2; lock = FREE)),
+    @testset "a free switch needs a rating, and in current a positive lower voltage limit" begin
+        data(; vmin = 0.9, rate = Inf) = NetworkData(Network(
+            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vmin), 2 => Node(; id = 2, vmin)),
+            Dict{Int,AbstractEdge}(1 => br(1, 1, 2), 2 => sw(2, 1, 2; lock = FREE, rate_a = rate)),
             Dict{Int,AbstractUnit}(1 => gen(1, 1), 2 => load(2, 2))))
 
-        err = try instantiate_model(data, OptimalPowerFlowProblem, LPFFormulation) catch e e end
-        @test err isa ArgumentError
-        @test occursin("switch 2", err.msg) && occursin("rate_a", err.msg)
+        for F in (LPFFormulation, IVRFormulation)
+            err = try instantiate_model(data(), OptimalPowerFlowProblem, F) catch e e end
+            @test err isa ArgumentError
+            @test occursin("switch 2", err.msg) && occursin("rate_a", err.msg)
 
-        # a power flow opens nothing, so it asks for none
-        @test instantiate_model(data, LoadFlowProblem, LPFFormulation) isa NetworkModel
+            # a power flow opens nothing, so it asks for none
+            @test instantiate_model(data(), LoadFlowProblem, F) isa NetworkModel
+        end
+
+        # the bound on a current is the rating over the lowest voltage there may be
+        err = try
+            instantiate_model(data(; rate = 2.0, vmin = 0.0), OptimalPowerFlowProblem, IVRFormulation)
+        catch e
+            e
+        end
+        @test err isa ArgumentError && occursin("vmin", err.msg)
+        @test instantiate_model(data(; rate = 2.0, vmin = 0.0), OptimalPowerFlowProblem,
+                                LPFFormulation) isa NetworkModel
     end
 
     @testset "a rolling horizon on one model keeps the position binary" begin
         dim  = Dimension(:time => 4)
-        data = free((1, 1, 1); dim, pd = nw_vector(dim, [2.0, 0.5, 2.0, 1.5]))
+        data = free((1, 1, 1); dim, pd = nw_vector(dim, [1.8, 0.5, 1.8, 1.5]))
 
         roll(; reuse) = quiet(() -> solve_rolling_horizon(data, OptimalPowerFlowProblem,
                                                           LPFFormulation, exact;
@@ -422,9 +466,82 @@ end
 
         for result in (built, reused)
             @test result["termination_status"] == JuMP.OPTIMAL
-            @test result["objective"] ≈ whole["objective"] atol = 1e-6
+            @test result["objective"] ≈ whole["objective"] atol = 1e-4      # the integrality tolerance
         end
         @test reused["horizon"]["built"] < built["horizon"]["built"]
+    end
+
+    @testset "in current a free switch is nine rows and a nonconvex one" begin
+        nm    = instantiate_model(free((1, 0, 1)), OptimalPowerFlowProblem, IVRFormulation)
+        keys_ = first.([(key, id) for (_, key, id) in keys(registered_constraints(nm))])
+        zs    = [_NMB.var(nm, :zsw, e) for e in 3:5]
+
+        @test all(JuMP.is_binary, zs)
+        @test JuMP.start_value.(zs) == [1.0, 0.0, 1.0]
+
+        # for each switch two flow rows, four on the voltage, four on the current, one rating
+        @test count(==(:switch_flow), keys_) == 6
+        @test count(==(:switch_voltage_range), keys_) == 12
+        @test count(==(:switch_current_range), keys_) == 12
+        @test count(==(:switch_rating), keys_) == 3
+
+        nm = instantiate_model(locked((1, 1, 1)), OptimalPowerFlowProblem, IVRFormulation)
+        @test isempty(_NMB.var(nm)[:zsw])
+        @test !any(JuMP.is_binary, JuMP.all_variables(nm.model))
+    end
+
+    @testset "a free switch fixed at a position is the same model as a locked one" begin
+        for F in (LPFFormulation, IVRFormulation),
+            positions in Iterators.product((0, 1), (0, 1), (0, 1))
+
+            nm = instantiate_model(free(), OptimalPowerFlowProblem, F)
+            JuMP.relax_integrality(nm.model)
+            for (e, z) in zip(3:5, positions)
+                JuMP.fix(_NMB.var(nm, :zsw, e), z; force = true)
+            end
+            relaxed = quiet(() -> optimize_model!(nm, OPTIMIZER))
+            held    = quiet(() -> solve_opf(locked(positions), F, OPTIMIZER))
+
+            if held["termination_status"] != JuMP.LOCALLY_SOLVED
+                # the one setting that cannot be fed
+                @test relaxed["termination_status"] != JuMP.LOCALLY_SOLVED
+            elseif all(==(1), positions)
+                # three closed switches round a loop: a locked model gives the loop an
+                # equation, and a free one does not, so it may send the flow round as it likes
+                @test relaxed["termination_status"] == JuMP.LOCALLY_SOLVED
+                @test relaxed["objective"] < held["objective"] - 1.0
+            else
+                @test relaxed["termination_status"] == JuMP.LOCALLY_SOLVED
+                @test relaxed["objective"] ≈ held["objective"] rtol = 1e-6
+                @test all(isapprox(flow(relaxed, e), flow(held, e); atol = 1e-5) for e in 1:5)
+            end
+        end
+    end
+
+    @testset "a nonconvex mixed-integer solver chooses the position in current" begin
+        juniper = JuMP.optimizer_with_attributes(
+            Juniper.Optimizer, "log_levels" => Symbol[],
+            "nl_solver" => JuMP.optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 0,
+                                                           "sb" => "yes"))
+
+        # one switch free, the other two held open
+        data = loop((FREE, LOCKED, LOCKED), (1, 0, 0))
+        nm   = instantiate_model(data, OptimalPowerFlowProblem, IVRFormulation)
+        quiet(() -> optimize_model!(nm, juniper))
+
+        held = [quiet(() -> solve_opf(loop((LOCKED, LOCKED, LOCKED), (z, 0, 0)),
+                                      IVRFormulation, OPTIMIZER)) for z in (0, 1)]
+        best = minimum(r["objective"] for r in held
+                       if r["termination_status"] == JuMP.LOCALLY_SOLVED)
+
+        @test JuMP.termination_status(nm.model) in (JuMP.OPTIMAL, JuMP.LOCALLY_SOLVED)
+        @test JuMP.objective_value(nm.model) ≈ best rtol = 1e-5
+        @test round(Int, JuMP.value(_NMB.var(nm, :zsw, 3))) == 1
+        @test maximum(r["objective"] for r in held) > best + 1.0       # and it was a choice
+
+        # a mixed-integer program has no prices in this formulation either
+        @test !JuMP.has_duals(nm.model)
+        @test all(active_nodal_price(nm, i) === nothing for i in 1:3)
     end
 
 end

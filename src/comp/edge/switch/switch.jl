@@ -116,15 +116,15 @@ end
 register_edge_type!(Switch)
 
 """
-    connects(dim, sw, n)
+    connects(dim, sw, n; decide = true)
     can_open(dim, sw, n)
 
-A switch connects its terminals unless it is locked open; a free switch counts as
-connecting because the problem may close it, and is the only kind the problem
-may open. See [`islands`](@ref).
+A switch connects its terminals where it is closed. A free switch also connects
+while the problem decides, because the problem may close it, and is the only kind
+the problem may open. See [`islands`](@ref).
 """
-connects(dim::Dimension, sw::AbstractSwitch, n::Int) =
-    sw.lock === FREE || nw_value(dim, sw.position, n) == 1
+connects(dim::Dimension, sw::AbstractSwitch, n::Int; decide::Bool = true) =
+    (decide && sw.lock === FREE) || nw_value(dim, sw.position, n) == 1
 
 can_open(::Dimension, sw::AbstractSwitch, ::Int) = sw.lock === FREE
 
@@ -136,3 +136,167 @@ for an open position than for a closed one, so those two decide the shape of its
 model rather than a number in it. See [`structure_gates`](@ref).
 """
 structure_gates(::AbstractSwitch) = (:rate_a, :position)
+
+################################################################################
+# Switch — the linearized formulation                                          #
+################################################################################
+
+"""
+    _held(nm, sw)
+
+Whether the problem holds switch `sw` where the data puts it: a locked switch
+always, a free one wherever the problem does not choose, as in a power flow.
+"""
+_held(::NetworkModel{P}, sw::AbstractSwitch) where {P<:AbstractProblemType} =
+    sw.lock === LOCKED || !_decides(P)
+
+"""
+    variable_edge(nm, T; nw)
+
+A switch held where the data puts it needs no variables of its own under a
+[`LPFFormulation`](@ref): its flow is the terminal power every edge already has.
+"""
+variable_edge(::NetworkModel{P,F}, ::Type{T}; nw::Int = 0
+             ) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractSwitch} = nothing
+
+"""
+    constraint_edge(nm, T; nw)
+
+The physics of every in-service switch held at its position, in the linearized
+formulation. What leaves one terminal arrives at the other, `p_{a^t} = -p_{a^f}`,
+and then
+
+| position | rows |
+|:---------|:-----|
+| open     | `p_{a^f} = 0` |
+| closed   | `v^a_i = v^a_j` |
+
+A closed switch has no impedance, so its flow is whatever the node balances ask
+of it, and a loop of closed switches leaves the split between them undetermined.
+The angle equality is therefore written only for the switches of a spanning tree
+of each group of closed switches, taken by ascending identifier. Each other
+closed switch closes a loop with the tree instead, and gets the equation of that
+loop in place of its angle equality,
+
+```math
+\\sum_{s \\in \\text{loop}} \\sigma_s \\, p_{a^{\\text{f}}_s} = 0 ,
+```
+
+with `σ_s = ±1` by the direction the loop runs through `s`. That is Kirchhoff's
+voltage law with every switch given the same impedance, so parallel switches share
+a flow equally, whichever solver is asked.
+"""
+function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                        ) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractSwitch}
+    va, p  = var(nm, :va; nw), var(nm, :p; nw)
+    switch = get!(() -> Dict{Int,Any}(), con(nm; nw), :switch)
+    cycles = _switch_cycles(nm; nw)
+
+    for e in ids(nm, T; nw)
+        sw         = edge(nm, e; nw)::T
+        a_fr, a_to = edge_arcs(nm, e; nw)
+        i, j       = a_fr.node, a_to.node
+
+        _held(nm, sw) ||
+            error("switch $e is free in a `$P`, which needs the free switch model " *
+                  "(`zsw`) that this formulation does not have yet; lock it")
+
+        flow = constrain!(nm, :switch_flow, e,
+                          JuMP.@build_constraint(p[a_to] == -p[a_fr]); nw)
+
+        position = if sw.position != 1
+            constrain!(nm, :switch_open, e, JuMP.@build_constraint(p[a_fr] == 0.0); nw)
+        elseif haskey(cycles, e)
+            loop = cycles[e]
+            constrain!(nm, :switch_loop, e, JuMP.@build_constraint(
+                sum(σ * p[first(edge_arcs(nm, f; nw))] for (f, σ) in loop; init = 0.0) == 0.0); nw)
+        else
+            constrain!(nm, :switch_angle, e, JuMP.@build_constraint(va[i] == va[j]); nw)
+        end
+
+        switch[e] = (flow, position)
+    end
+
+    return nothing
+end
+
+"""
+    constraint_edge_limits(nm, T; nw)
+
+The rating of every in-service switch that is closed, `-s^max_e ≤ p_{a^f} ≤
+s^max_e`, where it is finite. It is an equipment limit, so it holds whether or not
+the switch is monitored for congestion, and it is never priced: an open switch has
+no flow to limit.
+"""
+function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+                               ) where {P<:AbstractDispatchProblem,F<:LPFFormulation,T<:AbstractSwitch}
+    p      = var(nm, :p; nw)
+    limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :switch_limits)
+
+    for e in ids(nm, T; nw)
+        sw = edge(nm, e; nw)::T
+        (_held(nm, sw) && sw.position == 1 && isfinite(sw.rate_a)) || continue
+
+        a_fr = first(edge_arcs(nm, e; nw))
+        limits[e] = constrain!(nm, :switch_rating, e,
+                               JuMP.@build_constraint(-sw.rate_a <= p[a_fr] <= sw.rate_a); nw)
+    end
+
+    return nothing
+end
+
+"""
+    _switch_cycles(nm; nw)
+
+For every closed switch that is not in the spanning tree of its group, the loop it
+closes with the tree, as the `(edge, σ)` pairs that go round it, `σ` being `+1`
+where the loop runs through the edge from its first terminal to its second.
+"""
+function _switch_cycles(nm::NetworkModel; nw::Int)
+    adjacent = Dict{Int,Vector{Tuple{Int,Int,Int}}}()
+    cycles   = Dict{Int,Vector{Tuple{Int,Int}}}()
+
+    for e in ids(nm, AbstractSwitch; nw)
+        sw = edge(nm, e; nw)
+        (_held(nm, sw) && sw.position == 1) || continue
+
+        i, j = terminals(sw)
+        path = _tree_path(adjacent, j, i)
+        if path === nothing
+            push!(get!(() -> Tuple{Int,Int,Int}[], adjacent, i), (j, e, +1))
+            push!(get!(() -> Tuple{Int,Int,Int}[], adjacent, j), (i, e, -1))
+        else
+            cycles[e] = vcat([(e, +1)], path)
+        end
+    end
+
+    return cycles
+end
+
+"the `(edge, σ)` pairs along the one path through the tree from node `from` to node `to`, or `nothing`"
+function _tree_path(adjacent, from::Int, to::Int)
+    from == to && return Tuple{Int,Int}[]
+
+    reached = Dict{Int,Tuple{Int,Int,Int}}(from => (from, 0, 0))
+    stack   = [from]
+    while !isempty(stack)
+        u = pop!(stack)
+        for (w, f, σ) in get(adjacent, u, ())
+            haskey(reached, w) && continue
+            reached[w] = (u, f, σ)
+            if w == to
+                path = Tuple{Int,Int}[]
+                while w != from
+                    u, f, σ = reached[w]
+                    pushfirst!(path, (f, σ))
+                    w = u
+                end
+
+                return path
+            end
+            push!(stack, w)
+        end
+    end
+
+    return nothing
+end

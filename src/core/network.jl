@@ -84,7 +84,7 @@ terminals(e::AbstractEdge) = e.terminals
 nterminals(e::AbstractEdge) = length(terminals(e))
 
 """
-    connects(dim, e, n)
+    connects(dim, e, n; decide = true)
 
 Whether the in-service edge `e` ties its terminals together at network index `n`,
 for the purpose of asking which nodes can exchange power, see
@@ -93,8 +93,12 @@ for the purpose of asking which nodes can exchange power, see
 True for every edge unless its type says otherwise, as a switch does where it is
 locked open. Extend it for an edge type that can be in service and still carry
 nothing.
+
+`decide` says whether the problem chooses what an edge may be set to, as a
+dispatch problem does and a power flow does not: an edge the problem may close
+connects when it does, and holds the position the data gives when it does not.
 """
-connects(::Dimension, ::AbstractEdge, ::Int) = true
+connects(::Dimension, ::AbstractEdge, ::Int; decide::Bool = true) = true
 
 """
     can_open(dim, e, n)
@@ -594,19 +598,21 @@ arcs(net::Network, ::Type{T}; nw::Int = nw_id_default(net)) where {T<:AbstractEd
     sort!(reduce(vcat, (edge_arcs(net, e; nw) for e in ids(net, T; nw)); init = Arc[]))
 
 """
-    islands(net; nw, without = ())
-    islands(data; nw, without = ())
+    islands(net; nw, without = (), decide = true)
+    islands(data; nw, without = (), decide = true)
 
 The islands of a network at network index `nw`: the sets of in-service nodes that
 can exchange power, each a sorted vector of node identifiers, ordered by their
 first node. A connected network has one.
 
 Two nodes are in the same island when a path of edges that [`connects`](@ref)
-joins them. An edge that is out of service at `nw` is not there to join anything,
-and neither is an edge listed in `without`, which is how to ask what the islands
-would be if some edges were opened. Units play no part.
+joins them, `decide` being passed on to it. An edge that is out of service at `nw`
+is not there to join anything, and neither is an edge listed in `without`, which
+is how to ask what the islands would be if some edges were opened. Units play no
+part.
 """
-function islands(net::Network; nw::Int = nw_id_default(net), without = ())
+function islands(net::Network; nw::Int = nw_id_default(net), without = (),
+                 decide::Bool = true)
     top    = topology(net; nw)
     skip   = Set{Int}(without)
     parent = Dict{Int,Int}(i => i for i in top.node)
@@ -623,7 +629,7 @@ function islands(net::Network; nw::Int = nw_id_default(net), without = ())
     for e in top.edge
         e in skip && continue
         c = net.edge[e]
-        connects(net.dim, c, nw) || continue
+        connects(net.dim, c, nw; decide) || continue
         t = terminals(c)
         for j in t[2:end]
             a, b = root(first(t)), root(j)

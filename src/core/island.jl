@@ -38,12 +38,13 @@ The lowest node of every island at network index `nw` that has a source but no
 reference node, sorted. These are the nodes
 [`constraint_node_voltage_anchor`](@ref) pins.
 """
-function anchor_nodes(net::Network, n::Int)
-    return [first(part) for part in islands(net; nw = n)
+function anchor_nodes(net::Network, n::Int; decide::Bool = true)
+    return [first(part) for part in islands(net; nw = n, decide)
             if !_has_reference(net, part, n) && _has_source(net, part, n)]
 end
 
-anchor_nodes(nm::NetworkModel; nw::Int = nw_id_default(nm)) = anchor_nodes(network(nm), nw)
+anchor_nodes(nm::NetworkModel{P}; nw::Int = nw_id_default(nm)) where {P<:AbstractProblemType} =
+    anchor_nodes(network(nm), nw; decide = _decides(P))
 
 ################################################################################
 # Islands — the check                                                          #
@@ -54,7 +55,16 @@ _list(x; max::Int = 10) = length(x) <= max ? string(x) :
     string("[", join(x[1:max], ", "), ", … and ", length(x) - max, " more]")
 
 """
-    check_islands(data; islanding = :error)
+    _decides(P)
+
+Whether a problem of type `P` chooses the position of the edges that can be opened,
+as a dispatch problem does. A power flow holds every one of them where the data
+puts it.
+"""
+_decides(::Type{P}) where {P<:AbstractProblemType} = P <: AbstractDispatchProblem
+
+"""
+    check_islands(data; islanding = :error, decide = true)
 
 Refuse a network that cannot pose a sensible problem over its islands, at every
 network index of `data`; [`instantiate_model`](@ref) calls it before it builds.
@@ -70,12 +80,14 @@ Two things are refused, both with an `ArgumentError` that names the nodes:
   [`can_open`](@ref), when opening all of them would split an island. A model
   that chooses which switches to open is entitled to open one that leaves a
   section of the network on its own, and it would be wrong to find out from
-  the solver. Pass `islanding = :allow` to accept that.
+  the solver. Pass `islanding = :allow` to accept that. A problem that does not
+  choose, `decide = false`, holds every edge where the data puts it and has
+  nothing to check here.
 
 Network indices that share a topology and have the same edges locked open are
 checked once.
 """
-function check_islands(data::NetworkData; islanding::Symbol = :error)
+function check_islands(data::NetworkData; islanding::Symbol = :error, decide::Bool = true)
     islanding in (:error, :allow) ||
         throw(ArgumentError("`islanding` is `:error` or `:allow`, not `:$islanding`"))
 
@@ -84,16 +96,17 @@ function check_islands(data::NetworkData; islanding::Symbol = :error)
 
     for n in nw_ids(data)
         top  = topology(net; nw = n)
-        key  = (objectid(top), [e for e in top.edge if !connects(net.dim, net.edge[e], n)])
+        key  = (objectid(top),
+                [e for e in top.edge if !connects(net.dim, net.edge[e], n; decide)])
         key in seen && continue
         push!(seen, key)
 
-        parts = islands(net; nw = n)
+        parts = islands(net; nw = n, decide)
         for part in parts
             _check_supply(net, part, n)
         end
 
-        islanding === :allow && continue
+        (islanding === :allow || !decide) && continue
         free = [e for e in top.edge if can_open(net.dim, net.edge[e], n)]
         isempty(free) || _check_free(net, parts, free, n)
     end

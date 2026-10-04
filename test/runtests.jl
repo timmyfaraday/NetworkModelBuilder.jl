@@ -13,6 +13,7 @@
 # v0.10.2 - the solution tables test                                           #
 # v0.11.0 - the switch test                                                    #
 # v0.11.0 - the islands test                                                   #
+# v0.11.0 - imports HiGHS, for the linear programs a switch makes              #
 ################################################################################
 
 using Test
@@ -23,6 +24,7 @@ using Arrow
 using Ipopt
 using JuMP
 using Parquet2
+import HiGHS         # `using` would export names of its own into every test file
 import PowerModels   # `using` would export `parse_file`, `ids`, ... over this package's own
 
 using NetworkModelBuilder

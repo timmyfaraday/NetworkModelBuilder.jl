@@ -135,10 +135,13 @@ direction the cycle crosses `s` (in the current-based formulation the same on `c
 Parallel switches then split evenly. A free switch writes no equality and needs none; the flows it
 reports in a closed loop may differ between solvers, and normalising them afterwards is not done.
 
-**Islands** (D22). `islands(data; nw, without = ())` returns the connected node sets at an index; an
-edge counts as joining its terminals when `connects(dim, edge, n)` says so (every edge, except a
-switch locked open), an out-of-service edge counts as absent and a free switch as present
-(`can_open(dim, edge, n)`, true only for a free switch, names what the problem may open). In
+**Islands** (D22). `islands(data; nw, without = (), decide = true)` returns the connected node sets
+at an index; an edge counts as joining its terminals when `connects(dim, edge, n; decide)` says so
+(every edge, except a switch locked open), an out-of-service edge counts as absent and a free
+switch as present (`can_open(dim, edge, n)`, true only for a free switch, names what the problem
+may open). `decide = false` is a power flow, which chooses nothing: a free switch then connects
+only if its position is 1, and the free-switch check is skipped (`_decides(P)` is
+`P <: AbstractDispatchProblem`; `instantiate_model` and `anchor_nodes` pass it). In
 `instantiate_model` (`check_islands`), once per distinct topology and set of locked-open edges: an
 island with units but no `REF` node and no in-service generator, storage or unserved-energy unit
 (a `Spill` only absorbs, so it is not a source) is an `ArgumentError` naming its nodes; an island

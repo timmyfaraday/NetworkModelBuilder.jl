@@ -226,4 +226,23 @@
         @test check_islands(fine) === nothing
     end
 
+    @testset "a power flow holds a free switch where the data has it" begin
+        data = toy(n = 3, edges = [br(1, 1, 2), sw(2, 2, 3; lock = FREE, position = 0, rate_a = 5.0)],
+                   units = [gen(1, 1), gen(2, 3; pg = 1.0), load(3, 3)])
+
+        @test islands(data) == [[1, 2, 3]]                        # a dispatch problem may close it
+        @test islands(data; decide = false) == [[1, 2], [3]]      # a power flow may not
+        @test check_islands(data; decide = false) === nothing
+
+        # so the load flow has an island with a source and no reference node, and anchors it
+        nm = instantiate_model(data, LoadFlowProblem, LPFFormulation)
+        @test collect(keys(_NMB.con(nm)[:node_voltage_anchor])) == [3]
+        r = quiet(() -> solve_lf(data, LPFFormulation, OPTIMIZER))
+        @test r["termination_status"] == JuMP.LOCALLY_SOLVED
+        @test nw_solution(r)["node"]["3"]["va"] ≈ 0 atol = 1e-6
+
+        # while a dispatch problem is refused, since opening the switch would leave it there
+        @test_throws ArgumentError instantiate_model(data, OptimalPowerFlowProblem, LPFFormulation)
+    end
+
 end

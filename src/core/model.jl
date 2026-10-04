@@ -220,7 +220,7 @@ function instantiate_model(data::NetworkData, ::Type{P}, ::Type{F};
                            ext::Dict{Symbol,Any} = Dict{Symbol,Any}(),
                            islanding::Symbol = :error
                           ) where {P<:AbstractProblemType,F<:AbstractFormulationType}
-    build && check_islands(data; islanding)
+    build && check_islands(data; islanding, decide = _decides(P))
 
     nws = nw_ids(data)
     nm  = NetworkModel{P,F}(data, jump_model,

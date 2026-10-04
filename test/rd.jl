@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.5.0 - the redispatch problem                                              #
+# v0.11.0 - binary variables and integer gates                                 #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The
@@ -852,6 +853,16 @@ end
 peak_only(per_peak = 50.0) =
     Redispatch(; overload = OverloadPrice(; per_energy = 0.0, per_peak))
 
+"an edge without physics whose one integer decides the shape of a model"
+Base.@kwdef struct IntegerGate <: AbstractEdge
+    id       ::Int
+    terminals::Vector{Int}
+    gate     ::NetworkQuantity{Int}
+    status   ::NetworkQuantity{Bool} = true
+    ext      ::Dict{Symbol,Any}      = Dict{Symbol,Any}()
+end
+_NMB.structure_gates(::IntegerGate) = (:gate,)
+
 @testset "rolling horizon" begin
 
     @testset "a window is an ordinary data set over fewer coordinates" begin
@@ -997,6 +1008,22 @@ peak_only(per_peak = 50.0) =
         end
         @test counts[1] == counts[2]
         @test counts[3] < counts[1]
+    end
+
+    @testset "an integer gate separates two shapes" begin
+        # 0 and 1 are both finite and both inside (-π/2, π/2), which is all a gate
+        # used to ask, so a switch open at one index and closed at the next would
+        # have been updated into the wrong shape
+        dim = Dimension(:time => 3)
+        I   = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0), 2 => Node(; id = 2))
+        E   = Dict{Int,AbstractEdge}(
+            1 => IntegerGate(; id = 1, terminals = [1, 2], gate = nw_vector(dim, [1, 0, 1])))
+        data = NetworkData(Network(I, E, Dict{Int,AbstractUnit}(); dim))
+
+        @test isempty(switchable(network(data)))            # nothing went out of service
+        @test structure_varies(data)
+        @test same_structure(data, 1, 3)
+        @test !same_structure(data, 1, 2)
     end
 
     @testset "one window is the whole problem" begin
@@ -1457,6 +1484,32 @@ peak_only(per_peak = 50.0) =
         update_model!(nm, window(data, :time, 3:4))
         @test JuMP.num_variables(nm.model) == before
         @test length(registered_constraints(nm)) > 0
+    end
+
+    @testset "a binary variable stays binary through fixing and updating" begin
+        data = rolling_network()
+        nm   = instantiate_model(window(data, :time, 1:2), RedispatchProblem, LPFFormulation)
+
+        z = variable!(nm, :z, 7; nw = 1, base_name = "1_z[7]", start = 1.0, binary = true)
+        @test JuMP.is_binary(z)
+        @test JuMP.start_value(z) == 1.0
+        @test !JuMP.is_binary(variable!(nm, :w, 7; nw = 1, base_name = "1_w[7]"))
+
+        # asked for again it is the same variable, not a second one
+        count = JuMP.num_variables(nm.model)
+        @test variable!(nm, :z, 7; nw = 1) === z
+        @test JuMP.num_variables(nm.model) == count
+
+        # a load flow pins it and a dispatch problem releases it, binary throughout
+        variable!(nm, :z, 7; nw = 1, fix = 0)
+        @test JuMP.is_fixed(z) && JuMP.fix_value(z) == 0 && JuMP.is_binary(z)
+        variable!(nm, :z, 7; nw = 1)
+        @test !JuMP.is_fixed(z) && JuMP.is_binary(z)
+
+        # and an update of the same shape leaves it where it was
+        update_model!(nm, window(data, :time, 3:4))
+        @test _NMB.var(nm, :z, 7; nw = 1) === z
+        @test JuMP.is_binary(z)
     end
 
     @testset "the result reports what each window covered" begin

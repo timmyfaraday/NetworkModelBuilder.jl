@@ -21,14 +21,3 @@ fix may be "document the trade-off," not "add parallelism."
 Evidence 2026-10-02: Zorba's independent daily chunks scaled with one-thread *processes* (7: 330-400 s
 per chunk) but not with threads in one process (7: 860 s; 30 threads: no gain), so option (B)'s
 "`Threads.@threads` over independent models" is weaker than it reads. See `lessons.md`, Performance.
-
-### Q4 · A multi-terminal switch: one device with an integer position, or a group of two-terminal switches?
-Owner: Tom (not yet settled). Depends on: B5, D15 (`position` is an `Int`). Zorba's 21 couplers are
-two-terminal, so nothing waits on it.
-A device lists a common terminal first and takes `position` 0 (open) to n-1 (common terminal tied
-to terminal k+1). A group is n-1 two-terminal switches plus an allowed-states set (Goldis et al.
-2017, Eq. (53)). Written with one binary per alternative and at most one closed they are the same
-mixed-integer program, so solve time and numerical behaviour do not separate them; what does is
-the big-M values, the number of binaries and islanding. A one-of-n device cannot express both
-selectors closed, nor a junction that ties all terminals at once. Options: (A) device; (B) group;
-(C) validate exactly two terminals now and decide when a double-busbar selector turns up.

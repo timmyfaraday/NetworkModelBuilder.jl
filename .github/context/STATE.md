@@ -1,7 +1,7 @@
 # STATE
 
 Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-04 by Tom Van Acker (Switch
-decisions D15-D20 recorded on `b5-switch-edge`).
+spec drafted, decisions D15-D25 recorded on `b5-switch-edge`).
 
 ## Where NMB stands
 
@@ -37,13 +37,13 @@ decisions D15-D20 recorded on `b5-switch-edge`).
   retirement of the sequential script (`76a52ce`, D14), the `_diag_*` deletion (`9fc06d4`) and the
   window/step settings (`3ea65d4`).
 - `b5-switch-edge` is the branch for B5, created from `main` on 2026-10-03.
-- Next free decision id: **D21**.
+- Next free decision id: **D26**.
 
 ## In progress
 
-- B5, the `Switch` edge type (D13, D15-D20), on branch `b5-switch-edge`, ships as v0.11.0. The plan
-  is under review: loops of closed switches, islanding and IVR are proposed, not yet agreed, and
-  the multi-terminal form is `open-questions.md` Q4. No spec written, no code yet.
+- B5, the `Switch` edge type (D13, D15-D25), on branch `b5-switch-edge`, ships as v0.11.0. The spec
+  is `knowledge/plan/switch-edge.md`, draft, awaiting Tom's review; no code yet. The branch holds
+  only memory files and the Juniper test dependency; the Zorba scripts stay on `test-zorba-run`.
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`): run with the rescaled prices
   (`runs/_year_full`, gitignored): 365 of 365 daily chunks `OPTIMAL`, 0 fallback, 63 min as 73
   one-thread processes. Tom then restored the original prices (D14); week 1 with them is sound too
@@ -67,8 +67,7 @@ decisions D15-D20 recorded on `b5-switch-edge`).
 
 ## Next
 
-1. B5: agree the plan, then write the spec (`new-spec`) and implement on `b5-switch-edge`. When
-   it exists, drop the 1e-5
+1. B5: review `switch-edge.md`, then implement on `b5-switch-edge`. When it exists, drop the 1e-5
    reactance floor from `scripts/SteeringPlanData.jl` and re-run week 1 to compare.
 2. Gap #10 (parallel rolling-horizon throughput) and #11 (bus factor) remain — see `backlog.md`.
 

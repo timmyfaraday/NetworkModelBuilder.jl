@@ -101,6 +101,17 @@ How to use this file:
   angle difference allowed across it when open. To be revisited with network reduction (B7).
 - **A free switch can be a preventive or a corrective measure, and is non-costly** (D18).
 - **`BusbarSwitch` and `CircuitBreaker` are added later than `AbstractSwitch` and `Switch`** (D19).
+- **Closed locked switches in a loop keep the voltage equalities of a spanning tree only; every other
+  one gets a unit-weight loop equation, so parallel switches split the flow evenly** (D21). A free
+  switch writes no equality and needs none.
+- **An island must hold a reference node or a source, else building the model is an error; an island
+  with a source and no reference node has one node anchored; opening every free switch may not
+  create an island, unless the caller allows it** (D22).
+- **A free switch is supported in the current-based formulation too, as a nonconvex mixed-integer
+  program; Juniper is a test dependency for the tests that solve one** (D23).
+- **A switch has exactly two terminals for now; `position` stays an `Int` for a later multi-terminal
+  form** (D24).
+- **`lock` is the enum `SwitchLock`, `FREE` or `LOCKED`, as `NodeType` is** (D25).
 
 ## Zorba pipeline (`scripts/`)
 
@@ -262,3 +273,35 @@ Changes: D13 (children deferred).
 Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Versioning and releases
 Why: it adds a component type and the first integer model, more than a gap closed.
 Changes: D1 (minor digit for an item that adds a component type).
+
+### D21 — Closed switches in a loop share the flow equally
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: with every closed switch an equality, a loop of them leaves the split to the solver (a toy
+run: HiGHS 1.0/0.0, Ipopt 0.5/0.5); unit-weight loop equations make it unique, well scaled and the
+same in every solver.
+Changes: new.
+
+### D22 — Islands are checked for, not left to the solver
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: an islanded load gives INFEASIBLE with no explanation, and a false LOCALLY_SOLVED at 1.39e6 pu
+in the current-based load flow (case14, bus 14); the literature keeps the switchable set from
+islanding (Goldis, Fattahi, Pineda).
+Changes: new.
+
+### D23 — A free switch is supported in the current-based formulation; Juniper is a test dependency
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: one switch model in both formulations. The rating makes the free case nonconvex and
+mixed-integer; the package builds it and the caller supplies the solver. Juniper 0.9.5 with Ipopt
+and HiGHS solved a small such problem and resolves with the other test dependencies.
+Changes: new (`Project.toml`: Juniper in `[extras]` and `[targets]`).
+
+### D24 — A switch has two terminals for now
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: a one-of-n device and a group of two-terminal switches give the same mixed-integer program,
+so the form is left until a double-busbar selector turns up; `position` being an `Int` keeps it open.
+Changes: new.
+
+### D25 — `lock` is an enum, `SwitchLock`
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: `NodeType` is one, and the table reader parses enums already.
+Changes: D15 (names the type of `lock`).

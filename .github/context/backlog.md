@@ -7,9 +7,9 @@ older ones: git has them). Next id: **B8**.
 ## Now
 
 - [ ] B5 · A `Switch` edge type (children: busbar switch, circuit breaker), replacing near-zero-impedance couplers · Tom · 2026-10-02
-  - Started 2026-10-03 on branch `b5-switch-edge`; ships as v0.11.0. Decisions D15-D20; the spec is
-    not written yet (loops of closed switches, islanding and Q4 are open). Until it exists the Zorba
-    pipeline floors line reactance at 1e-5.
+  - Started 2026-10-03 on branch `b5-switch-edge`; ships as v0.11.0. Decisions D15-D25; spec in
+    `knowledge/plan/switch-edge.md`, awaiting review. Until it exists the Zorba pipeline floors
+    line reactance at 1e-5.
 
 ## Next
 

@@ -2,13 +2,14 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B7**.
+older ones: git has them). Next id: **B8**.
 
 ## Now
 
 - [ ] B5 · A `Switch` edge type (children: busbar switch, circuit breaker), replacing near-zero-impedance couplers · Tom · 2026-10-02
-  - Started 2026-10-03 on branch `b5-switch-edge`. See D13. Until it exists the Zorba pipeline floors
-    line reactance at 1e-5.
+  - Started 2026-10-03 on branch `b5-switch-edge`; ships as v0.11.0. Decisions D15-D20; the spec is
+    not written yet (loops of closed switches, islanding and Q4 are open). Until it exists the Zorba
+    pipeline floors line reactance at 1e-5.
 
 ## Next
 
@@ -23,6 +24,8 @@ older ones: git has them). Next id: **B7**.
     Relates to B3. Longer windows do not help: the overhead follows the hour-states solved, not the
     number of windows (`lessons.md`, Performance), so the target is the cost per hour-state.
 - [ ] B4 · Bus factor: solo maintainer, get a second reviewer/co-committer (gap #11, P3/Large) · Tom · 2026-09-30
+- [ ] B7 · Revisit closed switches as equality rows (D17) in the context of network reduction, where a
+  closed switch would merge its nodes · Tom · 2026-10-04
 
 ## Done
 

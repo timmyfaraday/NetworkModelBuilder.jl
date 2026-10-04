@@ -15,7 +15,8 @@ How to use this file:
 ## Versioning and releases
 
 - **Gap-closure items are tackled one at a time: plan → user review → implement** (D1). Each item
-  bumps the patch digit only (`version = "0.9.x"` in `Project.toml`); no git tag per bump. Tag and
+  bumps the patch digit only (`version = "0.9.x"` in `Project.toml`), except an item that adds a
+  component type, which bumps the minor digit (D20); no git tag per bump. Tag and
   push are the user's call, asked for every time, not assumed from a prior approval.
 - **`CHANGELOG.md` follows Keep a Changelog, backfilled from per-file changelog headers, not raw
   commit timing** (D3): the per-file `# vX.Y.Z - <what changed>` header comments are the author's
@@ -88,6 +89,18 @@ How to use this file:
   the edge with its own children, such as a busbar switch and a circuit breaker — not a branch with
   a near-zero impedance** (D13). Not built yet. Until it is, the Zorba pipeline floors the
   reactance of every line at 1e-5 as a stopgap (`scripts/SteeringPlanData.jl`, on `test-zorba-run`).
+- **A switch carries `lock` (free or locked) and `position`, an `Int` (0 open, 1 closed); `status`
+  stays the in-service flag every component has** (D15). A load flow treats every switch as locked.
+  A switch is supported in both the linearised and the current-based formulation.
+- **A free switch makes a dispatch problem a mixed-integer program, the first in the package**
+  (D16). Such a model has no duals, so nodal prices are `nothing`; tests that solve one use HiGHS.
+- **A closed switch is an equality of the voltage at its two nodes with a free flow, an open one a
+  zero flow; nodes are not merged** (D17). A locked switch writes exact rows chosen by its
+  position. A free one writes big-M rows, needs a finite `rate_a`, which is an equipment limit in
+  every dispatch problem whether or not the edge is monitored, and takes `angmin`/`angmax` as the
+  angle difference allowed across it when open. To be revisited with network reduction (B7).
+- **A free switch can be a preventive or a corrective measure, and is non-costly** (D18).
+- **`BusbarSwitch` and `CircuitBreaker` are added later than `AbstractSwitch` and `Switch`** (D19).
 
 ## Zorba pipeline (`scripts/`)
 
@@ -211,3 +224,41 @@ floor the original prices solve week 1 with 7 of 7 chunks `OPTIMAL`, no violatio
 in the same time as the rescaled ones. Higher prices tolerate less overload (week 1: 127,368 step-3
 overload rows against 129,486).
 Changes: new. The year run made with the rescaled prices has to be re-run.
+
+### D15 — A switch has `lock` and `position`; `status` stays the in-service flag
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: the core reads `status` as the in-service flag (topology, contingencies), so a free/locked
+meaning would need special cases there, and a coupler outage works unchanged as `status = false`.
+`position` is an `Int` so that more than two terminals can extend it later. Both formulations.
+Changes: new.
+
+### D16 — A free switch makes the first mixed-integer model in the package
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: a free switch has to choose between two physics, which a continuous variable cannot. The
+package avoided integers so far (a tap changer is continuous for that reason); the cost is no
+duals, hence no nodal prices, and HiGHS in the tests.
+Changes: new.
+
+### D17 — A closed switch is an equality, not a merged node; the rows follow the lock
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: keeps every node and its result, and states the voltage-equal, power-flows / decoupled,
+no-flow behaviour exactly. Merging closed switches is a network reduction, to be taken up later
+(B7), where this is revisited. The big-M rows of a free switch need a finite rating to be written.
+Changes: new.
+
+### D18 — A free switch is preventive or corrective, and non-costly
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: the choice is the `Redispatch` setup's, as for every other measure; no cost is charged for a
+move, as for a phase shifter at its default.
+Changes: new.
+
+### D19 — `BusbarSwitch` and `CircuitBreaker` come after `Switch`
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: they would change nothing in the model at first, as `Cable` and `OverheadLine` do not; D13
+names them as children and they are added once something tells them apart.
+Changes: D13 (children deferred).
+
+### D20 — B5 is v0.11.0, a minor bump
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Versioning and releases
+Why: it adds a component type and the first integer model, more than a gap closed.
+Changes: D1 (minor digit for an item that adds a component type).

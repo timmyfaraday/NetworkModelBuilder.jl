@@ -17,6 +17,7 @@
 # v0.10.0 - the security screening output, towards the zorba dashboard         #
 # v0.10.1 - src/comp/ is auto-included; its exports moved into it              #
 # v0.10.2 - exports solution_tables                                            #
+# v0.11.0 - the component walk is a dependency of the compiled package         #
 ################################################################################
 
 module NetworkModelBuilder
@@ -45,6 +46,8 @@ module NetworkModelBuilder
     function _include_dir(dir::AbstractString)
         root = joinpath(@__DIR__, dir)
         for (path, subdirs, files) in walkdir(root)
+            # a file added here changes no file the compiled package already tracks
+            include_dependency(path)
             sort!(subdirs)
             jl      = sort!(filter(f -> endswith(f, ".jl"), files))
             self    = basename(path) * ".jl"

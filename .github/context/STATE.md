@@ -29,14 +29,17 @@ of the Switch plan, islands, on `b5-switch-edge`).
 ## In progress
 
 - B5, the `Switch` edge type (D13, D15-D25), on branch `b5-switch-edge`, ships as v0.11.0; spec
-  `knowledge/plan/switch-edge.md`. Commits 1-3 of 9 are done: `variable!` takes `binary` and an
+  `knowledge/plan/switch-edge.md`. Commits 1-4 of 9 are done: `variable!` takes `binary` and an
   integer is a structure gate (`9f88d73`); the `Switch` type (`29a11b3`), with `cbc4ed3`, a fix so
   that a new component file is not missed by the compiled package; `islands`, `check_islands` and
   `constraint_node_voltage_anchor` (`28f65ea`, D22: `connects`/`can_open` are the edge hooks, a
   source is a generator, storage or `EnergyNotServed`, `islanding = :allow` skips only the
-  free-switch check). Full suite 2622 with 1 timing flake (B8). Next is commit 4, the locked
-  switch in the linearized formulation. The Zorba scripts stay on `test-zorba-run`. To run one test
-  file use `scratch/switch_spike/run_tests.jl <files in runtests order>` (`hierarchy.jl` has helpers).
+  free-switch check); a held switch in the linearized formulation with loop rows (`5bd3e34`,
+  D17/D21; `decide` tells `islands` whether the problem chooses, false in a power flow). Full suite
+  last run at commit 3: 2622 with 1 timing flake (B8). Next is commit 5, the free switch in the
+  linearized formulation (`zsw`, big-M rows; HiGHS). The Zorba scripts stay on `test-zorba-run`.
+  To run one test file use `scratch/switch_spike/run_tests.jl <files in runtests order>`
+  (`hierarchy.jl` has helpers; it imports HiGHS and Juniper, `runtests.jl` only HiGHS so far).
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`), done with the original
   prices (D14): `runs/_year_orig_prices`, 365 of 365 chunks sound, 0 fallback, 58 min; overload rows
   341,787 (step 2) and 5,720,514 (step 3), no load shedding or spillage (the rescaled-price run

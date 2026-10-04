@@ -88,6 +88,11 @@ again get retired.
   inside a loop instead of after it. Two of the three still parsed, so the first symptom was a
   misleading `UndefVarError` in a test, not a syntax error. Reading the result with `read_file`,
   or `git diff` on the file, found all three at once. (unconfirmed)
+- **Edits to one file go one call at a time, never side by side in one block.** Three
+  `replace_string_in_file` calls on `src/core/network.jl` issued together each matched against the
+  same starting text and interleaved: a docstring lost its closing quotes and a call was left half
+  written, which showed up only as a `LoadError` at precompile. A `read_file` issued next to an
+  edit also returns the text from before it. (unconfirmed)
 
 ## Performance
 

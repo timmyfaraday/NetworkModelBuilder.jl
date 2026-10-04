@@ -21,18 +21,3 @@ fix may be "document the trade-off," not "add parallelism."
 Evidence 2026-10-02: Zorba's independent daily chunks scaled with one-thread *processes* (7: 330-400 s
 per chunk) but not with threads in one process (7: 860 s; 30 threads: no gain), so option (B)'s
 "`Threads.@threads` over independent models" is weaker than it reads. See `lessons.md`, Performance.
-
-### Q5 · Should a loop of free switches get the loop equation a locked loop has?
-Owner: Tom (not yet settled). Depends on: `knowledge/plan/switch-edge.md`, D21, B5 (commits 5-6).
-A locked loop of closed switches gets unit-weight loop equations (D21), so its flow split is unique.
-A free switch writes only its big-M rows, so when the problem closes a loop of free switches its
-flow split is unconstrained and the model may route it as it likes. Toy (3 nodes, three free
-switches, `test/switch.jl`): all three closed costs 12.6 locked and 5.4 with free switches fixed
-closed; the optimum with free switches (4.5) is still the best locked run, so the claim "equals
-the best of the 2^k locked runs" held there, but nothing guarantees it. Options: (A) leave it and
-say so (what the code and docstring do now); (B) loop rows made conditional on the free switches
-of each simple cycle of the switch graph being closed, `|Σ σ p| ≤ Σ rate (1 - z)`, exact, one
-row per simple cycle and so exponential in the worst case, fine for a substation; (C) a second
-potential per node with `p = Δφ` where closed, exact and linear in size but more variables, and
-the locked switches in the same component would need it too. Recommended: (B), with an error
-above a cycle count, once a case with a loop of free switches exists.

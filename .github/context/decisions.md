@@ -103,7 +103,8 @@ How to use this file:
 - **`BusbarSwitch` and `CircuitBreaker` are added later than `AbstractSwitch` and `Switch`** (D19).
 - **Closed locked switches in a loop keep the voltage equalities of a spanning tree only; every other
   one gets a unit-weight loop equation, so parallel switches split the flow evenly** (D21). A free
-  switch writes no equality and needs none.
+  switch writes no equality of its own; every loop that free switches can close gets a loop row that
+  holds when they are closed (D26).
 - **An island must hold a reference node or a source, else building the model is an error; an island
   with a source and no reference node has one node anchored; opening every free switch may not
   create an island, unless the caller allows it** (D22).
@@ -305,3 +306,11 @@ Changes: new.
 Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
 Why: `NodeType` is one, and the table reader parses enums already.
 Changes: D15 (names the type of `lock`).
+
+### D26 — A loop that free switches can close gets a loop row that holds when they are closed
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: with no equation on it, a loop of free switches lets the problem split its flow as it likes and
+undercut every setting of the locked model (toy: 5.4 against 12.6). One big-M row per simple cycle
+of the switches that can be closed is exact; it is exponential in the worst case, so building errors
+above a cycle count, and it needs a finite rating on every switch of the loop.
+Changes: D21 (a free switch's loop).

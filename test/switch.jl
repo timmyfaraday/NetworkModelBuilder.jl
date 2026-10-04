@@ -408,6 +408,9 @@ end
         @test count(==(:switch_angle_range), first.(keys_)) == 6
         @test count(==(:switch_flow_range), first.(keys_)) == 6
 
+        # and the one loop they make between them, which holds when all three are closed
+        @test count(==(:switch_cycle), first.(keys_)) == 2
+
         # a locked one has none of it
         nm = instantiate_model(locked((1, 1, 1)), OptimalPowerFlowProblem, LPFFormulation)
         @test isempty(_NMB.var(nm)[:zsw])
@@ -484,6 +487,7 @@ end
         @test count(==(:switch_voltage_range), keys_) == 12
         @test count(==(:switch_current_range), keys_) == 12
         @test count(==(:switch_rating), keys_) == 3
+        @test count(==(:switch_cycle), keys_) == 4          # the loop, on each current twice
 
         nm = instantiate_model(locked((1, 1, 1)), OptimalPowerFlowProblem, IVRFormulation)
         @test isempty(_NMB.var(nm)[:zsw])
@@ -505,12 +509,9 @@ end
             if held["termination_status"] != JuMP.LOCALLY_SOLVED
                 # the one setting that cannot be fed
                 @test relaxed["termination_status"] != JuMP.LOCALLY_SOLVED
-            elseif all(==(1), positions)
-                # three closed switches round a loop: a locked model gives the loop an
-                # equation, and a free one does not, so it may send the flow round as it likes
-                @test relaxed["termination_status"] == JuMP.LOCALLY_SOLVED
-                @test relaxed["objective"] < held["objective"] - 1.0
             else
+                # three closed switches round a loop included: the free model has the
+                # equation of that loop as well, when the switches are closed
                 @test relaxed["termination_status"] == JuMP.LOCALLY_SOLVED
                 @test relaxed["objective"] ≈ held["objective"] rtol = 1e-6
                 @test all(isapprox(flow(relaxed, e), flow(held, e); atol = 1e-5) for e in 1:5)
@@ -542,6 +543,162 @@ end
         # a mixed-integer program has no prices in this formulation either
         @test !JuMP.has_duals(nm.model)
         @test all(active_nodal_price(nm, i) === nothing for i in 1:3)
+    end
+
+    @testset "a loop that a free switch can close has a row that holds when it is closed" begin
+        # a closed switch rated 0.6 beside a free one: a load of 1.0 needs both, and they share it
+        parallel(; rate = 0.6) = NetworkData(Network(
+            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF), 2 => Node(; id = 2)),
+            Dict{Int,AbstractEdge}(1 => sw(1, 1, 2; rate_a = rate),
+                                   2 => sw(2, 1, 2; lock = FREE, rate_a = 5.0)),
+            Dict{Int,AbstractUnit}(1 => gen(1, 1), 2 => load(2, 2))))
+
+        r = quiet(() -> solve_opf(parallel(), LPFFormulation, exact))
+        @test r["termination_status"] == JuMP.OPTIMAL
+        @test flow(r, 1) ≈ 0.5 atol = 1e-6
+        @test flow(r, 2) ≈ 0.5 atol = 1e-6
+
+        # and in current, with the position fixed at closed
+        nm = instantiate_model(parallel(), OptimalPowerFlowProblem, IVRFormulation)
+        JuMP.relax_integrality(nm.model)
+        JuMP.fix(_NMB.var(nm, :zsw, 2), 1; force = true)
+        r = quiet(() -> optimize_model!(nm, OPTIMIZER))
+        @test r["termination_status"] == JuMP.LOCALLY_SOLVED
+        @test flow(r, 1) ≈ 0.5 atol = 1e-5
+        @test flow(r, 2) ≈ 0.5 atol = 1e-5
+
+        # a loop that a locked switch has opened is none
+        nm    = instantiate_model(loop((FREE, FREE, LOCKED), (1, 1, 0)),
+                                  OptimalPowerFlowProblem, LPFFormulation)
+        keys_ = first.([(key, id) for (_, key, id) in keys(registered_constraints(nm))])
+        @test :switch_cycle ∉ keys_
+
+        # a switch of a loop that one can close has to have a finite rating, as the free one has
+        err = try
+            instantiate_model(parallel(; rate = Inf), OptimalPowerFlowProblem, LPFFormulation)
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("switch 1", err.msg) && occursin("rate_a", err.msg)
+
+        # a power flow closes nothing, so it asks for nothing
+        @test instantiate_model(parallel(; rate = Inf), LoadFlowProblem, LPFFormulation) isa NetworkModel
+    end
+
+    @testset "every loop that a free switch can close is found once, and not too many" begin
+        everywhere(n; kw...) = NetworkData(Network(
+            Dict{Int,AbstractNode}(i => Node(; id = i, type = i == 1 ? REF : PQ) for i in 1:n),
+            Dict{Int,AbstractEdge}(k => sw(k, i, j; lock = FREE, rate_a = 1.0, kw...)
+                                   for (k, (i, j)) in enumerate((i, j) for i in 1:n for j in i+1:n)),
+            Dict{Int,AbstractUnit}(1 => gen(1, 1), 2 => load(2, n))))
+        loops(data) = _NMB._free_switch_cycles(
+            instantiate_model(data, OptimalPowerFlowProblem, LPFFormulation; build = false); nw = 1)
+
+        # the simple cycles of a complete graph on 3, 4, 5 and 6 nodes
+        @test [length(loops(everywhere(n))) for n in 3:6] == [1, 7, 37, 197]
+
+        # no loop is the same set of switches twice
+        @test allunique(Tuple(sort([e for (e, _) in cycle])) for cycle in loops(everywhere(5)))
+
+        # parallel switches are loops of two, and three of them are three
+        triple = NetworkData(Network(
+            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF), 2 => Node(; id = 2)),
+            Dict{Int,AbstractEdge}(k => sw(k, 1, 2; lock = FREE, rate_a = 1.0) for k in 1:3),
+            Dict{Int,AbstractUnit}(1 => gen(1, 1), 2 => load(2, 2))))
+        @test length(loops(triple)) == 3
+
+        # one that goes round the other way has the signs to show it
+        data = NetworkData(Network(
+            Dict{Int,AbstractNode}(i => Node(; id = i, type = i == 1 ? REF : PQ) for i in 1:3),
+            Dict{Int,AbstractEdge}(1 => sw(1, 1, 2; lock = FREE, rate_a = 1.0),
+                                   2 => sw(2, 3, 2; lock = FREE, rate_a = 1.0),
+                                   3 => sw(3, 1, 3; lock = FREE, rate_a = 1.0)),
+            Dict{Int,AbstractUnit}(1 => gen(1, 1), 2 => load(2, 3))))
+        cycle = only(loops(data))
+        @test sort([e for (e, _) in cycle]) == [1, 2, 3]
+        @test sum(σ for (e, σ) in cycle if e == 1) + sum(σ for (e, σ) in cycle if e == 2) == 0
+
+        # seven nodes make 1,172, which is more than a model is written with
+        err = try
+            instantiate_model(everywhere(7), OptimalPowerFlowProblem, LPFFormulation;
+                              islanding = :allow)
+        catch e
+            e
+        end
+        @test err isa ArgumentError && occursin("1000 loops", err.msg)
+    end
+
+    @testset "a free switch is a measure that can be preventive or corrective" begin
+        # in the first state the load can only come over the closed switch, in the
+        # second the closed switch cannot take it and the branch, open, can
+        dim   = Dimension(:contingency => 2)
+        state(a, b) = nw_vector(dim, (n, c) -> n == 1 ? a : b)
+        data  = NetworkData(Network(
+            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF), 2 => Node(; id = 2)),
+            Dict{Int,AbstractEdge}(
+                1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1,
+                            angmin = -0.05, angmax = 0.05),
+                2 => sw(2, 1, 2; lock = FREE, rate_a = state(5.0, 0.2))),
+            Dict{Int,AbstractUnit}(
+                1 => gen(1, 1; pg = state(1.0, 0.4), cost = [0.0, 10.0]),
+                2 => gen(2, 2; pg = 0.0, cost = [0.0, 100.0]),
+                3 => load(3, 2; pd = state(1.0, 0.4))); dim))
+
+        @test _NMB.redispatch_controls(instantiate_model(data, RedispatchProblem, LPFFormulation;
+                                                         build = false), Switch) == (:zsw,)
+
+        corrective = quiet(() -> solve_rd(data, LPFFormulation, exact;
+                                          redispatch = Redispatch(; control = :corrective)))
+        preventive = quiet(() -> solve_rd(data, LPFFormulation, exact))
+
+        position(r, n) = nw_solution(r, n)["edge"]["2"]["position"]
+        @test corrective["termination_status"] == JuMP.OPTIMAL
+        @test preventive["termination_status"] == JuMP.OPTIMAL
+
+        # after the outage it is closed in the one state and open in the other, at no cost
+        @test [position(corrective, n) for n in 1:2] == [1, 0]
+        @test corrective["objective"] ≈ 0.0 atol = 1e-6
+
+        # decided beforehand it has to serve both, and one of them pays for it
+        @test position(preventive, 1) == position(preventive, 2)
+        @test preventive["objective"] > corrective["objective"] + 1e-3
+
+        # the tie is a row for the free switch under a preventive setup and none under a corrective one
+        ties(nm) = [id for (_, key, id) in keys(registered_constraints(nm)) if key == :redispatch_control]
+        @test (:edge, 2, :zsw) in ties(instantiate_model(data, RedispatchProblem, LPFFormulation))
+        @test (:edge, 2, :zsw) ∉ ties(instantiate_model(data, RedispatchProblem, LPFFormulation;
+            ext = Dict{Symbol,Any}(:redispatch => Redispatch(; control = :corrective))))
+
+        # a locked switch has nothing to tie
+        locked_data = NetworkData(Network(
+            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF), 2 => Node(; id = 2)),
+            Dict{Int,AbstractEdge}(1 => br(1, 1, 2), 2 => sw(2, 1, 2)),
+            Dict{Int,AbstractUnit}(1 => gen(1, 1), 2 => load(2, 2)); dim))
+        @test all(first(id) == :unit
+                  for id in ties(instantiate_model(locked_data, RedispatchProblem, LPFFormulation)))
+    end
+
+    @testset "the solution says where a switch is, and how it was allowed to be" begin
+        r = quiet(() -> solve_opf(free(), LPFFormulation, exact))
+        @test [nw_solution(r)["edge"]["$e"]["position"] for e in 3:5] == [1, 0, 0]
+        @test all(nw_solution(r)["edge"]["$e"]["lock"] == "FREE" for e in 3:5)
+
+        r = quiet(() -> solve_opf(locked((1, 0, 0)), LPFFormulation, exact))
+        @test [nw_solution(r)["edge"]["$e"]["position"] for e in 3:5] == [1, 0, 0]
+        @test all(nw_solution(r)["edge"]["$e"]["lock"] == "LOCKED" for e in 3:5)
+
+        # a power flow holds a free switch where the data has it, and says it was free
+        r = quiet(() -> solve_lf(free((0, 1, 0)), LPFFormulation, OPTIMIZER))
+        @test [nw_solution(r)["edge"]["$e"]["position"] for e in 3:5] == [0, 1, 0]
+        @test nw_solution(r)["edge"]["4"]["lock"] == "FREE"
+
+        # and the tables carry both, for the switches only
+        tables = solution_tables(free(), quiet(() -> solve_opf(free(), LPFFormulation, exact)))
+        rows   = findall(==("Switch"), tables.edge.type)
+        @test Set(tables.edge.position[rows]) == Set([0, 1])
+        @test all(tables.edge.lock[rows] .== "FREE")
+        @test all(ismissing, tables.edge.position[findall(==("Branch"), tables.edge.type)])
     end
 
 end

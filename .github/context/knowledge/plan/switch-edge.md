@@ -132,8 +132,12 @@ nonconvex mixed-integer program: building it is supported, solving needs such a 
 tree by ascending id (union-find). Tree switches keep their equalities. Each other switch loses its
 equality and gets one row `Σ σ_s p[a_f(s)] == 0` around its fundamental cycle, `σ_s = ±1` by the
 direction the cycle crosses `s` (in the current-based formulation the same on `cr` and on `ci`).
-Parallel switches then split evenly. A free switch writes no equality and needs none; the flows it
-reports in a closed loop may differ between solvers, and normalising them afterwards is not done.
+Parallel switches then split evenly. A free switch writes no equality of its own, and no loop row of
+the above kind (D26): every simple cycle of the switches that are held closed or free, with at least
+one free, gets `|Σ σ p| ≤ M Σ_free (1 - z)` with `M` the sum of the ratings in the cycle (in the
+current-based formulation `rate_a / min(vmin)` each, on both currents), so a loop the problem
+closes splits its flow as a locked one does. One row per cycle is exponential in the worst case:
+building errors above 1000 loops, and where a switch of such a loop has no finite `rate_a`.
 
 **Islands** (D22). `islands(data; nw, without = (), decide = true)` returns the connected node sets
 at an index; an edge counts as joining its terminals when `connects(dim, edge, n; decide)` says so

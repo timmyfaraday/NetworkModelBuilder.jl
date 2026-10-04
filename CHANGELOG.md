@@ -10,6 +10,61 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-04
+
+### Added
+
+- `Switch`, under `AbstractSwitch`, with `SwitchLock` (`FREE` and `LOCKED`): an
+  edge with exactly two terminals that is closed or open and has no impedance,
+  so a busbar coupler need not be a branch with a reactance of `1e-7`. Closed
+  it equates the voltages at its two nodes, open it stops the flow, in both the
+  `LPFFormulation` and the `IVRFormulation`. A locked switch is data; a free
+  one is a binary variable `zsw` in a dispatch problem, which makes that model
+  mixed-integer — with no duals, so the nodal prices are `nothing`, and a
+  finite `rate_a` that the big-M rows are written with. A power flow holds every
+  switch where its `position` puts it.
+- Loops of closed switches share the flow equally, in every solver: the
+  equality of voltages is written for a spanning tree of each group and every
+  other switch gets the equation of its loop instead. A loop that free
+  switches can close gets a row that holds when they are closed, one per
+  simple cycle, and the model is not built above 1000 of them.
+- A free switch is a preventive or a corrective measure of a redispatch, and
+  non-costly. The solution carries the `"position"` and the `"lock"` of every
+  switch, and so do the tables of `solution_tables`.
+- `islands`, `connects` and `can_open`, and `check_islands`, which
+  `instantiate_model` runs before it builds. An island that has units but no
+  reference node and no source is now an `ArgumentError` that names its nodes;
+  opening every free switch may not split an island unless
+  `instantiate_model(...; islanding = :allow)`. An island that has a source but
+  no reference node has its lowest node anchored, by
+  `constraint_node_voltage_anchor`.
+- `variable!` takes `binary = true`, and an integer is a structure gate, so a
+  model of a different position is rebuilt rather than updated in a rolling
+  horizon.
+- `docs/src/components/switch.md`, with the literature it follows, the islands in
+  the manual, and a
+  cross-check of the switch against PowerModels.jl's `_solve_opf_sw` and
+  `_solve_oswpf` on `test/data/matpower/switch_loop.m`. They agree except on a
+  loop of closed switches, which PowerModels.jl leaves with a free flow.
+- DocumenterCitations in the documentation: the references are in
+  `docs/src/refs.bib`, cited author-year from the pages, and listed on a
+  References page.
+- Juniper, a test-only dependency like HiGHS, for the free switch in the
+  `IVRFormulation`.
+
+### Changed
+
+- A network with an island that has load and no source no longer reaches the
+  solver: where it came back as `INFEASIBLE`, or in the current-based load flow
+  as a false `LOCALLY_SOLVED` with the voltage pushed towards infinity, it is
+  refused when the model is instantiated.
+
+### Fixed
+
+- A file added under `src/comp/` was not seen by a package loaded from its
+  compiled cache, so the new component was left undefined. `_include_dir` now
+  declares every directory it walks with `include_dependency`.
+
 ## [0.10.2] - 2026-09-30
 
 ### Added

@@ -11,6 +11,7 @@
 # v0.9.7 - the PowerModels.jl live cross-check                                 #
 # v0.10.0 - the security tables test                                           #
 # v0.10.2 - the solution tables test                                           #
+# v0.11.0 - the switch test                                                    #
 ################################################################################
 
 using Test
@@ -51,6 +52,7 @@ quiet(f) = Logging.with_logger(f, Logging.NullLogger())
     include("powermodels.jl")
     include("rd.jl")
     include("dc_link.jl")
+    include("switch.jl")
     include("slack.jl")
     include("zorba.jl")
     include("dashboard.jl")

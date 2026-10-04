@@ -9,6 +9,7 @@
 # v0.1.0 - initial implementation                                              #
 # v0.2.0 - network dependent data stored per component                         #
 # v0.9.4 - registering a model is safe from concurrent threads                 #
+# v0.11.0 - a model refuses an island it cannot supply                         #
 ################################################################################
 
 ################################################################################
@@ -128,6 +129,9 @@ end
 "the [`Topology`](@ref) of a model at network index `nw`"
 topology(nm::NetworkModel; nw::Int = nw_id_default(nm)) = topology(network(nm); nw)
 
+"the [`islands`](@ref) of a model at network index `nw`"
+islands(nm::NetworkModel; kwargs...) = islands(network(nm); kwargs...)
+
 "the arcs of a model at network index `nw`"
 arcs(nm::NetworkModel; nw::Int = nw_id_default(nm)) = arcs(network(nm); nw)
 
@@ -186,13 +190,19 @@ _value(x) = JuMP.value(x)
 ################################################################################
 
 """
-    instantiate_model(data, P, F; jump_model = JuMP.Model(), build = true, ext = Dict{Symbol,Any}())
+    instantiate_model(data, P, F; jump_model = JuMP.Model(), build = true,
+                      ext = Dict{Symbol,Any}(), islanding = :error)
 
 Create a [`NetworkModel`](@ref) for problem type `P` and formulation type `F`,
 and build it unless `build = false`.
 
 `data` may be a [`NetworkData`](@ref) or the path of a file that
 [`parse_file`](@ref) understands.
+
+Before it builds, the model refuses a network it cannot pose a sensible problem
+over, see [`check_islands`](@ref): an island that has load but nothing to supply
+it, and, unless `islanding = :allow`, a free switch whose opening would split an
+island. A network with none of that is built as before.
 
 `ext` is **copied**, not held: a model writes into its own `ext` — the register
 [`constrain!`](@ref) keeps is there — and two models handed the same dictionary
@@ -207,8 +217,11 @@ julia> nm = instantiate_model("case14.m", LoadFlowProblem, IVRFormulation);
 function instantiate_model(data::NetworkData, ::Type{P}, ::Type{F};
                            jump_model::JuMP.Model = JuMP.Model(),
                            build::Bool = true,
-                           ext::Dict{Symbol,Any} = Dict{Symbol,Any}()
+                           ext::Dict{Symbol,Any} = Dict{Symbol,Any}(),
+                           islanding::Symbol = :error
                           ) where {P<:AbstractProblemType,F<:AbstractFormulationType}
+    build && check_islands(data; islanding, decide = _decides(P))
+
     nws = nw_ids(data)
     nm  = NetworkModel{P,F}(data, jump_model,
                             Dict(n => Dict{Symbol,Any}() for n in nws),

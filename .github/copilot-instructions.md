@@ -23,7 +23,8 @@ The repo carries its own memory. Use it instead of re-deriving things from the c
    `src/form/` directory; a formulation is methods spread over component files, not a place.
 2. **Every `src/` and `test/` file carries an 80-column box header ending in a Changelog
    section.** Add a new `# vX.Y.Z - <what changed>` line to files you modify; don't rewrite
-   existing lines. Version bumps are the patch digit only, one per gap/item, in `Project.toml`.
+   existing lines. Version bumps are the patch digit, one per gap/item, in `Project.toml`; the
+   minor digit for an item that adds a component type.
 3. **A documentation code example that claims to run must actually run**: wrap it as a Documenter
    `@example` block and it will be swept by `test/docs.jl`. `README.md` claims are load-bearing.
 4. **Registries (`_EDGE_TYPES`, `_UNIT_TYPES`, `_MODELS`) are mutated under their own

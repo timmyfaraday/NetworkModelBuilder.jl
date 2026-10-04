@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.5.0 - building a model a second time updates it in place                  #
+# v0.11.0 - a variable may be binary                                           #
 ################################################################################
 
 # A model built for one window of a rolling horizon is very nearly the model the
@@ -108,7 +109,7 @@ registered_constraints(nm::NetworkModel) =
 ################################################################################
 
 """
-    variable!(nm, key, id; nw, base_name, start, lower, upper, fix)
+    variable!(nm, key, id; nw, base_name, start, lower, upper, fix, binary)
 
 The variable registered under `(key, id)` at network index `nw`, created on
 first sight and returned as it is on second — with its bounds brought to what
@@ -118,18 +119,26 @@ Only the bounds are updated, because only the bounds are data. Which variables
 exist is structure, and a model is updated rather than rebuilt exactly when the
 structure has not changed, see [`same_structure`](@ref).
 
+`binary` makes the variable created on first sight a binary one. Being integer is
+structure just as being there at all is, so a second call leaves it as it is. `fix`
+pins a binary variable like any other and releases it with its integrality intact:
+a problem that fixes a switch to its position and one that leaves it free then
+build the same model.
+
 `lower` and `upper` are dropped where they are `nothing` or not finite, so a
 limit that was `1.0` in one window and `Inf` in the next leaves the variable
 free rather than bounded by infinity. `fix` pins the variable outright, as a
 load flow does to a generator setpoint, and releases it where it is `nothing`.
 """
 function variable!(nm::NetworkModel, key::Symbol, id; nw::Int, base_name::String = "",
-                   start = nothing, lower = nothing, upper = nothing, fix = nothing)
+                   start = nothing, lower = nothing, upper = nothing, fix = nothing,
+                   binary::Bool = false)
     store = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), key)
     v     = get(store, id, nothing)
 
     if v === nothing
         v = JuMP.@variable(nm.model, base_name = base_name)
+        binary && JuMP.set_binary(v)
         start === nothing || JuMP.set_start_value(v, start)
         store[id] = v
     end

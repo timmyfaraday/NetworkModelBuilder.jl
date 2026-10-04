@@ -8,7 +8,7 @@ Priority: <P0-P3> · Effort: <Small|Medium|Large>
 - Implement on `<branch>`, one commit per item, test first when it fixes a defect.
 - Commit messages name the decision (`D<n>: …`) where there is one, and carry **no AI attribution**.
 - Update the per-file changelog header (80-column box comment) of every file touched, plus the
-  package version in `Project.toml` (patch digit) and `CHANGELOG.md`.
+  package version in `Project.toml` (patch digit; minor for a new component type) and `CHANGELOG.md`.
 - Targeted tests per commit; the full suite once at the end (`julia --project=. -e "using Pkg;
   Pkg.test()"`).
 - Everything the implementer needs is quoted here (file, line, sentence). Don't rely on other notes.

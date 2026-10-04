@@ -9,12 +9,14 @@
 # v0.1.0 - initial implementation                                              #
 # v0.2.0 - network dependent data stored per component                         #
 # v0.10.1 - exports its own public names                                       #
+# v0.11.0 - an island without a reference node is anchored                     #
 ################################################################################
 
 export Node, NodeType, PQ, PV, REF, ISOLATED, reference_nodes
 export active_nodal_price, reactive_nodal_price, nodal_prices
 export variable_node_voltage
 export constraint_node_balance, constraint_node_voltage_reference
+export constraint_node_voltage_anchor
 export constraint_node_voltage_setpoint, constraint_node_voltage_limits
 export solution_node
 
@@ -162,6 +164,9 @@ A load flow fixes the complex voltage outright, `v_i = v^{\\text{m}}_i
 \\angle v^{\\text{a}}_i`, since the reference generator absorbs the mismatch. A
 dispatch problem fixes the angle only, leaving the magnitude free within its
 limits.
+
+An island that has a source but no reference node is anchored as well, see
+[`constraint_node_voltage_anchor`](@ref).
 """
 function constraint_node_voltage_reference end
 
@@ -179,6 +184,8 @@ function constraint_node_voltage_reference(nm::NetworkModel{P,F}; nw::Int = nw_i
                        JuMP.@build_constraint(vi[i] == nd.vm * sin(nd.va)); nw))
     end
 
+    constraint_node_voltage_anchor(nm; nw)
+
     return nothing
 end
 
@@ -195,6 +202,8 @@ function constraint_node_voltage_reference(nm::NetworkModel{P,F}; nw::Int = nw_i
             constrain!(nm, :node_reference, (i, :side),
                        JuMP.@build_constraint(cos(va) * vr[i] + sin(va) * vi[i] >= 0.0); nw))
     end
+
+    constraint_node_voltage_anchor(nm; nw)
 
     return nothing
 end
@@ -312,6 +321,54 @@ function constraint_node_voltage_reference(nm::NetworkModel{P,F}; nw::Int = nw_i
     for i in reference_nodes(nm; nw)
         reference[i] = constrain!(nm, :node_reference, i,
             JuMP.@build_constraint(va[i] == node(nm, i; nw).va); nw)
+    end
+
+    constraint_node_voltage_anchor(nm; nw)
+
+    return nothing
+end
+
+"""
+    constraint_node_voltage_anchor(nm; nw)
+
+Fix the angle of the lowest node of every island that has a source but no
+reference node, see [`islands`](@ref).
+
+Such an island has no angle of its own to be measured against. Every angle in it
+can move by the same amount without changing a flow or a balance, and in a
+current based formulation so can the phase of every voltage, which leaves the
+solver a direction to wander along. Pinning one node removes that direction and
+moves nothing else. An island that has a reference node is left to it, and an
+island without a source is refused when the model is instantiated.
+
+The angle is set to zero: only differences matter inside the island.
+"""
+function constraint_node_voltage_anchor end
+
+function constraint_node_voltage_anchor(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+                                       ) where {P<:AbstractProblemType,F<:IVRFormulation}
+    vr, vi = var(nm, :vr; nw), var(nm, :vi; nw)
+
+    anchor = get!(() -> Dict{Int,Any}(), con(nm; nw), :node_voltage_anchor)
+    for i in anchor_nodes(nm; nw)
+        anchor[i] = (
+            constrain!(nm, :node_anchor, (i, :angle),
+                       JuMP.@build_constraint(vi[i] == 0.0); nw),
+            constrain!(nm, :node_anchor, (i, :side),
+                       JuMP.@build_constraint(vr[i] >= 0.0); nw))
+    end
+
+    return nothing
+end
+
+function constraint_node_voltage_anchor(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+                                       ) where {P<:AbstractProblemType,F<:LPFFormulation}
+    va = var(nm, :va; nw)
+
+    anchor = get!(() -> Dict{Int,Any}(), con(nm; nw), :node_voltage_anchor)
+    for i in anchor_nodes(nm; nw)
+        anchor[i] = constrain!(nm, :node_anchor, i,
+            JuMP.@build_constraint(va[i] == 0.0); nw)
     end
 
     return nothing

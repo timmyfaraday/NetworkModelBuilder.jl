@@ -56,6 +56,7 @@ that span them.
 |:-----|:-----------|:--------|
 | [`constraint_node_balance`](@ref) | every node | all |
 | [`constraint_node_voltage_reference`](@ref) | `REF` nodes | all |
+| [`constraint_node_voltage_anchor`](@ref) | the lowest node of an island with a source and no `REF` node | all |
 | [`constraint_node_voltage_setpoint`](@ref) | `PV` nodes | power flow |
 | [`constraint_node_voltage_limits`](@ref) | every node | dispatch |
 
@@ -90,6 +91,18 @@ A dispatch problem pins the angle only, leaving the magnitude to the optimizer:
 \cos(v^{\text{a}}_{i}) \, v^{\text{r}}_{i} + \sin(v^{\text{a}}_{i}) \, v^{\text{i}}_{i} \ge 0.
 ```
 
+### An island without a reference node
+
+Where the network falls into several [`islands`](@ref), only one of them has to
+hold the reference node. An island that has a source but no reference node would
+otherwise have no angle to be measured against: every angle in it can move by
+the same amount without changing a flow, and the solver is left a direction to
+wander along. Its lowest node is pinned instead, ``v^{\text{a}}_{i} = 0`` in the
+`LPFFormulation` and ``v^{\text{i}}_{i} = 0``, ``v^{\text{r}}_{i} \ge 0`` in the
+`IVRFormulation`, which fixes the direction and moves nothing else. An island
+that has units but neither a reference node nor a source is refused when the
+model is instantiated, see [`check_islands`](@ref).
+
 ### Voltage magnitude setpoint, and limits
 
 At a `PV` node in a power flow the magnitude is given:
@@ -120,6 +133,7 @@ no-ops.
 ```@docs
 constraint_node_balance
 constraint_node_voltage_reference
+constraint_node_voltage_anchor
 constraint_node_voltage_setpoint
 constraint_node_voltage_limits
 variable_node_voltage

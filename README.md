@@ -61,7 +61,10 @@ carrying a label. `Cable` and `OverheadLine` are electrically identical to
 `Branch` and exist to be addressed; a `PhaseShifter` and a `TapChanger` have a
 ratio that is a decision variable in a dispatch problem and a constant in a
 power flow; a `MultiWindingTransformer` keeps its star point as an edge variable
-rather than inventing a node for it.
+rather than inventing a node for it. A `Switch` has no impedance at all, so a
+busbar coupler is not a branch with a reactance of `1e-7`: closed it equates the
+voltages at its ends, open it stops the flow, and when it is `FREE` a dispatch
+problem chooses which, as a mixed-integer program.
 
 ```
 AbstractEdge                          AbstractUnit
@@ -75,7 +78,8 @@ AbstractEdge                          AbstractUnit
 │   │   ├── PhaseShifter              │   └── Spill
 │   │   └── TapChanger                └── AbstractShunt → Shunt
 │   └── MultiWindingTransformer
-└── AbstractDCLink → DCLink
+├── AbstractDCLink → DCLink
+└── AbstractSwitch → Switch
 ```
 
 The code of a component lives in one file, holding its struct, its variables and

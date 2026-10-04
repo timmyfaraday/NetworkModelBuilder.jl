@@ -2,16 +2,15 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B9**.
+older ones: git has them). Next id: **B10**.
 
 ## Now
 
-- [ ] B5 · A `Switch` edge type (children: busbar switch, circuit breaker), replacing near-zero-impedance couplers · Tom · 2026-10-02
-  - Started 2026-10-03 on branch `b5-switch-edge`; ships as v0.11.0. Decisions D15-D25; spec in
-    `knowledge/plan/switch-edge.md`, awaiting review. Until it exists the Zorba pipeline floors
-    line reactance at 1e-5.
-
 ## Next
+
+- [ ] B9 · On `test-zorba-run`, load the couplers as locked-closed `Switch`es, drop the 1e-5
+  reactance floor from `scripts/SteeringPlanData.jl`, re-run week 1 and compare · Tom · 2026-10-04
+  - Needs `b5-switch-edge` merged into `test-zorba-run` first (D13, D17).
 
 ## Later
 
@@ -31,6 +30,9 @@ older ones: git has them). Next id: **B9**.
 
 ## Done
 
+- [x] B5 · A `Switch` edge type, replacing near-zero-impedance couplers · Tom · 2026-10-02
+  - v0.11.0, branch `b5-switch-edge`, D13 and D15-D26; spec `knowledge/plan/switch-edge.md`.
+    Busbar switch and circuit breaker (D19) are not built.
 - [x] B0 · Adopt this `.github/` agent setup, ported from a colleague's FlowBasedDomains repo and
   adapted for Julia/GitHub/solo maintainer · Tom · 2026-09-30
 - [x] B1 · Central include/export file is a growing manual-edit tax (gap #8) · Tom · 2026-09-30

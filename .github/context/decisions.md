@@ -137,6 +137,11 @@ How to use this file:
   `test/data/matpower/` when it isn't found relative to the working directory** (D8), in
   `_read_matpower`. This makes doc quick-starts work from any cwd without changing behavior for
   any path that already resolves.
+- **The documentation cites literature through DocumenterCitations, author-year, from
+  `docs/src/refs.bib`** (D27): a page cites with `[Key](@citet)` or `[Key](@citep)`, lists its own
+  references in a non-canonical `@bibliography` block, and `docs/src/references.md` is the one
+  canonical list. An entry is written as in the published paper, with a `doi` where it is known,
+  and carries only the pages and details that were read in a source, never ones made up.
 
 ---
 
@@ -314,3 +319,10 @@ undercut every setting of the locked model (toy: 5.4 against 12.6). One big-M ro
 of the switches that can be closed is exact; it is exponential in the worst case, so building errors
 above a cycle count, and it needs a finite rating on every switch of the loop.
 Changes: D21 (a free switch's loop).
+
+### D27 — The documentation cites literature through DocumenterCitations
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Documentation
+Why: the switch page cites ten papers and other pages will cite more; one `refs.bib` and generated
+author-year links keep the references consistent, instead of a hand-written list on each page.
+Changes: new (`docs/Project.toml`: DocumenterCitations; `docs/make.jl`: the plugin;
+`docs/src/refs.bib` and `docs/src/references.md`).

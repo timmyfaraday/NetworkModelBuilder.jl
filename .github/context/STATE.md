@@ -1,53 +1,47 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-04 by Tom Van Acker (commit 7
-of the Switch plan, redispatch and loop rows, on `b5-switch-edge`).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-04 by Tom Van Acker (B5, the
+Switch plan, complete and merged into `main` as v0.11.0).
 
 ## Where NMB stands
 
 - Specs/plans live in `context/knowledge/plan/` (D12).
-- v0.10.2 (D11): `solution_tables` and `docs/src/manual/concepts.md`. v0.10.1 (D10): `src/comp/` is
-  auto-included by a directory walk (`_include_dir`) and each component file exports its own names;
-  the public API was checked unchanged (258 names). v0.10.0: `security_tables`.
+- v0.11.0 (D13, D15-D27): the `Switch` edge, see below. v0.10.2 (D11): `solution_tables` and
+  `docs/src/manual/concepts.md`. v0.10.1 (D10): `src/comp/` is auto-included by a directory walk
+  (`_include_dir`) and each component file exports its own names. v0.10.0: `security_tables`.
 - Gap-closure items #1-9 of `context/knowledge/plan/GAP_CLOSURE_PLAN.md` are closed; #10-11 are
   open, see `backlog.md`. The only tag is `v0.6.0`; later versions are untagged `Project.toml` states.
 
 ## Branches
 
-- `main` and `test-zorba-run` were pushed to `origin` on 2026-10-03, nothing local ahead.
-  `git log --oneline -1` has the real hash. The context files are kept current on `main` only;
-  `test-zorba-run` lags them.
+- `main` carries B5. `git log --oneline -1` has the real hash. The context files are kept current
+  on `main` only; `test-zorba-run` lags them.
 - `test-zorba-run` is `6cd0af1` (a merge of `main`) plus 9 commits, all under `scripts/`: the price
   rescale (`4ef3472`), phases 0-3 (`20d88dc`, `f7571aa`, `e100616`, `f939763`: hour ids, parallel
   step 1, the N-1 screen, parallel steps 2-3 with the contingency fix, the reactance floor and
   checked solves), the driver's `NMB_MERGE` flag (`9a8b676`), and the restored prices plus the
   retirement of the sequential script (`76a52ce`, D14), the `_diag_*` deletion (`9fc06d4`) and the
-  window/step settings (`3ea65d4`).
-- `b5-switch-edge` is the branch for B5, created from `main` on 2026-10-03.
-- Next free decision id: **D27**.
+  window/step settings (`3ea65d4`). It does not have B5 yet.
+- `b5-switch-edge` is merged and can be deleted.
+- Next free decision id: **D28**.
+
+## Done: B5, the `Switch` edge type (v0.11.0)
+
+- A `Switch` has a `lock` (`SwitchLock`, free or locked) and a `position` (D15, D25); a locked one
+  writes exact rows, a free one a binary `zsw` and big-M rows, so a dispatch with free switches is
+  mixed-integer with no duals (D16, D17, D23). Both formulations; Juniper is a test dependency.
+  Closed locked switches in a loop share the flow, and a loop free switches can close gets a
+  loop row, at most 1000 (D21, D26). A free switch is preventive or corrective, non-costly (D18).
+- `islands`, `check_islands`, `connects`, `can_open`: an island needs a reference node or a source;
+  opening every free switch may not island unless `islanding = :allow` (D22).
+- Checked against PowerModels.jl's `_solve_opf_sw`/`_solve_oswpf` in `test/powermodels.jl`: equal
+  except a closed loop, where PowerModels.jl leaves the flow free. Full suite 2890 passing with
+  `JULIA_NUM_THREADS=4`. Docs page `docs/src/components/switch.md`, cited through
+  DocumenterCitations (D27). To run one test file use
+  `scratch/switch_spike/run_tests.jl <files in runtests order>` (`hierarchy.jl` has helpers).
 
 ## In progress
 
-- B5, the `Switch` edge type (D13, D15-D26), on branch `b5-switch-edge`, ships as v0.11.0; spec
-  `knowledge/plan/switch-edge.md`. Commits 1-8 of 9 are done: `variable!` takes `binary` and an
-  integer is a structure gate (`9f88d73`); the `Switch` type (`29a11b3`), with `cbc4ed3`, a fix so
-  that a new component file is not missed by the compiled package; `islands`, `check_islands` and
-  `constraint_node_voltage_anchor` (`28f65ea`, D22: `connects`/`can_open` are the edge hooks, a
-  source is a generator, storage or `EnergyNotServed`, `islanding = :allow` skips only the
-  free-switch check); a held switch in the linearized formulation with loop rows (`5bd3e34`,
-  D17/D21; `decide` tells `islands` whether the problem chooses, false in a power flow); a free
-  switch in the linearized formulation (`e860f44`, D16: binary `zsw`, angle range and flow range
-  with `rate_a` as the big-M, no duals); both in the current-based formulation (`d2ebc72`, one
-  shared `constraint_edge`, big-M `M` and `C`, the rating row, Juniper in the tests); loop rows for
-  loops that free switches can close, one per simple cycle, at most 1000 (`db3858e`, D26), and
-  `redispatch_controls` and `position`/`lock` in the solution (D18); the cross-check against
-  PowerModels.jl's `_solve_opf_sw` and `_solve_oswpf` on `test/data/matpower/switch_loop.m`
-  (`c9773c4`: equal except a closed loop, where PowerModels.jl leaves the flow free). Full suite
-  last run at commit 3: 2622 with 1 timing flake (B8). Next is commit 9: docs page
-  `docs/src/components/switch.md` with an `@example`, the hierarchy and README trees,
-  `CHANGELOG.md`, `version = "0.11.0"`, then the full suite once with `JULIA_NUM_THREADS=4`. The
-  Zorba scripts stay on `test-zorba-run`. To run one test file use
-  `scratch/switch_spike/run_tests.jl <files in runtests order>` (`hierarchy.jl` has helpers).
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`), done with the original
   prices (D14): `runs/_year_orig_prices`, 365 of 365 chunks sound, 0 fallback, 58 min; overload rows
   341,787 (step 2) and 5,720,514 (step 3), no load shedding or spillage (the rescaled-price run
@@ -65,9 +59,10 @@ of the Switch plan, redispatch and loop rows, on `b5-switch-edge`).
 
 ## Next
 
-1. B5: implement `switch-edge.md` on `b5-switch-edge`. When it exists, drop the 1e-5
-   reactance floor from `scripts/SteeringPlanData.jl` and re-run week 1 to compare.
-2. Gap #10 (parallel rolling-horizon throughput) and #11 (bus factor) remain — see `backlog.md`.
+1. B9: merge `main` into `test-zorba-run`, load the 21 couplers there as locked-closed switches,
+   drop the 1e-5 reactance floor from `scripts/SteeringPlanData.jl` and re-run week 1 to compare.
+2. B7 (closed switches under network reduction), B8 (timing flake), B3/B6 (throughput) and B4
+   (bus factor) remain, see `backlog.md`.
 
 ## Blocked / waiting
 

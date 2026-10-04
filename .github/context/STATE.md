@@ -1,7 +1,7 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-04 by Tom Van Acker (commit 3
-of the Switch plan, islands, on `b5-switch-edge`).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-04 by Tom Van Acker (commit 7
+of the Switch plan, redispatch and loop rows, on `b5-switch-edge`).
 
 ## Where NMB stands
 
@@ -24,12 +24,12 @@ of the Switch plan, islands, on `b5-switch-edge`).
   retirement of the sequential script (`76a52ce`, D14), the `_diag_*` deletion (`9fc06d4`) and the
   window/step settings (`3ea65d4`).
 - `b5-switch-edge` is the branch for B5, created from `main` on 2026-10-03.
-- Next free decision id: **D26**.
+- Next free decision id: **D27**.
 
 ## In progress
 
-- B5, the `Switch` edge type (D13, D15-D25), on branch `b5-switch-edge`, ships as v0.11.0; spec
-  `knowledge/plan/switch-edge.md`. Commits 1-6 of 9 are done: `variable!` takes `binary` and an
+- B5, the `Switch` edge type (D13, D15-D26), on branch `b5-switch-edge`, ships as v0.11.0; spec
+  `knowledge/plan/switch-edge.md`. Commits 1-7 of 9 are done: `variable!` takes `binary` and an
   integer is a structure gate (`9f88d73`); the `Switch` type (`29a11b3`), with `cbc4ed3`, a fix so
   that a new component file is not missed by the compiled package; `islands`, `check_islands` and
   `constraint_node_voltage_anchor` (`28f65ea`, D22: `connects`/`can_open` are the edge hooks, a
@@ -38,11 +38,13 @@ of the Switch plan, islands, on `b5-switch-edge`).
   D17/D21; `decide` tells `islands` whether the problem chooses, false in a power flow); a free
   switch in the linearized formulation (`e860f44`, D16: binary `zsw`, angle range and flow range
   with `rate_a` as the big-M, no duals); both in the current-based formulation (`d2ebc72`, one
-  shared `constraint_edge`, big-M `M` and `C`, the rating row, Juniper in the tests). Full suite
-  last run at commit 3: 2622 with 1 timing flake (B8). Awaiting Tom: Q5, a loop of free switches
-  has no loop equation and can undercut a locked loop. Next is commit 7 (`redispatch_controls`,
-  `solution_edge!`). The Zorba scripts stay on `test-zorba-run`. To run one test file use
-  `scratch/switch_spike/run_tests.jl <files in runtests order>` (`hierarchy.jl` has helpers).
+  shared `constraint_edge`, big-M `M` and `C`, the rating row, Juniper in the tests); loop rows for
+  loops that free switches can close, one per simple cycle, at most 1000 (`db3858e`, D26), and
+  `redispatch_controls` and `position`/`lock` in the solution (D18). Full suite last run at
+  commit 3: 2622 with 1 timing flake (B8). Next is commit 8, the PowerModels cross-check
+  (`_solve_opf_sw`, `_solve_oswpf`, behind an `isdefined` guard). The Zorba scripts stay on
+  `test-zorba-run`. To run one test file use `scratch/switch_spike/run_tests.jl <files in
+  runtests order>` (`hierarchy.jl` has helpers).
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`), done with the original
   prices (D14): `runs/_year_orig_prices`, 365 of 365 chunks sound, 0 fallback, 58 min; overload rows
   341,787 (step 2) and 5,720,514 (step 3), no load shedding or spillage (the rescaled-price run

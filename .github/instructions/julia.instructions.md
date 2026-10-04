@@ -9,8 +9,9 @@ applyTo: "src/**/*.jl,test/**/*.jl"
   URL, Authors, Changelog). Add a new `# vX.Y.Z - <what changed>` line to files you modify; don't
   rewrite existing lines. Every content line is exactly 80 characters — compute the padding,
   don't hand-count it.
-- Version bumps are the patch digit only (`version = "0.9.x"` in `Project.toml`), one per
-  gap/item closed. Don't tag a git release per bump, and don't push, unless asked.
+- Version bumps are the patch digit (`version = "0.10.x"` in `Project.toml`), one per
+  gap/item closed, or the minor digit for an item that adds a component type. Don't tag a git
+  release per bump, and don't push, unless asked.
 - `BASE_DIR = dirname(@__DIR__)` (exported from `NetworkModelBuilder.jl`) resolves the package
   root at runtime — use it instead of `pkgdir(NetworkModelBuilder)` for anything needing bundled
   fixtures (e.g. `test/data/matpower/*.m`) from a doc example.

@@ -48,4 +48,4 @@ Next id: **F4**.
 - F3 · 2026-10-04 · Tom Van Acker · `copilot-instructions.md` rule 2 and `julia.instructions.md` say
   version bumps are the patch digit only; Tom decided B5 (a new component type and the first integer
   model) is v0.11.0 (D20), so the rule is wrong for that case · cost: none yet, but the next agent
-  will read "patch only" and push back · status: open
+  will read "patch only" and push back · status: applied SC4

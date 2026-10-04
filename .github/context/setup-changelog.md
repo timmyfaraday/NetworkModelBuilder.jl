@@ -2,7 +2,7 @@
 
 Every change to the setup (instructions, skills, hooks, settings), newest at the bottom.
 Format: `- SC<n> · YYYY-MM-DD · approved by <user> · <what changed> · why: <feedback ids or reason>`.
-Next id: **SC4**.
+Next id: **SC5**.
 
 - SC1 · 2026-09-30 · approved by Tom Van Acker · Initial setup, ported from a colleague's
   FlowBasedDomains (fbd) repo and adapted for Julia/GitHub/solo maintainer: `copilot-instructions`,
@@ -18,3 +18,6 @@ Next id: **SC4**.
   updated their `plans/` path references to `context/knowledge/plan/` · why: D12 moved specs/plans
   from a top-level `plans/` to `context/knowledge/plan/`; these two setup files are the only ones
   under the setup-files protocol that named the old path.
+- SC4 · 2026-10-04 · approved by Tom Van Acker · `copilot-instructions.md` rule 2 and
+  `julia.instructions.md`: a version bump is the patch digit, or the minor digit for an item that
+  adds a component type; `templates/spec.md` says the same · why: F3, D20 (B5 is v0.11.0).

@@ -1,29 +1,27 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-05 by Tom Van Acker (B9: the
-Zorba couplers are locked-closed switches on `test-zorba-run`, week 1 re-run and compared).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-05 by Tom Van Acker (B11: the
+unified-transformer plan is accepted, D28-D33 recorded; commit 1 (the tests) is in.
 
 ## Where NMB stands
 
-- Specs/plans live in `context/knowledge/plan/` (D12).
 - v0.11.0 (D13, D15-D27): the `Switch` edge, see below. v0.10.2 (D11): `solution_tables` and
   `docs/src/manual/concepts.md`. v0.10.1 (D10): `src/comp/` is auto-included by a directory walk
   (`_include_dir`) and each component file exports its own names. v0.10.0: `security_tables`.
 - Gap-closure items #1-9 of `context/knowledge/plan/GAP_CLOSURE_PLAN.md` are closed; #10-11 are
-  open, see `backlog.md`. The only tag is `v0.6.0`; later versions are untagged `Project.toml` states.
+  open, see `backlog.md`. Tags: `v0.6.0` and `v0.9.1`-`v0.9.7`; v0.10.x and v0.11.0 are untagged.
 
 ## Branches
 
 - `main` carries B5. `git log --oneline -1` has the real hash. The context files are current on
   both branches; only `test-zorba-run` has the B9 loader change.
-- `test-zorba-run` is `6cd0af1` (an earlier merge of `main`) plus 9 commits, all under `scripts/`: the price
-  rescale (`4ef3472`), phases 0-3 (`20d88dc`, `f7571aa`, `e100616`, `f939763`: hour ids, parallel
-  step 1, the N-1 screen, parallel steps 2-3 with the contingency fix, the reactance floor and
-  checked solves), the driver's `NMB_MERGE` flag (`9a8b676`), and the restored prices plus the
-  retirement of the sequential script (`76a52ce`, D14), the `_diag_*` deletion (`9fc06d4`) and the
-  window/step settings (`3ea65d4`), then `main` merged in (`420b1aa`, so it has B5) and the B9
-  loader change in `scripts/SteeringPlanData.jl`.
-- `b5-switch-edge` is merged and can be deleted. Next free decision id: **D28**.
+- `test-zorba-run` is `6cd0af1` (an earlier merge of `main`) plus 9 commits, all under `scripts/`: the
+  price rescale (`4ef3472`), phases 0-3 (`20d88dc`, `f7571aa`, `e100616`, `f939763`: hour ids, parallel
+  steps, N-1 screen, contingency fix, reactance floor), the `NMB_MERGE` flag (`9a8b676`), restored
+  prices (`76a52ce`, D14), the `_diag_*` deletion (`9fc06d4`), the window/step settings (`3ea65d4`),
+  then `main` merged in (`420b1aa`, so it has B5) and the B9 loader change in `SteeringPlanData.jl`.
+- `b11-unified-transformer` is `main` (`01122bd`), the plan and decisions, and commit 1 of the plan.
+- `b5-switch-edge` is merged and can be deleted. Next free decision id: **D34**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -36,26 +34,26 @@ Zorba couplers are locked-closed switches on `test-zorba-run`, week 1 re-run and
   opening every free switch may not island unless `islanding = :allow` (D22).
 - Checked against PowerModels.jl's `_solve_opf_sw`/`_solve_oswpf` in `test/powermodels.jl`: equal
   except a closed loop, where PowerModels.jl leaves the flow free. Full suite 2890 passing with
-  `JULIA_NUM_THREADS=4`. Docs page `docs/src/components/switch.md`, cited through
-  DocumenterCitations (D27). To run one test file use
-  `scratch/switch_spike/run_tests.jl <files in runtests order>` (`hierarchy.jl` has helpers).
+  `JULIA_NUM_THREADS=4`. Docs page `docs/src/components/switch.md`, cited through DocumenterCitations
+  (D27). To run one test file use `scratch/switch_spike/run_tests.jl <files in runtests order>`
+  (`hierarchy.jl` has helpers).
 
 ## In progress
 
+- B11, one `Transformer` for every transformer: plan `context/knowledge/plan/unified-transformer.md` on
+  `b11-unified-transformer` (D28-D33). Commit 1 done, `test/transformer.jl`: 82 tests green on today's
+  code. Next commit 2. Tom OK'd editing `domain-invariants.instructions.md` at commit 3 (log it as SC).
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`), done with the original
   prices (D14) and the 1e-5 floor: `runs/_year_orig_prices`, 365 of 365 chunks sound, 0 fallback, 58
   min; overload rows 341,787 (step 2) and 5,720,514 (step 3), no load shedding or spillage (the
   rescaled-price run `_year_full` had 352,540, 5,953,226, 0 and 635). `with_contingencies` fixed,
   N-1 screen dropped, the old script and `_diag_*` retired. See `lessons.md`.
-- B9 done, week 1 (`runs/_week1_switches`, 7 processes): `load_network` loads the 21 couplers (lines
-  with reactance < `max_coupler_reactance` = 1e-6, all 1e-7) as locked, closed `Switch`es with the
-  ids they had as branches; no reactance is floored. Against the floor run `runs/_phase5_week_orig`:
-  7 of 7 chunks sound, 0 fallback, 0 violation, chunks 376 s against 358 s, but the floor loader
-  re-run today took 377 s and, side by side on four days, the switches were 8 % faster (`lessons.md`),
-  so the gap is the machine's; objective +0.009 % (step 2) and +0.018 % (step 3); overload rows
-  7,718 against 7,729 and 127,323 against 127,368; step 1 flows on the 2,853 congested rows differ by
-  at most 0.14 % of rating (spec: 2.2 %); no load shedding or spillage. No contingency event lists a
-  coupler; `check_islands` passes.
+- B9 done, week 1 (`runs/_week1_switches`, 7 processes): `load_network` loads the 21 couplers (reactance
+  < `max_coupler_reactance` = 1e-6, all 1e-7) as locked, closed `Switch`es, no reactance floored. Against
+  the floor run `runs/_phase5_week_orig`: 7 of 7 chunks sound, 0 fallback, 0 violation, no shedding or
+  spillage, objective +0.009 % (step 2) and +0.018 % (step 3), overload rows 7,718 against 7,729 and
+  127,323 against 127,368, step 1 flows on the 2,853 congested rows within 0.14 % of rating (spec:
+  2.2 %); chunks 376 s against 358 s, which was the machine's (`lessons.md`). `check_islands` passes.
 - Tom asked for 48 h windows committing 8 h in both steps; tried, and worse. They are settings now
   (`NMB_HORIZON_CB/STEP_CB/HORIZON_BE/STEP_BE`, defaults unchanged 8/8 and 1/1; the chunk must be at
   least as long as the horizon). `runs/_phase6_h48_probe`, hours 1-48: same results (objectives
@@ -68,9 +66,10 @@ Zorba couplers are locked-closed switches on `test-zorba-run`, week 1 re-run and
 
 ## Next
 
-1. B10: re-run the full year with the switches (`_year_orig_prices` has the floor), recipe in the
+1. Implement B11 on `b11-unified-transformer`, one commit per row of the plan's table.
+2. B10: re-run the full year with the switches (`_year_orig_prices` has the floor), recipe in the
    header of `scripts/run_year_redispatch.jl`.
-2. B7 (closed switches under network reduction), B8 (timing flake), B3/B6 (throughput) and B4
+3. B7 (closed switches under network reduction), B8 (timing flake), B3/B6 (throughput) and B4
    (bus factor) remain, see `backlog.md`.
 
 ## Blocked / waiting

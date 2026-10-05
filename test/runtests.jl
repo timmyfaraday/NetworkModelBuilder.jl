@@ -15,6 +15,7 @@
 # v0.11.0 - the islands test                                                   #
 # v0.11.0 - imports HiGHS, for the linear programs a switch makes              #
 # v0.11.0 - imports Juniper, for a free switch in current                      #
+# v0.12.0 - the transformers, as they behave                                   #
 ################################################################################
 
 using Test
@@ -56,6 +57,7 @@ quiet(f) = Logging.with_logger(f, Logging.NullLogger())
     include("lpf.jl")
     include("powermodels.jl")
     include("rd.jl")
+    include("transformer.jl")
     include("dc_link.jl")
     include("switch.jl")
     include("islands.jl")

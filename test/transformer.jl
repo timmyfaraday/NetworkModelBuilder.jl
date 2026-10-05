@@ -1,0 +1,226 @@
+################################################################################
+# NetworkModelBuilder.jl                                                       #
+# A Julia package to build optimization models for power system problems.      #
+# See http://github.com/timmyfaraday/NetworkModelBuilder.jl                    #
+################################################################################
+# Authors: Tom Van Acker                                                       #
+################################################################################
+# Changelog:                                                                   #
+# v0.12.0 - initial implementation                                             #
+################################################################################
+
+# What a transformer does, written so that it does not depend on how one is
+# built. The helpers below are the only place in this file that names a type; the
+# assertions say what the device does, with numbers taken from the code as it
+# stood when this file was written. A change to how a transformer is built
+# changes a helper and nothing else.
+
+"a transformer whose ratio is data"
+fixed(; kw...) = Transformer(; kw...)
+
+"a transformer whose angle is a decision between `ta_min` and `ta_max`"
+pst(; ta_min, ta_max, cost = 0.0, kw...) = PhaseShifter(; ta_min, ta_max, cost, kw...)
+
+"a transformer whose magnitude is a decision between `tm_min` and `tm_max`"
+oltc(; tm_min, tm_max, kw...) = TapChanger(; tm_min, tm_max, kw...)
+
+"a transformer with three or more windings, `r`, `x`, ... holding one entry per terminal"
+star(; kw...) = MultiWindingTransformer(; kw...)
+
+"the tap of edge `e` in a result at network index `n`"
+tap_of(result, e, n = 1) = nw_solution(result, n)["edge"]["$e"]["tap"]
+
+"the number of variables and of constraints that are not variable bounds"
+size_of(nm) = (JuMP.num_variables(nm.model),
+               JuMP.num_constraints(nm.model; count_variable_in_set_constraints = false))
+
+"the model of problem `P` in formulation `F` over `data`, and its solution"
+function solved(data, ::Type{P}, ::Type{F}) where {P,F}
+    nm = instantiate_model(data, P, F)
+
+    return nm, quiet(() -> optimize_model!(nm, OPTIMIZER))
+end
+
+"case5 with branch 5, the one with a turns ratio, rebuilt by `make`"
+function case5_with(make; extra...)
+    data = quiet(() -> parse_file(case("case5")))
+    net  = network(data)
+    tf   = edge(net, 5)
+    E    = Dict{Int,AbstractEdge}(net.edge)
+
+    E[5] = make(; id = tf.id, name = tf.name, terminals = tf.terminals, r = tf.r, x = tf.x,
+                b_fr = tf.b_fr, b_to = tf.b_to, tm = tf.tm, ta = tf.ta, rate_a = tf.rate_a,
+                angmin = tf.angmin, angmax = tf.angmax, status = tf.status, extra...)
+
+    return NetworkData(Network(net.node, E, net.unit); name = "case5", baseMVA = baseMVA(data))
+end
+
+"one reference node feeding two loads through a transformer with three windings"
+function winding_network(; kw...)
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.02),
+                               2 => Node(; id = 2), 3 => Node(; id = 3))
+    E = Dict{Int,AbstractEdge}(
+        1 => star(; id = 1, terminals = [1, 2, 3], r = [0.010, 0.020, 0.030],
+                  x = [0.100, 0.200, 0.300], kw...))
+    U = Dict{Int,AbstractUnit}(
+        1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
+                       cost = [0.0, 10.0]),
+        2 => FixedLoad(; id = 2, node = 2, pd = 0.40, qd = 0.15),
+        3 => FixedLoad(; id = 3, node = 3, pd = 0.25, qd = 0.10))
+
+    return NetworkData(Network(I, E, U); name = "windings")
+end
+
+"""
+A tight corridor `1–3` in parallel with a path `1–2–3` that carries a transformer
+whose angle can move, which is what relieves the corridor.
+"""
+function shifter_network(; cost = 0.0)
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
+                               2 => Node(; id = 2), 3 => Node(; id = 3))
+    E = Dict{Int,AbstractEdge}(
+        1 => Branch(; id = 1, terminals = [1, 3], r = 0.0, x = 0.1, rate_a = 0.5),
+        2 => pst(; id = 2, terminals = [1, 2], r = 0.0, x = 0.1, ta_min = -0.3, ta_max = 0.3,
+                 cost = cost),
+        3 => Branch(; id = 3, terminals = [2, 3], r = 0.0, x = 0.1))
+    U = Dict{Int,AbstractUnit}(
+        1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
+                       pg = 1.0, cost = [0.0, 10.0]),
+        2 => Generator(; id = 2, node = 3, pmax = 5.0, qmin = -5.0, qmax = 5.0,
+                       pg = 0.0, cost = [0.0, 100.0]),
+        3 => FixedLoad(; id = 3, node = 3, pd = 1.0, qd = 0.0))
+
+    return NetworkData(Network(I, E, U); name = "shifter", baseMVA = 100.0)
+end
+
+"the optimal power flow of case5 with branch 5 as `make`, against what it gave"
+function check_case5(make, F; extra = (;), objective, tm, ta, sz)
+    nm, result = solved(case5_with(make; extra...), OptimalPowerFlowProblem, F)
+    tap        = tap_of(result, 5)
+
+    @test result["termination_status"] == JuMP.LOCALLY_SOLVED
+    @test result["objective"] ≈ objective rtol = 1e-7
+    @test tap["tm"] ≈ tm atol = 1e-6
+    @test tap["ta"] ≈ ta atol = 1e-6
+    @test size_of(nm) == sz
+
+    return nothing
+end
+
+"""
+The load flow and the optimal power flow of the three-winding network against
+what they gave. `vm` and `q` are only there where the formulation has them.
+"""
+function check_windings(F, extra; va, p, objective, lf_size, opf_size, vm = nothing, q = nothing)
+    data = winding_network(; extra...)
+
+    lf, result = solved(data, LoadFlowProblem, F)
+    sol        = nw_solution(result)
+    @test result["termination_status"] == JuMP.LOCALLY_SOLVED
+    @test sol["node"]["2"]["va"] ≈ va[1] atol = 1e-6
+    @test sol["node"]["3"]["va"] ≈ va[2] atol = 1e-6
+    @test sol["unit"]["1"]["p"] ≈ p atol = 1e-6
+    if vm !== nothing
+        @test sol["node"]["2"]["vm"] ≈ vm[1] atol = 1e-6
+        @test sol["node"]["3"]["vm"] ≈ vm[2] atol = 1e-6
+        @test sol["unit"]["1"]["q"] ≈ q atol = 1e-6
+    end
+    @test size_of(lf) == lf_size
+
+    opf, result = solved(data, OptimalPowerFlowProblem, F)
+    @test result["termination_status"] == JuMP.LOCALLY_SOLVED
+    @test result["objective"] ≈ objective rtol = 1e-7
+    @test size_of(opf) == opf_size
+
+    return nothing
+end
+
+@testset "transformers" begin
+
+    @testset "case5, optimal power flow: what a control buys" begin
+        pst_range  = (ta_min = -0.2, ta_max = 0.2)
+        oltc_range = (tm_min = 0.9, tm_max = 1.1)
+
+        @testset "fixed, current-based" begin
+            check_case5(fixed, IVRFormulation; objective = 18269.10277920319,
+                        tm = 1.05, ta = deg2rad(1.0), sz = (82, 112))
+        end
+        @testset "fixed, linearized" begin
+            check_case5(fixed, LPFFormulation; objective = 18230.87327365834,
+                        tm = 1.05, ta = deg2rad(1.0), sz = (32, 49))
+        end
+        @testset "phase shifter, current-based" begin
+            check_case5(pst, IVRFormulation; extra = pst_range, objective = 15361.63977117874,
+                        tm = 1.05, ta = -0.1437787322995556, sz = (84, 115))
+        end
+        @testset "phase shifter, linearized" begin
+            check_case5(pst, LPFFormulation; extra = pst_range, objective = 14979.73668132809,
+                        tm = 1.05, ta = -0.16926719116051048, sz = (33, 49))
+        end
+        @testset "tap changer, current-based" begin
+            check_case5(oltc, IVRFormulation; extra = oltc_range, objective = 18175.84597840520,
+                        tm = 0.9195861572681617, ta = deg2rad(1.0), sz = (83, 112))
+        end
+        @testset "tap changer, linearized: no use for a magnitude" begin
+            check_case5(oltc, LPFFormulation; extra = oltc_range, objective = 18230.87327365833,
+                        tm = 1.05, ta = deg2rad(1.0), sz = (32, 49))
+        end
+    end
+
+    @testset "three windings, load flow and optimal power flow" begin
+        # the second network gives every winding a ratio and a rating, and the
+        # star point a magnetising branch
+        ratios = (tm = [1.0, 0.95, 1.05], ta = [0.0, 0.02, -0.01], g_m = 0.002, b_m = -0.01,
+                  rate_a = [3.0, 1.0, 1.0])
+
+        @testset "plain, current-based" begin
+            check_windings(IVRFormulation, (;); va = (-0.1468713374927703, -0.14130337788297284),
+                           vm = (0.9348310737873904, 0.9358532410998236),
+                           p = 0.6622053866092757, q = 0.3720538660927581,
+                           lf_size = (22, 22), objective = 6.601790739872742, opf_size = (22, 28))
+        end
+        @testset "plain, linearized" begin
+            check_windings(LPFFormulation, (;); va = (-0.14645, -0.1414), p = 0.65,
+                           lf_size = (11, 11), objective = 6.5, opf_size = (11, 11))
+        end
+        @testset "ratios and magnetising, current-based" begin
+            check_windings(IVRFormulation, ratios; va = (-0.12723016145875204, -0.1516489913608215),
+                           vm = (0.8870174021272711, 0.9814634990542811),
+                           p = 0.6642380022581644, q = 0.3828174463537286,
+                           lf_size = (22, 22), objective = 6.625487508859268, opf_size = (22, 31))
+        end
+        @testset "ratios and magnetising, linearized" begin
+            check_windings(LPFFormulation, ratios; va = (-0.12645, -0.1514), p = 0.65,
+                           lf_size = (11, 11), objective = 6.5, opf_size = (11, 14))
+        end
+    end
+
+    @testset "redispatch with a phase shifter" begin
+        # priced, it moves no further than it has to: -0.05 just clears the
+        # rating of the corridor, and every radian more costs 10
+        nm, result = solved(shifter_network(; cost = 10.0), RedispatchProblem, LPFFormulation)
+        tap        = tap_of(result, 2)
+
+        @test result["termination_status"] == JuMP.LOCALLY_SOLVED
+        @test result["objective"] ≈ 0.5 atol = 1e-4
+        @test tap["tm"] == 1.0
+        @test tap["ta"] ≈ -0.05 atol = 1e-4
+        @test tap["ta_market"] == 0.0
+        @test tap["tadn"] ≈ 0.05 atol = 1e-4
+        @test tap["taup"] ≈ 0.0 atol = 1e-4
+        @test size_of(nm) == (21, 21)
+
+        # free, any angle that clears the rating costs nothing, so only the
+        # objective and the limits are determined
+        nm, result = solved(shifter_network(), RedispatchProblem, LPFFormulation)
+        @test result["objective"] ≈ 0.0 atol = 1e-5
+        @test -0.3 - 1e-6 <= tap_of(result, 2)["ta"] <= 0.3 + 1e-6
+        @test size_of(nm) == (21, 21)
+
+        # the current-based formulation carries no price, but builds the free one
+        nm, result = solved(shifter_network(), RedispatchProblem, IVRFormulation)
+        @test result["termination_status"] == JuMP.LOCALLY_SOLVED
+        @test result["objective"] ≈ 0.0 atol = 1e-5
+        @test size_of(nm) == (42, 53)
+    end
+end

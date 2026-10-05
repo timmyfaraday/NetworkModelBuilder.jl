@@ -80,3 +80,7 @@ facts `(unverified)` and remove the marker once checked.
   silently return zero matches even though the text is there. Read it with `Get-Content -Path ...
   -Encoding Unicode | Select-String ...` instead (found by Tom Van Acker, 2026-09-30, capturing a
   `Pkg.test()` run to a log file).
+- `Get-Content -Raw` without `-Encoding UTF8` reads this repo's BOM-less UTF-8 files as ANSI, so a
+  rewritten copy of a test file (`–`, `≈`) is mojibake and Julia fails to parse it. Read with `-Encoding
+  UTF8` and write with `[IO.File]::WriteAllText(path, text, (New-Object Text.UTF8Encoding($false)))`
+  (found by Tom Van Acker, 2026-10-05, perturbing a helper to prove a test can fail).

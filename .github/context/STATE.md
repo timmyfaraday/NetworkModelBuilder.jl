@@ -1,7 +1,7 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-04 by Tom Van Acker (B5, the
-Switch plan, complete and merged into `main` as v0.11.0).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-05 by Tom Van Acker (B9: the
+Zorba couplers are locked-closed switches on `test-zorba-run`, week 1 re-run and compared).
 
 ## Where NMB stands
 
@@ -14,16 +14,16 @@ Switch plan, complete and merged into `main` as v0.11.0).
 
 ## Branches
 
-- `main` carries B5. `git log --oneline -1` has the real hash. The context files are kept current
-  on `main` only; `test-zorba-run` lags them.
-- `test-zorba-run` is `6cd0af1` (a merge of `main`) plus 9 commits, all under `scripts/`: the price
+- `main` carries B5. `git log --oneline -1` has the real hash. The context files are current on
+  `main` and, from B9, on `test-zorba-run`; the B9 notes are not on `main` yet.
+- `test-zorba-run` is `6cd0af1` (an earlier merge of `main`) plus 9 commits, all under `scripts/`: the price
   rescale (`4ef3472`), phases 0-3 (`20d88dc`, `f7571aa`, `e100616`, `f939763`: hour ids, parallel
   step 1, the N-1 screen, parallel steps 2-3 with the contingency fix, the reactance floor and
   checked solves), the driver's `NMB_MERGE` flag (`9a8b676`), and the restored prices plus the
   retirement of the sequential script (`76a52ce`, D14), the `_diag_*` deletion (`9fc06d4`) and the
-  window/step settings (`3ea65d4`). It does not have B5 yet.
-- `b5-switch-edge` is merged and can be deleted.
-- Next free decision id: **D28**.
+  window/step settings (`3ea65d4`), then `main` merged in (`420b1aa`, so it has B5) and the B9
+  loader change in `scripts/SteeringPlanData.jl`.
+- `b5-switch-edge` is merged and can be deleted. Next free decision id: **D28**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -43,10 +43,19 @@ Switch plan, complete and merged into `main` as v0.11.0).
 ## In progress
 
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`), done with the original
-  prices (D14): `runs/_year_orig_prices`, 365 of 365 chunks sound, 0 fallback, 58 min; overload rows
-  341,787 (step 2) and 5,720,514 (step 3), no load shedding or spillage (the rescaled-price run
-  `_year_full` had 352,540, 5,953,226, 0 and 635). Reactance floor 1e-5 (D13), `with_contingencies`
-  fixed, N-1 screen dropped, the old script and `_diag_*` retired. See `lessons.md`.
+  prices (D14) and the 1e-5 floor: `runs/_year_orig_prices`, 365 of 365 chunks sound, 0 fallback, 58
+  min; overload rows 341,787 (step 2) and 5,720,514 (step 3), no load shedding or spillage (the
+  rescaled-price run `_year_full` had 352,540, 5,953,226, 0 and 635). `with_contingencies` fixed,
+  N-1 screen dropped, the old script and `_diag_*` retired. See `lessons.md`.
+- B9 done, week 1 (`runs/_week1_switches`, 7 processes): `load_network` loads the 21 couplers (lines
+  with reactance < `max_coupler_reactance` = 1e-6, all 1e-7) as locked, closed `Switch`es with the
+  ids they had as branches; no reactance is floored. Against the floor run `runs/_phase5_week_orig`:
+  7 of 7 chunks sound, 0 fallback, 0 violation, chunks 376 s against 358 s, but the floor loader
+  re-run today took 377 s and, side by side on four days, the switches were 8 % faster (`lessons.md`),
+  so the gap is the machine's; objective +0.009 % (step 2) and +0.018 % (step 3); overload rows
+  7,718 against 7,729 and 127,323 against 127,368; step 1 flows on the 2,853 congested rows differ by
+  at most 0.14 % of rating (spec: 2.2 %); no load shedding or spillage. No contingency event lists a
+  coupler; `check_islands` passes.
 - Tom asked for 48 h windows committing 8 h in both steps; tried, and worse. They are settings now
   (`NMB_HORIZON_CB/STEP_CB/HORIZON_BE/STEP_BE`, defaults unchanged 8/8 and 1/1; the chunk must be at
   least as long as the horizon). `runs/_phase6_h48_probe`, hours 1-48: same results (objectives
@@ -59,8 +68,8 @@ Switch plan, complete and merged into `main` as v0.11.0).
 
 ## Next
 
-1. B9: merge `main` into `test-zorba-run`, load the 21 couplers there as locked-closed switches,
-   drop the 1e-5 reactance floor from `scripts/SteeringPlanData.jl` and re-run week 1 to compare.
+1. B10: re-run the full year with the switches (`_year_orig_prices` has the floor), recipe in the
+   header of `scripts/run_year_redispatch.jl`.
 2. B7 (closed switches under network reduction), B8 (timing flake), B3/B6 (throughput) and B4
    (bus factor) remain, see `backlog.md`.
 

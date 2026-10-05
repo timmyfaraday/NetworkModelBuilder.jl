@@ -2,15 +2,17 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B10**.
+older ones: git has them). Next id: **B11**.
 
 ## Now
 
 ## Next
 
-- [ ] B9 · On `test-zorba-run`, load the couplers as locked-closed `Switch`es, drop the 1e-5
-  reactance floor from `scripts/SteeringPlanData.jl`, re-run week 1 and compare · Tom · 2026-10-04
-  - Needs `b5-switch-edge` merged into `test-zorba-run` first (D13, D17).
+- [ ] B10 · Re-run the full year on `test-zorba-run` with the couplers as switches; `runs/_year_orig_prices`
+  has the 1e-5 floor · Tom · 2026-10-05
+  - Week 1 moved the objective by under 0.02 % (B9), so expect the year's overload rows within
+    about 0.1 % of 341,787 (step 2) and 5,720,514 (step 3). Recipe in the header of
+    `scripts/run_year_redispatch.jl`.
 
 ## Later
 
@@ -30,6 +32,10 @@ older ones: git has them). Next id: **B10**.
 
 ## Done
 
+- [x] B9 · On `test-zorba-run`, load the couplers as locked-closed `Switch`es, drop the 1e-5
+  reactance floor, re-run week 1 and compare · Tom · 2026-10-05
+  - `scripts/SteeringPlanData.jl`; `runs/_week1_switches` against `runs/_phase5_week_orig`: 7 of 7
+    sound, 0 violation, objective +0.009 % / +0.018 %, flows within 0.14 % of rating (STATE.md).
 - [x] B5 · A `Switch` edge type, replacing near-zero-impedance couplers · Tom · 2026-10-02
   - v0.11.0, branch `b5-switch-edge`, D13 and D15-D26; spec `knowledge/plan/switch-edge.md`.
     Busbar switch and circuit breaker (D19) are not built.

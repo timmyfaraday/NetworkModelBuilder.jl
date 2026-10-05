@@ -64,7 +64,9 @@ again get retired.
   extreme coefficient in the *constraint matrix* (`Coefficient range` in the solver log) before
   touching prices or solver attributes. Confirmed 2026-10-03: with the floor and the original prices
   week 1 solves 7 of 7 chunks `OPTIMAL`, violation-free, no fallback, in the same time as with the
-  rescaled prices. (unconfirmed)
+  rescaled prices. Confirmed again 2026-10-05 with the couplers as locked-closed `Switch`es and no
+  floor: 7 of 7 sound, 0 violation, flows on the 2,853 congested step 1 rows within 0.14 % of rating
+  of the floored run, objective +0.009 % (step 2) and +0.018 % (step 3). (unconfirmed)
 - **A per-edge lookup of "which event contains this edge" silently drops every event after the
   first.** The pipeline's `with_contingencies` used `findfirst(ev -> id in ev.edges, events)`, so an
   edge listed by several events (a line that is both a simple N-1 and part of a busbar group) went out
@@ -96,6 +98,17 @@ again get retired.
 
 ## Performance
 
+- **Time a change against a control run made the same day, not against an older run.** Week 1 with
+  the couplers as switches took 376 s a chunk against 358 s three days earlier (+5 %, every chunk
+  slower, all of it outside the solver). The floor loader, unchanged, re-run beside it took 377 s;
+  two uncontended processes, three 8 h chunks each, gave 341 s with switches against 352 s with the
+  floor, and a build-only benchmark of one window was within 4 %. The gap was the machine (25-29 %
+  CPU busy before the launch, GC pauses 69 s then 73-78 s). The two sequential 7-process runs also
+  differed by ~20 s of non-solver time in step 3 (switches slower) with ~18 s less solver time, same
+  total; that did not survive a paired run: 8 processes at once, floor and switches on the same four
+  days, gave step 3 non-solver 213-219 s with switches against 217-222 s with the floor, solver 67-101 s
+  against 85-139 s, chunk 330-370 s against 354-410 s. Run the variants side by side on the same
+  hours, not one after the other. (unconfirmed)
 - **Threads inside one Julia process stop paying at a handful of tasks for NMB's per-window work;
   separate one-thread processes keep scaling.** Zorba week 1, same 7 daily chunks: 7 threads in one
   process 860 s per chunk; 7 processes 330-400 s. One 720-hour month on 30 threads had the same

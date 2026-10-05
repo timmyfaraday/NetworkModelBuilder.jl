@@ -17,7 +17,12 @@ round. See [Where a type earns its place](@ref).
 The literature has both. [Babaeinejadsarookolaee2021](@citet) keep
 a breaker a branch and regularise it, with a susceptance of `1e5` closed and `1e-2`
 open; [Goldis2017](@citet) model it exactly, as an element of zero
-impedance with a flow of its own. This is the second.
+impedance with a flow of its own.
+
+!!! note "A switch is modelled exactly, not regularised"
+    NetworkModelBuilder.jl models a switch **exactly**, as an element of zero
+    impedance with a flow of its own, and does **not** regularise it as a branch with
+    a large closed and a small open susceptance.
 
 ```@docs
 AbstractSwitch

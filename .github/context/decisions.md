@@ -87,8 +87,9 @@ How to use this file:
 
 - **A bus coupler, or any other device that only connects or disconnects, is a `Switch`: a subtype of
   the edge with its own children, such as a busbar switch and a circuit breaker — not a branch with
-  a near-zero impedance** (D13). Not built yet. Until it is, the Zorba pipeline floors the
-  reactance of every line at 1e-5 as a stopgap (`scripts/SteeringPlanData.jl`, on `test-zorba-run`).
+  a near-zero impedance** (D13). Built in v0.11.0. The Zorba pipeline loads its 21 couplers as
+  locked, closed switches and floors no reactance (`scripts/SteeringPlanData.jl`, on
+  `test-zorba-run`).
 - **A switch carries `lock` (free or locked) and `position`, an `Int` (0 open, 1 closed); `status`
   stays the in-service flag every component has** (D15). A load flow treats every switch as locked.
   A switch is supported in both the linearised and the current-based formulation.

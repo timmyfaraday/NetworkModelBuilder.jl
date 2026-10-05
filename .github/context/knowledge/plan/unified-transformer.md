@@ -1,7 +1,7 @@
 # One `Transformer` for every transformer: windings, tap changers, phase shifters
 
 Status: accepted, ready to implement (D28-D33 accepted and recorded 2026-10-05) · Author: Tom Van Acker · Date: 2026-10-05
-Decisions: D28-D33 (next free after: D34) · Priority: P2 · Effort: Large · Backlog: B11 (follow-ups B12, B13)
+Decisions: D28-D34 (next free after: D35) · Priority: P2 · Effort: Large · Backlog: B11 (follow-ups B12, B13)
 
 ## Handoff instructions
 
@@ -30,7 +30,7 @@ Decisions: D28-D33 (next free after: D34) · Priority: P2 · Effort: Large · Ba
 
 ## Evidence
 
-**1. Four types for one device; combinations that cannot be built** (run 2026-10-05):
+**1. Four types, 1,162 lines, for one device; combinations that cannot be built** (run 2026-10-05):
 
 ```
 PhaseShifter(...; tm_min = 0.9)             MethodError, no keyword tm_min
@@ -39,8 +39,6 @@ MultiWindingTransformer(...; tm_min = ...)  MethodError, no keyword tm_min / ta_
 Transformer(...; terminals = [1, 2, 3])     ArgumentError: a two-winding transformer has exactly two
 TapChanger(...; tap_pos = 3)                MethodError, no discrete tap anywhere
 ```
-
-Four files, 1,162 lines. A tap changer is continuous on purpose (`tap_changer.jl:28`), inert in LPF (`transformer.jl:310`).
 
 **2. A star with a zero-impedance winding fails in the linearized formulation** (`multi_winding.jl:274`):
 `r = 0`, `x = [0.1, 0.0, 0.3]` gives `invalid term NaN * 1_va[2]`; `x = [0.1, 0.2, 0.3]` solves.
@@ -77,7 +75,7 @@ Base.@kwdef struct Transformer <: AbstractTransformer
     tm, ta       ::NetworkQuantity{Vector{Float64}}           # ratio setpoint per winding
     oltc, pst    ::Vector{TapMode}                            # per winding, static, default FIXED: may the magnitude / the angle move
     tm_min, tm_max, ta_min, ta_max   # per winding; default 0.9..1.1 and ±π/12 as the old types had
-    tm_step, ta_step, ta_cost        # STEPPED: the values are min, min + step, ..., max; price per radian moved
+    tm_step, ta_step                 # STEPPED: the values are min, min + step, ..., max
     rate_a       ::NetworkQuantity{Vector{Float64}} = Inf     # per terminal
     angmin, angmax, status, ext                               # angle limits: two windings only
 end
@@ -102,8 +100,8 @@ point: `p_{a_1} = -b (va^t_1 - va^t_2)` with `b = susceptance(z_1 + z_2)`, `p_{a
 `ArgumentError` naming the winding (evidence 2).
 
 **Redispatch.** `redispatch_controls` returns the keys a preventive winding holds across contingencies
-(`:tm`, `:tr`, `:ti`, `:ta`, `:zt`); one without the variable is skipped, as now. Linearized angle and price
-as `PhaseShifter` today (`ta = ta_set + taup - tadn`, `ta_cost (taup + tadn)`); a price in IVR is an error.
+(`:tm`, `:tr`, `:ti`, `:ta`, `:zt`); one without the variable is skipped, as now. Linearized, the angle keeps
+`ta = ta_set + taup - tadn` as today and has no price (D34): `parse_zorba` loses `pst_cost`.
 
 **Stepped windings** (D32). `true` is continuous; `STEPPED` is asked for. `oltc = STEPPED` takes the
 magnitudes `tm_min, tm_min + tm_step, …, tm_max`, `pst = STEPPED` the angles likewise; the setpoint must be
@@ -118,7 +116,7 @@ when stepped): `solution_tables` has `tap_tm`, `tap_ta` per terminal, `zorba.jl:
 
 | # | Commit | Verification |
 |---|---|---|
-| 1 | Characterization: helpers `fixed`, `pst` (with its `cost`), `oltc`, `star` in `test/transformer.jl`; objectives, taps, sizes frozen | green on today's code; a perturbed helper goes red |
+| 1 | Characterization: helpers `fixed`, `pst`, `oltc`, `star` in `test/transformer.jl`; objectives, taps, sizes frozen | green on today's code; a perturbed helper goes red |
 | 2 | `variable!` takes any hashable id (an `Arc`); `constraint_redispatch_control` ties each arc's variable | suite green; a toy `Arc`-keyed tie |
 | 3 | `Transformer`, the T-model for every `n`, `oltc`/`pst` `FIXED` or `CONTINUOUS` (not both on one winding); both formulations; redispatch; solution; Matpower, Zorba, table readers; four files become one; helpers swapped | step 1 numbers unchanged; IVR 80/110, 84/115, 83/112, LPF 32/49, 33/49, 32/49; three windings equal their decomposition; PowerModels equal on case5 (a shift), current-based |
 | 4 | `oltc` and `pst` on one winding; controls on any winding of `n ≥ 3` | objective ≤ the best single-control run; preventive tie over a three-winding winding |
@@ -135,7 +133,7 @@ when stepped): `solution_tables` has `tap_tm`, `tap_ta` per terminal, `zorba.jl:
 
 - B12: moving `test-zorba-run` to `Transformer`. B13: a datasheet constructor (winding resistances, pairwise
   short-circuit reactances, no-load power) and a mesh for four or more windings (Claeys' Algorithm 1).
-- Non-uniform PST tap tables; tap-dependent impedance; a price on a magnitude move; a PST flow target
+- Non-uniform PST tap tables; tap-dependent impedance; a price on moving a tap or an angle (D34); a PST flow target
   (`P_ij = P_esp`); sequential rounding for `STEPPED`; phases, delta windings, convex relaxations.
 
 ## Decisions (recorded in `decisions.md`)
@@ -148,3 +146,4 @@ when stepped): `solution_tables` has `tap_tm`, `tap_ta` per terminal, `zorba.jl:
 | D31 | `oltc` and `pst` per winding, static, for magnitude and angle; the enum `TapMode`, a `Bool` accepted: `false` is `FIXED`, `true` is `CONTINUOUS` | accepted, Tom |
 | D32 | Stepped windings in this branch, last; the default is continuous; `STEPPED` is asked for | accepted, Tom |
 | D33 | `tap` reported per terminal | accepted, Tom |
+| D34 | `oltc` and `pst` are non-costly measures for now: no `cost`, no `pst_cost`; may change | accepted, Tom |

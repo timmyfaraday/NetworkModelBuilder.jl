@@ -8,7 +8,7 @@ older ones: git has them). Next id: **B14**.
 
 - [ ] B11 · One `Transformer` for every transformer (windings, tap changer, phase shifter), replacing
   `TapChanger`, `PhaseShifter` and `MultiWindingTransformer` · Tom · 2026-10-05
-  - Plan `knowledge/plan/unified-transformer.md` (D28-D33), branch `b11-unified-transformer`, v0.12.0,
+  - Plan `knowledge/plan/unified-transformer.md` (D28-D34), branch `b11-unified-transformer`, v0.12.0,
     tagged at the merge. Accepted by Tom; ready to implement.
 
 ## Next

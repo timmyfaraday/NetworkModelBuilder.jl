@@ -21,7 +21,7 @@ unified-transformer plan is accepted, D28-D33 recorded; commit 1 (the tests) is 
   prices (`76a52ce`, D14), the `_diag_*` deletion (`9fc06d4`), the window/step settings (`3ea65d4`),
   then `main` merged in (`420b1aa`, so it has B5) and the B9 loader change in `SteeringPlanData.jl`.
 - `b11-unified-transformer` is `main` (`01122bd`), the plan and decisions, and commit 1 of the plan.
-- `b5-switch-edge` is merged and can be deleted. Next free decision id: **D34**.
+- `b5-switch-edge` is merged and can be deleted. Next free decision id: **D35**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -41,7 +41,7 @@ unified-transformer plan is accepted, D28-D33 recorded; commit 1 (the tests) is 
 ## In progress
 
 - B11, one `Transformer` for every transformer: plan `context/knowledge/plan/unified-transformer.md` on
-  `b11-unified-transformer` (D28-D33). Commit 1 done, `test/transformer.jl`: 82 tests green on today's
+  `b11-unified-transformer` (D28-D34). Commit 1 done, `test/transformer.jl`: 77 tests green on today's
   code. Next commit 2. Tom OK'd editing `domain-invariants.instructions.md` at commit 3 (log it as SC).
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`), done with the original
   prices (D14) and the 1e-5 floor: `runs/_year_orig_prices`, 365 of 365 chunks sound, 0 fallback, 58

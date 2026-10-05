@@ -19,7 +19,7 @@
 fixed(; kw...) = Transformer(; kw...)
 
 "a transformer whose angle is a decision between `ta_min` and `ta_max`"
-pst(; ta_min, ta_max, cost = 0.0, kw...) = PhaseShifter(; ta_min, ta_max, cost, kw...)
+pst(; ta_min, ta_max, kw...) = PhaseShifter(; ta_min, ta_max, kw...)
 
 "a transformer whose magnitude is a decision between `tm_min` and `tm_max`"
 oltc(; tm_min, tm_max, kw...) = TapChanger(; tm_min, tm_max, kw...)
@@ -75,13 +75,12 @@ end
 A tight corridor `1–3` in parallel with a path `1–2–3` that carries a transformer
 whose angle can move, which is what relieves the corridor.
 """
-function shifter_network(; cost = 0.0)
+function shifter_network()
     I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
                                2 => Node(; id = 2), 3 => Node(; id = 3))
     E = Dict{Int,AbstractEdge}(
         1 => Branch(; id = 1, terminals = [1, 3], r = 0.0, x = 0.1, rate_a = 0.5),
-        2 => pst(; id = 2, terminals = [1, 2], r = 0.0, x = 0.1, ta_min = -0.3, ta_max = 0.3,
-                 cost = cost),
+        2 => pst(; id = 2, terminals = [1, 2], r = 0.0, x = 0.1, ta_min = -0.3, ta_max = 0.3),
         3 => Branch(; id = 3, terminals = [2, 3], r = 0.0, x = 0.1))
     U = Dict{Int,AbstractUnit}(
         1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
@@ -196,28 +195,16 @@ end
     end
 
     @testset "redispatch with a phase shifter" begin
-        # priced, it moves no further than it has to: -0.05 just clears the
-        # rating of the corridor, and every radian more costs 10
-        nm, result = solved(shifter_network(; cost = 10.0), RedispatchProblem, LPFFormulation)
-        tap        = tap_of(result, 2)
-
-        @test result["termination_status"] == JuMP.LOCALLY_SOLVED
-        @test result["objective"] ≈ 0.5 atol = 1e-4
-        @test tap["tm"] == 1.0
-        @test tap["ta"] ≈ -0.05 atol = 1e-4
-        @test tap["ta_market"] == 0.0
-        @test tap["tadn"] ≈ 0.05 atol = 1e-4
-        @test tap["taup"] ≈ 0.0 atol = 1e-4
-        @test size_of(nm) == (21, 21)
-
-        # free, any angle that clears the rating costs nothing, so only the
-        # objective and the limits are determined
+        # any angle that clears the rating of the corridor costs nothing, so only
+        # the objective and the limits are determined
         nm, result = solved(shifter_network(), RedispatchProblem, LPFFormulation)
+        @test result["termination_status"] == JuMP.LOCALLY_SOLVED
         @test result["objective"] ≈ 0.0 atol = 1e-5
+        @test tap_of(result, 2)["tm"] == 1.0
         @test -0.3 - 1e-6 <= tap_of(result, 2)["ta"] <= 0.3 + 1e-6
+        @test tap_of(result, 2)["ta_market"] == 0.0
         @test size_of(nm) == (21, 21)
 
-        # the current-based formulation carries no price, but builds the free one
         nm, result = solved(shifter_network(), RedispatchProblem, IVRFormulation)
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
         @test result["objective"] ≈ 0.0 atol = 1e-5

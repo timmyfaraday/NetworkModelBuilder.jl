@@ -129,6 +129,8 @@ How to use this file:
 - **A stepped winding makes a dispatch problem mixed-integer, a second source after the free switch;
   continuous is the default and `STEPPED` is asked for, built after the continuous controls** (D32).
 - **A transformer reports its tap per terminal, not per edge** (D33).
+- **`oltc` and `pst` are non-costly measures, for now: moving a tap or an angle has no price, and a
+  transformer has no `cost`** (D34). The price a phase shifter carried is removed; to be revisited.
 
 ## Zorba pipeline (`scripts/`)
 
@@ -383,3 +385,9 @@ Date: 2026-10-05 · Decided by: Tom Van Acker · Area: Component model
 Why: with a ratio per winding an edge-level value cannot say which winding it belongs to, and
 `solution_tables` already has a row per terminal.
 Changes: new.
+
+### D34 — A tap and an angle are non-costly measures, for now
+Date: 2026-10-05 · Decided by: Tom Van Acker · Area: Component model
+Why: the steering-plan pipeline never prices a phase shifter, a price per radian is a charge the
+current-based formulation cannot carry, and a free switch is non-costly already (D18). May change.
+Changes: new. Removes the priced phase shifter: `cost`, and `pst_cost` of `parse_zorba`.

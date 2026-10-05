@@ -2,12 +2,21 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B11**.
+older ones: git has them). Next id: **B14**.
 
 ## Now
 
+- [ ] B11 · One `Transformer` for every transformer (windings, tap changer, phase shifter), replacing
+  `TapChanger`, `PhaseShifter` and `MultiWindingTransformer` · Tom · 2026-10-05
+  - Plan `knowledge/plan/unified-transformer.md` (D28-D33), branch `b11-unified-transformer`, v0.12.0,
+    tagged at the merge. Accepted by Tom; ready to implement.
+
 ## Next
 
+- [ ] B12 · After B11 merges: move `test-zorba-run` (`scripts/SteeringPlanData.jl`, `NMinusOneScreen.jl`,
+  `ContingencyData.jl`) to `Transformer`, then re-run week 1 beside a control run made the same day
+  · Tom · 2026-10-05
+  - Objective equal to 1e-9 relative to `runs/_week1_switches`; chunk time within the control's spread.
 - [ ] B10 · Re-run the full year on `test-zorba-run` with the couplers as switches; `runs/_year_orig_prices`
   has the 1e-5 floor · Tom · 2026-10-05
   - Week 1 moved the objective by under 0.02 % (B9), so expect the year's overload rows within
@@ -25,6 +34,9 @@ older ones: git has them). Next id: **B11**.
     Relates to B3. Longer windows do not help: the overhead follows the hour-states solved, not the
     number of windows (`lessons.md`, Performance), so the target is the cost per hour-state.
 - [ ] B4 · Bus factor: solo maintainer, get a second reviewer/co-committer (gap #11, P3/Large) · Tom · 2026-09-30
+- [ ] B13 · A `Transformer` constructor from datasheet values (winding resistances, pairwise short-circuit
+  reactances, no-load power) and a mesh instead of a star for four or more windings · Tom · 2026-10-05
+  - Claeys et al. 2020, Algorithm 1; follows B11 (D30).
 - [ ] B7 · Revisit closed switches as equality rows (D17) in the context of network reduction, where a
   closed switch would merge its nodes · Tom · 2026-10-04
 - [ ] B8 · `test/lf.jl:124` (`solve_time > 0.0`) fails now and then on Windows: `time()` has a coarse

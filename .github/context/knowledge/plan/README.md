@@ -21,3 +21,4 @@ Verification per item — the shape `GAP_CLOSURE_PLAN.md` already uses).
 | `zorba-integration.md` | Julia side complete; Python side tracked in Zorba's own repo | — |
 | `dashboard-output-mapping.md` | reference, not a plan to close; revisit when GRIP unifies its naming | D9 |
 | `switch-edge.md` | draft, awaiting review; B5 on `b5-switch-edge`, v0.11.0 | D13, D15-D25 |
+| `unified-transformer.md` | accepted, ready to implement; B11 on `b11-unified-transformer` | D28-D33 |

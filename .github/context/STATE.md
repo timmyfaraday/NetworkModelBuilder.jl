@@ -15,7 +15,7 @@ Zorba couplers are locked-closed switches on `test-zorba-run`, week 1 re-run and
 ## Branches
 
 - `main` carries B5. `git log --oneline -1` has the real hash. The context files are current on
-  `main` and, from B9, on `test-zorba-run`; the B9 notes are not on `main` yet.
+  both branches; only `test-zorba-run` has the B9 loader change.
 - `test-zorba-run` is `6cd0af1` (an earlier merge of `main`) plus 9 commits, all under `scripts/`: the price
   rescale (`4ef3472`), phases 0-3 (`20d88dc`, `f7571aa`, `e100616`, `f939763`: hour ids, parallel
   step 1, the N-1 screen, parallel steps 2-3 with the contingency fix, the reactance floor and

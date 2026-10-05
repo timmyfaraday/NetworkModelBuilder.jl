@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.5.0 - the redispatch problem                                              #
 # v0.6.0 - a window carries the periods it cut                                 #
+# v0.11.0 - two integers are two shapes                                        #
 ################################################################################
 
 ################################################################################
@@ -345,6 +346,10 @@ anything at all, and whether it lies inside `(-π/2, π/2)`.
 The pair covers both kinds of guard the package writes — `isfinite` for a rating
 or an operating limit, `±π/2` for an angle difference — without the caller
 having to know which kind a given field is.
+
+An integer is its own gate. It is no limit that bounds or does not: it picks which
+rows are written, as the position of a switch does, so two values are two shapes.
 """
 _gate(x::Real) = (isfinite(x), -pi / 2 < x < pi / 2)
+_gate(x::Integer) = x
 _gate(x::AbstractVector) = map(_gate, x)

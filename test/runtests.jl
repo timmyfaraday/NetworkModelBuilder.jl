@@ -11,6 +11,10 @@
 # v0.9.7 - the PowerModels.jl live cross-check                                 #
 # v0.10.0 - the security tables test                                           #
 # v0.10.2 - the solution tables test                                           #
+# v0.11.0 - the switch test                                                    #
+# v0.11.0 - the islands test                                                   #
+# v0.11.0 - imports HiGHS, for the linear programs a switch makes              #
+# v0.11.0 - imports Juniper, for a free switch in current                      #
 ################################################################################
 
 using Test
@@ -21,6 +25,8 @@ using Arrow
 using Ipopt
 using JuMP
 using Parquet2
+import HiGHS         # `using` would export names of its own into every test file
+import Juniper       # the same, and the solver of a nonconvex mixed-integer program
 import PowerModels   # `using` would export `parse_file`, `ids`, ... over this package's own
 
 using NetworkModelBuilder
@@ -51,6 +57,8 @@ quiet(f) = Logging.with_logger(f, Logging.NullLogger())
     include("powermodels.jl")
     include("rd.jl")
     include("dc_link.jl")
+    include("switch.jl")
+    include("islands.jl")
     include("slack.jl")
     include("zorba.jl")
     include("dashboard.jl")

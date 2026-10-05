@@ -20,3 +20,4 @@ Verification per item — the shape `GAP_CLOSURE_PLAN.md` already uses).
 | `GAP_CLOSURE_PLAN.md` | in progress (9/11 gaps closed) | D1, D2, D4-D8, D10, D11 |
 | `zorba-integration.md` | Julia side complete; Python side tracked in Zorba's own repo | — |
 | `dashboard-output-mapping.md` | reference, not a plan to close; revisit when GRIP unifies its naming | D9 |
+| `switch-edge.md` | draft, awaiting review; B5 on `b5-switch-edge`, v0.11.0 | D13, D15-D25 |

@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
 # v0.2.0 - network dependent data stored per component                         #
+# v0.11.0 - what an edge connects, and the islands of a network                #
 ################################################################################
 
 ################################################################################
@@ -81,6 +82,35 @@ terminals(e::AbstractEdge) = e.terminals
 
 "the number of terminals of an edge"
 nterminals(e::AbstractEdge) = length(terminals(e))
+
+"""
+    connects(dim, e, n; decide = true)
+
+Whether the in-service edge `e` ties its terminals together at network index `n`,
+for the purpose of asking which nodes can exchange power, see
+[`islands`](@ref).
+
+True for every edge unless its type says otherwise, as a switch does where it is
+locked open. Extend it for an edge type that can be in service and still carry
+nothing.
+
+`decide` says whether the problem chooses what an edge may be set to, as a
+dispatch problem does and a power flow does not: an edge the problem may close
+connects when it does, and holds the position the data gives when it does not.
+"""
+connects(::Dimension, ::AbstractEdge, ::Int; decide::Bool = true) = true
+
+"""
+    can_open(dim, e, n)
+
+Whether the problem may open the in-service edge `e` at network index `n`, as a
+decision rather than as data. False for every edge unless its type says
+otherwise, as a free switch does. An edge that can be opened still
+[`connects`](@ref), because the problem may leave it closed; what is asked of it
+is that opening it does not leave a section of the network on its own, see
+[`check_islands`](@ref).
+"""
+can_open(::Dimension, ::AbstractEdge, ::Int) = false
 
 "the node identifier a unit is connected to"
 node(u::AbstractUnit) = u.node
@@ -566,6 +596,56 @@ Sorted arcs of the in-service edges of `net` that are instances of the edge type
 """
 arcs(net::Network, ::Type{T}; nw::Int = nw_id_default(net)) where {T<:AbstractEdge} =
     sort!(reduce(vcat, (edge_arcs(net, e; nw) for e in ids(net, T; nw)); init = Arc[]))
+
+"""
+    islands(net; nw, without = (), decide = true)
+    islands(data; nw, without = (), decide = true)
+
+The islands of a network at network index `nw`: the sets of in-service nodes that
+can exchange power, each a sorted vector of node identifiers, ordered by their
+first node. A connected network has one.
+
+Two nodes are in the same island when a path of edges that [`connects`](@ref)
+joins them, `decide` being passed on to it. An edge that is out of service at `nw`
+is not there to join anything, and neither is an edge listed in `without`, which
+is how to ask what the islands would be if some edges were opened. Units play no
+part.
+"""
+function islands(net::Network; nw::Int = nw_id_default(net), without = (),
+                 decide::Bool = true)
+    top    = topology(net; nw)
+    skip   = Set{Int}(without)
+    parent = Dict{Int,Int}(i => i for i in top.node)
+
+    function root(i::Int)
+        while parent[i] != i
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        end
+
+        return i
+    end
+
+    for e in top.edge
+        e in skip && continue
+        c = net.edge[e]
+        connects(net.dim, c, nw; decide) || continue
+        t = terminals(c)
+        for j in t[2:end]
+            a, b = root(first(t)), root(j)
+            a == b || (parent[max(a, b)] = min(a, b))
+        end
+    end
+
+    groups = Dict{Int,Vector{Int}}()
+    for i in top.node
+        push!(get!(() -> Int[], groups, root(i)), i)
+    end
+
+    return sort!([sort!(g) for g in values(groups)]; by = first)
+end
+
+islands(data::NetworkData; kwargs...) = islands(data.net; kwargs...)
 
 function Base.show(io::IO, net::Network)
     print(io, "Network(|I| = $(length(net.node)), |E| = $(length(net.edge)), ",

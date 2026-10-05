@@ -15,7 +15,8 @@ How to use this file:
 ## Versioning and releases
 
 - **Gap-closure items are tackled one at a time: plan → user review → implement** (D1). Each item
-  bumps the patch digit only (`version = "0.9.x"` in `Project.toml`); no git tag per bump. Tag and
+  bumps the patch digit only (`version = "0.9.x"` in `Project.toml`), except an item that adds a
+  component type, which bumps the minor digit (D20); no git tag per bump. Tag and
   push are the user's call, asked for every time, not assumed from a prior approval.
 - **`CHANGELOG.md` follows Keep a Changelog, backfilled from per-file changelog headers, not raw
   commit timing** (D3): the per-file `# vX.Y.Z - <what changed>` header comments are the author's
@@ -82,6 +83,44 @@ How to use this file:
   reports at all is dropped rather than kept `missing` throughout. No new dependency —
   `DataFrame(tables.node)` works for a caller who already has DataFrames.jl.
 
+## Component model
+
+- **A bus coupler, or any other device that only connects or disconnects, is a `Switch`: a subtype of
+  the edge with its own children, such as a busbar switch and a circuit breaker — not a branch with
+  a near-zero impedance** (D13). Not built yet. Until it is, the Zorba pipeline floors the
+  reactance of every line at 1e-5 as a stopgap (`scripts/SteeringPlanData.jl`, on `test-zorba-run`).
+- **A switch carries `lock` (free or locked) and `position`, an `Int` (0 open, 1 closed); `status`
+  stays the in-service flag every component has** (D15). A load flow treats every switch as locked.
+  A switch is supported in both the linearised and the current-based formulation.
+- **A free switch makes a dispatch problem a mixed-integer program, the first in the package**
+  (D16). Such a model has no duals, so nodal prices are `nothing`; tests that solve one use HiGHS.
+- **A closed switch is an equality of the voltage at its two nodes with a free flow, an open one a
+  zero flow; nodes are not merged** (D17). A locked switch writes exact rows chosen by its
+  position. A free one writes big-M rows, needs a finite `rate_a`, which is an equipment limit in
+  every dispatch problem whether or not the edge is monitored, and takes `angmin`/`angmax` as the
+  angle difference allowed across it when open. To be revisited with network reduction (B7).
+- **A free switch can be a preventive or a corrective measure, and is non-costly** (D18).
+- **`BusbarSwitch` and `CircuitBreaker` are added later than `AbstractSwitch` and `Switch`** (D19).
+- **Closed locked switches in a loop keep the voltage equalities of a spanning tree only; every other
+  one gets a unit-weight loop equation, so parallel switches split the flow evenly** (D21). A free
+  switch writes no equality of its own; every loop that free switches can close gets a loop row that
+  holds when they are closed (D26).
+- **An island must hold a reference node or a source, else building the model is an error; an island
+  with a source and no reference node has one node anchored; opening every free switch may not
+  create an island, unless the caller allows it** (D22).
+- **A free switch is supported in the current-based formulation too, as a nonconvex mixed-integer
+  program; Juniper is a test dependency for the tests that solve one** (D23).
+- **A switch has exactly two terminals for now; `position` stays an `Int` for a later multi-terminal
+  form** (D24).
+- **`lock` is the enum `SwitchLock`, `FREE` or `LOCKED`, as `NodeType` is** (D25).
+
+## Zorba pipeline (`scripts/`)
+
+- **The last-resort prices are 10x the thermal ceiling for a monitored-line overload (477,000
+  $/pu), 5x that overload price for spillage and 10x for load shedding** (D14), not the 3x/2x/4x
+  rescaling tried while the false `INFEASIBLE` was being chased. The rescaling was never the fix;
+  the reactance floor was (D13).
+
 ## Validation against a reference implementation
 
 - **PowerModels.jl is a live cross-check (`test/powermodels.jl`), run alongside the existing
@@ -98,6 +137,11 @@ How to use this file:
   `test/data/matpower/` when it isn't found relative to the working directory** (D8), in
   `_read_matpower`. This makes doc quick-starts work from any cwd without changing behavior for
   any path that already resolves.
+- **The documentation cites literature through DocumenterCitations, author-year, from
+  `docs/src/refs.bib`** (D27): a page cites with `[Key](@citet)` or `[Key](@citep)`, lists its own
+  references in a non-canonical `@bibliography` block, and `docs/src/references.md` is the one
+  canonical list. An entry is written as in the published paper, with a `doi` where it is known,
+  and carries only the pages and details that were read in a source, never ones made up.
 
 ---
 
@@ -181,3 +225,104 @@ Why: keeps all project memory under one root (`.github/context/`) instead of spl
 a separate top-level `plans/`; `knowledge/` was already named as a context category in
 `context-files.instructions.md` before this gave it a real directory.
 Changes: new.
+
+### D13 — A bus coupler is a `Switch`, a subtype of the edge, not a near-zero-impedance branch
+Date: 2026-10-02 · Decided by: Tom Van Acker · Area: Component model
+Why: the Zorba data models 21 busbar couplers as branches with reactance 1e-7 (susceptance 1e7
+against ~60 for a line), and that coefficient range made Xpress return false `INFEASIBLE` and false
+`OPTIMAL` solutions that violated node balance by up to 32 pu. A switch has no impedance to get
+wrong and can be open or closed. Its children would include a busbar switch and a circuit breaker.
+Changes: new. Not implemented; the pipeline floors reactance at 1e-5 meanwhile.
+
+### D14 — The Zorba pipeline's last-resort prices go back to 10x / 5x / 10x of the thermal ceiling
+Date: 2026-10-03 · Decided by: Tom Van Acker · Area: Zorba pipeline
+Why: the price rescale to 3x/2x/4x was a wrong fix for the false `INFEASIBLE`; with the reactance
+floor the original prices solve week 1 with 7 of 7 chunks `OPTIMAL`, no violation and no fallback,
+in the same time as the rescaled ones. Higher prices tolerate less overload (week 1: 127,368 step-3
+overload rows against 129,486).
+Changes: new. The year run made with the rescaled prices has to be re-run.
+
+### D15 — A switch has `lock` and `position`; `status` stays the in-service flag
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: the core reads `status` as the in-service flag (topology, contingencies), so a free/locked
+meaning would need special cases there, and a coupler outage works unchanged as `status = false`.
+`position` is an `Int` so that more than two terminals can extend it later. Both formulations.
+Changes: new.
+
+### D16 — A free switch makes the first mixed-integer model in the package
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: a free switch has to choose between two physics, which a continuous variable cannot. The
+package avoided integers so far (a tap changer is continuous for that reason); the cost is no
+duals, hence no nodal prices, and HiGHS in the tests.
+Changes: new.
+
+### D17 — A closed switch is an equality, not a merged node; the rows follow the lock
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: keeps every node and its result, and states the voltage-equal, power-flows / decoupled,
+no-flow behaviour exactly. Merging closed switches is a network reduction, to be taken up later
+(B7), where this is revisited. The big-M rows of a free switch need a finite rating to be written.
+Changes: new.
+
+### D18 — A free switch is preventive or corrective, and non-costly
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: the choice is the `Redispatch` setup's, as for every other measure; no cost is charged for a
+move, as for a phase shifter at its default.
+Changes: new.
+
+### D19 — `BusbarSwitch` and `CircuitBreaker` come after `Switch`
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: they would change nothing in the model at first, as `Cable` and `OverheadLine` do not; D13
+names them as children and they are added once something tells them apart.
+Changes: D13 (children deferred).
+
+### D20 — B5 is v0.11.0, a minor bump
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Versioning and releases
+Why: it adds a component type and the first integer model, more than a gap closed.
+Changes: D1 (minor digit for an item that adds a component type).
+
+### D21 — Closed switches in a loop share the flow equally
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: with every closed switch an equality, a loop of them leaves the split to the solver (a toy
+run: HiGHS 1.0/0.0, Ipopt 0.5/0.5); unit-weight loop equations make it unique, well scaled and the
+same in every solver.
+Changes: new.
+
+### D22 — Islands are checked for, not left to the solver
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: an islanded load gives INFEASIBLE with no explanation, and a false LOCALLY_SOLVED at 1.39e6 pu
+in the current-based load flow (case14, bus 14); the literature keeps the switchable set from
+islanding (Goldis, Fattahi, Pineda).
+Changes: new.
+
+### D23 — A free switch is supported in the current-based formulation; Juniper is a test dependency
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: one switch model in both formulations. The rating makes the free case nonconvex and
+mixed-integer; the package builds it and the caller supplies the solver. Juniper 0.9.5 with Ipopt
+and HiGHS solved a small such problem and resolves with the other test dependencies.
+Changes: new (`Project.toml`: Juniper in `[extras]` and `[targets]`).
+
+### D24 — A switch has two terminals for now
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: a one-of-n device and a group of two-terminal switches give the same mixed-integer program,
+so the form is left until a double-busbar selector turns up; `position` being an `Int` keeps it open.
+Changes: new.
+
+### D25 — `lock` is an enum, `SwitchLock`
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: `NodeType` is one, and the table reader parses enums already.
+Changes: D15 (names the type of `lock`).
+
+### D26 — A loop that free switches can close gets a loop row that holds when they are closed
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Component model
+Why: with no equation on it, a loop of free switches lets the problem split its flow as it likes and
+undercut every setting of the locked model (toy: 5.4 against 12.6). One big-M row per simple cycle
+of the switches that can be closed is exact; it is exponential in the worst case, so building errors
+above a cycle count, and it needs a finite rating on every switch of the loop.
+Changes: D21 (a free switch's loop).
+
+### D27 — The documentation cites literature through DocumenterCitations
+Date: 2026-10-04 · Decided by: Tom Van Acker · Area: Documentation
+Why: the switch page cites ten papers and other pages will cite more; one `refs.bib` and generated
+author-year links keep the references consistent, instead of a hand-written list on each page.
+Changes: new (`docs/Project.toml`: DocumenterCitations; `docs/make.jl`: the plugin;
+`docs/src/refs.bib` and `docs/src/references.md`).

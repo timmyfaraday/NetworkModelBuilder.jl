@@ -42,3 +42,80 @@ again get retired.
   (10.0, -5.0, …); the function correctly multiplies by `baseMVA` to convert per-unit to MW, so
   every assertion was off by exactly 100×. Caught by running the tests, not by reading the code —
   the fixture "looked" right. (unconfirmed)
+- **A solver status is a claim, not a result: cross-check an unexpected `INFEASIBLE` with a second
+  solver, and check an `OPTIMAL` primal vector against the model's own constraints.** The Zorba
+  three-step redispatch pipeline (`test-zorba-run`) had Xpress report hour 61 of step 3 `INFEASIBLE`
+  (~20 min to "prove"); pinning a phase shifter inside its range — a strict subset of the free case —
+  solved `OPTIMAL`, and HiGHS solved the unchanged model `OPTIMAL` in under a minute. The same model
+  also returned `OPTIMAL` vectors that violate node balance by up to 32 pu — visible only through
+  `JuMP.primal_feasibility_report(model; atol = 1e-5)`; the status and objective looked normal. On
+  week 1 step 2, 8 of 21 windows were affected. `JuMP.compute_conflict!` returned `NO_CONFLICT_EXISTS`
+  on a confirmed-infeasible model, so it is no help here. (unconfirmed)
+- **The root cause was 21 busbar-coupler edges with reactance 1e-7, not the prices or Xpress's
+  settings.** A coupler has susceptance 1e7 against ~60 for an ordinary line, so the matrix spans
+  [1, 1e7]; FICO's docs name this symptom ("long run times or spurious infeasibilities"). Flooring the
+  reactance at 1e-5 removed every violation (0 of 21 windows) and solved hour 61 in 6.3 s *with the
+  original prices*, default settings and no other change. It moves monitored flows little (week 1, 79
+  outage cases: 99th percentile 0.22 % of rating, maximum 2.2 %, none above 10 %); a floor of 1e-4
+  moves them up to 17 % and is too coarse. Two earlier "fixes" were wrong and are retracted: Xpress
+  `SCALING=0`/`PRESOLVE=0` fixed hour 61 but broke a different window under `reuse=true` (the bug
+  tracks solver state, so a fix checked only on the known-bad window proves nothing about the rest),
+  and rescaling the last-resort prices only reduced how often the trouble showed. Look for the
+  extreme coefficient in the *constraint matrix* (`Coefficient range` in the solver log) before
+  touching prices or solver attributes. Confirmed 2026-10-03: with the floor and the original prices
+  week 1 solves 7 of 7 chunks `OPTIMAL`, violation-free, no fallback, in the same time as with the
+  rescaled prices. (unconfirmed)
+- **A per-edge lookup of "which event contains this edge" silently drops every event after the
+  first.** The pipeline's `with_contingencies` used `findfirst(ev -> id in ev.edges, events)`, so an
+  edge listed by several events (a line that is both a simple N-1 and part of a busbar group) went out
+  only in the first one. 34 of 79 internal events and 2 of 13 cross-border events were affected, and 10
+  busbar events lost *every* edge, i.e. modelled no outage at all. It showed up only because an
+  independent closed-form flow calculation matched NMB's load flow to 1e-9 pu for 12 events and was
+  off by 46 pu for the two with a shared edge. Validate a second implementation against the first on
+  the real data, not a toy case. Every redispatch result produced before the fix understates the N-1
+  severity of those events. (unconfirmed)
+- **A file added to a directory that is walked at load time is invisible to a package that loads
+  from its compiled cache.** Adding `src/comp/edge/switch/switch.jl` left `Switch` undefined and
+  unregistered: the cache tracks the files it included, a new one changes none of them, touching
+  `src/NetworkModelBuilder.jl` did not help (Julia compares content, not the time stamp) and
+  deleting `~/.julia/compiled/v1.12/NetworkModelBuilder` did. `include_dependency(path)` on every
+  walked directory fixes it: a file added to, then removed from, `src/comp/edge/switch/` was
+  noticed each time. Checked on Julia 1.12.5 only. When a new component "does nothing", look at
+  `names(NetworkModelBuilder)` and `edge_types()` before the code. (unconfirmed)
+- **After an edit that ends a Julia block (`end`, `return nothing`), read the edited lines back;
+  `get_errors` does not see a broken Julia file.** Five edits to `src/comp/node/node.jl` in one call
+  left one method without the `end` of its `for` loop, another with an extra `end`, and a call
+  inside a loop instead of after it. Two of the three still parsed, so the first symptom was a
+  misleading `UndefVarError` in a test, not a syntax error. Reading the result with `read_file`,
+  or `git diff` on the file, found all three at once. (unconfirmed)
+- **Edits to one file go one call at a time, never side by side in one block.** Three
+  `replace_string_in_file` calls on `src/core/network.jl` issued together each matched against the
+  same starting text and interleaved: a docstring lost its closing quotes and a call was left half
+  written, which showed up only as a `LoadError` at precompile. A `read_file` issued next to an
+  edit also returns the text from before it. (unconfirmed)
+
+## Performance
+
+- **Threads inside one Julia process stop paying at a handful of tasks for NMB's per-window work;
+  separate one-thread processes keep scaling.** Zorba week 1, same 7 daily chunks: 7 threads in one
+  process 860 s per chunk; 7 processes 330-400 s. One 720-hour month on 30 threads had the same
+  throughput as the week on 7 (0.17 vs 0.19 h/s). The year as 73 processes took 63 min (chunks
+  327-911 s, mean 632 s, so some contention remains at 73). The Xpress solve is only ~15-20% of a
+  chunk (step 3: 137 s of 3,680 s on 30 threads); the rest is `update_model!` (~3 s/window),
+  `build_solution` (~1 s) and the agent's per-window feasibility check (~1.9 s), plus GC (13-20%
+  of wall). The cause (shared GC or allocator, a GC held up by threads inside a long Xpress call) is
+  not proven. Before building parallelism into a long run, time a one-chunk run alone, then at the
+  intended concurrency, as threads and as processes. (unconfirmed)
+- **A longer window buys nothing in the Zorba pipeline and costs in proportion to the hours it
+  solves.** Hours do not depend on each other there (storage excluded, nothing ramps), so a window
+  only adds model size and overlap. Hours 1-48, original prices, one process: 48 h windows committing
+  8 h in both steps gave the same answer as 8/8 (step 2) and 1/1 (step 3) — objectives equal to
+  1.7e-11 and 4.6e-11 relative, overload rows 1,576 and 20,054 in both, largest unit-hour volume
+  difference 5.8e-6 pu — but the chunk took 4,944 s against ~670 s for two 24 h chunks (7 processes
+  at once; ~1,230 s under the 73-process load), at 27 GB and 978 s of GC. Step 2: 579 s (solver
+  290 s) against ~83 s (20 s); step 3: 4,344 s (solver 1,926 s) against ~570 s (147 s). Step 3 alone
+  on hours 1-24: 1/1 276 s, 8/8 379 s, 24/24 395 s, 24/8 745 s (solver 62, 136, 122, 247 s). The time
+  outside the solver (214, 243, 273, 497 s) follows the hour-states processed, overlap included, not
+  the number of windows, so fewer windows saves nothing. Keep 8/8 and 1/1 unless a component couples
+  the hours again (storage back in). (unconfirmed)
+

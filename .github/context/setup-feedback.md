@@ -30,7 +30,7 @@ Owner: **Tom Van Acker**.
 ## Log
 
 Format: `- F<n> · YYYY-MM-DD · <user> · <what happened> · cost: <turns/result> · status: open`
-Next id: **F2**.
+Next id: **F4**.
 
 - F1 · 2026-09-30 · Tom Van Acker · `probe-environment` found the SessionStart/PreToolUse/Stop
   hooks have never fired: no `.git/agent-session/` dir, no `.git/agent-hooks.log`, and this
@@ -39,3 +39,13 @@ Next id: **F2**.
   inert since the setup was created — `STATE.md` auto-injection, the AI-attribution/setup-file
   guard and the wrap-up nag all rely on the prose fallback in `copilot-instructions.md` only ·
   status: open
+- F2 · 2026-10-01 · Tom Van Acker · `STATE.md`'s `## Branches` section claimed `main` was "one
+  commit ahead of `origin/main`... not yet pushed" for the D12 commit, but `git log` showed
+  `main`/`origin/main`/`origin/HEAD` already identical — D12 had been pushed outside a recorded
+  session and `STATE.md` was never updated to match · cost: one extra `git log` cross-check before
+  trusting STATE's push-status claim; likely the same root cause as F1 (no Stop-hook nag to keep
+  it fresh) · status: open
+- F3 · 2026-10-04 · Tom Van Acker · `copilot-instructions.md` rule 2 and `julia.instructions.md` say
+  version bumps are the patch digit only; Tom decided B5 (a new component type and the first integer
+  model) is v0.11.0 (D20), so the rule is wrong for that case · cost: none yet, but the next agent
+  will read "patch only" and push back · status: applied SC4

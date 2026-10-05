@@ -9,15 +9,24 @@
 # v0.3.0 - component hierarchy                                                 #
 # v0.10.0 - adds the dashboard manual page                                     #
 # v0.10.2 - adds the concepts-for-newcomers page                               #
+# v0.11.0 - adds the switch component page                                     #
+# v0.11.0 - cites the literature through DocumenterCitations                   #
 ################################################################################
 
 using Documenter
+using DocumenterCitations
 using NetworkModelBuilder
+
+bib = CitationBibliography(
+    joinpath(@__DIR__, "src", "refs.bib");
+    style = :authoryear,
+)
 
 makedocs(
     sitename = "NetworkModelBuilder.jl",
     authors  = "Tom Van Acker",
     modules  = [NetworkModelBuilder],
+    plugins  = [bib],
     format   = Documenter.HTML(
         prettyurls = get(ENV, "CI", nothing) == "true",
         canonical  = "https://timmyfaraday.github.io/NetworkModelBuilder.jl",
@@ -59,6 +68,7 @@ makedocs(
             "Branch"        => "components/branch.md",
             "Transformer"   => "components/transformer.md",
             "DC link"       => "components/dc_link.md",
+            "Switch"        => "components/switch.md",
             "Generator"     => "components/generator.md",
             "Load"          => "components/load.md",
             "Storage"       => "components/storage.md",
@@ -66,6 +76,7 @@ makedocs(
             "Shunt"         => "components/shunt.md",
         ],
         "API reference" => "api.md",
+        "References"    => "references.md",
     ],
     checkdocs = :exports,
     warnonly  = [:missing_docs],

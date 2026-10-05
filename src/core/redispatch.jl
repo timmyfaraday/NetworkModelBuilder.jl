@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.5.0 - the redispatch problem                                              #
 # v0.6.0 - a rating can be priced instead of enforced                          #
+# v0.12.0 - a measure may belong to one terminal of an edge                    #
 ################################################################################
 
 ################################################################################
@@ -256,6 +257,9 @@ preventive-corrective split by giving it one method. The keys depend on the
 formulation as well as on the type: a [`PhaseShifter`](@ref) carries its ratio as
 `(:tr, :ti)` in the current based formulation and as `(:ta,)` in the linearized
 one.
+
+A key may name a variable that belongs to one terminal of an edge, registered
+under an [`Arc`](@ref); each of those is held on its own.
 """
 redispatch_controls(::NetworkModel, ::Type{T}) where {T<:AbstractComponent} = ()
 

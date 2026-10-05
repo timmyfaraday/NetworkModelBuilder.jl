@@ -88,11 +88,13 @@ end
 ################################################################################
 
 """
-    _load_lines!(E, e, dir, baseMVA, min_reactance)
+    _load_lines!(E, e, dir, baseMVA, max_coupler_reactance)
 
-One [`Branch`](@ref) per row of `lines.csv`, appended to `E` from edge
-identifier `e`, and the last identifier used. A reactance below `min_reactance`
-is raised to it, see [`load_network`](@ref).
+One edge per row of `lines.csv`, appended to `E` from edge identifier `e`, and
+the last identifier used: a locked, closed [`Switch`](@ref) where the reactance
+is below `max_coupler_reactance`, a [`Branch`](@ref) otherwise, see
+[`load_network`](@ref). A switch keeps the identifier its row would have had as
+a branch.
 
 `lines.csv` carries no resistance and its `capacity` is `Inf` wherever the data
 leaves a line unconstrained; `CSV.jl` parses that token as `Inf` itself, so no
@@ -103,26 +105,27 @@ struct's narrower default (`±π/3`) would otherwise impose a stability limit
 this data never asked for.
 """
 function _load_lines!(E::Dict{Int,AbstractEdge}, e::Int, dir::AbstractString, baseMVA::Float64,
-                      min_reactance::Float64)
+                      max_coupler_reactance::Float64)
     df = DataFrame(CSV.File(joinpath(dir, "lines.csv")))
     for row in eachrow(df)
         e += 1
-        E[e] = Branch(; id = e, name = row.name, terminals = [row.from, row.to],
-                      r = 0.0, x = max(row.reactance, min_reactance),
-                      rate_a = coalesce(row.capacity, Inf) / baseMVA,
-                      angmin = -pi / 2, angmax = pi / 2,
-                      ext = Dict{Symbol,Any}(:source_id => row.id))
+        rate_a = coalesce(row.capacity, Inf) / baseMVA
+        ext    = Dict{Symbol,Any}(:source_id => row.id)
+        E[e]   = row.reactance < max_coupler_reactance ?
+                 Switch(; id = e, name = row.name, terminals = [row.from, row.to], rate_a, ext) :
+                 Branch(; id = e, name = row.name, terminals = [row.from, row.to],
+                        r = 0.0, x = row.reactance, rate_a,
+                        angmin = -pi / 2, angmax = pi / 2, ext)
     end
 
     return e
 end
 
 """
-    _load_psts!(E, e, dir, baseMVA, min_reactance)
+    _load_psts!(E, e, dir, baseMVA)
 
 One [`PhaseShifter`](@ref) per row of `pst.csv`, appended to `E` from edge
-identifier `e`. A reactance below `min_reactance` is raised to it, see
-[`load_network`](@ref).
+identifier `e`.
 
 `pst.csv`'s `angle_min`/`angle_max` are the *control* range of the ratio angle,
 mapped onto `ta_min`/`ta_max`; they are not the edge's own stability range,
@@ -130,13 +133,12 @@ which is not in this data at all, so `angmin`/`angmax` get the same wide-open
 `±π/2` a `Branch` does, for the same reason. The data carries no market angle
 setpoint, so `ta = 0.0` — an assumption, noted here rather than left silent.
 """
-function _load_psts!(E::Dict{Int,AbstractEdge}, e::Int, dir::AbstractString, baseMVA::Float64,
-                     min_reactance::Float64)
+function _load_psts!(E::Dict{Int,AbstractEdge}, e::Int, dir::AbstractString, baseMVA::Float64)
     df = DataFrame(CSV.File(joinpath(dir, "pst.csv")))
     for row in eachrow(df)
         e += 1
         E[e] = PhaseShifter(; id = e, name = row.name, terminals = [row.from, row.to],
-                            r = 0.0, x = max(row.reactance, min_reactance),
+                            r = 0.0, x = row.reactance,
                             rate_a = row.capacity_max / baseMVA,
                             ta = 0.0, ta_min = row.angle_min, ta_max = row.angle_max,
                             angmin = -pi / 2, angmax = pi / 2,
@@ -329,7 +331,7 @@ end
 ################################################################################
 
 """
-    load_network(dir; hours = 1:8760, baseMVA = 100.0, min_reactance = 1e-5) -> NetworkData
+    load_network(dir; hours = 1:8760, baseMVA = 100.0, max_coupler_reactance = 1e-6) -> NetworkData
 
 Build a [`NetworkData`](@ref) from the LongTermSteeringPlan CSV export in
 `dir`, over the hour range `hours`.
@@ -337,23 +339,22 @@ Build a [`NetworkData`](@ref) from the LongTermSteeringPlan CSV export in
 Every quantity is converted to per unit on `baseMVA`, following the convention
 `src/io/matpower.jl` uses: a power in MW is divided by it, a price per MW is
 multiplied by it. Reactances and angles in the source data are already per unit
-and radians respectively and are carried through unchanged — except that a
-reactance below `min_reactance` is raised to it.
+and radians respectively and are carried through unchanged.
 
 The export models the 21 busbar couplers as lines of reactance `1e-7`, a
-susceptance of `1e7` against about `60` for an ordinary line. A matrix spanning
+susceptance of `1e7` against about `60` for an ordinary line; a matrix spanning
 that range made Xpress return `INFEASIBLE` for feasible problems and `OPTIMAL`
-for solutions that break node balance; at `1e-5` neither happens, and the flow
-on a monitored edge moves by at most 2.2 % of its rating. This is a stopgap for
-a coupler that has no impedance at all, which a switch component would model.
-Pass `min_reactance = 0.0` for the data as exported.
+for solutions that break node balance. A line with a reactance below
+`max_coupler_reactance` is therefore loaded as a locked, closed [`Switch`](@ref),
+which has no impedance to get wrong. Pass `max_coupler_reactance = 0.0` to load
+every line as a branch, as exported.
 
 The hour identifiers of `hours` are kept in `data.ext[:hour_ids]`, see
 [`hour_ids`](@ref), so a data set cut down to some of them later still knows
 which hours of the year it holds.
 """
 function load_network(dir::AbstractString; hours::UnitRange{Int} = 1:8760,
-                      baseMVA::Float64 = 100.0, min_reactance::Float64 = 1e-5)
+                      baseMVA::Float64 = 100.0, max_coupler_reactance::Float64 = 1e-6)
     thermal_df = DataFrame(CSV.File(joinpath(dir, "thermal_generators.csv")))
 
     I        = _load_nodes(dir, thermal_df)
@@ -364,8 +365,8 @@ function load_network(dir::AbstractString; hours::UnitRange{Int} = 1:8760,
     neighbour_pg = Dict{Int,Vector{Float64}}()
 
     E = Dict{Int,AbstractEdge}()
-    e = _load_lines!(E, 0, dir, baseMVA, min_reactance)
-    _load_psts!(E, e, dir, baseMVA, min_reactance)
+    e = _load_lines!(E, 0, dir, baseMVA, max_coupler_reactance)
+    _load_psts!(E, e, dir, baseMVA)
 
     U = Dict{Int,AbstractUnit}()
     u = _load_thermal_generators!(U, 0, dir, thermal_df, net_position, neighbour_pg, dim, hours, baseMVA)

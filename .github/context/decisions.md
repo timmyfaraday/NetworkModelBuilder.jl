@@ -114,6 +114,28 @@ How to use this file:
 - **A switch has exactly two terminals for now; `position` stays an `Int` for a later multi-terminal
   form** (D24).
 - **`lock` is the enum `SwitchLock`, `FREE` or `LOCKED`, as `NodeType` is** (D25).
+- **A transformer is one component, `Transformer`, with any number of windings; `TapChanger`,
+  `PhaseShifter`, `MultiWindingTransformer` and `AbstractTwoWindingTransformer` are removed, with no
+  shims for the old names** (D28). Planned as v0.12.0, tagged `v0.12.0`; spec
+  `knowledge/plan/unified-transformer.md`.
+- **A transformer's data are vectors with one entry per winding, for two windings as for more; a
+  scalar is accepted for two windings** (D29).
+- **A transformer is a T-model for every number of windings: a ratio and a series impedance per
+  winding, meeting at a star point that carries the magnetising branch and is an edge variable, not a
+  node; a π-equivalent is `y_m = 0` and `z_2 = 0`** (D30).
+- **Whether a winding's ratio magnitude and angle can move is `oltc` and `pst`, each a `TapMode`
+  (`FIXED`, `CONTINUOUS`, `STEPPED`) per winding, static over the network index; a `Bool` is accepted,
+  `false` is `FIXED` and `true` is `CONTINUOUS`** (D31).
+- **A stepped winding makes a dispatch problem mixed-integer, a second source after the free switch;
+  continuous is the default and `STEPPED` is asked for, built after the continuous controls** (D32).
+- **A transformer reports its tap per terminal, not per edge** (D33).
+- **`oltc` and `pst` are non-costly measures, for now: moving a tap or an angle has no price, and a
+  transformer has no `cost`** (D34). The price a phase shifter carried is removed; to be revisited.
+- **A preventive measure tied to the base case builds no rows of its own at the network indices it
+  is tied to; the rows that only restrict it are written once, at the base case** (D35).
+- **A preventive winding that steps has no binaries of its own at the network indices it is held at:
+  it reuses the base case's, and nothing is tied; its continuous ratio stays tied. A corrective one
+  keeps a set per contingency** (D36).
 
 ## Zorba pipeline (`scripts/`)
 
@@ -327,3 +349,65 @@ Why: the switch page cites ten papers and other pages will cite more; one `refs.
 author-year links keep the references consistent, instead of a hand-written list on each page.
 Changes: new (`docs/Project.toml`: DocumenterCitations; `docs/make.jl`: the plugin;
 `docs/src/refs.bib` and `docs/src/references.md`).
+
+### D28 — One `Transformer` replaces the four transformer types, with no shims
+Date: 2026-10-05 · Decided by: Tom Van Acker · Area: Component model
+Why: one device was four types, so a winding with both controls, or a control on a three-winding
+transformer, could not be built; the old names change meaning (their fields become vectors), so keeping
+them as shims would hide that.
+Changes: new. Released as v0.12.0 and tagged `v0.12.0`, as v0.9.1-v0.9.7 were (D1 leaves tagging to Tom).
+
+### D29 — A transformer's data are per-winding vectors, with a scalar shorthand for two windings
+Date: 2026-10-05 · Decided by: Tom Van Acker · Area: Component model
+Why: one shape for every number of windings beats a scalar field for two and a vector for more; the
+shorthand keeps the two-winding call sites, such as a Matpower branch, readable.
+Changes: new.
+
+### D30 — A transformer is a T-model for every number of windings
+Date: 2026-10-05 · Decided by: Tom Van Acker · Area: Component model
+Why: the T is the usual transformer model and the package's three-winding star already was one; a
+Matpower π is its `y_m = 0`, `z_2 = 0` case with a shunt per winding, so imports stay exact, and for two
+windings the star voltage replaces the series current, six rows either way. One set of rows serves every
+number of windings.
+Changes: new.
+
+### D31 — `oltc` and `pst` per winding, as the enum `TapMode`
+Date: 2026-10-05 · Decided by: Tom Van Acker · Area: Component model
+Why: whether the magnitude can move and whether the angle can are two independent facts; fixed, tap
+changer, phase shifter and both are the four combinations. Static over the network index, so a model is
+still updated in place. An enum rather than two Bools, since D32 needs a third value; a `Bool` still works.
+Changes: new.
+
+### D32 — A stepped winding makes a dispatch problem mixed-integer; continuous is the default
+Date: 2026-10-05 · Decided by: Tom Van Acker · Area: Component model
+Why: a real tap changer and a mechanical phase shifter step, but an integer variable costs the duals
+(D16) and needs a nonconvex mixed-integer solver in the current-based formulation (D23), so it is
+asked for with `STEPPED` and built after the continuous controls.
+Changes: D16 (a second source of integers).
+
+### D33 — A transformer reports its tap per terminal
+Date: 2026-10-05 · Decided by: Tom Van Acker · Area: Component model
+Why: with a ratio per winding an edge-level value cannot say which winding it belongs to, and
+`solution_tables` already has a row per terminal.
+Changes: new.
+
+### D34 — A tap and an angle are non-costly measures, for now
+Date: 2026-10-05 · Decided by: Tom Van Acker · Area: Component model
+Why: the steering-plan pipeline never prices a phase shifter, a price per radian is a charge the
+current-based formulation cannot carry, and a free switch is non-costly already (D18). May change.
+Changes: new. Removes the priced phase shifter: `cost`, and `pst_cost` of `parse_zorba`.
+
+### D35 — A held measure builds no rows of its own
+Date: 2026-10-06 · Decided by: Tom Van Acker · Area: Component model
+Why: the tie of a preventive phase shifter and the magnitude row each state wrote made the
+current-based rows dependent at every feasible point, and Ipopt stopped at its first iteration on a
+three-winding shifter set at zero (B14); without the repeated rows it solves, to the two-winding optimum.
+Changes: new. Reuse of the base case's variables instead of a tie was left open, and is settled in D36.
+
+### D36 — A held stepped winding reuses the base case's binaries
+Date: 2026-10-06 · Decided by: Tom Van Acker · Area: Component model
+Why: measured on a preventive stepped shifter with N contingencies and P positions, a tie leaves P×N
+binaries and the same optimum as reuse, which leaves P: HiGHS takes 0.01-0.02 s either way, Juniper
+0.07-23 s tied against 0.05-0.2 s reused. A corrective winding is the same under both, 100 and 200
+binaries and about two minutes of Juniper at N = 4 and 8 with P = 25.
+Changes: D35, its open question. Only the binaries; `tr`, `ti` and `ta` stay tied.

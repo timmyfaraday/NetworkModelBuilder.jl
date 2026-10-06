@@ -14,8 +14,9 @@ See [The linearized formulation](@ref) for what the approximations discard.
 |:-------|:----|:----------|:-------|
 | ``v^{\text{a}}_{i}`` | `:va` | ``i \in I`` | free |
 | ``p_{a}`` | `:p` | ``a \in A`` | free |
-| ``v^{\text{as}}_{e}`` | `:vas` | ``e \in E^{\text{mw}}`` | free |
-| ``ta_{e}`` | `:ta` | ``e \in E^{\text{ps}}`` | ``[ta^{\text{min}}_{e}, ta^{\text{max}}_{e}]`` |
+| ``v^{\text{as}}_{e}`` | `:vas` | ``e \in E^{\text{tf}}``, three or more windings | free |
+| ``ta_{a}`` | `:ta` | ``a \in A^{\text{ta}}`` | ``[ta^{\text{min}}_{a}, ta^{\text{max}}_{a}]`` |
+| ``z^{\text{t}}_{a,s}`` | `:zt` | ``a \in A^{\text{zt}}``, every position ``s`` | binary |
 | ``p_{u}`` | `:pu` | ``u \in U`` | free |
 | ``p^{\text{g}}_{u}`` | `:pg` | ``u \in U^{\text{g}}`` | ``[p^{\text{min}}_{u}, p^{\text{max}}_{u}]`` |
 | ``p^{\uparrow}_{u}, p^{\downarrow}_{u}`` | `:pgup`, `:pgdn` | ``u \in U^{\text{g}}`` | the headroom each way |
@@ -24,9 +25,10 @@ See [The linearized formulation](@ref) for what the approximations discard.
 | ``e_{u}`` | `:es` | ``u \in U^{\text{s}}`` | ``[0, e^{\text{max}}_{u}]`` |
 | ``p^{\uparrow}_{u}, p^{\downarrow}_{u}`` | `:psup`, `:psdn` | ``u \in U^{\text{s}}`` | the headroom each way |
 
-No voltage magnitude, no reactive power, no current — and no ``tm_{e}``, since a
-[`TapChanger`](@ref) is inert here. A [`PhaseShifter`](@ref) is not, and it is
-the free measure a redispatch reaches for first.
+No voltage magnitude, no reactive power, no current — and no ``tm_{a}``, since a
+winding that is `oltc` is inert here. A winding that is `pst` is not, and it is
+the free measure a redispatch reaches for first. Where it steps, the problem is
+mixed-integer, no longer a linear program, and has no duals.
 
 ## Objective
 
@@ -47,7 +49,8 @@ v^{\text{a}}_{i} = v^{\text{a,set}}_{i} \quad \forall i \in I^{\text{ref}},
 
 ### At the edges
 
-Flow, ``\forall e \in E^{\text{br}} \cup E^{\text{tf}}``:
+Flow, ``\forall e \in E^{\text{br}}``, and ``\forall e \in E^{\text{tf}}`` with two windings,
+whose shift is ``ta_{e,1} - ta_{e,2}``:
 
 ```math
 p_{a^{\text{f}}_{e}} = -b_{e} \left(v^{\text{a}}_{i} - v^{\text{a}}_{j} - ta_{e}\right),
@@ -87,8 +90,8 @@ p_{u} &= -g^{\text{s}}_{u} & && \forall u \in U^{\text{sh}}
 The state of charge, the energy of a flexible load, and the preventive
 equalities — identical to the
 [IVR formulation](@ref "Redispatch in the IVR formulation") but for which
-variables a phase shifter contributes: the angle ``ta_{e}`` here, the pair
-``(t^{\text{r}}_{e}, t^{\text{i}}_{e})`` there.
+variables a winding contributes: the angle ``ta_{a}`` here, the pair
+``(t^{\text{r}}_{a}, t^{\text{i}}_{a})`` there.
 
 ## A worked example
 

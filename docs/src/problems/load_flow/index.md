@@ -34,8 +34,7 @@ elsewhere is a constant here:
 
 | component | in a load flow |
 |:----------|:---------------|
-| [`PhaseShifter`](@ref) | holds `ta` |
-| [`TapChanger`](@ref) | holds `tm` |
+| a winding of a [`Transformer`](@ref) that is `oltc` or `pst` | holds `tm` and `ta` |
 | [`FlexibleLoad`](@ref) | takes `pd_nominal`, exactly as a [`FixedLoad`](@ref) |
 | [`Storage`](@ref) | holds the injection setpoint `ps`, `qs` |
 

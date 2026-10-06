@@ -12,7 +12,7 @@ See [The linearized formulation](@ref) for what the approximations discard.
 |:-------|:----|:----------|:-------|
 | ``v^{\text{a}}_{i}`` | `:va` | ``i \in I`` | free |
 | ``p_{a}`` | `:p` | ``a \in A`` | free |
-| ``v^{\text{as}}_{e}`` | `:vas` | ``e \in E^{\text{mw}}`` | free |
+| ``v^{\text{as}}_{e}`` | `:vas` | ``e \in E^{\text{tf}}``, three or more windings | free |
 | ``p_{u}`` | `:pu` | ``u \in U`` | free |
 | ``p^{\text{g}}_{u}`` | `:pg` | ``u \in U^{\text{g}}`` | free |
 
@@ -44,21 +44,21 @@ There is no magnitude setpoint at a `PV` node: there is no magnitude.
 
 ### At the edges
 
-Branch, ``\forall e \in E^{\text{br}}``, and two-winding transformer,
-``\forall e \in E^{\text{tf}}``, differing only in the shift:
+Branch, ``\forall e \in E^{\text{br}}``, and transformer with two windings,
+``\forall e \in E^{\text{tf}}``, differing only in the shift and the impedance, which
+is that of both windings together:
 
 ```math
-p_{a^{\text{f}}_{e}} = -b_{e} \left(v^{\text{a}}_{i} - v^{\text{a}}_{j} - ta_{e}\right),
+p_{a^{\text{f}}_{e}} = -b_{e} \left(v^{\text{a}}_{i} - v^{\text{a}}_{j} - ta_{e,1} + ta_{e,2}\right),
 \qquad
 p_{a^{\text{t}}_{e}} = -p_{a^{\text{f}}_{e}}
 ```
 
-with ``b_{e} = -x_{e}/(r_{e}^2 + x_{e}^2)`` and ``ta_{e} = 0`` for a branch. The
+with ``b_{e} = -x_{e}/(r_{e}^2 + x_{e}^2)`` and no shift for a branch. The
 second equation is what makes the model lossless. The ratio *magnitude* does not
-appear, so a [`TapChanger`](@ref) is indistinguishable from a
-[`Transformer`](@ref) here.
+appear, so a winding that is `oltc` is indistinguishable from one that is not.
 
-Multi-winding transformer, ``\forall e \in E^{\text{mw}}``:
+Transformer with three or more windings, ``\forall e \in E^{\text{tf}}``:
 
 ```math
 p_{a_{e,k}} = -b_{e,k} \left(v^{\text{a}}_{i_k} - ta_{e,k} - v^{\text{as}}_{e}\right)
@@ -97,7 +97,7 @@ Affine constraints and a constant objective, so any LP solver will do. On case14
 |:--|----------:|------------:|
 | case14 | 76 | 76 |
 
-Against 198 and 198 for the same problem in the IVR formulation.
+Against 192 and 192 for the same problem in the IVR formulation.
 
 ## Validation
 

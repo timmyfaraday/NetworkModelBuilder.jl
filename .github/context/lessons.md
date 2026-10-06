@@ -93,8 +93,31 @@ again get retired.
 - **Edits to one file go one call at a time, never side by side in one block.** Three
   `replace_string_in_file` calls on `src/core/network.jl` issued together each matched against the
   same starting text and interleaved: a docstring lost its closing quotes and a call was left half
-  written, which showed up only as a `LoadError` at precompile. A `read_file` issued next to an
-  edit also returns the text from before it. (unconfirmed)
+  written, which showed up only as a `LoadError` at precompile. A `read_file` or `grep_search` issued
+  next to an edit also returns the text from before it. (unconfirmed)
+- **A restriction written in every state, plus a tie of the state to the base case, makes rows
+  dependent, and Ipopt can stop on it at the first iteration.** B14: a preventive three-winding phase
+  shifter set at exactly zero gave `OTHER_ERROR` (restoration failed) under every Ipopt setting tried,
+  while a setpoint of 1e-3 rad solved. The rank of the equality Jacobian at the start (finite
+  differences, 80 rows, rank 78) pointed at the repeated magnitude row; leaving it out of the tied
+  states solved the case to the two-winding optimum (D35). Confirmed Tom Van Acker.
+- **A test that matches an enumeration can pass with the row it is about removed.** `STEPPED`: with
+  `Σ zt = 1` deleted, every "optimum equals the best of the enumerated positions" test still passed,
+  because the objective is flat past the angle that clears the corridor and a combination of
+  positions cost no less than the best single one; only the row-count and size assertions failed.
+  Delete the row once to see which tests notice, and keep a structural assertion beside the oracle.
+  (unconfirmed)
+- **A test extension that writes a variable key the package also uses replaces the package's
+  container.** `StarEdge` in `test/multiterminal.jl` wrote `:vsr`/`:vsi`; once the package's own
+  `Transformer` used the same keys, any model with both a `Transformer` and the registered
+  `StarEdge` type (registration is process-wide) got an empty array in `:vsr` and a `KeyError` far
+  from the cause. Extensions pick their own keys (`:star_vr`). Found by running `zorba.jl` after
+  `multiterminal.jl`; each alone passed. (unconfirmed)
+- **Removing a price can leave the optimum non-unique, and a test that froze one vertex then
+  fails.** Zorba's `[12, 12, 18]` flows came from the phase shifter price (1 per radian) choosing
+  the least movement among equal-overload solutions; free, the solver returns another split with the
+  same 11 MW overload (D34). Assert what is determined (total overload, conservation, ratings) and
+  say so in the test. (unconfirmed)
 
 ## Performance
 

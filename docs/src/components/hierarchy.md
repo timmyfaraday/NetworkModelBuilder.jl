@@ -18,11 +18,7 @@ AbstractComponent
 │   │   ├── Cable
 │   │   └── OverheadLine
 │   ├── AbstractTransformer           transforms power between its terminals
-│   │   ├── AbstractTwoWindingTransformer
-│   │   │   ├── Transformer           fixed turns ratio
-│   │   │   ├── PhaseShifter          the ratio angle is a control
-│   │   │   └── TapChanger            the ratio magnitude is a control
-│   │   └── MultiWindingTransformer   three or more terminals, star equivalent
+│   │   └── Transformer               two or more windings, each with a ratio and an impedance
 │   ├── AbstractDCLink                the flow is chosen, not determined
 │   │   └── DCLink                    two terminals, lossy, decoupling
 │   └── AbstractSwitch                connects or disconnects, no impedance
@@ -50,9 +46,10 @@ the units connected to it without knowing what kinds of either exist.
 
 **The abstract middle** is where an implementation lives. Every
 [`AbstractBranch`](@ref) shares one π-equivalent, written once and dispatched on
-the abstract type; every [`AbstractTwoWindingTransformer`](@ref) shares one ideal
-ratio plus π-equivalent. A concrete type inherits that implementation and
-overrides only what genuinely differs.
+the abstract type. [`AbstractTransformer`](@ref) is where an extension that adds a
+transformer of its own hangs, and [`Transformer`](@ref) is the one concrete type: a
+winding is data, a decision or a step, and the type does not change with it. A
+concrete type inherits the implementation and overrides only what genuinely differs.
 
 **The concrete leaves** are what a network is built from, and what
 [`ids`](@ref) addresses.
@@ -66,7 +63,7 @@ package is explicit about which is which.
 |:------------|:-------------------|:--------------------|
 | [`Cable`](@ref) vs [`OverheadLine`](@ref) | **no** — the same π-equivalent | to address one kind, and to carry the data that does differ |
 | [`Branch`](@ref) vs [`Transformer`](@ref) | **yes** — the turns ratio and the voltage behind it | a branch transports, a transformer transforms |
-| [`Transformer`](@ref) vs [`TapChanger`](@ref) | **yes** — the ratio becomes a variable in a dispatch problem | a tap that the optimizer sets is a different model from one it does not |
+| a winding that holds its ratio vs one that moves or steps | **yes** — the ratio becomes a variable, or a binary for each position, in a dispatch problem | a property of a winding of one [`Transformer`](@ref), not a type: a device can be a tap changer and a phase shifter at once |
 | [`FixedLoad`](@ref) vs [`FlexibleLoad`](@ref) | **yes** — the demand becomes a variable, and constraints span network indices | who chooses the demand |
 | [`FixedLoad`](@ref) vs [`Shunt`](@ref) | **yes** — constant power against constant impedance | one is bilinear in the voltage, the other linear |
 | [`Branch`](@ref) vs [`DCLink`](@ref) | **yes** — the flow stops being a function of the angles and becomes a decision | one transports what the physics send it, the other what it is told |
@@ -108,7 +105,7 @@ src/comp/
 │   ├── pi_model.jl                 the π-equivalent, shared by branch and transformer
 │   ├── branch/{branch,cable,overhead_line}.jl
 │   ├── switch/switch.jl
-│   └── transformer/{transformer,phase_shifter,tap_changer,multi_winding}.jl
+│   └── transformer/transformer.jl
 └── unit/
     ├── unit.jl                     the registry, injection currents, dispatchers
     ├── generator/generator.jl

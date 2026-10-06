@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
 # v0.2.0 - network dependent data stored per component                         #
+# v0.12.0 - a transformer has an entry per winding                             #
 ################################################################################
 
 @testset "network" begin
@@ -44,7 +45,7 @@
         tf = edge(net, 8)::Transformer      # branch 8 of case14 has a turns ratio
         E  = Dict{Int,AbstractEdge}(net.edge)
         E[8] = Transformer(; id = tf.id, name = tf.name, terminals = tf.terminals,
-                           r = tf.r, x = tf.x, b_fr = tf.b_fr, b_to = tf.b_to,
+                           r = tf.r, x = tf.x, g_sh = tf.g_sh, b_sh = tf.b_sh,
                            tm = tf.tm, ta = tf.ta, status = false)
         out = Network(net.node, E, net.unit)
 

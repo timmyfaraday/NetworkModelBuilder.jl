@@ -85,9 +85,9 @@ v_{i} - v_{j} &= z_{e} \, c^{\text{s}}_{e}.
 ```
 
 The first two split the terminal current over the shunt and the series branch;
-the third is the drop across the series impedance. The same three equations,
-with the from-side quantities taken behind an ideal ratio, are what a
-[Transformer](@ref) uses.
+the third is the drop across the series impedance. A [Transformer](@ref) without a
+magnetising branch writes the same three equations with the from side behind an
+ideal ratio.
 
 ### Rating and angle difference
 
@@ -126,6 +126,7 @@ linear.
 susceptance
 constraint_linear_flow!
 constraint_linear_limits!
+constraint_linear_ratings!
 ```
 
 ```@docs

@@ -2,7 +2,7 @@
 
 Every change to the setup (instructions, skills, hooks, settings), newest at the bottom.
 Format: `- SC<n> · YYYY-MM-DD · approved by <user> · <what changed> · why: <feedback ids or reason>`.
-Next id: **SC5**.
+Next id: **SC6**.
 
 - SC1 · 2026-09-30 · approved by Tom Van Acker · Initial setup, ported from a colleague's
   FlowBasedDomains (fbd) repo and adapted for Julia/GitHub/solo maintainer: `copilot-instructions`,
@@ -21,3 +21,6 @@ Next id: **SC5**.
 - SC4 · 2026-10-04 · approved by Tom Van Acker · `copilot-instructions.md` rule 2 and
   `julia.instructions.md`: a version bump is the patch digit, or the minor digit for an item that
   adds a component type; `templates/spec.md` says the same · why: F3, D20 (B5 is v0.11.0).
+- SC5 · 2026-10-06 · approved by Tom Van Acker · `domain-invariants.instructions.md`: the
+  load-order bullet no longer names `transformer/transformer.jl` as an example · why: B11, D28 —
+  `transformer/` holds the one file and has no siblings left to load after it.

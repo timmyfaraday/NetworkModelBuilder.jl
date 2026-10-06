@@ -58,13 +58,14 @@ nothing more than a `status` that varies.
 
 Within the three families a type earns its place by changing the *model*, not by
 carrying a label. `Cable` and `OverheadLine` are electrically identical to
-`Branch` and exist to be addressed; a `PhaseShifter` and a `TapChanger` have a
-ratio that is a decision variable in a dispatch problem and a constant in a
-power flow; a `MultiWindingTransformer` keeps its star point as an edge variable
-rather than inventing a node for it. A `Switch` has no impedance at all, so a
-busbar coupler is not a branch with a reactance of `1e-7`: closed it equates the
-voltages at its ends, open it stops the flow, and when it is `FREE` a dispatch
-problem chooses which, as a mixed-integer program.
+`Branch` and exist to be addressed; a `Transformer` has a ratio per winding that is
+a constant in a power flow and, in a dispatch problem, a decision between limits or
+one of a list of positions, so a tap changer and a phase shifter are flags on a
+winding rather than types, and a winding can be both. It keeps its star point as an
+edge variable rather than inventing a node for it. A `Switch` has no impedance at
+all, so a busbar coupler is not a branch with a reactance of `1e-7`: closed it
+equates the voltages at its ends, open it stops the flow, and when it is `FREE` a
+dispatch problem chooses which, as a mixed-integer program.
 
 ```
 AbstractEdge                          AbstractUnit
@@ -73,13 +74,10 @@ AbstractEdge                          AbstractUnit
 │   ├── Cable                         │   ├── FixedLoad
 │   └── OverheadLine                  │   └── FlexibleLoad
 ├── AbstractTransformer               ├── AbstractStorage → Storage
-│   ├── AbstractTwoWindingTransformer ├── AbstractSlackUnit
-│   │   ├── Transformer               │   ├── EnergyNotServed
-│   │   ├── PhaseShifter              │   └── Spill
-│   │   └── TapChanger                └── AbstractShunt → Shunt
-│   └── MultiWindingTransformer
-├── AbstractDCLink → DCLink
-└── AbstractSwitch → Switch
+│   └── Transformer                   ├── AbstractSlackUnit
+├── AbstractDCLink → DCLink           │   ├── EnergyNotServed
+└── AbstractSwitch → Switch           │   └── Spill
+                                      └── AbstractShunt → Shunt
 ```
 
 The code of a component lives in one file, holding its struct, its variables and

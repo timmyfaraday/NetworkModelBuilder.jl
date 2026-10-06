@@ -37,7 +37,7 @@ after that loop, and guard them with [`require_time_dimension`](@ref).
 ### If it has more than two terminals
 
 Give it as many `terminals` as it needs and let the internal points be *edge
-variables*, as [`MultiWindingTransformer`](@ref) does with its star point. Do
+variables*, as a [`Transformer`](@ref) does with its star point. Do
 not invent nodes: an implicit internal point keeps ``I`` a set of real busbars,
 needs no synthetic identifier, and does not grow the topology.
 
@@ -64,7 +64,7 @@ add a method in that component's own file dispatching on the new problem type.
 
 `src/prob/rd.jl` is the worked example: the redispatch problem adds a builder
 of nine lines, an objective, and one method each on the generator, the storage
-unit and the two controllable transformers — and no formulation code at all.
+unit and the transformer — and no formulation code at all.
 
 ## Every variable and constraint goes in through one door
 
@@ -94,8 +94,7 @@ registered_constraints
 Physics that several components share lives in a fragment rather than being
 written twice:
 
-- [`constraint_pi_section!`](@ref) — the π-equivalent, used by every branch and
-  every two-winding transformer;
+- [`constraint_pi_section!`](@ref) — the π-equivalent, used by every branch;
 - [`constraint_unit_power!`](@ref) — the injection of a unit against its current,
   used by every generator, load and storage unit;
 - [`constraint_edge_rating!`](@ref) and

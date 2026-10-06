@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
 # v0.9.1 - a bare case file name is found from the bundled test data           #
+# v0.12.0 - a branch with a ratio is a transformer of two windings             #
 ################################################################################
 
 ################################################################################
@@ -218,10 +219,15 @@ function _matpower_edges(branch::Matrix{Float64}, baseMVA::Float64)
 
         # Matpower writes a branch and a transformer into the same table; a turns
         # ratio, or the lack of one, is what tells them apart. A ratio of zero
-        # means the row is not a transformer at all.
+        # means the row is not a transformer at all. The ratio sits on the from
+        # winding, which holds the impedance, and each winding carries half the
+        # charging.
         E[e] = if (ratio != 0 && ratio != 1) || angle != 0
-            Transformer(; common..., name = "transformer $e",
-                        tm = ratio == 0 ? 1.0 : ratio, ta = deg2rad(angle))
+            Transformer(; id = e, name = "transformer $e", terminals = [f, t],
+                        r = common.r, x = common.x, b_sh = [b / 2, b / 2],
+                        tm = ratio == 0 ? 1.0 : ratio, ta = deg2rad(angle),
+                        rate_a = common.rate_a, angmin = common.angmin,
+                        angmax = common.angmax, status = common.status, ext = common.ext)
         else
             Branch(; common..., name = "branch $e")
         end

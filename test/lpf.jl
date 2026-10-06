@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.4.0 - the linearized formulation                                          #
+# v0.12.0 - one Transformer; its controls are flags, not types                 #
 ################################################################################
 
 # The reference values below are those of PowerModels.jl v0.21 in its
@@ -133,9 +134,10 @@ degrees(result, nw = 1) =
 
         for e in ids(net, AbstractEdge)
             br = edge(net, e)
-            isfinite(br.rate_a) || continue
-            for t in values(sol["edge"]["$e"]["terminal"])
-                @test abs(t["p"]) <= br.rate_a + 1e-6
+            for a in edge_arcs(net, e)
+                rate = rating_at(br, a.terminal)
+                isfinite(rate) || continue
+                @test abs(sol["edge"]["$e"]["terminal"]["$(a.terminal)"]["p"]) <= rate + 1e-6
             end
         end
         for u in ids(net, Generator)
@@ -158,24 +160,23 @@ end
     end
 
     @testset "a tap changer is inert, a phase shifter is a control" begin
-        plain = quiet(() -> solve_opf(as_transformer_type(Transformer),
-                                      LPFFormulation, OPTIMIZER))
+        plain = quiet(() -> solve_opf(as_transformer(), LPFFormulation, OPTIMIZER))
 
         # the ratio magnitude has nothing to act on once every magnitude is one,
         # so a tap changer gives exactly the transformer it was built from
-        tap = quiet(() -> solve_opf(as_transformer_type(TapChanger; tm_min = 0.8, tm_max = 1.2),
+        tap = quiet(() -> solve_opf(as_transformer(; oltc = true, tm_min = 0.8, tm_max = 1.2),
                                     LPFFormulation, OPTIMIZER))
         @test tap["objective"] ≈ plain["objective"] rtol = 1e-9
         @test degrees(tap) ≈ degrees(plain) atol = 1e-9
 
         # the ratio angle does survive, so a phase shifter enlarges the feasible set
-        data = as_transformer_type(PhaseShifter; ta_min = -0.2, ta_max = 0.2)
+        data = as_transformer(; pst = true, ta_min = -0.2, ta_max = 0.2)
         nm   = instantiate_model(data, OptimalPowerFlowProblem, LPFFormulation)
         pst  = quiet(() -> optimize_model!(nm, OPTIMIZER))
 
         @test pst["objective"] <= plain["objective"] + 1e-6
         @test pst["objective"] < plain["objective"]          # it is worth using here
-        @test -0.2 - 1e-6 <= nw_solution(pst)["edge"]["5"]["tap"]["ta"] <= 0.2 + 1e-6
+        @test -0.2 - 1e-6 <= nw_solution(pst)["edge"]["5"]["terminal"]["1"]["tap"]["ta"] <= 0.2 + 1e-6
 
         # and it stays a linear program while doing it
         @test all(T <: Union{JuMP.AffExpr,JuMP.VariableRef}
@@ -200,7 +201,7 @@ end
         @test sol["unit"]["1"]["pg"] ≈ 0.03 atol = 1e-9     # which the generator covers
     end
 
-    @testset "a multi-winding transformer hides its star point here too" begin
+    @testset "a transformer with three windings hides its star point here too" begin
         r, x = [0.010, 0.020, 0.030], [0.100, 0.200, 0.300]
         units() = Dict{Int,AbstractUnit}(1 => Generator(; id = 1, node = 1, pmax = 5.0),
                                          2 => FixedLoad(; id = 2, node = 2, pd = 0.40),
@@ -209,9 +210,9 @@ end
         star = NetworkData(Network(
             Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF),
                                    2 => Node(; id = 2), 3 => Node(; id = 3)),
-            Dict{Int,AbstractEdge}(1 => MultiWindingTransformer(; id = 1,
-                                                                terminals = [1, 2, 3],
-                                                                r = r, x = x)),
+            Dict{Int,AbstractEdge}(1 => Transformer(; id = 1,
+                                                    terminals = [1, 2, 3],
+                                                    r = r, x = x)),
             units()); name = "star")
 
         split = NetworkData(Network(
@@ -241,7 +242,7 @@ end
         for e in ids(net, Transformer)
             tf   = edge(net, e)::Transformer
             E[e] = Transformer(; id = tf.id, name = tf.name, terminals = tf.terminals,
-                               r = tf.r, x = tf.x, b_fr = tf.b_fr, b_to = tf.b_to,
+                               r = tf.r, x = tf.x, g_sh = tf.g_sh, b_sh = tf.b_sh,
                                tm = tf.tm, ta = 0.0, rate_a = tf.rate_a,
                                angmin = tf.angmin, angmax = tf.angmax, status = tf.status)
         end

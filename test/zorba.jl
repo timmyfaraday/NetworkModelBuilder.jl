@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.8.0 - the zorba adapter                                                   #
+# v0.12.0 - a phase shifter is a winding that can move                         #
 ################################################################################
 
 # The network below is the one Zorba's own `BaseTestCase.get_ref_minimal_study`
@@ -73,17 +74,23 @@ end
         @test node(net, 2; nw = 1).type == PQ
 
         # a link with a phase shift range is a control, one without is a branch
-        @test edge(net, 1; nw = 1) isa PhaseShifter
+        @test edge(net, 1; nw = 1) isa Transformer
         @test edge(net, 2; nw = 1) isa Branch
         @test edge(net, 3; nw = 1) isa Branch
 
-        ps = edge(net, 1; nw = 1)::PhaseShifter
+        ps = edge(net, 1; nw = 1)::Transformer
         @test ps.terminals == [1, 2]
-        @test ps.x == 1.0
-        @test ps.rate_a ≈ 8.0 / 100.0            # MW against a 100 MVA base
-        @test ps.ta_min ≈ -deg2rad(30)
-        @test ps.ta_max ≈  deg2rad(30)
-        @test ps.cost == 1.0                     # `RdsSettings.pst_cost`
+        @test ps.pst == [CONTINUOUS, FIXED]
+        @test ps.oltc == [FIXED, FIXED]
+        @test ps.x ≈ [1.0, 0.0]
+        @test ps.rate_a ≈ [8.0, 8.0] ./ 100.0   # MW against a 100 MVA base
+        @test ps.ta_min[1] ≈ -deg2rad(30)
+        @test ps.ta_max[1] ≈  deg2rad(30)
+
+        # a phase shifter is a non-costly measure, and the price Zorba put on it is
+        # no longer taken
+        @test_logs (:warn, r"`pst_cost` is deprecated") parse_zorba(;
+            grid = ref_grid(), net_position = ref_net_position(), pst_cost = 1.0)
 
         # Zorba writes no angle difference limits, and ±π/2 is how this package
         # says there are none
@@ -109,8 +116,13 @@ end
         result = quiet(() -> solve_zorba(data, OPTIMIZER))
         tables = zorba_tables(data, result)
 
-        @test flows(tables.grid_flows, 0) ≈ [12.0, 12.0, 18.0] atol = 1e-4
-        @test overloads(tables.grid_flows, 0) ≈ [4.0, 0.0, 7.0] atol = 1e-4
+        # the shifter is free, so how the flow splits between the corridors is not
+        # determined; what is, is how much of it cannot be served, and that every
+        # megawatt a exports reaches c, with b exchanging nothing
+        flow = flows(tables.grid_flows, 0)
+        @test sum(overloads(tables.grid_flows, 0)) ≈ 11.0 atol = 1e-3
+        @test flow[1] ≈ flow[2] atol = 1e-4
+        @test flow[1] + flow[3] ≈ 30.0 atol = 1e-4
 
         # and it is worth having: without the range the split is 15 / 15
         flat = parse_zorba(; grid = merge(ref_grid(), (pst_deg = [0.0, 0.0, 0.0],)),
@@ -146,7 +158,13 @@ end
         net    = network(data)
         tables = zorba_tables(data, quiet(() -> solve_zorba(data, OPTIMIZER)))
 
-        @test flows(tables.grid_flows, 0)          ≈ [4.0, 4.0, 4.0, 22.0]  atol = 1e-4
+        # no state is overloaded, and the phase shifter being free, the 8 MW the
+        # link leaves a to carry split between the corridors in no determined way
+        base = flows(tables.grid_flows, 0)
+        @test base[4] ≈ 22.0 atol = 1e-4
+        @test base[1] ≈ base[2] atol = 1e-4
+        @test base[1] + base[3] ≈ 8.0 atol = 1e-4
+        @test all(abs.(base[1:3]) .<= [8.0, 12.0, 11.0] .+ 1e-4)
         @test flows(tables.grid_flows, 0, "a - c") ≈ [8.0, 8.0, 0.0, 22.0]  atol = 1e-4
         @test flows(tables.grid_flows, 0, "b - c") ≈ [0.0, 0.0, 8.0, 22.0]  atol = 1e-4
 
@@ -159,23 +177,21 @@ end
         @test count(isequal("a - c"), tables.grid_flows.outage) == 8
     end
 
-    @testset "the congestion is summed over the states and the measures charged once" begin
+    @testset "the congestion is summed over the states and the link charged once" begin
         outage = (name = ["a - c", "b - c"], link = ["a - c", "b - c"])
         data   = parse_zorba(; grid = ref_grid(), net_position = ref_net_position(),
-                               hvdc = ref_hvdc(), outage, overload_penalty = 1e3,
-                               pst_cost = 1.0)
+                               hvdc = ref_hvdc(), outage, overload_penalty = 1e3)
         result = quiet(() -> solve_zorba(data, OPTIMIZER))
         tables = zorba_tables(data, result)
-        gf, ps = tables.grid_flows, tables.pst_dispatch
+        gf     = tables.grid_flows
 
-        # Zorba's objective, written out: every overload of every state, every
-        # radian of phase shift once, and every MWh the link moved once
+        # Zorba's objective, written out: every overload of every state, and every
+        # MWh the link moved once. The phase shift is not in it, being free.
         congestion = 1e3 * sum(gf.overload_mw)
-        shift      = 1.0 * sum(deg2rad(abs(x)) for x in skipmissing(ps.pst_deg))
         transfer   = 10.0 * sum(abs(nw_solution(result, n)["edge"]["4"]["pdc"]) * 100.0
                                 for n in nw_ids(data; contingency = 1))
 
-        @test result["objective"] ≈ congestion + shift + transfer rtol = 1e-5
+        @test result["objective"] ≈ congestion + transfer rtol = 1e-5
 
         # which is what the gross-up buys: three states, so an average of the
         # congestion priced at three times over is the sum of it priced at one
@@ -247,7 +263,7 @@ end
 
         # this package writes `p = -b(θi - θj - ta)` and Zorba `P = (θi - θj + s)B`,
         # so the two differ by a sign and the adapter is where it is applied
-        ta = nw_solution(result, 1)["edge"]["1"]["tap"]["ta"]
+        ta = nw_solution(result, 1)["edge"]["1"]["terminal"]["1"]["tap"]["ta"]
         @test tables.pst_dispatch.pst_deg[1] ≈ -rad2deg(ta)
         @test !iszero(ta)
 
@@ -396,16 +412,8 @@ end
         @test is_monitored(nm, 1)
 
         # the current based formulation asks the same grid a different question,
-        # and the two things it cannot be asked say so rather than answering
-        priced = try
-            solve_zorba(data, RedispatchProblem, IVRFormulation, OPTIMIZER)
-        catch e
-            e
-        end
-        @test priced isa ErrorException
-        @test occursin("priced phase shifter", priced.msg)
-
-        link = parse_zorba(; grid = ref_grid(), pst_cost = 0.0, hvdc = ref_hvdc(),
+        # and the one thing it cannot be asked says so rather than answering
+        link = parse_zorba(; grid = ref_grid(), hvdc = ref_hvdc(),
                              net_position = ref_net_position(; scale = 1.0))
         dc = try
             solve_zorba(link, RedispatchProblem, IVRFormulation, OPTIMIZER)
@@ -415,12 +423,10 @@ end
         @test dc isa ErrorException
         @test occursin("DCLink", dc.msg)
 
-        # and one that can be: unpriced, without a link, the model is built
-        ac = parse_zorba(; grid = ref_grid(), pst_cost = 0.0,
-                           net_position = ref_net_position(; scale = 1.0))
-        @test instantiate_model(ac, RedispatchProblem, IVRFormulation;
+        # and one that can be: a phase shifter, without a link, the model is built
+        @test instantiate_model(data, RedispatchProblem, IVRFormulation;
                                 ext = Dict{Symbol,Any}(
-                                    :redispatch => zorba_study(ac).redispatch)) isa
+                                    :redispatch => zorba_study(data).redispatch)) isa
               NetworkModel
     end
 
@@ -433,8 +439,9 @@ end
                                                           reuse = true)))
 
         # the study is two independent hours, so a window of one sees everything
-        # a window of two does
-        @test roll.grid_flows.flow_mw ≈ one.grid_flows.flow_mw atol = 1e-3
+        # a window of two does; the free phase shifter leaves the split of the
+        # flow open, so it is the congestion that is compared
+        @test sum(roll.grid_flows.overload_mw) ≈ sum(one.grid_flows.overload_mw) atol = 1e-2
     end
 
 end

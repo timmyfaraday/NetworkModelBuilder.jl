@@ -1,7 +1,7 @@
 # Open questions
 
 Questions only a person can settle. Before asking Tom, check here; when one is answered, record
-the answer as a decision (if it changes a rule) and delete the question. Next id: **Q6**.
+the answer as a decision (if it changes a rule) and delete the question. Next id: **Q7**.
 
 Format: `### Q<n> · <question>` then who can settle it, what depends on it, and the options.
 

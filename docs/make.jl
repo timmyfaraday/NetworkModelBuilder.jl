@@ -11,6 +11,7 @@
 # v0.10.2 - adds the concepts-for-newcomers page                               #
 # v0.11.0 - adds the switch component page                                     #
 # v0.11.0 - cites the literature through DocumenterCitations                   #
+# v0.12.0 - warns about a page over 150 KiB, not 100                           #
 ################################################################################
 
 using Documenter
@@ -30,6 +31,7 @@ makedocs(
     format   = Documenter.HTML(
         prettyurls = get(ENV, "CI", nothing) == "true",
         canonical  = "https://timmyfaraday.github.io/NetworkModelBuilder.jl",
+        size_threshold_warn = 150 * 1024,
     ),
     pages = [
         "Home" => "index.md",

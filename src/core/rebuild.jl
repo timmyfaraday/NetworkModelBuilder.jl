@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.5.0 - building a model a second time updates it in place                  #
 # v0.11.0 - a variable may be binary                                           #
+# v0.12.0 - a variable may belong to one terminal of an edge                   #
 ################################################################################
 
 # A model built for one window of a rolling horizon is very nearly the model the
@@ -115,6 +116,11 @@ The variable registered under `(key, id)` at network index `nw`, created on
 first sight and returned as it is on second — with its bounds brought to what
 the arguments say either way.
 
+`id` is what tells one variable of `key` from another: the identifier of a
+component, or an [`Arc`](@ref) where the variable belongs to one terminal of an
+edge, as the ratio of one winding of a transformer does. The variables of a `key`
+are all keyed the same way, by the type of the first `id` given.
+
 Only the bounds are updated, because only the bounds are data. Which variables
 exist is structure, and a model is updated rather than rebuilt exactly when the
 structure has not changed, see [`same_structure`](@ref).
@@ -133,7 +139,7 @@ load flow does to a generator setpoint, and releases it where it is `nothing`.
 function variable!(nm::NetworkModel, key::Symbol, id; nw::Int, base_name::String = "",
                    start = nothing, lower = nothing, upper = nothing, fix = nothing,
                    binary::Bool = false)
-    store = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), key)
+    store = get!(() -> Dict{typeof(id),JuMP.VariableRef}(), var(nm; nw), key)
     v     = get(store, id, nothing)
 
     if v === nothing
@@ -147,10 +153,11 @@ function variable!(nm::NetworkModel, key::Symbol, id; nw::Int, base_name::String
 end
 
 """
-    variable_container!(nm, keys...; nw)
+    variable_container!(nm, keys...; nw, idtype = Int)
 
 Make sure the container registered under each of `keys` at network index `nw`
-exists, and return the last of them.
+exists, and return the last of them. `idtype` is what its variables are keyed by,
+`Int` for a component and `Arc` for a variable that belongs to a terminal.
 
 [`variable!`](@ref) creates a container as it puts the first variable in it,
 which leaves the container missing where a type has no components at this
@@ -158,10 +165,10 @@ network index. Code that reaches for the whole container before looping — the
 limits of a phase shifter, say — would then find nothing rather than nothing to
 do, so a caller that does declares its containers up front.
 """
-function variable_container!(nm::NetworkModel, keys::Symbol...; nw::Int)
+function variable_container!(nm::NetworkModel, keys::Symbol...; nw::Int, idtype::Type = Int)
     container = nothing
     for key in keys
-        container = get!(() -> Dict{Int,JuMP.VariableRef}(), var(nm; nw), key)
+        container = get!(() -> Dict{idtype,JuMP.VariableRef}(), var(nm; nw), key)
     end
 
     return container

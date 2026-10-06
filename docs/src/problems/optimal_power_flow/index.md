@@ -32,16 +32,21 @@ Two calls appear in this builder that do not appear in a load flow —
 
 | component | in an optimal power flow |
 |:----------|:-------------------------|
-| [`PhaseShifter`](@ref) | its ratio angle is free between `ta_min` and `ta_max` |
-| [`TapChanger`](@ref) | its ratio magnitude is free between `tm_min` and `tm_max` — in the IVR formulation only, see below |
+| a winding of a [`Transformer`](@ref) that is `pst` | its ratio angle is free between `ta_min` and `ta_max`, or one of a list of positions if `STEPPED` |
+| a winding of a [`Transformer`](@ref) that is `oltc` | its ratio magnitude is free between `tm_min` and `tm_max`, or one of a list of positions if `STEPPED` — in the IVR formulation only, see below |
 | [`FlexibleLoad`](@ref) | its demand is free between `pd_min` and `pd_max`, subject to an energy balance |
 | [`Storage`](@ref) | it charges and discharges within its ratings, subject to its state of charge |
 
 !!! note "A tap changer is inert in the linearized formulation"
     With every voltage magnitude equal to one there is nothing for a ratio
-    magnitude to change, so a [`TapChanger`](@ref) is solved as an ordinary
-    transformer under [`LPFFormulation`](@ref). A phase shifter is unaffected —
+    magnitude to change, so a winding that is `oltc` is solved as an ordinary
+    winding under [`LPFFormulation`](@ref). A winding that is `pst` is unaffected —
     the ratio *angle* survives the linearization.
+
+!!! note "A winding that steps makes the problem mixed-integer"
+    A `STEPPED` winding is a binary variable for each position, so the problem has
+    no duals, and in the IVR formulation it is a nonconvex mixed-integer program. See
+    [Transformer](@ref).
 
 ## Constraints that span network indices
 

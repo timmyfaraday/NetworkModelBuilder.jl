@@ -9,12 +9,13 @@
 # v0.3.0 - component hierarchy                                                 #
 # v0.6.0 - the rating of a monitored edge may hold an overload                 #
 # v0.10.1 - exports its own public names                                       #
+# v0.12.0 - a rating may differ between the terminals of an edge               #
 ################################################################################
 
 export susceptance
 export constraint_pi_section!, constraint_edge_rating!
 export constraint_edge_angle_difference!
-export constraint_linear_flow!, constraint_linear_limits!
+export constraint_linear_flow!, constraint_linear_limits!, constraint_linear_ratings!
 export variable_edge_overload!, variable_edge_series_current
 
 ################################################################################
@@ -23,8 +24,8 @@ export variable_edge_overload!, variable_edge_series_current
 
 # Every two-terminal edge in the package is a π-equivalent: a series impedance
 # `z = r + jx` between two shunt admittances `y = g + jb`. A branch applies it
-# directly between its two nodes; a transformer applies it between the secondary
-# of its ideal ratio and its to-node. Rather than write the physics twice, both
+# directly between its two nodes; a transformer applies it between the star point
+# of its windings and its terminals. Rather than write the physics twice, both
 # call the fragment below, a branch with the voltage and current of its from
 # node and a transformer with the voltage and current on the transformer side of
 # its ratio.
@@ -105,9 +106,10 @@ end
 Bound the apparent power at every terminal of edge `e` by `rate_a`,
 `(v^{\\text{r}}_i{}^2 + v^{\\text{i}}_i{}^2)(c^{\\text{r}}_a{}^2 + c^{\\text{i}}_a{}^2) \\le
 (s^{\\text{max}}_e)^2`. Written per terminal, it applies to an edge with any
-number of them.
+number of them. `rate_a` is one number for every terminal or one per terminal, and
+a terminal whose rating is not finite is not bounded.
 
-Skipped where the data leaves the rating unbounded, and where the problem does
+Skipped where the data leaves every rating unbounded, and where the problem does
 not watch the edge for congestion, see [`is_monitored`](@ref).
 
 Where the problem prices congestion rather than forbidding it, see
@@ -123,8 +125,9 @@ worst of them rather than a separate allowance for each. The constraint stays th
 same degree it already was and is written under its own key, since a row whose
 set is `≤ (s^{max})^2` cannot be updated in place into one holding a variable.
 """
-function constraint_edge_rating!(nm::NetworkModel, e::Int, rate_a::Real; nw::Int)
-    isfinite(rate_a) && is_monitored(nm, e) || return nothing
+function constraint_edge_rating!(nm::NetworkModel, e::Int, rate_a::Union{Real,AbstractVector};
+                                 nw::Int)
+    _any_finite(rate_a) && is_monitored(nm, e) || return nothing
 
     vr, vi = var(nm, :vr; nw), var(nm, :vi; nw)
     cr, ci = var(nm, :cr; nw), var(nm, :ci; nw)
@@ -133,16 +136,26 @@ function constraint_edge_rating!(nm::NetworkModel, e::Int, rate_a::Real; nw::Int
     price === nothing &&
         return [constrain!(nm, :edge_rating, (e, t),
                     JuMP.@build_constraint(
-                        (vr[a.node]^2 + vi[a.node]^2) * (cr[a]^2 + ci[a]^2) <= rate_a^2); nw)
-                for (t, a) in enumerate(edge_arcs(nm, e; nw))]
+                        (vr[a.node]^2 + vi[a.node]^2) * (cr[a]^2 + ci[a]^2) <=
+                        _rating_at(rate_a, t)^2); nw)
+                for (t, a) in enumerate(edge_arcs(nm, e; nw)) if isfinite(_rating_at(rate_a, t))]
 
     ol = variable_edge_overload!(nm, e; nw)
 
     return [constrain!(nm, :edge_overload, (e, t),
                 JuMP.@build_constraint(
-                    (vr[a.node]^2 + vi[a.node]^2) * (cr[a]^2 + ci[a]^2) <= (rate_a + ol)^2); nw)
-            for (t, a) in enumerate(edge_arcs(nm, e; nw))]
+                    (vr[a.node]^2 + vi[a.node]^2) * (cr[a]^2 + ci[a]^2) <=
+                    (_rating_at(rate_a, t) + ol)^2); nw)
+            for (t, a) in enumerate(edge_arcs(nm, e; nw)) if isfinite(_rating_at(rate_a, t))]
 end
+
+"the rating of terminal `t`, where a rating is one number for every terminal or one per terminal"
+_rating_at(rate_a::Real, ::Int) = rate_a
+_rating_at(rate_a::AbstractVector, t::Int) = rate_a[t]
+
+"whether any terminal has a rating that bounds anything"
+_any_finite(rate_a::Real) = isfinite(rate_a)
+_any_finite(rate_a::AbstractVector) = any(isfinite, rate_a)
 
 """
     variable_edge_overload!(nm, e; nw)
@@ -220,8 +233,8 @@ where `shift` is the phase shift the edge applies, zero for a branch. The second
 equation is what makes the model lossless: whatever leaves one terminal arrives
 at the other.
 
-`shift` may be a number or a variable, which is what lets a
-[`PhaseShifter`](@ref) be a control here.
+`shift` may be a number or a variable, which is what lets a winding of a
+[`Transformer`](@ref) that is a `pst` be a control here.
 """
 function constraint_linear_flow!(nm::NetworkModel, e::Int, a_fr::Arc, a_to::Arc,
                                  b::Real, shift; nw::Int)
@@ -284,21 +297,36 @@ function constraint_linear_limits!(nm::NetworkModel, e::Int, a_fr::Arc, a_to::Ar
     return (rating, angle)
 end
 
-"the rating rows of a monitored two-terminal edge, hard or priced"
-function _linear_rating!(nm::NetworkModel, e::Int, terminals, rate_a::Real; nw::Int)
+"the rating rows of a monitored edge, hard or priced; a terminal whose rating is not finite has none"
+function _linear_rating!(nm::NetworkModel, e::Int, terminals, rate_a::Union{Real,AbstractVector}; nw::Int)
     p     = var(nm, :p; nw)
     price = overload_price(nm)
 
     price === nothing &&
         return [constrain!(nm, :linear_rating, (e, t),
-                           JuMP.@build_constraint(-rate_a <= p[a] <= rate_a); nw)
-                for (t, a) in enumerate(terminals)]
+                           JuMP.@build_constraint(-_rating_at(rate_a, t) <= p[a] <= _rating_at(rate_a, t)); nw)
+                for (t, a) in enumerate(terminals) if isfinite(_rating_at(rate_a, t))]
 
     ol = variable_edge_overload!(nm, e; nw)
 
     return [(constrain!(nm, :linear_overload, (e, t, :pos),
-                        JuMP.@build_constraint(p[a] - ol <= rate_a); nw),
+                        JuMP.@build_constraint(p[a] - ol <= _rating_at(rate_a, t)); nw),
              constrain!(nm, :linear_overload, (e, t, :neg),
-                        JuMP.@build_constraint(-p[a] - ol <= rate_a); nw))
-            for (t, a) in enumerate(terminals)]
+                        JuMP.@build_constraint(-p[a] - ol <= _rating_at(rate_a, t)); nw))
+            for (t, a) in enumerate(terminals) if isfinite(_rating_at(rate_a, t))]
+end
+
+"""
+    constraint_linear_ratings!(nm, e, arcs, rate_a; nw)
+
+The rating at each terminal of an edge with any number of them in a linearized
+formulation, `rate_a` holding one rating per terminal: the counterpart of
+[`constraint_linear_limits!`](@ref) for an edge with no angle difference to limit.
+Skipped where no terminal has a finite rating, and where the problem does not
+watch the edge for congestion, see [`is_monitored`](@ref).
+"""
+function constraint_linear_ratings!(nm::NetworkModel, e::Int, arcs, rate_a::AbstractVector; nw::Int)
+    _any_finite(rate_a) && is_monitored(nm, e) || return nothing
+
+    return _linear_rating!(nm, e, arcs, rate_a; nw)
 end

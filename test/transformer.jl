@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.12.0 - initial implementation                                             #
 # v0.12.0 - the helpers build the one Transformer; a held ratio is folded      #
+# v0.12.0 - both controls on one winding, and on any winding of three          #
 ################################################################################
 
 # What a transformer does, written so that it does not depend on how one is
@@ -31,11 +32,19 @@ pst(; ta_min, ta_max, kw...) = Transformer(; pst = true, ta_min, ta_max, kw...)
 "a transformer whose magnitude is a decision between `tm_min` and `tm_max`"
 oltc(; tm_min, tm_max, kw...) = Transformer(; oltc = true, tm_min, tm_max, kw...)
 
+"a transformer whose magnitude and angle are both decisions"
+both(; kw...) = Transformer(; oltc = true, pst = true, kw...)
+
 "a transformer with three or more windings, `r`, `x`, ... holding one entry per terminal"
 star(; kw...) = Transformer(; kw...)
 
 "the tap of edge `e` in a result at network index `n`"
 tap_of(result, e, n = 1) = nw_solution(result, n)["edge"]["$e"]["terminal"]["1"]["tap"]
+
+"the taps of the windings of edge `e` in a result at network index `n`, in terminal order"
+taps_of(result, e, n = 1) =
+    [t["tap"] for (_, t) in sort!(collect(nw_solution(result, n)["edge"]["$e"]["terminal"]);
+                                  by = kv -> parse(Int, first(kv)))]
 
 "the number of variables and of constraints that are not variable bounds"
 size_of(nm) = (JuMP.num_variables(nm.model),
@@ -62,10 +71,10 @@ function case5_with(make; extra...)
     return NetworkData(Network(net.node, E, net.unit); name = "case5", baseMVA = baseMVA(data))
 end
 
-"one reference node feeding two loads through a transformer with three windings"
-function winding_network(; kw...)
+"one reference node feeding two loads through a transformer with three windings, the loads' voltage capped at `vmax`"
+function winding_network(; vmax = 1.1, kw...)
     I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.02),
-                               2 => Node(; id = 2), 3 => Node(; id = 3))
+                               2 => Node(; id = 2, vmax), 3 => Node(; id = 3, vmax))
     E = Dict{Int,AbstractEdge}(
         1 => star(; id = 1, terminals = [1, 2, 3], r = [0.010, 0.020, 0.030],
                   x = [0.100, 0.200, 0.300], kw...))
@@ -173,6 +182,26 @@ end
         end
     end
 
+    @testset "case5, both controls on one winding" begin
+        range = (tm_min = 0.9, tm_max = 1.1, ta_min = -0.2, ta_max = 0.2)
+
+        # together they do better than either alone, 15361.6 and 18175.8
+        @testset "current-based: a ring of ratios" begin
+            check_case5(both, IVRFormulation; extra = range, objective = 15344.22651230504,
+                        tm = 1.0219854701926994, ta = -0.138662043125777, sz = (82, 114))
+        end
+        @testset "linearized: the angle alone" begin
+            check_case5(both, LPFFormulation; extra = range, objective = 14979.73668132809,
+                        tm = 1.05, ta = -0.16926719116051048, sz = (33, 49))
+        end
+        @testset "held at what it chose, the winding gives the same optimum" begin
+            check_case5(fixed, IVRFormulation;
+                        extra = (tm = [1.0219854701926994, 1.0], ta = [-0.138662043125777, 0.0]),
+                        objective = 15344.22651230504,
+                        tm = 1.0219854701926994, ta = -0.138662043125777, sz = (78, 108))
+        end
+    end
+
     @testset "three windings, load flow and optimal power flow" begin
         # the second network gives every winding a ratio and a rating, and the
         # star point a magnetising branch
@@ -198,6 +227,103 @@ end
         @testset "ratios and magnetising, linearized" begin
             check_windings(LPFFormulation, ratios; va = (-0.12645, -0.1514), p = 0.65,
                            lf_size = (11, 11), objective = 6.5, opf_size = (11, 14))
+        end
+    end
+
+    @testset "controls on the windings of a transformer with three" begin
+        # the loads' voltage is capped, so what a ratio buys is a source that can
+        # stay high; it takes both windings to do it, as both loads are at the cap
+        opf(; kw...) = solved(winding_network(; vmax = 1.02, kw...),
+                              OptimalPowerFlowProblem, IVRFormulation)
+        angle = (ta_min = [0.0, -0.2, -0.2], ta_max = [0.0, 0.2, 0.2])
+
+        _, plain = opf()
+        @test plain["objective"] ≈ 6.602714947516425 rtol = 1e-7
+
+        @testset "magnitudes" begin
+            nm, result = opf(; oltc = [false, true, true])
+            taps = taps_of(result, 1)
+
+            @test result["objective"] ≈ 6.601790739817746 rtol = 1e-7
+            @test size_of(nm) == (28, 32)
+            @test taps[1]["tm"] == 1.0
+            @test all(0.9 - 1e-6 <= t["tm"] < 1.0 for t in taps[2:3])
+
+            # a ratio on one winding does not relieve the cap at the other
+            _, one = opf(; oltc = [false, true, false])
+            @test one["objective"] ≈ plain["objective"] rtol = 1e-9
+
+            # held at the ratios it chose, the transformer gives the same optimum
+            _, held = opf(; tm = [t["tm"] for t in taps])
+            @test held["objective"] ≈ result["objective"] rtol = 1e-7
+        end
+
+        @testset "angles" begin
+            # in a radial network an angle has nothing to relieve
+            nm, result = opf(; pst = [false, true, true], angle...)
+            @test result["objective"] ≈ plain["objective"] rtol = 1e-9
+            @test size_of(nm) == (30, 38)
+        end
+
+        @testset "magnitudes and angles" begin
+            nm, result = opf(; oltc = [false, true, true], pst = [false, true, true], angle...)
+            taps = taps_of(result, 1)
+
+            @test result["objective"] ≈ 6.601790739817746 rtol = 1e-7
+            @test size_of(nm) == (30, 40)
+            @test all(0.9 - 1e-6 <= t["tm"] <= 1.1 + 1e-6 for t in taps)
+            @test all(-0.2 - 1e-6 <= t["ta"] <= 0.2 + 1e-6 for t in taps)
+
+            _, held = opf(; tm = [t["tm"] for t in taps], ta = [t["ta"] for t in taps])
+            @test held["objective"] ≈ result["objective"] rtol = 1e-7
+        end
+    end
+
+    @testset "a phase shifter that is one winding of three" begin
+        # the same device as the two-winding one, with a third winding that ends on a
+        # node of its own and so carries nothing
+        for (F, sz) in ((LPFFormulation, (18, 20)), (IVRFormulation, (42, 55)))
+            _, two      = solved(meshed_network(), OptimalPowerFlowProblem, F)
+            nm, three   = solved(meshed_network(; star = true), OptimalPowerFlowProblem, F)
+            _, stranded = solved(meshed_network(; shift = false, star = true),
+                                 OptimalPowerFlowProblem, F)
+            taps = taps_of(three, 2)
+
+            @test three["objective"] ≈ two["objective"] rtol = 1e-6
+            @test stranded["objective"] > three["objective"] + 1.0
+            @test size_of(nm) == sz
+
+            # any angle that brings the corridor under its rating costs the same, so
+            # it is the rating and the direction that are determined
+            corridor = nw_solution(three)["edge"]["1"]["terminal"]["1"]
+            @test hypot(corridor["p"], get(corridor, "q", 0.0)) <= 0.5 + 1e-6
+            @test -0.3 - 1e-6 <= taps[1]["ta"] < -1e-3
+            @test taps[2]["ta"] == 0.0 && taps[3]["ta"] == 0.0
+        end
+    end
+
+    @testset "a winding of three held across the contingencies" begin
+        dim  = Dimension(:contingency => 2)
+        data = meshed_network(; dim, out = (2,), star = true)
+
+        for (F, keys) in ((LPFFormulation, (:ta,)), (IVRFormulation, (:tr, :ti)))
+            tied = instantiate_model(data, RedispatchProblem, F).ext[:redispatch_control]
+
+            @test all(haskey(tied, (:edge, Arc(2, 1, 1), k, 2)) for k in keys)
+            @test !any(haskey(tied, (:edge, a, k, 2))
+                       for a in (Arc(2, 2, 2), Arc(2, 3, 4)), k in (:ta, :tr, :ti, :tm))
+        end
+
+        # the linearized optimum is the two-winding one, held or not
+        two = meshed_network(; dim, out = (2,))
+        for control in (:preventive, :corrective)
+            rd = Redispatch(; control)
+            three = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; redispatch = rd))
+            @test three["objective"] ≈
+                  quiet(() -> solve_rd(two, LPFFormulation, OPTIMIZER; redispatch = rd))["objective"] rtol = 1e-6
+
+            control === :preventive && @test taps_of(three, 2, 1)[1]["ta"] ≈
+                                             taps_of(three, 2, 2)[1]["ta"] atol = 1e-6
         end
     end
 
@@ -236,7 +362,6 @@ end
 
         # what is not built yet says so rather than being modelled as something else
         @test_throws ArgumentError Transformer(; two..., oltc = STEPPED)
-        @test_throws ArgumentError Transformer(; two..., oltc = true, pst = true)
 
         # a winding with no impedance has no angle of its own in the linearized
         # formulation, where the star point is one

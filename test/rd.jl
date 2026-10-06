@@ -9,6 +9,7 @@
 # v0.5.0 - the redispatch problem                                              #
 # v0.11.0 - binary variables and integer gates                                 #
 # v0.12.0 - a phase shifter is a winding of a transformer, and free            #
+# v0.12.0 - the meshed network can carry a three-winding shifter               #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The
@@ -39,19 +40,27 @@ end
 """
 A three-node meshed network: a tight direct corridor `1–3` in parallel with a
 path `1–2–3` carrying a phase shifter, which can steer flow off the corridor at
-no cost. Edge 3 is what a contingency takes out.
+no cost. Edge 3 is what a contingency takes out. With `star`, the phase shifter has
+a third winding that ends on a node of its own, so it is the same device with an
+extra terminal.
 """
 function meshed_network(; dim::Dimension = Dimension(), rate::Float64 = 0.5,
-                          shift::Bool = true, out = ())
+                          shift::Bool = true, out = (), star::Bool = false)
     ps_limit = shift ? 0.3 : 0.0
     status   = isempty(out) ? true : nw_vector(dim, (n, c) -> n ∉ out)
 
     I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
                                2 => Node(; id = 2), 3 => Node(; id = 3))
+    shifter = star ?
+        Transformer(; id = 2, terminals = [1, 2, 4], r = 0.0, x = [0.05, 0.05, 0.1],
+                    pst = [true, false, false],
+                    ta_min = [-ps_limit, 0.0, 0.0], ta_max = [ps_limit, 0.0, 0.0]) :
+        Transformer(; id = 2, terminals = [1, 2], r = 0.0, x = 0.1, pst = true,
+                    ta_min = -ps_limit, ta_max = ps_limit)
+    star && (I[4] = Node(; id = 4))
     E = Dict{Int,AbstractEdge}(
         1 => Branch(; id = 1, terminals = [1, 3], r = 0.0, x = 0.1, rate_a = rate),
-        2 => Transformer(; id = 2, terminals = [1, 2], r = 0.0, x = 0.1, pst = true,
-                         ta_min = -ps_limit, ta_max = ps_limit),
+        2 => shifter,
         3 => Branch(; id = 3, terminals = [2, 3], r = 0.0, x = 0.1, status = status))
     U = Dict{Int,AbstractUnit}(
         1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,

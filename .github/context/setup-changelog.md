@@ -21,6 +21,6 @@ Next id: **SC6**.
 - SC4 · 2026-10-04 · approved by Tom Van Acker · `copilot-instructions.md` rule 2 and
   `julia.instructions.md`: a version bump is the patch digit, or the minor digit for an item that
   adds a component type; `templates/spec.md` says the same · why: F3, D20 (B5 is v0.11.0).
-- SC5 · 2026-10-11 · approved by Tom Van Acker · `domain-invariants.instructions.md`: the
+- SC5 · 2026-10-06 · approved by Tom Van Acker · `domain-invariants.instructions.md`: the
   load-order bullet no longer names `transformer/transformer.jl` as an example · why: B11, D28 —
   `transformer/` holds the one file and has no siblings left to load after it.

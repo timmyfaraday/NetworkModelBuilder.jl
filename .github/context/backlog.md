@@ -2,14 +2,14 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B14**.
+older ones: git has them). Next id: **B15**.
 
 ## Now
 
 - [ ] B11 · One `Transformer` for every transformer (windings, tap changer, phase shifter), replacing
   `TapChanger`, `PhaseShifter` and `MultiWindingTransformer` · Tom · 2026-10-05
   - Plan `knowledge/plan/unified-transformer.md` (D28-D34), branch `b11-unified-transformer`, v0.12.0,
-    tagged at the merge. Accepted by Tom; ready to implement.
+    tagged at the merge. Accepted by Tom; commits 1-4 of 6 done, 5 (`STEPPED`) and 6 (docs) left.
 
 ## Next
 
@@ -41,6 +41,14 @@ older ones: git has them). Next id: **B14**.
   closed switch would merge its nodes · Tom · 2026-10-04
 - [ ] B8 · `test/lf.jl:124` (`solve_time > 0.0`) fails now and then on Windows: `time()` has a coarse
   resolution and case14 solves faster; seen once in a full run, passes alone. Likely `>= 0.0` · Tom · 2026-10-04
+- [ ] B14 · A preventive phase shifter whose setpoint angle is exactly zero can stop Ipopt at its first
+  iteration in the current-based redispatch · Tom · 2026-10-06
+  - The tie holds `tr` and `ti` equal across the states while every state keeps `tr² + ti² = tm²`, so
+    those rows are dependent at every feasible point, and at the start too when `ti = 0`. The tie is
+    older than B11 (the old `PhaseShifter` had it). `meshed_network(; star = true)` in `test/rd.jl`
+    with two contingencies: `OTHER_ERROR`, restoration failed, for every Ipopt setting tried; a setpoint
+    of 1e-3 rad solves to 55.0117, which the two-winding network gives at zero. Either drop the rows
+    of the tied states or start off zero. The linearized formulation is unaffected.
 
 ## Done
 

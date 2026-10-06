@@ -9,6 +9,7 @@
 # v0.3.0 - component hierarchy                                                 #
 # v0.10.1 - exports its own public names                                       #
 # v0.12.0 - one transformer, with windings, a tap changer and a phase shifter  #
+# v0.12.0 - a winding can be a tap changer and a phase shifter at once         #
 ################################################################################
 
 export AbstractTransformer, Transformer, TapMode, FIXED, CONTINUOUS, STEPPED
@@ -90,8 +91,10 @@ winding: it stands for the first winding, and the second is neutral — a ratio 
 one, no shift, no impedance, no shunt — except for `rate_a`, which applies to
 both terminals. With more windings every such field is a vector.
 
-A winding that is `CONTINUOUS` in both `oltc` and `pst`, and `STEPPED` windings,
-are not built yet.
+A winding that is both `oltc` and `pst` moves its magnitude and its angle at once,
+which in the current based formulation puts the ratio in a ring between `tm_min`
+and `tm_max`, cut to the angles between `ta_min` and `ta_max`. A `STEPPED` winding
+is not built yet.
 
 # Examples
 ```julia
@@ -221,9 +224,6 @@ function _check_transformer(id, tm, tm_min, tm_max, ta_min, ta_max, oltc, pst, a
     for k in eachindex(oltc)
         STEPPED in (oltc[k], pst[k]) &&
             throw(ArgumentError("winding $k of transformer $id is `STEPPED`, which is not built yet"))
-        oltc[k] != FIXED && pst[k] != FIXED &&
-            throw(ArgumentError("winding $k of transformer $id moves both its magnitude and " *
-                                "its angle, which is not built yet"))
     end
 
     return nothing
@@ -284,12 +284,13 @@ phase_shift(::NetworkModel, tf::Transformer, ::Int, k::Int; nw::Int) = tf.ta[k]
 
 The complex voltage of the star point of every in-service transformer, `vsr` and
 `vsi`, and for every winding whose ratio the problem chooses, the voltage behind
-it, `vtr` and `vti`, and the ratio itself: `tm` where only the magnitude moves,
-`tr` and `ti` where the angle does. A variable of a winding is keyed by its
-[`Arc`](@ref).
+it, and the ratio itself: `tm` where only the magnitude moves, `tr` and `ti` where
+the angle does, with or without the magnitude. A variable of a winding is keyed by
+its [`Arc`](@ref).
 
 Only the angle is kept as a real and an imaginary part, so that the equations stay
-polynomial: it enters through `tr² + ti² = tm²` and a pair of bounds on `ti/tr`, in
+polynomial: it enters through `tr² + ti² = tm²`, or a ring between `tm_min²` and
+`tm_max²` where the magnitude moves too, and a pair of bounds on `ti/tr`, in
 place of a sine and a cosine of a variable. The start of a voltage behind a ratio
 is the node's own, referred through it.
 """
@@ -329,16 +330,20 @@ function _variable_winding!(nm::NetworkModel, tf::Transformer, a::Arc, k::Int; n
     variable!(nm, :vtr, a; nw, base_name = name(:vtr), start = vtr0)
     variable!(nm, :vti, a; nw, base_name = name(:vti), start = vti0)
 
-    if _moves_magnitude(nm, tf, k)
+    if _moves_angle(nm, tf, k)
+        lo, hi   = tf.ta_min[k], tf.ta_max[k]
+        mlo, mhi = _moves_magnitude(nm, tf, k) ? (tf.tm_min[k], tf.tm_max[k]) : (tm, tm)
+        ms       = clamp(tm, mlo, mhi)
+
+        variable!(nm, :tr, a; nw, base_name = name(:tr), start = ms * cos(ta),
+                  lower = mlo * cos(max(abs(lo), abs(hi))), upper = mhi)
+        variable!(nm, :ti, a; nw, base_name = name(:ti), start = ms * sin(ta),
+                  lower = min(mlo * sin(lo), mhi * sin(lo)),
+                  upper = max(mlo * sin(hi), mhi * sin(hi)))
+    else
         variable!(nm, :tm, a; nw, base_name = name(:tm),
                   start = clamp(tm, tf.tm_min[k], tf.tm_max[k]),
                   lower = tf.tm_min[k], upper = tf.tm_max[k])
-    else
-        lo, hi = tf.ta_min[k], tf.ta_max[k]
-        variable!(nm, :tr, a; nw, base_name = name(:tr), start = tm * cos(ta),
-                  lower = tm * cos(max(abs(lo), abs(hi))), upper = tm)
-        variable!(nm, :ti, a; nw, base_name = name(:ti), start = tm * sin(ta),
-                  lower = tm * sin(lo), upper = tm * sin(hi))
     end
 
     return nothing
@@ -474,8 +479,9 @@ The limits of every in-service transformer: the apparent power rating at each
 terminal, where the problem watches the transformer for congestion, see
 [`is_monitored`](@ref); the limits on the voltage angle difference across a
 two-winding one; and, for a winding whose angle the problem chooses, that the
-ratio keeps its magnitude, `tr² + ti² = tm²`, and its angle stays between `ta_min`
-and `ta_max`.
+ratio keeps its magnitude, `tr² + ti² = tm²`, and its angle stays between
+`ta_min` and `ta_max`. Where the magnitude is chosen too, the ratio stays in the
+ring `tm_min² ≤ tr² + ti² ≤ tm_max²` instead.
 """
 function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_id_default(nm)
                                ) where {P<:AbstractDispatchProblem,F<:IVRFormulation}
@@ -495,9 +501,17 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::
             _moves_angle(nm, tf, k) || continue
             tr, ti = var(nm, :tr, a; nw), var(nm, :ti, a; nw)
 
-            tap[a] = (
-                constrain!(nm, :tap_setting, (a, :magnitude),
-                           JuMP.@build_constraint(tr^2 + ti^2 == tf.tm[k]^2); nw),
+            magnitude = if _moves_magnitude(nm, tf, k)
+                (constrain!(nm, :tap_setting, (a, :magnitude_max),
+                            JuMP.@build_constraint(tr^2 + ti^2 <= tf.tm_max[k]^2); nw),
+                 constrain!(nm, :tap_setting, (a, :magnitude_min),
+                            JuMP.@build_constraint(tr^2 + ti^2 >= tf.tm_min[k]^2); nw))
+            else
+                (constrain!(nm, :tap_setting, (a, :magnitude),
+                            JuMP.@build_constraint(tr^2 + ti^2 == tf.tm[k]^2); nw),)
+            end
+
+            tap[a] = (magnitude...,
                 constrain!(nm, :tap_setting, (a, :max),
                            JuMP.@build_constraint(ti <= tan(tf.ta_max[k]) * tr); nw),
                 constrain!(nm, :tap_setting, (a, :min),
@@ -527,8 +541,9 @@ and only the sum of their impedances matters, so nothing is left to be a variabl
     magnitude to change, so `tm` does not appear in the linearized equations at
     all. A winding that is `oltc` is therefore **inert** in this formulation: it is
     built and solved as an ordinary winding at its setpoint, and the control it
-    offers an alternating current model is simply absent. Use an
-    [`IVRFormulation`](@ref) where that control is the point.
+    offers an alternating current model is simply absent. If it is also `pst`, its
+    angle still moves. Use an [`IVRFormulation`](@ref) where the magnitude is the
+    point.
 """
 function variable_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_id_default(nm)
                       ) where {P<:AbstractProblemType,F<:LPFFormulation}

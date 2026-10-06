@@ -11,6 +11,7 @@
 # v0.12.0 - one transformer, with windings, a tap changer and a phase shifter  #
 # v0.12.0 - a winding can be a tap changer and a phase shifter at once         #
 # v0.12.0 - a transformer held at the base case writes no tap rows again       #
+# v0.12.0 - a winding can step through the positions of a range                #
 ################################################################################
 
 export AbstractTransformer, Transformer, TapMode, FIXED, CONTINUOUS, STEPPED
@@ -80,6 +81,9 @@ Every field with an entry per winding is indexed by terminal position.
   `0.9` and `1.1` by default.
 - `ta_min`, `ta_max`: the limits of the angle where `pst` is `CONTINUOUS`, `±π/12`
   by default.
+- `tm_step`, `ta_step`: the distance between the positions of a winding that is
+  `STEPPED`, which run from `tm_min` to `tm_max` and from `ta_min` to `ta_max`;
+  `0.0125` and one degree by default.
 - `rate_a`: the apparent power rating at each terminal [pu], `Inf` when unlimited.
 - `angmin`, `angmax`: the limits on the voltage angle difference between the two
   terminals of a two-winding transformer [rad]. A transformer with more windings
@@ -94,8 +98,17 @@ both terminals. With more windings every such field is a vector.
 
 A winding that is both `oltc` and `pst` moves its magnitude and its angle at once,
 which in the current based formulation puts the ratio in a ring between `tm_min`
-and `tm_max`, cut to the angles between `ta_min` and `ta_max`. A `STEPPED` winding
-is not built yet.
+and `tm_max`, cut to the angles between `ta_min` and `ta_max`.
+
+A `STEPPED` winding takes one of the positions of its range, a binary variable for
+each, which makes a dispatch problem mixed-integer: there are no duals, and in the
+current based formulation it is nonconvex as well, so it needs a solver for that.
+The setpoint has to be one of the positions, and the limits and the step of a
+stepped winding cannot vary over the network index. In the current based
+formulation a winding steps its magnitude, its angle or both, over every pair, the
+other part of the ratio being its setpoint; in the linearized one only the angle
+exists, so only `pst` steps and `oltc` is inert as it is when continuous. A winding
+that steps one of the two and moves the other continuously is not built.
 
 # Examples
 ```julia
@@ -126,6 +139,8 @@ Base.@kwdef struct Transformer <: AbstractTransformer
     tm_max   ::NetworkQuantity{Vector{Float64}}    = 1.1
     ta_min   ::NetworkQuantity{Vector{Float64}}    = -pi / 12
     ta_max   ::NetworkQuantity{Vector{Float64}}    =  pi / 12
+    tm_step  ::NetworkQuantity{Vector{Float64}}    = 0.0125
+    ta_step  ::NetworkQuantity{Vector{Float64}}    = pi / 180
     rate_a   ::NetworkQuantity{Vector{Float64}}    = Inf
     angmin   ::NetworkQuantity{Float64}            = -pi / 3
     angmax   ::NetworkQuantity{Float64}            =  pi / 3
@@ -133,7 +148,8 @@ Base.@kwdef struct Transformer <: AbstractTransformer
     ext      ::Dict{Symbol,Any}                    = Dict{Symbol,Any}()
 
     function Transformer(id, name, terminals, r, x, g_sh, b_sh, g_m, b_m, tm, ta, oltc, pst,
-                         tm_min, tm_max, ta_min, ta_max, rate_a, angmin, angmax, status, ext)
+                         tm_min, tm_max, ta_min, ta_max, tm_step, ta_step, rate_a, angmin,
+                         angmax, status, ext)
         n = length(terminals)
         n >= 2 ||
             throw(ArgumentError("transformer $id has $n terminals, a transformer has at least two"))
@@ -148,14 +164,18 @@ Base.@kwdef struct Transformer <: AbstractTransformer
         tm_max = _per_winding(tm_max, n, 1.1,      id, :tm_max)
         ta_min = _per_winding(ta_min, n, -pi / 12, id, :ta_min)
         ta_max = _per_winding(ta_max, n,  pi / 12, id, :ta_max)
+        tm_step = _per_winding(tm_step, n, 0.0125,   id, :tm_step)
+        ta_step = _per_winding(ta_step, n, pi / 180, id, :ta_step)
         rate_a = _per_winding(rate_a, n, Inf,      id, :rate_a; every = true)
         oltc   = _tap_modes(oltc, n, id, :oltc)
         pst    = _tap_modes(pst,  n, id, :pst)
 
-        _check_transformer(id, tm, tm_min, tm_max, ta_min, ta_max, oltc, pst, angmin, angmax)
+        _check_transformer(id, tm, ta, tm_min, tm_max, ta_min, ta_max, tm_step, ta_step,
+                           oltc, pst, angmin, angmax)
 
         return new(id, name, terminals, r, x, g_sh, b_sh, g_m, b_m, tm, ta, oltc, pst,
-                   tm_min, tm_max, ta_min, ta_max, rate_a, angmin, angmax, status, ext)
+                   tm_min, tm_max, ta_min, ta_max, tm_step, ta_step, rate_a, angmin, angmax,
+                   status, ext)
     end
 end
 
@@ -207,7 +227,8 @@ function _tap_modes(x, n::Int, id, field::Symbol)
                         "transformer only"))
 end
 
-function _check_transformer(id, tm, tm_min, tm_max, ta_min, ta_max, oltc, pst, angmin, angmax)
+function _check_transformer(id, tm, ta, tm_min, tm_max, ta_min, ta_max, tm_step, ta_step,
+                            oltc, pst, angmin, angmax)
     all_nw(w -> all(>(0), w), tm) ||
         throw(ArgumentError("transformer $id has a non-positive tap magnitude"))
     all_nw(w -> all(>(0), w), tm_min) ||
@@ -219,13 +240,51 @@ function _check_transformer(id, tm, tm_min, tm_max, ta_min, ta_max, oltc, pst, a
     all_nw(w -> all(a -> -pi / 2 < a < pi / 2, w), ta_min) &&
         all_nw(w -> all(a -> -pi / 2 < a < pi / 2, w), ta_max) ||
         throw(ArgumentError("transformer $id has a ratio angle limit outside (-π/2, π/2)"))
+    all_nw(w -> all(>(0), w), tm_step) && all_nw(w -> all(>(0), w), ta_step) ||
+        throw(ArgumentError("transformer $id has a step that is not positive"))
     all_nw(<=, angmin, angmax) ||
         throw(ArgumentError("transformer $id has angmin above angmax"))
 
     for k in eachindex(oltc)
-        STEPPED in (oltc[k], pst[k]) &&
-            throw(ArgumentError("winding $k of transformer $id is `STEPPED`, which is not built yet"))
+        steps_magnitude, steps_angle = oltc[k] === STEPPED, pst[k] === STEPPED
+        mixed = (steps_magnitude && pst[k] === CONTINUOUS) ||
+                (steps_angle && oltc[k] === CONTINUOUS)
+
+        mixed &&
+            throw(ArgumentError("winding $k of transformer $id steps one part of its ratio and " *
+                                "moves the other continuously, which is not built"))
+
+        steps_magnitude && _check_steps(id, k, "magnitude", tm, tm_min, tm_max, tm_step)
+        steps_angle     && _check_steps(id, k, "angle", ta, ta_min, ta_max, ta_step)
     end
+
+    return nothing
+end
+
+"the positions of a stepped range, from `lo` to `hi` and `step` apart"
+_positions(lo, hi, step) = [lo + i * step for i in 0:round(Int, (hi - lo) / step)]
+
+"the index of `x` among the positions of a range, or `nothing` where it is none of them"
+function _position(x, lo, hi, step)
+    i = round(Int, (x - lo) / step)
+
+    return 0 <= i <= round(Int, (hi - lo) / step) && abs(x - (lo + i * step)) < 1e-8 ? i + 1 : nothing
+end
+
+"what a winding that steps its `what` has to satisfy: a range of whole steps, a setpoint on one"
+function _check_steps(id, k, what, setpoint, lo, hi, step)
+    any(is_nw_varying, (lo, hi, step)) &&
+        throw(ArgumentError("winding $k of transformer $id steps its $what, so the limits and the " *
+                            "step of it cannot vary over the network index"))
+
+    n = (hi[k] - lo[k]) / step[k]
+    abs(n - round(n)) < 1e-6 ||
+        throw(ArgumentError("the limits of the $what of winding $k of transformer $id are not " *
+                            "a whole number of steps apart"))
+
+    all_nw(x -> _position(x[k], lo[k], hi[k], step[k]) !== nothing, setpoint) ||
+        throw(ArgumentError("the setpoint of the $what of winding $k of transformer $id is " *
+                            "not one of its positions"))
 
     return nothing
 end
@@ -245,7 +304,74 @@ _moves_angle(::NetworkModel{P}, tf::Transformer, k::Int) where {P<:AbstractProbl
 
 "whether the problem chooses the ratio of winding `k` at all"
 _moves(nm::NetworkModel, tf::Transformer, k::Int) =
-    _moves_magnitude(nm, tf, k) || _moves_angle(nm, tf, k)
+    _moves_magnitude(nm, tf, k) || _moves_angle(nm, tf, k) || _stepped(nm, tf, k)
+
+"""
+    _stepped(nm, tf, k)
+
+Whether the problem chooses the ratio of winding `k` from the positions of a
+range. In the linearized formulation that is only an angle, since a magnitude does
+nothing there.
+"""
+function _stepped end
+
+_stepped(::NetworkModel{P,F}, tf::Transformer, k::Int) where {P<:AbstractProblemType,F<:IVRFormulation} =
+    _decides(P) && (tf.oltc[k] === STEPPED || tf.pst[k] === STEPPED)
+
+_stepped(::NetworkModel{P,F}, tf::Transformer, k::Int) where {P<:AbstractProblemType,F<:LPFFormulation} =
+    _decides(P) && tf.pst[k] === STEPPED
+
+"""
+    _variable_steps!(nm, tf, a, k; nw)
+
+One binary `zt` for each position winding `k` can take, keyed by `(a, s)` with `a`
+its [`Arc`](@ref), and starting at 1 for the position of the setpoint.
+
+A winding that is held, see [`is_held`](@ref), takes the position of the base case,
+so it does not have binaries of its own: it reuses the ones of the base case, where
+ties between copies would only give a mixed-integer solver more to branch on.
+"""
+function _variable_steps!(nm::NetworkModel, tf::Transformer, a::Arc, k::Int; nw::Int)
+    start = _step_start(nm, tf, k)
+    base  = is_held(nm, :edge, a.edge; nw) ? first_id(nm, nw, :contingency) : nothing
+
+    zt = variable_container!(nm, :zt; nw, idtype = Tuple{Arc,Int})
+    for s in eachindex(_step_values(nm, tf, k))
+        if base === nothing
+            variable!(nm, :zt, (a, s); nw, base_name = "$(nw)_zt[$(a.edge),$k,$s]",
+                      start = s == start ? 1.0 : 0.0, binary = true)
+        else
+            zt[(a, s)] = var(nm, :zt, (a, s); nw = base)
+        end
+    end
+
+    return nothing
+end
+
+"""
+    _constraint_steps!(nm, tf, e, A; nw)
+
+One position for every stepped winding of transformer `e`, `Σₛ zt = 1`, written
+where the transformer is not held, see [`is_held`](@ref).
+"""
+function _constraint_steps!(nm::NetworkModel, tf::Transformer, e::Int, A::Vector{Arc}; nw::Int)
+    step = get!(() -> Dict{Arc,Any}(), con(nm; nw), :tap_step)
+    is_held(nm, :edge, e; nw) && return nothing
+
+    for (k, a) in enumerate(A)
+        _stepped(nm, tf, k) || continue
+
+        zt = var(nm, :zt; nw)
+        step[a] = constrain!(nm, :tap_step, a, JuMP.@build_constraint(
+            sum(zt[(a, s)] for s in eachindex(_step_values(nm, tf, k))) == 1); nw)
+    end
+
+    return nothing
+end
+
+"the position winding `k` takes, among the ones it can, in a solved model"
+_chosen_step(nm::NetworkModel, tf::Transformer, a::Arc, k::Int; nw::Int) =
+    argmax(s -> JuMP.value(var(nm, :zt, (a, s); nw)), eachindex(_step_values(nm, tf, k)))
 
 """
     tap_ratio(nm, tf, e, k; nw)
@@ -255,8 +381,8 @@ transformer `e`.
 
 Two numbers where the winding holds its ratio, which is the case for a `FIXED`
 one and for any winding in a power flow. A winding the problem chooses the ratio
-of returns what that ratio is made of: variables for the angle, or an expression
-in the magnitude variable.
+of returns what that ratio is made of: variables for the angle, an expression in
+the magnitude variable, or an expression in the binaries of its positions.
 """
 function tap_ratio end
 
@@ -270,7 +396,8 @@ The angle winding `k` of transformer `e` shifts, `ta`.
 
 The counterpart of [`tap_ratio`](@ref) for the linearized formulation, where only
 the angle survives: a number where the winding holds it, the variable the problem
-chooses where `pst` is `CONTINUOUS` and the problem chooses.
+chooses where `pst` is `CONTINUOUS`, and an expression in the binaries of its
+positions where `pst` is `STEPPED`.
 """
 function phase_shift end
 
@@ -331,7 +458,9 @@ function _variable_winding!(nm::NetworkModel, tf::Transformer, a::Arc, k::Int; n
     variable!(nm, :vtr, a; nw, base_name = name(:vtr), start = vtr0)
     variable!(nm, :vti, a; nw, base_name = name(:vti), start = vti0)
 
-    if _moves_angle(nm, tf, k)
+    if _stepped(nm, tf, k)
+        _variable_steps!(nm, tf, a, k; nw)
+    elseif _moves_angle(nm, tf, k)
         lo, hi   = tf.ta_min[k], tf.ta_max[k]
         mlo, mhi = _moves_magnitude(nm, tf, k) ? (tf.tm_min[k], tf.tm_max[k]) : (tm, tm)
         ms       = clamp(tm, mlo, mhi)
@@ -355,12 +484,43 @@ function tap_ratio(nm::NetworkModel{P,F}, tf::Transformer, e::Int, k::Int; nw::I
     _moves(nm, tf, k) || return (tf.tm[k] * cos(tf.ta[k]), tf.tm[k] * sin(tf.ta[k]))
 
     a = edge_arcs(nm, e; nw)[k]
+    if _stepped(nm, tf, k)
+        zt, S = var(nm, :zt; nw), _step_values(nm, tf, k)
+
+        return (JuMP.@expression(nm.model, sum(S[s][1] * zt[(a, s)] for s in eachindex(S))),
+                JuMP.@expression(nm.model, sum(S[s][2] * zt[(a, s)] for s in eachindex(S))))
+    end
     _moves_angle(nm, tf, k) && return (var(nm, :tr, a; nw), var(nm, :ti, a; nw))
 
     tm = var(nm, :tm, a; nw)
 
     return (JuMP.@expression(nm.model, cos(tf.ta[k]) * tm),
             JuMP.@expression(nm.model, sin(tf.ta[k]) * tm))
+end
+
+"""
+    _step_values(nm, tf, k)
+
+The ratios `(tr, ti)` winding `k` can take where it steps, one binary for each: the
+magnitudes in turn for every angle, where it steps both. The part of the ratio it
+does not step is its setpoint.
+"""
+function _step_values(::NetworkModel{P,F}, tf::Transformer, k::Int
+                     ) where {P<:AbstractProblemType,F<:IVRFormulation}
+    ms = tf.oltc[k] === STEPPED ? _positions(tf.tm_min[k], tf.tm_max[k], tf.tm_step[k]) : [tf.tm[k]]
+    as = tf.pst[k]  === STEPPED ? _positions(tf.ta_min[k], tf.ta_max[k], tf.ta_step[k]) : [tf.ta[k]]
+
+    return [(m * cos(a), m * sin(a)) for m in ms for a in as]
+end
+
+"the index, among [`_step_values`](@ref), of the setpoint of winding `k`"
+function _step_start(::NetworkModel{P,F}, tf::Transformer, k::Int
+                    ) where {P<:AbstractProblemType,F<:IVRFormulation}
+    i = tf.oltc[k] === STEPPED ? _position(tf.tm[k], tf.tm_min[k], tf.tm_max[k], tf.tm_step[k]) : 1
+    j = tf.pst[k]  === STEPPED ? _position(tf.ta[k], tf.ta_min[k], tf.ta_max[k], tf.ta_step[k]) : 1
+    na = tf.pst[k] === STEPPED ? length(_positions(tf.ta_min[k], tf.ta_max[k], tf.ta_step[k])) : 1
+
+    return (i - 1) * na + j
 end
 
 ################################################################################
@@ -482,7 +642,8 @@ terminal, where the problem watches the transformer for congestion, see
 two-winding one; and, for a winding whose angle the problem chooses, that the
 ratio keeps its magnitude, `tr² + ti² = tm²`, and its angle stays between
 `ta_min` and `ta_max`. Where the magnitude is chosen too, the ratio stays in the
-ring `tm_min² ≤ tr² + ti² ≤ tm_max²` instead.
+ring `tm_min² ≤ tr² + ti² ≤ tm_max²` instead. A winding that steps takes exactly one
+of its positions, `Σₛ zt = 1`.
 
 In a redispatch the ratio of a preventive winding is tied to the base case, whose
 rows already restrict it, so the other network indices do not write them again,
@@ -502,6 +663,7 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::
         length(A) == 2 &&
             (angle[e] = constraint_edge_angle_difference!(nm, A[1], A[2], tf.angmin, tf.angmax; nw))
 
+        _constraint_steps!(nm, tf, e, A; nw)
         is_held(nm, :edge, e; nw) && continue
 
         for (k, a) in enumerate(A)
@@ -538,7 +700,8 @@ end
 
 The angle of the star point of every in-service transformer with three or more
 windings, `vas`, and the angle of every winding whose `pst` is `CONTINUOUS` where
-the problem chooses, held between `ta_min` and `ta_max`.
+the problem chooses, held between `ta_min` and `ta_max`. A winding whose `pst` is
+`STEPPED` has a binary `zt` for each of its positions instead.
 
 A transformer with two windings has no star point here: its windings are in series
 and only the sum of their impedances matters, so nothing is left to be a variable.
@@ -563,6 +726,11 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_
         length(A) > 2 && variable!(nm, :vas, e; nw, base_name = "$(nw)_vas[$e]", start = 0.0)
 
         for (k, a) in enumerate(A)
+            if _stepped(nm, tf, k)
+                _variable_steps!(nm, tf, a, k; nw)
+                continue
+            end
+
             _moves_angle(nm, tf, k) || continue
             variable!(nm, :ta, a; nw, base_name = "$(nw)_ta[$e,$k]",
                       start = clamp(tf.ta[k], tf.ta_min[k], tf.ta_max[k]),
@@ -573,9 +741,27 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_
     return nothing
 end
 
-phase_shift(nm::NetworkModel{P,F}, tf::Transformer, e::Int, k::Int; nw::Int
+function phase_shift(nm::NetworkModel{P,F}, tf::Transformer, e::Int, k::Int; nw::Int
+                    ) where {P<:AbstractProblemType,F<:LPFFormulation}
+    a = edge_arcs(nm, e; nw)[k]
+    if _stepped(nm, tf, k)
+        zt, S = var(nm, :zt; nw), _step_values(nm, tf, k)
+
+        return JuMP.@expression(nm.model, sum(S[s] * zt[(a, s)] for s in eachindex(S)))
+    end
+
+    return _moves_angle(nm, tf, k) ? var(nm, :ta, a; nw) : tf.ta[k]
+end
+
+"the angles winding `k` can take where it steps, one binary for each"
+_step_values(::NetworkModel{P,F}, tf::Transformer, k::Int
+            ) where {P<:AbstractProblemType,F<:LPFFormulation} =
+    _positions(tf.ta_min[k], tf.ta_max[k], tf.ta_step[k])
+
+"the index, among [`_step_values`](@ref), of the setpoint of winding `k`"
+_step_start(::NetworkModel{P,F}, tf::Transformer, k::Int
            ) where {P<:AbstractProblemType,F<:LPFFormulation} =
-    _moves_angle(nm, tf, k) ? var(nm, :ta, edge_arcs(nm, e; nw)[k]; nw) : tf.ta[k]
+    _position(tf.ta[k], tf.ta_min[k], tf.ta_max[k], tf.ta_step[k])
 
 """
     constraint_edge(nm, Transformer; nw)
@@ -649,7 +835,8 @@ The rating and the angle difference limits of every in-service transformer. With
 no losses, what leaves one terminal of a two-winding transformer arrives at the
 other, so the tighter of the two ratings is the one that binds; a transformer with
 more windings is rated at each terminal. The rating is skipped where the problem
-does not watch the transformer for congestion, see [`is_monitored`](@ref).
+does not watch the transformer for congestion, see [`is_monitored`](@ref). A winding
+that steps takes exactly one of its positions, `Σₛ zt = 1`.
 """
 function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_id_default(nm)
                                ) where {P<:AbstractDispatchProblem,F<:LPFFormulation}
@@ -663,6 +850,8 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::
             constraint_linear_limits!(nm, e, A[1], A[2], minimum(tf.rate_a),
                                       tf.angmin, tf.angmax; nw) :
             constraint_linear_ratings!(nm, e, A, tf.rate_a; nw)
+
+        _constraint_steps!(nm, tf, e, A; nw)
     end
 
     return nothing
@@ -677,7 +866,9 @@ end
 
 The ratio of a preventive winding, held equal across the contingencies: `tm`, `tr`
 and `ti` in the current based formulation, the angle `ta` in the linearized one,
-each of them keyed by the [`Arc`](@ref) of the winding it belongs to.
+each of them keyed by the [`Arc`](@ref) of the winding it belongs to. The binaries
+of a winding that steps are not tied: a preventive winding reuses the ones of the
+base case, see [`is_held`](@ref).
 
 A winding that is `oltc` or `pst` is a **non-costly** measure: there is no
 [`redispatch_cost`](@ref) method for a transformer, so moving it is free. In the
@@ -704,7 +895,9 @@ given; for one the problem chose it is what the optimizer chose.
 
 In a redispatch the setpoint is reported too, as `tm_market` and `ta_market`: the
 ratio the market schedule left the winding at, so that what the redispatch moved is
-the difference.
+the difference. A winding that steps reports the index of its position as `step`,
+counted as the positions of [`Transformer`](@ref) run: for a winding that steps
+both in the current based formulation, the magnitudes in turn for every angle.
 """
 function solution_edge!(entry::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{Transformer},
                         e::Int, nw::Int) where {P<:AbstractProblemType,F<:IVRFormulation}
@@ -713,6 +906,7 @@ function solution_edge!(entry::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T
     for (k, a) in enumerate(edge_arcs(nm, e; nw))
         tr, ti = map(_value, tap_ratio(nm, tf, e, k; nw))
         tap    = Dict{String,Any}("tr" => tr, "ti" => ti, "tm" => hypot(tr, ti), "ta" => atan(ti, tr))
+        _stepped(nm, tf, k) && (tap["step"] = _chosen_step(nm, tf, a, k; nw))
         _market!(tap, nm, tf, k)
 
         entry["terminal"]["$(a.terminal)"]["tap"] = tap
@@ -727,6 +921,7 @@ function solution_edge!(entry::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T
 
     for (k, a) in enumerate(edge_arcs(nm, e; nw))
         tap = Dict{String,Any}("tm" => tf.tm[k], "ta" => _value(phase_shift(nm, tf, e, k; nw)))
+        _stepped(nm, tf, k) && (tap["step"] = _chosen_step(nm, tf, a, k; nw))
         _market!(tap, nm, tf, k)
 
         entry["terminal"]["$(a.terminal)"]["tap"] = tap

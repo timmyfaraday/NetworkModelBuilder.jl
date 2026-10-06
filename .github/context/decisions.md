@@ -132,8 +132,10 @@ How to use this file:
 - **`oltc` and `pst` are non-costly measures, for now: moving a tap or an angle has no price, and a
   transformer has no `cost`** (D34). The price a phase shifter carried is removed; to be revisited.
 - **A preventive measure tied to the base case builds no rows of its own at the network indices it
-  is tied to; the rows that only restrict it are written once, at the base case** (D35). Reusing the
-  base case's variables instead of tying them is to be re-evaluated when `STEPPED` is built (Q6).
+  is tied to; the rows that only restrict it are written once, at the base case** (D35).
+- **A preventive winding that steps has no binaries of its own at the network indices it is held at:
+  it reuses the base case's, and nothing is tied; its continuous ratio stays tied. A corrective one
+  keeps a set per contingency** (D36).
 
 ## Zorba pipeline (`scripts/`)
 
@@ -400,5 +402,12 @@ Date: 2026-10-06 · Decided by: Tom Van Acker · Area: Component model
 Why: the tie of a preventive phase shifter and the magnitude row each state wrote made the
 current-based rows dependent at every feasible point, and Ipopt stopped at its first iteration on a
 three-winding shifter set at zero (B14); without the repeated rows it solves, to the two-winding optimum.
-Changes: new. Whether a held measure should reuse the base case's variables instead of being tied is
-open, to be re-evaluated in the commit that builds `STEPPED` (Q6).
+Changes: new. Reuse of the base case's variables instead of a tie was left open, and is settled in D36.
+
+### D36 — A held stepped winding reuses the base case's binaries
+Date: 2026-10-06 · Decided by: Tom Van Acker · Area: Component model
+Why: measured on a preventive stepped shifter with N contingencies and P positions, a tie leaves P×N
+binaries and the same optimum as reuse, which leaves P: HiGHS takes 0.01-0.02 s either way, Juniper
+0.07-23 s tied against 0.05-0.2 s reused. A corrective winding is the same under both, 100 and 200
+binaries and about two minutes of Juniper at N = 4 and 8 with P = 25.
+Changes: D35, its open question. Only the binaries; `tr`, `ti` and `ta` stay tied.

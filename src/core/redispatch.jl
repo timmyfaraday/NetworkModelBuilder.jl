@@ -10,6 +10,7 @@
 # v0.6.0 - a rating can be priced instead of enforced                          #
 # v0.12.0 - a measure may belong to one terminal of an edge                    #
 # v0.12.0 - a measure held at the base case builds no rows of its own          #
+# v0.12.0 - a held measure may reuse the binaries of the base case             #
 ################################################################################
 
 ################################################################################
@@ -257,6 +258,10 @@ A held measure is tied to the base case by [`constraint_redispatch_control`](@re
 so every row that only restricts its setting is already implied there. A
 component builds none of them again at a network index where this is `true`:
 written twice, such rows are dependent, which a solver can stop on.
+
+A measure that is a binary variable is not tied at all: the component reuses the
+variable of the base case, since a copy tied to it is one more variable for a
+mixed-integer solver to branch on, for the same decision.
 """
 is_held(::NetworkModel, ::Symbol, ::Int; nw::Int) = false
 

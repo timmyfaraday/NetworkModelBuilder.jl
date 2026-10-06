@@ -9,6 +9,7 @@
 # v0.12.0 - initial implementation                                             #
 # v0.12.0 - the helpers build the one Transformer; a held ratio is folded      #
 # v0.12.0 - both controls on one winding, and on any winding of three          #
+# v0.12.0 - a winding that steps through the positions of a range              #
 ################################################################################
 
 # What a transformer does, written so that it does not depend on how one is
@@ -34,6 +35,9 @@ oltc(; tm_min, tm_max, kw...) = Transformer(; oltc = true, tm_min, tm_max, kw...
 
 "a transformer whose magnitude and angle are both decisions"
 both(; kw...) = Transformer(; oltc = true, pst = true, kw...)
+
+"a transformer whose magnitude, angle or both take one of the positions of a range, as `kw` say"
+stepper(; kw...) = Transformer(; kw...)
 
 "a transformer with three or more windings, `r`, `x`, ... holding one entry per terminal"
 star(; kw...) = Transformer(; kw...)
@@ -355,6 +359,153 @@ end
         @test size_of(nm) == (42, 53)
     end
 
+    @testset "stepped windings" begin
+        exact   = JuMP.optimizer_with_attributes(HiGHS.Optimizer, "output_flag" => false,
+                                                 "mip_rel_gap" => 0.0, "mip_abs_gap" => 0.0)
+        juniper = JuMP.optimizer_with_attributes(
+            Juniper.Optimizer, "log_levels" => Symbol[],
+            "nl_solver" => JuMP.optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 0,
+                                                           "sb" => "yes"))
+
+        # the meshed network with its shifter at each of `positions`, or stepping
+        positions = -0.3:0.1:0.3
+        stepping  = (pst = STEPPED, ta_step = 0.1)
+        held_at(a; star = false, kw...) =
+            meshed_network(; kw..., star, tap = (pst = FIXED, ta = star ? [a, 0.0, 0.0] : [a, 0.0]))
+
+        @testset "linearized: the optimum is the best of every position" begin
+            runs = [quiet(() -> solve_opf(held_at(a), LPFFormulation, exact))["objective"]
+                    for a in positions]
+
+            nm     = instantiate_model(meshed_network(; tap = stepping), OptimalPowerFlowProblem,
+                                       LPFFormulation)
+            result = quiet(() -> optimize_model!(nm, exact))
+            tap    = taps_of(result, 2)[1]
+
+            @test result["termination_status"] == JuMP.OPTIMAL
+            @test result["objective"] ≈ minimum(runs) atol = 1e-6
+            @test maximum(runs) - minimum(runs) > 100.0        # and it was a choice
+
+            # the position it took is the angle it reports, and one that clears the corridor
+            @test tap["ta"] ≈ positions[tap["step"]] atol = 1e-9
+            @test tap["ta"] <= -0.1 + 1e-9
+            @test sum(JuMP.value, values(_NMB.var(nm)[:zt])) ≈ 1.0 atol = 1e-9
+
+            # held at that position, the same winding gives the same optimum
+            @test quiet(() -> solve_opf(held_at(tap["ta"]), LPFFormulation, exact))["objective"] ≈
+                  result["objective"] atol = 1e-6
+        end
+
+        @testset "one binary for each position, and no prices" begin
+            nm = instantiate_model(meshed_network(; tap = stepping), OptimalPowerFlowProblem,
+                                   LPFFormulation)
+            zt = _NMB.var(nm)[:zt]
+
+            @test length(zt) == 7 && all(JuMP.is_binary, values(zt))
+            @test [JuMP.start_value(zt[(Arc(2, 1, 1), s)]) for s in 1:7] == [0, 0, 0, 1, 0, 0, 0]
+            @test !haskey(_NMB.var(nm), :ta)
+            @test count(==(:tap_step), first.([(key, id) for (_, key, id) in
+                                               keys(registered_constraints(nm))])) == 1
+
+            quiet(() -> optimize_model!(nm, exact))
+            @test !JuMP.has_duals(nm.model)
+            @test all(active_nodal_price(nm, i) === nothing for i in 1:3)
+        end
+
+        @testset "a power flow holds the setpoint, and a magnitude is inert when linearized" begin
+            range = (pst = STEPPED, ta_min = deg2rad(-9), ta_max = deg2rad(11), ta_step = deg2rad(5))
+            lf    = instantiate_model(case5_with(stepper; range...), LoadFlowProblem, LPFFormulation)
+            @test !any(JuMP.is_binary, JuMP.all_variables(lf.model))
+
+            # a stepped magnitude has nothing to act on in the linearized formulation
+            nm, result = solved(case5_with(stepper; oltc = STEPPED, tm_min = 0.9, tm_max = 1.1,
+                                           tm_step = 0.05), OptimalPowerFlowProblem, LPFFormulation)
+            @test !any(JuMP.is_binary, JuMP.all_variables(nm.model))
+            @test result["objective"] ≈ 18230.87327365834 rtol = 1e-7
+            @test size_of(nm) == (32, 49)
+        end
+
+        @testset "current-based, $name: the optimum is the best of every position" for
+                (name, extra, ms, as, sz) in (
+                    ("magnitude", (oltc = STEPPED, tm_min = 0.9, tm_max = 1.1, tm_step = 0.05),
+                     0.9:0.05:1.1, [deg2rad(1.0)], (85, 111)),
+                    ("angle", (pst = STEPPED, ta_min = deg2rad(-9), ta_max = deg2rad(11),
+                               ta_step = deg2rad(5)),
+                     [1.05], deg2rad.(-9:5:11), (85, 111)),
+                    ("magnitude and angle", (oltc = STEPPED, pst = STEPPED, tm_min = 0.95,
+                                             tm_max = 1.05, tm_step = 0.05, ta_min = deg2rad(-9),
+                                             ta_max = deg2rad(1), ta_step = deg2rad(5)),
+                     0.95:0.05:1.05, deg2rad.(-9:5:1), (89, 111)))
+
+            # in turn for each angle, the order in which the winding numbers its positions
+            runs = [solved(case5_with(fixed; tm = [m, 1.0], ta = [a, 0.0]),
+                           OptimalPowerFlowProblem, IVRFormulation)[2]["objective"]
+                    for m in ms for a in as]
+            best = argmin(runs)
+
+            nm     = instantiate_model(case5_with(stepper; extra...), OptimalPowerFlowProblem,
+                                       IVRFormulation)
+            result = quiet(() -> optimize_model!(nm, juniper))
+            tap    = taps_of(result, 5)[1]
+
+            @test result["termination_status"] in (JuMP.OPTIMAL, JuMP.LOCALLY_SOLVED)
+            @test result["objective"] ≈ runs[best] rtol = 1e-6
+            @test maximum(runs) - minimum(runs) > 100.0
+            @test tap["step"] == best
+            @test size_of(nm) == sz
+            @test !JuMP.has_duals(nm.model)
+        end
+
+        @testset "a winding of three steps as one of two" begin
+            tap  = (pst = [STEPPED, FIXED, FIXED], ta_step = [0.1, 0.1, 0.1])
+            two  = quiet(() -> solve_opf(meshed_network(; tap = stepping), LPFFormulation, exact))
+            nm   = instantiate_model(meshed_network(; star = true, tap), OptimalPowerFlowProblem,
+                                     LPFFormulation)
+            three = quiet(() -> optimize_model!(nm, exact))
+
+            @test three["objective"] ≈ two["objective"] atol = 1e-6
+            @test length(_NMB.var(nm)[:zt]) == 7              # the windings that hold have none
+            @test taps_of(three, 2)[1]["ta"] <= -0.1 + 1e-9
+            @test taps_of(three, 2)[2]["ta"] == 0.0 && !haskey(taps_of(three, 2)[2], "step")
+        end
+
+        @testset "preventive: one position over the contingencies" begin
+            dim = Dimension(:contingency => 2)
+            for star in (false, true)
+                t    = star ? (pst = [STEPPED, FIXED, FIXED], ta_step = [0.1, 0.1, 0.1]) : stepping
+                data = meshed_network(; dim, out = (2,), star, tap = t)
+
+                # one angle for both states, so the best of the enumerated fixed ones
+                runs = [quiet(() -> solve_rd(held_at(a; dim, out = (2,), star), LPFFormulation,
+                                             exact))["objective"] for a in positions]
+                preventive = quiet(() -> solve_rd(data, LPFFormulation, exact))
+                corrective = quiet(() -> solve_rd(data, LPFFormulation, exact;
+                                          redispatch = Redispatch(; control = :corrective)))
+
+                @test preventive["objective"] ≈ minimum(runs) atol = 1e-6
+                @test corrective["objective"] < preventive["objective"] - 1.0
+                @test taps_of(preventive, 2, 1)[1]["step"] == taps_of(preventive, 2, 2)[1]["step"]
+            end
+
+            # a held winding has no binaries and no row of its own: it takes the base
+            # case's, so nothing is tied and the corrective one keeps a set per state
+            data = meshed_network(; dim, out = (2,), tap = stepping)
+            arc  = Arc(2, 1, 1)
+            for F in (LPFFormulation, IVRFormulation), control in (:preventive, :corrective)
+                nm = instantiate_model(data, RedispatchProblem, F;
+                                       ext = Dict{Symbol,Any}(:redispatch => Redispatch(; control)))
+                held = control === :preventive
+
+                @test count(JuMP.is_binary, JuMP.all_variables(nm.model)) == (held ? 7 : 14)
+                @test all((_NMB.var(nm, :zt, (arc, s); nw = 2) === _NMB.var(nm, :zt, (arc, s); nw = 1))
+                          == held for s in 1:7)
+                @test !any(key[3] === :zt for key in keys(nm.ext[:redispatch_control]))
+                @test haskey(_NMB.con(nm; nw = 1)[:tap_step], arc)
+                @test haskey(_NMB.con(nm; nw = 2)[:tap_step], arc) == !held
+            end
+        end
+    end
+
     @testset "what it refuses" begin
         two = (id = 1, terminals = [1, 2], r = 0.0, x = 0.1)
 
@@ -372,7 +523,19 @@ end
                                                  r = [0.01, 0.02, 0.03], x = 0.1)
 
         # what is not built yet says so rather than being modelled as something else
-        @test_throws ArgumentError Transformer(; two..., oltc = STEPPED)
+        @test_throws ArgumentError Transformer(; two..., oltc = STEPPED, pst = true)
+        @test_throws ArgumentError Transformer(; two..., oltc = true, pst = STEPPED)
+
+        # a stepped winding needs a range of whole steps with its setpoint on one, and
+        # a range that is the same at every network index
+        @test Transformer(; two..., oltc = STEPPED).oltc == [STEPPED, FIXED]
+        @test Transformer(; two..., pst = STEPPED).pst == [STEPPED, FIXED]
+        @test_throws ArgumentError Transformer(; two..., oltc = STEPPED, tm = 1.004)
+        @test_throws ArgumentError Transformer(; two..., pst = STEPPED, ta = 0.003)
+        @test_throws ArgumentError Transformer(; two..., oltc = STEPPED, tm_max = 1.11)
+        @test_throws ArgumentError Transformer(; two..., pst = STEPPED, ta_step = 0.0)
+        @test_throws ArgumentError Transformer(; two..., oltc = STEPPED,
+            tm_max = nw_vector(Dimension(:time => 2), [1.1, 1.0]))
 
         # a winding with no impedance has no angle of its own in the linearized
         # formulation, where the star point is one

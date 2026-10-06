@@ -11,6 +11,7 @@
 # v0.12.0 - a phase shifter is a winding of a transformer, and free            #
 # v0.12.0 - the meshed network can carry a three-winding shifter               #
 # v0.12.0 - which measures are held at the base case                           #
+# v0.12.0 - the meshed network's shifter can step                              #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The
@@ -43,10 +44,10 @@ A three-node meshed network: a tight direct corridor `1–3` in parallel with a
 path `1–2–3` carrying a phase shifter, which can steer flow off the corridor at
 no cost. Edge 3 is what a contingency takes out. With `star`, the phase shifter has
 a third winding that ends on a node of its own, so it is the same device with an
-extra terminal.
+extra terminal. `tap` is what else the shifter is given, a way to make it step.
 """
 function meshed_network(; dim::Dimension = Dimension(), rate::Float64 = 0.5,
-                          shift::Bool = true, out = (), star::Bool = false)
+                          shift::Bool = true, out = (), star::Bool = false, tap = (;))
     ps_limit = shift ? 0.3 : 0.0
     status   = isempty(out) ? true : nw_vector(dim, (n, c) -> n ∉ out)
 
@@ -55,9 +56,9 @@ function meshed_network(; dim::Dimension = Dimension(), rate::Float64 = 0.5,
     shifter = star ?
         Transformer(; id = 2, terminals = [1, 2, 4], r = 0.0, x = [0.05, 0.05, 0.1],
                     pst = [true, false, false],
-                    ta_min = [-ps_limit, 0.0, 0.0], ta_max = [ps_limit, 0.0, 0.0]) :
+                    ta_min = [-ps_limit, 0.0, 0.0], ta_max = [ps_limit, 0.0, 0.0], tap...) :
         Transformer(; id = 2, terminals = [1, 2], r = 0.0, x = 0.1, pst = true,
-                    ta_min = -ps_limit, ta_max = ps_limit)
+                    ta_min = -ps_limit, ta_max = ps_limit, tap...)
     star && (I[4] = Node(; id = 4))
     E = Dict{Int,AbstractEdge}(
         1 => Branch(; id = 1, terminals = [1, 3], r = 0.0, x = 0.1, rate_a = rate),
@@ -388,8 +389,8 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         @test redispatch_controls(lpf, Generator) == (:pgup, :pgdn)
         @test redispatch_controls(ivr, Storage) == (:psc, :psd, :psup, :psdn)
 
-        # the ratio is carried differently in the two formulations, and a
-        # transformer holds whatever a winding of it can move
+        # the ratio is carried differently in the two formulations; the positions of a
+        # winding that steps are not tied, the preventive one reuses the base case's
         @test redispatch_controls(ivr, Transformer) == (:tm, :tr, :ti)
         @test redispatch_controls(lpf, Transformer) == (:ta,)
 

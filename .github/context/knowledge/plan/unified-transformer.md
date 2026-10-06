@@ -120,7 +120,7 @@ when stepped): `solution_tables` has `tap_tm`, `tap_ta` per terminal, `zorba.jl:
 | 2 | `variable!` takes any hashable id (an `Arc`); `constraint_redispatch_control` ties each arc's variable | suite green; a toy `Arc`-keyed tie |
 | 3 | `Transformer`, the T-model for every `n`, `oltc`/`pst` `FIXED` or `CONTINUOUS` (not both on one winding); both formulations; redispatch; solution; Matpower, Zorba, table readers; four files become one; helpers swapped | step 1 numbers unchanged; IVR 78/108, 82/113, 81/110 (a held ratio is folded, and case5 has two transformers), LPF 32/49, 33/49, 32/49, redispatch LPF 19/20 (no `taup`/`tadn`); three windings equal their decomposition; PowerModels' ACP equals on case5 (a shift), PowerModels' IVR has no row for a shifted branch |
 | 4 | `oltc` and `pst` on one winding; controls on any winding of `n ≥ 3` | objective ≤ the best single-control run; preventive tie over a three-winding winding |
-| 5 | `STEPPED` | optimum equals the best of all enumerated fixed runs (HiGHS linearized, Juniper current-based, small); no duals; settle Q6 (held windings reuse the base case's binaries, or are tied) with the binaries and the solve time of both |
+| 5 | `STEPPED` | optimum equals the best of all enumerated fixed runs (HiGHS linearized, Juniper current-based, small); no duals; a held winding reuses the base case's binaries (D36) |
 | 6 | Docs (`transformer.md`, hierarchy, 13 other pages, README, `refs.bib`), `CHANGELOG.md`, 0.12.0 | `docs/make.jl`, `test/docs.jl`, full suite |
 
 ## Verification

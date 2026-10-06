@@ -1,7 +1,7 @@
 # STATE
 
 Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-06 by Tom Van Acker (B11: the
-unified-transformer plan is accepted, D28-D34 recorded; commits 1-4 are in).
+unified-transformer plan is accepted, D28-D36 recorded; commits 1-5 are in).
 
 ## Where NMB stands
 
@@ -19,8 +19,8 @@ unified-transformer plan is accepted, D28-D34 recorded; commits 1-4 are in).
   steps, N-1 screen, contingency fix, reactance floor), the `NMB_MERGE` flag (`9a8b676`), restored
   prices (`76a52ce`, D14), the `_diag_*` deletion (`9fc06d4`), the window/step settings (`3ea65d4`),
   then `main` merged in (`420b1aa`, so it has B5) and the B9 loader change in `SteeringPlanData.jl`.
-- `b11-unified-transformer` is `main` (`01122bd`), the plan and decisions, and commits 1-4 of the plan.
-- `b5-switch-edge` is merged and can be deleted. Next free decision id: **D36**.
+- `b11-unified-transformer` is `main` (`01122bd`), the plan and decisions, and commits 1-5 of the plan.
+- `b5-switch-edge` is merged and can be deleted. Next free decision id: **D37**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -39,10 +39,10 @@ unified-transformer plan is accepted, D28-D34 recorded; commits 1-4 are in).
 ## In progress
 
 - B11, one `Transformer` for every transformer: plan `context/knowledge/plan/unified-transformer.md` on
-  `b11-unified-transformer` (D28-D35). Commits 1-4 done: the swap (old types gone, T-model, `oltc`/`pst`
-  as `TapMode`), both controls on a winding (a ring of ratios), controls on any winding of three, B14
-  fixed (a held measure builds no restricting rows); suite 3052, docs still name the old types
-  (commit 6). Zorba flows are not unique without `pst_cost` (D34). Next 5, `STEPPED`, settles Q6.
+  `b11-unified-transformer` (D28-D36). Commits 1-5 done: the swap (old types gone, T-model, `oltc`/`pst`
+  as `TapMode`), both controls on a winding, controls on any winding of three, B14 fixed (D35), and
+  `STEPPED` (a binary per position; a held winding reuses the base case's, D36). Suite 3125. Docs
+  still name the old types and know nothing of `STEPPED`: commit 6. Zorba flows not unique (D34).
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`), done with the original
   prices (D14) and the 1e-5 floor: `runs/_year_orig_prices`, 365 of 365 chunks sound, 0 fallback, 58
   min; overload rows 341,787 (step 2) and 5,720,514 (step 3), no load shedding or spillage (the
@@ -66,7 +66,7 @@ unified-transformer plan is accepted, D28-D34 recorded; commits 1-4 are in).
 
 ## Next
 
-1. Implement B11 on `b11-unified-transformer`, one commit per row of the plan's table (5 is next).
+1. Implement B11 on `b11-unified-transformer`, one commit per row of the plan's table (6, docs, is next).
 2. B10: re-run the full year with the switches (`_year_orig_prices` has the floor), recipe in the
    header of `scripts/run_year_redispatch.jl`.
 3. B7 (closed switches under network reduction), B8 (timing flake), B3/B6 (throughput) and B4

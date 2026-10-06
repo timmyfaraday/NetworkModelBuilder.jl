@@ -1,13 +1,14 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-06 by Tom Van Acker (B11: the
-unified-transformer plan is accepted, D28-D36 recorded; commits 1-5 are in).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-06 by Tom Van Acker (B11: commit 6,
+docs and 0.12.0, is in; the branch is complete and not merged).
 
 ## Where NMB stands
 
-- v0.11.0 (D13, D15-D27): the `Switch` edge, see below. v0.10.2 (D11): `solution_tables` and
-  `docs/src/manual/concepts.md`. v0.10.1 (D10): `src/comp/` is auto-included by a directory walk
-  (`_include_dir`) and each component file exports its own names. v0.10.0: `security_tables`.
+- v0.12.0 (D28-D36, on `b11-unified-transformer`): one `Transformer`, see below. v0.11.0 (D13,
+  D15-D27): the `Switch` edge. v0.10.2 (D11): `solution_tables` and `docs/src/manual/concepts.md`.
+  v0.10.1 (D10): `src/comp/` is auto-included by a directory walk (`_include_dir`) and each
+  component file exports its own names. v0.10.0: `security_tables`.
 - Gap-closure items #1-9 of `context/knowledge/plan/GAP_CLOSURE_PLAN.md` are closed; #10-11 are
   open, see `backlog.md`. Tags: `v0.6.0` and `v0.9.1`-`v0.9.7`; v0.10.x and v0.11.0 are untagged.
 
@@ -19,7 +20,7 @@ unified-transformer plan is accepted, D28-D36 recorded; commits 1-5 are in).
   steps, N-1 screen, contingency fix, reactance floor), the `NMB_MERGE` flag (`9a8b676`), restored
   prices (`76a52ce`, D14), the `_diag_*` deletion (`9fc06d4`), the window/step settings (`3ea65d4`),
   then `main` merged in (`420b1aa`, so it has B5) and the B9 loader change in `SteeringPlanData.jl`.
-- `b11-unified-transformer` is `main` (`01122bd`), the plan and decisions, and commits 1-5 of the plan.
+- `b11-unified-transformer` is `main` (`01122bd`), the plan and decisions, and the 6 commits of the plan.
 - `b5-switch-edge` is merged and can be deleted. Next free decision id: **D37**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
@@ -38,11 +39,10 @@ unified-transformer plan is accepted, D28-D36 recorded; commits 1-5 are in).
 
 ## In progress
 
-- B11, one `Transformer` for every transformer: plan `context/knowledge/plan/unified-transformer.md` on
-  `b11-unified-transformer` (D28-D36). Commits 1-5 done: the swap (old types gone, T-model, `oltc`/`pst`
-  as `TapMode`), both controls on a winding, controls on any winding of three, B14 fixed (D35), and
-  `STEPPED` (a binary per position; a held winding reuses the base case's, D36). Suite 3125. Docs
-  still name the old types and know nothing of `STEPPED`: commit 6. Zorba flows not unique (D34).
+- B11 is done on `b11-unified-transformer` (plan `context/knowledge/plan/unified-transformer.md`, D28-D36):
+  one `Transformer` with a T-model, `oltc`/`pst` as `TapMode`, `STEPPED` windings, `is_held`; old types
+  gone, no shims. Docs, `CHANGELOG.md` (with a migration table) and `version = "0.12.0"` are in.
+  Suite 3126, docs build clean. Not merged, not tagged. Zorba flows are not unique (D34).
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`), done with the original
   prices (D14) and the 1e-5 floor: `runs/_year_orig_prices`, 365 of 365 chunks sound, 0 fallback, 58
   min; overload rows 341,787 (step 2) and 5,720,514 (step 3), no load shedding or spillage (the
@@ -66,7 +66,7 @@ unified-transformer plan is accepted, D28-D36 recorded; commits 1-5 are in).
 
 ## Next
 
-1. Implement B11 on `b11-unified-transformer`, one commit per row of the plan's table (6, docs, is next).
+1. Merge B11 and tag `v0.12.0` (Tom's OK), then B12: move `test-zorba-run` to `Transformer`.
 2. B10: re-run the full year with the switches (`_year_orig_prices` has the floor), recipe in the
    header of `scripts/run_year_redispatch.jl`.
 3. B7 (closed switches under network reduction), B8 (timing flake), B3/B6 (throughput) and B4

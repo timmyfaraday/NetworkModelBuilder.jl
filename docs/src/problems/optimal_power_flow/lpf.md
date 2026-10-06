@@ -13,18 +13,21 @@ See [The linearized formulation](@ref) for what the approximations discard.
 |:-------|:----|:----------|:-------|
 | ``v^{\text{a}}_{i}`` | `:va` | ``i \in I`` | free |
 | ``p_{a}`` | `:p` | ``a \in A`` | free |
-| ``v^{\text{as}}_{e}`` | `:vas` | ``e \in E^{\text{mw}}`` | free |
-| ``ta_{e}`` | `:ta` | ``e \in E^{\text{ps}}`` | ``[ta^{\text{min}}_{e}, ta^{\text{max}}_{e}]`` |
+| ``v^{\text{as}}_{e}`` | `:vas` | ``e \in E^{\text{tf}}``, three or more windings | free |
+| ``ta_{a}`` | `:ta` | ``a \in A^{\text{ta}}`` | ``[ta^{\text{min}}_{a}, ta^{\text{max}}_{a}]`` |
+| ``z^{\text{t}}_{a,s}`` | `:zt` | ``a \in A^{\text{zt}}``, every position ``s`` | binary |
 | ``p_{u}`` | `:pu` | ``u \in U`` | free |
 | ``p^{\text{g}}_{u}`` | `:pg` | ``u \in U^{\text{g}}`` | ``[p^{\text{min}}_{u}, p^{\text{max}}_{u}]`` |
 | ``p^{\text{d}}_{u}`` | `:pdf` | ``u \in U^{\text{fl}}`` | ``[p^{\text{d,min}}_{u}, p^{\text{d,max}}_{u}]`` |
 | ``p^{\text{sc}}_{u}, p^{\text{sd}}_{u}`` | `:psc`, `:psd` | ``u \in U^{\text{s}}`` | ``[0, \cdot^{\text{max}}_{u}]`` |
 | ``e_{u}`` | `:es` | ``u \in U^{\text{s}}`` | ``[0, e^{\text{max}}_{u}]`` |
 
-No voltage magnitude, no reactive power, no current — and no ``tm_{e}``: a
-[`TapChanger`](@ref) has no control to exercise here. A [`PhaseShifter`](@ref)
-does, and here its angle is the variable itself, where the IVR formulation has to
-carry the ratio as a real and an imaginary part.
+No voltage magnitude, no reactive power, no current — and no ``tm_{a}``: a winding
+that is `oltc` has no control to exercise here. A winding that is `pst` does, and
+here its angle is the variable itself, where the IVR formulation has to carry the
+ratio as a real and an imaginary part. A winding that steps its angle has a binary
+for each position instead, which makes the problem mixed-integer: a solver such as
+HiGHS takes it, and it has no duals.
 
 ## Objective
 
@@ -49,7 +52,8 @@ voltage violation, and cannot use reactive support to avoid one.
 
 ### At the edges
 
-Flow, ``\forall e \in E^{\text{br}} \cup E^{\text{tf}}``:
+Flow, ``\forall e \in E^{\text{br}}``, and ``\forall e \in E^{\text{tf}}`` with two windings,
+whose shift is ``ta_{e,1} - ta_{e,2}``:
 
 ```math
 p_{a^{\text{f}}_{e}} = -b_{e} \left(v^{\text{a}}_{i} - v^{\text{a}}_{j} - ta_{e}\right),
@@ -57,13 +61,16 @@ p_{a^{\text{f}}_{e}} = -b_{e} \left(v^{\text{a}}_{i} - v^{\text{a}}_{j} - ta_{e}
 p_{a^{\text{t}}_{e}} = -p_{a^{\text{f}}_{e}}
 ```
 
-and ``\forall e \in E^{\text{mw}}``:
+and ``\forall e \in E^{\text{tf}}`` with three or more windings:
 
 ```math
 p_{a_{e,k}} = -b_{e,k} \left(v^{\text{a}}_{i_k} - ta_{e,k} - v^{\text{as}}_{e}\right) \quad \forall k,
 \qquad
 \sum_{k} p_{a_{e,k}} = 0
 ```
+
+A winding that steps takes exactly one of its positions, ``\sum_{s} z^{\text{t}}_{a,s} = 1``,
+and its angle is ``ta_{a} = \sum_{s} z^{\text{t}}_{a,s} \, ta_{s}``.
 
 Limits, per terminal and per two-terminal edge:
 
@@ -105,7 +112,7 @@ solver where every cost is linear. On case14:
 |:--|----------:|------------:|
 | case14 | 76 | 82 |
 
-Against 198 and 294 for the same problem in the IVR formulation.
+Against 192 and 288 for the same problem in the IVR formulation.
 
 ```@example opf-lpf
 using NetworkModelBuilder, HiGHS, JuMP

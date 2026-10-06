@@ -45,7 +45,8 @@ constraint_node_voltage_reference(nm::NetworkModel{<:AbstractDispatchProblem,<:I
 ```
 
 The same axis decides whether a generator holds a setpoint or moves within its
-limits, whether a [`TapChanger`](@ref) is a control or a constant, and whether a
+limits, whether the ratio of a [`Transformer`](@ref) winding is a control or a
+constant, and whether a
 [`FlexibleLoad`](@ref) is flexible at all.
 
 The formulation type decides *in which variables the physics are written*. The

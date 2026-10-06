@@ -13,11 +13,12 @@ bounded, plus the controls a load flow does not give.
 |:-------|:----|:----------|:-------|
 | ``v^{\text{r}}_{i}, v^{\text{i}}_{i}`` | `:vr`, `:vi` | ``i \in I`` | ``[-v^{\text{max}}_{i}, v^{\text{max}}_{i}]`` |
 | ``c^{\text{r}}_{a}, c^{\text{i}}_{a}`` | `:cr`, `:ci` | ``a \in A`` | free |
-| ``c^{\text{sr}}_{e}, c^{\text{si}}_{e}`` | `:csr`, `:csi` | ``e \in E^{\text{br}} \cup E^{\text{tf}}`` | free |
-| ``v^{\text{tr}}_{e}, v^{\text{ti}}_{e}`` | `:vtr`, `:vti` | ``e \in E^{\text{tf}}`` | free |
-| ``v^{\text{sr}}_{e}, v^{\text{si}}_{e}`` | `:vsr`, `:vsi` | ``e \in E^{\text{mw}}`` | free |
-| ``t^{\text{r}}_{e}, t^{\text{i}}_{e}`` | `:tr`, `:ti` | ``e \in E^{\text{ps}}`` | from `ta_min`, `ta_max` |
-| ``tm_{e}`` | `:tm` | tap changers | ``[tm^{\text{min}}_{e}, tm^{\text{max}}_{e}]`` |
+| ``c^{\text{sr}}_{e}, c^{\text{si}}_{e}`` | `:csr`, `:csi` | ``e \in E^{\text{br}}`` | free |
+| ``v^{\text{sr}}_{e}, v^{\text{si}}_{e}`` | `:vsr`, `:vsi` | ``e \in E^{\text{tf}}`` | free |
+| ``v^{\text{tr}}_{a}, v^{\text{ti}}_{a}`` | `:vtr`, `:vti` | ``a \in A^{\text{tm}} \cup A^{\text{ta}} \cup A^{\text{zt}}`` | free |
+| ``t^{\text{r}}_{a}, t^{\text{i}}_{a}`` | `:tr`, `:ti` | ``a \in A^{\text{ta}}`` | from `ta_min`, `ta_max` |
+| ``tm_{a}`` | `:tm` | ``a \in A^{\text{tm}} \setminus A^{\text{ta}}`` | ``[tm^{\text{min}}_{a}, tm^{\text{max}}_{a}]`` |
+| ``z^{\text{t}}_{a,s}`` | `:zt` | ``a \in A^{\text{zt}}``, every position ``s`` | binary |
 | ``c^{\text{r}}_{u}, c^{\text{i}}_{u}`` | `:cru`, `:ciu` | ``u \in U`` | free |
 | ``p^{\text{g}}_{u}`` | `:pg` | ``u \in U^{\text{g}}`` | ``[p^{\text{min}}_{u}, p^{\text{max}}_{u}]`` |
 | ``q^{\text{g}}_{u}`` | `:qg` | ``u \in U^{\text{g}}`` | ``[q^{\text{min}}_{u}, q^{\text{max}}_{u}]`` |
@@ -60,8 +61,8 @@ Current balance, ``\forall i \in I``: as in the load flow.
 
 The physics are **identical** to the [load flow](@ref "Load flow in the IVR formulation"):
 the π-equivalent, the ideal ratio, the star. What a dispatch problem adds is the
-limits, and what it changes is that the ratio of a phase shifter or a tap changer
-is now a variable rather than a number.
+limits, and what it changes is that the ratio of a winding that is `pst`, `oltc` or
+`STEPPED` is now a variable rather than a number.
 
 Rating, ``\forall e``, per terminal ``a`` at node ``i``:
 
@@ -78,16 +79,28 @@ Angle difference across a two-terminal edge:
 \le \tan(\theta^{\text{max}}_{e}) \left(v^{\text{r}}_{i} v^{\text{r}}_{j} + v^{\text{i}}_{i} v^{\text{i}}_{j}\right)
 ```
 
-Phase shifter ratio, ``\forall e \in E^{\text{ps}}``:
+Ratio of a winding whose angle is chosen, ``\forall a \in A^{\text{ta}}``, with the
+magnitude held at its setpoint, or between its limits where it is chosen too,
 
 ```math
-(t^{\text{r}}_{e})^2 + (t^{\text{i}}_{e})^2 = tm_{e}^2,
+(t^{\text{r}}_{a})^2 + (t^{\text{i}}_{a})^2 = tm_{a}^2
+\quad \text{or} \quad
+(tm^{\text{min}}_{a})^2 \le (t^{\text{r}}_{a})^2 + (t^{\text{i}}_{a})^2 \le (tm^{\text{max}}_{a})^2,
 \qquad
-\tan(ta^{\text{min}}_{e}) \, t^{\text{r}}_{e} \le t^{\text{i}}_{e} \le \tan(ta^{\text{max}}_{e}) \, t^{\text{r}}_{e}
+\tan(ta^{\text{min}}_{a}) \, t^{\text{r}}_{a} \le t^{\text{i}}_{a} \le \tan(ta^{\text{max}}_{a}) \, t^{\text{r}}_{a}
 ```
 
 The ratio is carried as a real and an imaginary part rather than as an angle so
 that the equations it enters stay polynomial.
+
+Ratio of a winding that steps, ``\forall a \in A^{\text{zt}}``, with ``T_{s}`` the ratio
+of position ``s``, which makes the problem mixed-integer:
+
+```math
+\sum_{s} z^{\text{t}}_{a,s} = 1,
+\qquad
+v_{i} = \Big( \sum_{s} z^{\text{t}}_{a,s} \, T_{s} \Big) v^{\text{t}}_{a}
+```
 
 ### At the units
 
@@ -125,13 +138,13 @@ held fixed.
 ## Model class and size
 
 Nonconvex, quadratically constrained, with a quadratic objective. Needs a
-nonlinear solver. On case14:
+nonlinear solver, and a nonconvex mixed-integer one where a winding steps. On case14:
 
 | | variables | constraints |
 |:--|----------:|------------:|
-| case14 | 198 | 294 |
+| case14 | 192 | 288 |
 
-The same 198 variables as the load flow — case14 carries no controls — against 96
+The same 192 variables as the load flow — case14 carries no controls — against 96
 more constraints, which are its limits.
 
 ## Validation

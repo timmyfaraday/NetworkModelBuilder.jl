@@ -62,14 +62,13 @@ Beyond the [symbols in the introduction](@ref "Notation"), these pages use:
 |:-------|:--------|
 | ``I^{\text{ref}}, I^{\text{pv}}, I^{\text{pq}}`` | the reference, `PV` and `PQ` nodes |
 | ``E^{\text{br}}`` | the branches, any [`AbstractBranch`](@ref) |
-| ``E^{\text{tf}}`` | the two-winding transformers, any [`AbstractTwoWindingTransformer`](@ref) |
-| ``E^{\text{ps}} \subseteq E^{\text{tf}}`` | the phase shifters |
-| ``E^{\text{mw}}`` | the multi-winding transformers |
+| ``E^{\text{tf}}`` | the transformers, [`Transformer`](@ref), each with two or more windings |
+| ``A^{\text{tm}}, A^{\text{ta}}, A^{\text{zt}}`` | the arcs of the windings whose ratio magnitude or angle a dispatch problem chooses, and of those that step |
 | ``U^{\text{g}}, U^{\text{d}}, U^{\text{s}}, U^{\text{sh}}`` | the generators, loads, storage units and shunts |
 | ``U^{\text{fl}} \subseteq U^{\text{d}}`` | the flexible loads |
 | ``E^{\text{mon}} \subseteq E`` | the monitored edges of a redispatch |
 | ``a^{\text{f}}_{e}, a^{\text{t}}_{e}`` | the from and to arc of a two-terminal edge `e` |
-| ``a_{e,k}`` | the arc of winding `k` of a multi-winding transformer |
+| ``a_{e,k}`` | the arc of winding `k` of a transformer |
 | ``\mathcal{N}`` | the network indices, ``\mathcal{T}`` a horizon along `:time` |
 | ``p^{\uparrow}_{u}, p^{\downarrow}_{u}`` | the volumes a unit moved up and down from its market schedule |
 

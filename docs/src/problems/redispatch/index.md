@@ -86,8 +86,8 @@ Nothing else marks it, and nothing has to.
 |:--------|:--------|:-----------|
 | [`Generator`](@ref) | yes, at `cost_up` and `cost_dn` | its active power |
 | [`Storage`](@ref) | yes, at `cost_up` and `cost_dn`, both zero by default | what it charges and discharges, over the whole window |
-| [`PhaseShifter`](@ref) | no | its ratio angle, between `ta_min` and `ta_max` |
-| [`TapChanger`](@ref) | no | its ratio magnitude — in the IVR formulation only |
+| a winding of a [`Transformer`](@ref) that is `pst` | no | its ratio angle, between `ta_min` and `ta_max`, or one of its positions |
+| a winding of a [`Transformer`](@ref) that is `oltc` | no | its ratio magnitude — in the IVR formulation only |
 | [`DCLink`](@ref) | at `cost`, zero by default | its transfer, within its rating |
 | [`FlexibleLoad`](@ref) | no | its demand, subject to its energy balance |
 

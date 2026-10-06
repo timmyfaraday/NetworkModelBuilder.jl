@@ -10,6 +10,96 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-06
+
+This release replaces four transformer types with one, and breaks the code that
+named them: there are no shims for the old names. See the migration table at the end
+of the section.
+
+### Added
+
+- `Transformer` is every transformer: two or more windings, each with a ratio, a
+  series impedance and a shunt, meeting at a star point that carries the
+  magnetising branch, `g_m` and `b_m`. The model is a T for two windings as for
+  more, and the π-equivalent a Matpower branch with a ratio is, is the special case
+  of no magnetising branch and the whole impedance on the first winding. The star
+  point is an edge variable, not a node. A transformer with two windings accepts a
+  scalar for the first winding where a field takes an entry per winding.
+- `TapMode`, with `FIXED`, `CONTINUOUS` and `STEPPED`: the `oltc` field of a winding
+  says whether its ratio magnitude can move, as a tap changer's does, and `pst`
+  whether its angle can, as a phase shifter's does. A `Bool` is accepted, `true`
+  for `CONTINUOUS`. A winding can be both, which in the `IVRFormulation` keeps the
+  ratio in a ring between `tm_min` and `tm_max`, cut to the angles between `ta_min`
+  and `ta_max`, and a transformer can have a control on any of its windings.
+- `STEPPED` windings, with `tm_step` and `ta_step`: the winding takes one of the
+  positions `lo, lo + step, …, hi`, a binary `zt` for each. A dispatch problem is
+  then mixed-integer, a MILP in the `LPFFormulation` and a nonconvex MINLP in the
+  `IVRFormulation`, with no duals, so the nodal prices are `nothing`. A winding can
+  step its magnitude, its angle, or both over every pair; in the `LPFFormulation`
+  only the angle exists, so only `pst` steps there. The solution reports the index
+  of the position as `step`.
+- `is_held(nm, family, id; nw)`: whether a preventive measure takes the setting of
+  the base case at a network index. A held measure writes no row that only restricts
+  it, and a held winding that steps reuses the binaries of the base case instead of
+  tying copies of them, which leaves a mixed-integer solver `P` binaries rather
+  than `P × N`.
+- `constraint_linear_ratings!`, the rating of every terminal of an edge, and a
+  rating per terminal where `constraint_edge_rating!` took one for the edge.
+- `docs/src/components/transformer.md` rewritten for the one type, with the
+  literature it follows.
+
+### Changed
+
+- **Breaking.** The fields of a `Transformer` are per winding: `r`, `x`, `g_sh`,
+  `b_sh`, `tm`, `ta`, `tm_min`, `tm_max`, `ta_min`, `ta_max` and `rate_a` are vectors
+  with an entry per terminal, and the shunt that was `b_fr` and `b_to` is
+  `b_sh = [b_fr, b_to]`. `parse_matpower` builds the transformer with the ratio on
+  the first winding and half the charging on each.
+- **Breaking.** The tap of a transformer is reported under each terminal,
+  `solution["edge"][e]["terminal"][k]["tap"]`, and not under the edge. In a
+  redispatch it carries `tm_market` and `ta_market`, the setpoint the market left it
+  at; `taup` and `tadn` are gone with the price.
+- A phase shifter is a non-costly measure, and so is a tap changer: a transformer has
+  no `cost` and no `redispatch_cost` method. Without the price that picked the
+  least movement, a free angle is one of however many settings relieve the
+  congestion equally; the overload of a redispatch is unchanged, but how the flow
+  splits between parallel paths is not determined.
+- A ratio that is held is substituted into the rows in the `IVRFormulation`, so a
+  transformer that holds its ratio has no variable for the voltage behind it:
+  case14 is 192 variables instead of 198.
+- A transformer held at the base case writes the rows that restrict its ratio once.
+  Written at every contingency as well, they were dependent next to the tie, and
+  Ipopt stopped at its first iteration on a preventive phase shifter set at exactly
+  zero.
+
+### Deprecated
+
+- `pst_cost` of `parse_zorba` warns and has no effect.
+
+### Removed
+
+- `PhaseShifter`, `TapChanger`, `MultiWindingTransformer` and
+  `AbstractTwoWindingTransformer`, with `solution_tap`, `variable_two_winding!`,
+  `constraint_two_winding_limits!` and `constraint_two_winding_flow!`.
+
+### Fixed
+
+- A transformer with three or more windings and a winding without impedance, which
+  the `LPFFormulation` would write with an infinite susceptance and fail on with
+  `NaN`, is an `ArgumentError` that names the winding.
+
+### Migrating
+
+| before | now |
+|:-------|:----|
+| `PhaseShifter(; ta_min, ta_max, cost)` | `Transformer(; pst = true, ta_min, ta_max)`; there is no price |
+| `TapChanger(; tm_min, tm_max)` | `Transformer(; oltc = true, tm_min, tm_max)` |
+| `MultiWindingTransformer(; terminals, r, x, g_m, b_m)` | `Transformer(; terminals, r, x, g_m, b_m)` |
+| `Transformer(; b_fr, b_to)` | `Transformer(; b_sh = [b_fr, b_to])` |
+| `solution["edge"][e]["tap"]` | `solution["edge"][e]["terminal"][k]["tap"]` |
+| `parse_zorba(; pst_cost = c)` | `parse_zorba()`; the keyword warns and does nothing |
+| a type test, `edge isa PhaseShifter` | `any(tf.pst .!== FIXED)` on the `Transformer` |
+
 ## [0.11.0] - 2026-10-04
 
 ### Added

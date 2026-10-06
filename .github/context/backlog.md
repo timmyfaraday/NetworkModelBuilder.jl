@@ -6,10 +6,7 @@ older ones: git has them). Next id: **B15**.
 
 ## Now
 
-- [ ] B11 · One `Transformer` for every transformer (windings, tap changer, phase shifter), replacing
-  `TapChanger`, `PhaseShifter` and `MultiWindingTransformer` · Tom · 2026-10-05
-  - Plan `knowledge/plan/unified-transformer.md` (D28-D34), branch `b11-unified-transformer`, v0.12.0,
-    tagged at the merge. Accepted by Tom; commits 1-5 of 6 done, 6 (docs, CHANGELOG, 0.12.0) left.
+- (nothing: B11 is done on its branch and waits for the merge)
 
 ## Next
 
@@ -44,6 +41,10 @@ older ones: git has them). Next id: **B15**.
 
 ## Done
 
+- [x] B11 · One `Transformer` for every transformer (windings, tap changer, phase shifter), replacing
+  `TapChanger`, `PhaseShifter` and `MultiWindingTransformer` · Tom · 2026-10-05
+  - Plan `knowledge/plan/unified-transformer.md` (D28-D36), branch `b11-unified-transformer`, v0.12.0,
+    6 commits, suite 3126. To merge into `main` and tag `v0.12.0`: Tom's OK.
 - [x] B14 · A preventive phase shifter set at exactly zero stopped Ipopt in the current-based
   redispatch: the tie and each state's magnitude row were dependent. A held measure now builds no
   restricting rows of its own (D35); reuse of the base case's variables is Q6 · Tom · 2026-10-06

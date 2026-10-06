@@ -10,6 +10,7 @@
 # v0.11.0 - binary variables and integer gates                                 #
 # v0.12.0 - a phase shifter is a winding of a transformer, and free            #
 # v0.12.0 - the meshed network can carry a three-winding shifter               #
+# v0.12.0 - which measures are held at the base case                           #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The
@@ -323,6 +324,14 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         tied = nm.ext[:redispatch_control]
         @test haskey(tied, (:unit, 1, :pgup, 2))
         @test !haskey(tied, (:unit, 2, :pgup, 2))
+
+        # held is what is tied: never the base case, never a corrective measure, and
+        # nothing at all without a redispatch
+        @test !is_held(nm, :unit, 1; nw = 1)
+        @test is_held(nm, :unit, 1; nw = 2)
+        @test !is_held(nm, :unit, 2; nw = 2)
+        @test !is_held(instantiate_model(data, OptimalPowerFlowProblem, LPFFormulation),
+                       :unit, 1; nw = 2)
 
         result = quiet(() -> optimize_model!(nm, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED

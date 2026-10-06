@@ -275,12 +275,14 @@ redispatch_controls
 control_mode
 is_preventive
 is_corrective
+is_held
 ```
 
 The first `:contingency` coordinate is the base case, and every preventive
 measure is tied back to it. A measure at a network index where its component is
 out of service is skipped, so a generator that is itself the contingency
-constrains nothing.
+constrains nothing. Where a measure is held, its component does not write again
+the rows that only restrict it, since the base case's imply them.
 
 Every network index enters the objective, contingencies included, so the
 objective is an **expectation** over the states rather than a sum of them. A

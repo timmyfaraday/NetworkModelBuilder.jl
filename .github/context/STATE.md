@@ -20,7 +20,7 @@ unified-transformer plan is accepted, D28-D34 recorded; commits 1-4 are in).
   prices (`76a52ce`, D14), the `_diag_*` deletion (`9fc06d4`), the window/step settings (`3ea65d4`),
   then `main` merged in (`420b1aa`, so it has B5) and the B9 loader change in `SteeringPlanData.jl`.
 - `b11-unified-transformer` is `main` (`01122bd`), the plan and decisions, and commits 1-4 of the plan.
-- `b5-switch-edge` is merged and can be deleted. Next free decision id: **D35**.
+- `b5-switch-edge` is merged and can be deleted. Next free decision id: **D36**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -39,10 +39,10 @@ unified-transformer plan is accepted, D28-D34 recorded; commits 1-4 are in).
 ## In progress
 
 - B11, one `Transformer` for every transformer: plan `context/knowledge/plan/unified-transformer.md` on
-  `b11-unified-transformer` (D28-D34). Commits 1-4 done: the swap (`PhaseShifter`, `TapChanger`,
-  `MultiWindingTransformer` gone, T-model, `oltc`/`pst` as `TapMode`), both controls on a winding (a
-  ring of ratios), controls on any winding of three; suite 3037. Docs name the old types until
-  commit 6. Zorba flows are not unique without `pst_cost` (D34). Next 5, `STEPPED`; B14 is open.
+  `b11-unified-transformer` (D28-D35). Commits 1-4 done: the swap (old types gone, T-model, `oltc`/`pst`
+  as `TapMode`), both controls on a winding (a ring of ratios), controls on any winding of three, B14
+  fixed (a held measure builds no restricting rows); suite 3052, docs still name the old types
+  (commit 6). Zorba flows are not unique without `pst_cost` (D34). Next 5, `STEPPED`, settles Q6.
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`), done with the original
   prices (D14) and the 1e-5 floor: `runs/_year_orig_prices`, 365 of 365 chunks sound, 0 fallback, 58
   min; overload rows 341,787 (step 2) and 5,720,514 (step 3), no load shedding or spillage (the

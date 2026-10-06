@@ -9,6 +9,7 @@
 # v0.5.0 - the redispatch problem                                              #
 # v0.6.0 - a rating can be priced instead of enforced                          #
 # v0.12.0 - a measure may belong to one terminal of an edge                    #
+# v0.12.0 - a measure held at the base case builds no rows of its own          #
 ################################################################################
 
 ################################################################################
@@ -243,6 +244,30 @@ is_preventive(nm::NetworkModel, family::Symbol, id::Int) =
 "whether a component may take a different setting per contingency"
 is_corrective(nm::NetworkModel, family::Symbol, id::Int) =
     control_mode(nm, family, id) === :corrective
+
+"""
+    is_held(nm, family, id; nw)
+
+Whether component `id` of `family` takes, at network index `nw`, the setting it
+takes in the base case: it is preventive, `nw` is not itself the base case, and
+the component is in service in the base case too. Always `false` where there is
+no redispatch, or only one contingency.
+
+A held measure is tied to the base case by [`constraint_redispatch_control`](@ref),
+so every row that only restricts its setting is already implied there. A
+component builds none of them again at a network index where this is `true`:
+written twice, such rows are dependent, which a solver can stop on.
+"""
+is_held(::NetworkModel, ::Symbol, ::Int; nw::Int) = false
+
+function is_held(nm::NetworkModel{P}, family::Symbol, id::Int; nw::Int
+                ) where {P<:RedispatchProblem}
+    has_dim(nm, :contingency) && dim_length(nm, :contingency) > 1 || return false
+    is_first_id(nm, nw, :contingency) && return false
+    is_preventive(nm, family, id) || return false
+
+    return insorted(id, getproperty(topology(nm; nw = first_id(nm, nw, :contingency)), family))
+end
 
 """
     redispatch_controls(nm, T)

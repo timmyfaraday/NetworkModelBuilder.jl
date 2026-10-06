@@ -314,16 +314,27 @@ end
                        for a in (Arc(2, 2, 2), Arc(2, 3, 4)), k in (:ta, :tr, :ti, :tm))
         end
 
-        # the linearized optimum is the two-winding one, held or not
+        # the optimum is the two-winding one, held or not; the setpoint angle is zero,
+        # where dependent rows would stop the current-based solver
         two = meshed_network(; dim, out = (2,))
-        for control in (:preventive, :corrective)
-            rd = Redispatch(; control)
-            three = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; redispatch = rd))
+        for F in (LPFFormulation, IVRFormulation), control in (:preventive, :corrective)
+            rd    = Redispatch(; control)
+            three = quiet(() -> solve_rd(data, F, OPTIMIZER; redispatch = rd))
+            @test three["termination_status"] == JuMP.LOCALLY_SOLVED
             @test three["objective"] ≈
-                  quiet(() -> solve_rd(two, LPFFormulation, OPTIMIZER; redispatch = rd))["objective"] rtol = 1e-6
+                  quiet(() -> solve_rd(two, F, OPTIMIZER; redispatch = rd))["objective"] rtol = 1e-6
 
             control === :preventive && @test taps_of(three, 2, 1)[1]["ta"] ≈
                                              taps_of(three, 2, 2)[1]["ta"] atol = 1e-6
+        end
+
+        # a held winding has no tap rows of its own, the base case's imply them
+        for (control, held) in ((:preventive, true), (:corrective, false))
+            nm = instantiate_model(data, RedispatchProblem, IVRFormulation;
+                                   ext = Dict{Symbol,Any}(:redispatch => Redispatch(; control)))
+
+            @test haskey(_NMB.con(nm; nw = 1)[:tap_setting], Arc(2, 1, 1))
+            @test haskey(_NMB.con(nm; nw = 2)[:tap_setting], Arc(2, 1, 1)) == !held
         end
     end
 

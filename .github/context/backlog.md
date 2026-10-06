@@ -41,17 +41,12 @@ older ones: git has them). Next id: **B15**.
   closed switch would merge its nodes · Tom · 2026-10-04
 - [ ] B8 · `test/lf.jl:124` (`solve_time > 0.0`) fails now and then on Windows: `time()` has a coarse
   resolution and case14 solves faster; seen once in a full run, passes alone. Likely `>= 0.0` · Tom · 2026-10-04
-- [ ] B14 · A preventive phase shifter whose setpoint angle is exactly zero can stop Ipopt at its first
-  iteration in the current-based redispatch · Tom · 2026-10-06
-  - The tie holds `tr` and `ti` equal across the states while every state keeps `tr² + ti² = tm²`, so
-    those rows are dependent at every feasible point, and at the start too when `ti = 0`. The tie is
-    older than B11 (the old `PhaseShifter` had it). `meshed_network(; star = true)` in `test/rd.jl`
-    with two contingencies: `OTHER_ERROR`, restoration failed, for every Ipopt setting tried; a setpoint
-    of 1e-3 rad solves to 55.0117, which the two-winding network gives at zero. Either drop the rows
-    of the tied states or start off zero. The linearized formulation is unaffected.
 
 ## Done
 
+- [x] B14 · A preventive phase shifter set at exactly zero stopped Ipopt in the current-based
+  redispatch: the tie and each state's magnitude row were dependent. A held measure now builds no
+  restricting rows of its own (D35); reuse of the base case's variables is Q6 · Tom · 2026-10-06
 - [x] B9 · On `test-zorba-run`, load the couplers as locked-closed `Switch`es, drop the 1e-5
   reactance floor, re-run week 1 and compare · Tom · 2026-10-05
   - `scripts/SteeringPlanData.jl`; `runs/_week1_switches` against `runs/_phase5_week_orig`: 7 of 7

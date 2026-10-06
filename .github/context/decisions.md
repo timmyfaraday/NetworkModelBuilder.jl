@@ -131,6 +131,9 @@ How to use this file:
 - **A transformer reports its tap per terminal, not per edge** (D33).
 - **`oltc` and `pst` are non-costly measures, for now: moving a tap or an angle has no price, and a
   transformer has no `cost`** (D34). The price a phase shifter carried is removed; to be revisited.
+- **A preventive measure tied to the base case builds no rows of its own at the network indices it
+  is tied to; the rows that only restrict it are written once, at the base case** (D35). Reusing the
+  base case's variables instead of tying them is to be re-evaluated when `STEPPED` is built (Q6).
 
 ## Zorba pipeline (`scripts/`)
 
@@ -391,3 +394,11 @@ Date: 2026-10-05 · Decided by: Tom Van Acker · Area: Component model
 Why: the steering-plan pipeline never prices a phase shifter, a price per radian is a charge the
 current-based formulation cannot carry, and a free switch is non-costly already (D18). May change.
 Changes: new. Removes the priced phase shifter: `cost`, and `pst_cost` of `parse_zorba`.
+
+### D35 — A held measure builds no rows of its own
+Date: 2026-10-06 · Decided by: Tom Van Acker · Area: Component model
+Why: the tie of a preventive phase shifter and the magnitude row each state wrote made the
+current-based rows dependent at every feasible point, and Ipopt stopped at its first iteration on a
+three-winding shifter set at zero (B14); without the repeated rows it solves, to the two-winding optimum.
+Changes: new. Whether a held measure should reuse the base case's variables instead of being tied is
+open, to be re-evaluated in the commit that builds `STEPPED` (Q6).

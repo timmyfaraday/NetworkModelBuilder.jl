@@ -19,6 +19,7 @@
 # v0.10.2 - exports solution_tables                                            #
 # v0.11.0 - the component walk is a dependency of the compiled package         #
 # v0.11.0 - islands, and the check a model makes of them                       #
+# v0.12.0 - exports is_held                                                    #
 ################################################################################
 
 module NetworkModelBuilder
@@ -137,7 +138,7 @@ module NetworkModelBuilder
     # export — the redispatch problem
     export Redispatch, OverloadPrice, redispatch_setup
     export is_monitored, monitored_edges, overload_price, overload_cost
-    export control_mode, is_preventive, is_corrective
+    export control_mode, is_preventive, is_corrective, is_held
     export redispatch_controls, redispatch_cost
     export constraint_redispatch_control, constraint_overload_peak
     export solution_overload_peak

@@ -10,6 +10,7 @@
 # v0.10.1 - exports its own public names                                       #
 # v0.12.0 - one transformer, with windings, a tap changer and a phase shifter  #
 # v0.12.0 - a winding can be a tap changer and a phase shifter at once         #
+# v0.12.0 - a transformer held at the base case writes no tap rows again       #
 ################################################################################
 
 export AbstractTransformer, Transformer, TapMode, FIXED, CONTINUOUS, STEPPED
@@ -482,6 +483,10 @@ two-winding one; and, for a winding whose angle the problem chooses, that the
 ratio keeps its magnitude, `tr² + ti² = tm²`, and its angle stays between
 `ta_min` and `ta_max`. Where the magnitude is chosen too, the ratio stays in the
 ring `tm_min² ≤ tr² + ti² ≤ tm_max²` instead.
+
+In a redispatch the ratio of a preventive winding is tied to the base case, whose
+rows already restrict it, so the other network indices do not write them again,
+see [`is_held`](@ref).
 """
 function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_id_default(nm)
                                ) where {P<:AbstractDispatchProblem,F<:IVRFormulation}
@@ -496,6 +501,8 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::
         rating[e] = constraint_edge_rating!(nm, e, tf.rate_a; nw)
         length(A) == 2 &&
             (angle[e] = constraint_edge_angle_difference!(nm, A[1], A[2], tf.angmin, tf.angmax; nw))
+
+        is_held(nm, :edge, e; nw) && continue
 
         for (k, a) in enumerate(A)
             _moves_angle(nm, tf, k) || continue

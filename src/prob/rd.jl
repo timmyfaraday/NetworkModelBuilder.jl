@@ -9,6 +9,7 @@
 # v0.5.0 - initial implementation, including the rolling horizon               #
 # v0.6.0 - the objective pays for the congestion it left                       #
 # v0.12.0 - a measure may belong to one terminal of an edge                    #
+# v0.12.0 - a measure held at the base case builds no rows of its own          #
 ################################################################################
 
 ################################################################################
@@ -110,6 +111,10 @@ skipped, so a generator that is itself the contingency constrains nothing.
 A measure that belongs to one terminal of an edge, such as the ratio of one
 winding of a transformer, is registered under an [`Arc`](@ref) rather than under
 the identifier of the edge, and is held equal terminal by terminal.
+
+Which measures are tied is [`is_held`](@ref). A component does not write again,
+at a network index where its measure is held, the rows that only restrict the
+measure: the base case's imply them.
 """
 function constraint_redispatch_control(nm::NetworkModel)
     has_dim(nm, :contingency) || return nothing
@@ -125,10 +130,8 @@ function constraint_redispatch_control(nm::NetworkModel)
             controls = redispatch_controls(nm, T)
             isempty(controls) && continue
 
-            at_base = ids(nm, T; nw = base)
             for id in ids(nm, T; nw = n)
-                insorted(id, at_base) || continue
-                is_preventive(nm, family, id) || continue
+                is_held(nm, family, id; nw = n) || continue
 
                 for key in controls, sub in _control_ids(nm, key, id, n)
                     x = _control_variable(nm, key, sub, n)

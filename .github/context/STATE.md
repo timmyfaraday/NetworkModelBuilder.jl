@@ -1,21 +1,20 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-06 by Tom Van Acker (B11 is merged
-into `main` locally; not pushed, not tagged).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-06 by Tom Van Acker (B11 is merged,
+pushed and tagged `v0.12.0`).
 
 ## Where NMB stands
 
-- v0.12.0 (D28-D36, merged into `main`, untagged): one `Transformer`, see below. v0.11.0 (D13,
+- v0.12.0 (D28-D36, tagged): one `Transformer`, see below. v0.11.0 (D13,
   D15-D27): the `Switch` edge. v0.10.2 (D11): `solution_tables` and `docs/src/manual/concepts.md`.
   v0.10.1 (D10): `src/comp/` is auto-included by a directory walk (`_include_dir`) and each
   component file exports its own names. v0.10.0: `security_tables`.
 - Gap-closure items #1-9 of `context/knowledge/plan/GAP_CLOSURE_PLAN.md` are closed; #10-11 are
-  open, see `backlog.md`. Tags: `v0.6.0` and `v0.9.1`-`v0.9.7`; v0.10.x and v0.11.0 are untagged.
+  open, see `backlog.md`. Tags: `v0.6.0`, `v0.9.1`-`v0.9.7` and `v0.12.0`; v0.10.x and v0.11.0 are untagged.
 
 ## Branches
 
-- `main` carries B5 and B11 (`--no-ff`), ahead of `origin/main` (`01122bd`); `test-zorba-run` has the
-  B9 loader change.
+- `main` carries B5 and B11 (`--no-ff`) and is pushed; `test-zorba-run` has the B9 loader change.
 - `test-zorba-run` is `6cd0af1` (an earlier merge of `main`) plus 9 commits, all under `scripts/`: the
   price rescale (`4ef3472`), phases 0-3 (`20d88dc`, `f7571aa`, `e100616`, `f939763`: hour ids, parallel
   steps, N-1 screen, contingency fix, reactance floor), the `NMB_MERGE` flag (`9a8b676`), restored
@@ -42,7 +41,7 @@ into `main` locally; not pushed, not tagged).
 - B11 is done and merged into `main` (plan `context/knowledge/plan/unified-transformer.md`, D28-D36):
   one `Transformer` with a T-model, `oltc`/`pst` as `TapMode`, `STEPPED` windings, `is_held`; old types
   gone, no shims. Docs, `CHANGELOG.md` (with a migration table) and `version = "0.12.0"` are in.
-  Suite 3126, docs build clean. Not pushed, not tagged. Zorba flows are not unique (D34).
+  Suite 3126, docs build clean. Pushed, tag `v0.12.0` on the merge. Zorba flows are not unique (D34).
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`), done with the original
   prices (D14) and the 1e-5 floor: `runs/_year_orig_prices`, 365 of 365 chunks sound, 0 fallback, 58
   min; overload rows 341,787 (step 2) and 5,720,514 (step 3), no load shedding or spillage (the
@@ -66,7 +65,7 @@ into `main` locally; not pushed, not tagged).
 
 ## Next
 
-1. Push `main` and tag `v0.12.0` (Tom's OK), then B12: move `test-zorba-run` to `Transformer`.
+1. B12: move `test-zorba-run` to `Transformer`, then re-run week 1 beside a control run.
 2. B10: re-run the full year with the switches (`_year_orig_prices` has the floor), recipe in the
    header of `scripts/run_year_redispatch.jl`.
 3. B7 (closed switches under network reduction), B8 (timing flake), B3/B6 (throughput) and B4

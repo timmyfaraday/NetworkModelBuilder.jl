@@ -20,7 +20,7 @@ pushed and tagged `v0.12.0`).
   steps, N-1 screen, contingency fix, reactance floor), the `NMB_MERGE` flag (`9a8b676`), restored
   prices (`76a52ce`, D14), the `_diag_*` deletion (`9fc06d4`), the window/step settings (`3ea65d4`),
   then `main` merged in (`420b1aa`, so it has B5) and the B9 loader change in `SteeringPlanData.jl`.
-- `b5-switch-edge` and `b11-unified-transformer` are merged, deletable. Next free decision id: **D37**.
+- `b5-switch-edge` and `b11-unified-transformer` are merged and deleted. Next free decision id: **D37**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 

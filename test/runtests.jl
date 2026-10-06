@@ -17,6 +17,7 @@
 # v0.11.0 - imports Juniper, for a free switch in current                      #
 # v0.12.0 - the transformers, as they behave                                   #
 # v0.12.0 - the per-terminal control test                                      #
+# v0.12.0 - the rating of an edge at one of its terminals                      #
 ################################################################################
 
 using Test
@@ -45,6 +46,9 @@ case(name::String) = joinpath(@__DIR__, "data", "matpower", "$name.m")
 
 "run `f` with warnings suppressed, the bus type corrections are expected here"
 quiet(f) = Logging.with_logger(f, Logging.NullLogger())
+
+"the rating of edge `ed` at its terminal `k`, whether it has one rating or one per terminal"
+rating_at(ed, k::Int) = ed.rate_a isa AbstractVector ? ed.rate_a[k] : ed.rate_a
 
 @testset "NetworkModelBuilder" begin
     include("dimension.jl")

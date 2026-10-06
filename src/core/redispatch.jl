@@ -254,9 +254,9 @@ is no measure at all.
 This is the single dispatch point [`constraint_redispatch_control`](@ref) walks,
 so an extension package that adds a controllable component gets it into the
 preventive-corrective split by giving it one method. The keys depend on the
-formulation as well as on the type: a [`PhaseShifter`](@ref) carries its ratio as
-`(:tr, :ti)` in the current based formulation and as `(:ta,)` in the linearized
-one.
+formulation as well as on the type: a [`Transformer`](@ref) carries the ratio of a
+winding as `(:tm, :tr, :ti)` in the current based formulation and as `(:ta,)` in
+the linearized one.
 
 A key may name a variable that belongs to one terminal of an edge, registered
 under an [`Arc`](@ref); each of those is held on its own.
@@ -274,7 +274,7 @@ What moving component `id` of type `T` away from its market schedule costs at
 network index `nw`, as a JuMP expression or a number.
 
 Zero unless the type says otherwise, which is what makes a measure *non-costly*:
-a [`PhaseShifter`](@ref) is free to move and simply has no method here, while an
+a [`Transformer`](@ref) is free to move and simply has no method here, while an
 [`AbstractGenerator`](@ref) and an [`AbstractStorage`](@ref) price the volumes
 they moved. [`objective_redispatch_cost`](@ref) sums this over every registered
 edge and unit type.

@@ -96,6 +96,18 @@ again get retired.
   written, which showed up only as a `LoadError` at precompile. A `read_file` issued next to an
   edit also returns the text from before it. (unconfirmed)
 
+- **A test extension that writes a variable key the package also uses replaces the package's
+  container.** `StarEdge` in `test/multiterminal.jl` wrote `:vsr`/`:vsi`; once the package's own
+  `Transformer` used the same keys, any model with both a `Transformer` and the registered
+  `StarEdge` type (registration is process-wide) got an empty array in `:vsr` and a `KeyError` far
+  from the cause. Extensions pick their own keys (`:star_vr`). Found by running `zorba.jl` after
+  `multiterminal.jl`; each alone passed. (unconfirmed)
+- **Removing a price can leave the optimum non-unique, and a test that froze one vertex then
+  fails.** Zorba's `[12, 12, 18]` flows came from the phase shifter price (1 per radian) choosing
+  the least movement among equal-overload solutions; free, the solver returns another split with the
+  same 11 MW overload (D34). Assert what is determined (total overload, conservation, ratings) and
+  say so in the test. (unconfirmed)
+
 ## Performance
 
 - **Time a change against a control run made the same day, not against an older run.** Week 1 with

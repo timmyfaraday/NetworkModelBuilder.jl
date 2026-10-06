@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.12.0 - initial implementation                                             #
+# v0.12.0 - the helpers build the one Transformer; a held ratio is folded      #
 ################################################################################
 
 # What a transformer does, written so that it does not depend on how one is
@@ -14,21 +15,27 @@
 # assertions say what the device does, with numbers taken from the code as it
 # stood when this file was written. A change to how a transformer is built
 # changes a helper and nothing else.
+#
+# Objectives, taps and angles are as they were before the three transformer types
+# became one. The current-based sizes are 2 variables and 2 constraints smaller per
+# transformer whose ratio is held, because a ratio that is data is folded into the
+# winding and not given variables (case5 has two transformers); a phase shifter in
+# a redispatch has no price and so no `taup`, `tadn` and their two constraints.
 
 "a transformer whose ratio is data"
 fixed(; kw...) = Transformer(; kw...)
 
 "a transformer whose angle is a decision between `ta_min` and `ta_max`"
-pst(; ta_min, ta_max, kw...) = PhaseShifter(; ta_min, ta_max, kw...)
+pst(; ta_min, ta_max, kw...) = Transformer(; pst = true, ta_min, ta_max, kw...)
 
 "a transformer whose magnitude is a decision between `tm_min` and `tm_max`"
-oltc(; tm_min, tm_max, kw...) = TapChanger(; tm_min, tm_max, kw...)
+oltc(; tm_min, tm_max, kw...) = Transformer(; oltc = true, tm_min, tm_max, kw...)
 
 "a transformer with three or more windings, `r`, `x`, ... holding one entry per terminal"
-star(; kw...) = MultiWindingTransformer(; kw...)
+star(; kw...) = Transformer(; kw...)
 
 "the tap of edge `e` in a result at network index `n`"
-tap_of(result, e, n = 1) = nw_solution(result, n)["edge"]["$e"]["tap"]
+tap_of(result, e, n = 1) = nw_solution(result, n)["edge"]["$e"]["terminal"]["1"]["tap"]
 
 "the number of variables and of constraints that are not variable bounds"
 size_of(nm) = (JuMP.num_variables(nm.model),
@@ -49,7 +56,7 @@ function case5_with(make; extra...)
     E    = Dict{Int,AbstractEdge}(net.edge)
 
     E[5] = make(; id = tf.id, name = tf.name, terminals = tf.terminals, r = tf.r, x = tf.x,
-                b_fr = tf.b_fr, b_to = tf.b_to, tm = tf.tm, ta = tf.ta, rate_a = tf.rate_a,
+                g_sh = tf.g_sh, b_sh = tf.b_sh, tm = tf.tm, ta = tf.ta, rate_a = tf.rate_a,
                 angmin = tf.angmin, angmax = tf.angmax, status = tf.status, extra...)
 
     return NetworkData(Network(net.node, E, net.unit); name = "case5", baseMVA = baseMVA(data))
@@ -142,7 +149,7 @@ end
 
         @testset "fixed, current-based" begin
             check_case5(fixed, IVRFormulation; objective = 18269.10277920319,
-                        tm = 1.05, ta = deg2rad(1.0), sz = (82, 112))
+                        tm = 1.05, ta = deg2rad(1.0), sz = (78, 108))
         end
         @testset "fixed, linearized" begin
             check_case5(fixed, LPFFormulation; objective = 18230.87327365834,
@@ -150,7 +157,7 @@ end
         end
         @testset "phase shifter, current-based" begin
             check_case5(pst, IVRFormulation; extra = pst_range, objective = 15361.63977117874,
-                        tm = 1.05, ta = -0.1437787322995556, sz = (84, 115))
+                        tm = 1.05, ta = -0.1437787322995556, sz = (82, 113))
         end
         @testset "phase shifter, linearized" begin
             check_case5(pst, LPFFormulation; extra = pst_range, objective = 14979.73668132809,
@@ -158,7 +165,7 @@ end
         end
         @testset "tap changer, current-based" begin
             check_case5(oltc, IVRFormulation; extra = oltc_range, objective = 18175.84597840520,
-                        tm = 0.9195861572681617, ta = deg2rad(1.0), sz = (83, 112))
+                        tm = 0.9195861572681617, ta = deg2rad(1.0), sz = (81, 110))
         end
         @testset "tap changer, linearized: no use for a magnitude" begin
             check_case5(oltc, LPFFormulation; extra = oltc_range, objective = 18230.87327365833,
@@ -203,11 +210,43 @@ end
         @test tap_of(result, 2)["tm"] == 1.0
         @test -0.3 - 1e-6 <= tap_of(result, 2)["ta"] <= 0.3 + 1e-6
         @test tap_of(result, 2)["ta_market"] == 0.0
-        @test size_of(nm) == (21, 21)
+        @test size_of(nm) == (19, 20)
 
         nm, result = solved(shifter_network(), RedispatchProblem, IVRFormulation)
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
         @test result["objective"] ≈ 0.0 atol = 1e-5
         @test size_of(nm) == (42, 53)
+    end
+
+    @testset "what it refuses" begin
+        two = (id = 1, terminals = [1, 2], r = 0.0, x = 0.1)
+
+        @test_throws ArgumentError Transformer(; id = 1, terminals = [1], r = 0.0, x = 0.1)
+        @test_throws ArgumentError Transformer(; two..., tm = 0.0)
+        @test_throws ArgumentError Transformer(; two..., oltc = true, tm_min = 1.1, tm_max = 0.9)
+        @test_throws ArgumentError Transformer(; two..., pst = true, ta_min = 0.2, ta_max = -0.2)
+        @test_throws ArgumentError Transformer(; two..., pst = true, ta_min = -2.0, ta_max = 2.0)
+        @test_throws ArgumentError Transformer(; two..., angmin = 1.0, angmax = -1.0)
+
+        # a vector has to say something about every winding, and a scalar only
+        # stands for the first winding of two
+        @test_throws ArgumentError Transformer(; two..., tm = [1.0, 1.0, 1.0])
+        @test_throws ArgumentError Transformer(; id = 1, terminals = [1, 2, 3],
+                                                 r = [0.01, 0.02, 0.03], x = 0.1)
+
+        # what is not built yet says so rather than being modelled as something else
+        @test_throws ArgumentError Transformer(; two..., oltc = STEPPED)
+        @test_throws ArgumentError Transformer(; two..., oltc = true, pst = true)
+
+        # a winding with no impedance has no angle of its own in the linearized
+        # formulation, where the star point is one
+        data = winding_network(; r = [0.0, 0.02, 0.03], x = [0.0, 0.2, 0.3])
+        err  = try
+            instantiate_model(data, LoadFlowProblem, LPFFormulation)
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("winding", err.msg)
     end
 end

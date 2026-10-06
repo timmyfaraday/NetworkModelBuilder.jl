@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.12.0 - a transformer has an entry per winding                             #
 ################################################################################
 
 # The reference objectives below are those of PowerModels.jl v0.21, computed in
@@ -45,10 +46,11 @@
 
         for e in ids(net, AbstractEdge)
             br = edge(net, e)
-            isfinite(br.rate_a) || continue
             for a in edge_arcs(net, e)
+                rate = rating_at(br, a.terminal)
+                isfinite(rate) || continue
                 t = sol["edge"]["$e"]["terminal"]["$(a.terminal)"]
-                @test hypot(t["p"], t["q"]) <= br.rate_a + 1e-6
+                @test hypot(t["p"], t["q"]) <= rate + 1e-6
             end
         end
     end
@@ -81,7 +83,7 @@
         for e in ids(net, Transformer)
             tf = edge(net, e)::Transformer
             E[e] = Transformer(; id = tf.id, name = tf.name, terminals = tf.terminals,
-                               r = tf.r, x = tf.x, b_fr = tf.b_fr, b_to = tf.b_to,
+                               r = tf.r, x = tf.x, g_sh = tf.g_sh, b_sh = tf.b_sh,
                                tm = tf.tm, ta = tf.ta, rate_a = Inf,
                                angmin = tf.angmin, angmax = tf.angmax, status = tf.status)
         end

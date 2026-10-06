@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.8.0 - initial implementation                                              #
+# v0.12.0 - a phase shift range moves a winding, pst_cost is deprecated        #
 ################################################################################
 
 ################################################################################
@@ -143,7 +144,8 @@ The four settings are `RdsSettings` and its defaults:
 - `wiggle_room`: how many MW the balance of a node may be missed by, free, in
   either direction. Zero by default, and it becomes an
   [`EnergyNotServed`](@ref) and a [`Spill`](@ref) at every node.
-- `pst_cost`: the price of one radian of phase shift. `1.0` by default.
+- `pst_cost`: deprecated, and without effect. A phase shifter is a non-costly
+  measure, so there is no price of a radian of phase shift to give.
 - `baseMVA`: Zorba's `BASE_POWER_MVA`, `100.0` by default. The reactances are
   per unit on it, so it has to be the number Zorba used.
 
@@ -160,8 +162,7 @@ and two that Zorba has no way of saying:
 
 # Examples
 ```julia
-data = parse_zorba(; grid, net_position, hvdc, outage,
-                     overload_penalty = 1e3, pst_cost = 1.0)
+data = parse_zorba(; grid, net_position, hvdc, outage, overload_penalty = 1e3)
 
 result = solve_zorba(data, HiGHS.Optimizer)
 tables = zorba_tables(data, result)
@@ -170,17 +171,19 @@ tables = zorba_tables(data, result)
 function parse_zorba(; grid, net_position, hvdc = nothing, outage = nothing,
                        name::String = "zorba", baseMVA::Real = 100.0,
                        overload_penalty::Union{Real,Symbol} = 1e3,
-                       wiggle_room::Real = 0.0, pst_cost::Real = 1.0,
+                       wiggle_room::Real = 0.0, pst_cost::Union{Nothing,Real} = nothing,
                        contingency_weight::Union{Nothing,AbstractVector{<:Real}} = nothing)
     base = Float64(baseMVA)
     base > 0 || throw(ArgumentError("`baseMVA` is $base, which is not a power base"))
+    pst_cost === nothing ||
+        @warn "`pst_cost` is deprecated and has no effect: a phase shifter is a non-costly measure"
 
     nodes, times, injection = _zorba_net_position(net_position, base)
     outages, out_links      = _zorba_outages(outage)
     dim, states             = _zorba_dimension(length(times), length(outages),
                                                contingency_weight)
 
-    E, links = _zorba_edges(grid, hvdc, nodes, dim, outages, out_links, base, Float64(pst_cost))
+    E, links = _zorba_edges(grid, hvdc, nodes, dim, outages, out_links, base)
     I        = _zorba_nodes(nodes)
     U        = _zorba_units(nodes, injection, dim, Float64(wiggle_room), base)
 
@@ -346,12 +349,13 @@ function _zorba_nodes(nodes::Vector{String})
 end
 
 """
-    _zorba_edges(grid, hvdc, nodes, dim, outages, out_links, base, pst_cost)
+    _zorba_edges(grid, hvdc, nodes, dim, outages, out_links, base)
 
 One edge per row of the grid table and one per HVDC link, together with the
 [`ZorbaLink`](@ref) each became.
 
-A row with a phase shift range is a [`PhaseShifter`](@ref) and one without is a
+A row with a phase shift range is a [`Transformer`](@ref) whose first winding is a
+`pst` and one without is a
 [`Branch`](@ref): the range is what makes the angle a decision rather than data,
 which is the test a type has to pass to exist. An outage is carried on the
 `status` of the links it takes out, which is what turns Zorba's trick of nulling
@@ -360,7 +364,7 @@ a susceptance into a topology this package derives.
 function _zorba_edges(grid, hvdc, nodes::Vector{String}, dim::Dimension,
                       outages::Vector{Union{Missing,String}},
                       out_links::Dict{String,Vector{String}},
-                      base::Float64, pst_cost::Float64)
+                      base::Float64)
     for c in (:id, :from_node, :to_node, :reactance_pu)
         c in _columns(grid) ||
             throw(ArgumentError("the `grid` table has no `$c` column"))
@@ -394,9 +398,8 @@ function _zorba_edges(grid, hvdc, nodes::Vector{String}, dim::Dimension,
                     status = _zorba_status(dim, outages, out_links, nm))
 
         E[e] = iszero(deg) ? Branch(; common...) :
-                             PhaseShifter(; common..., tm = 1.0, ta = 0.0,
-                                            ta_min = -deg2rad(deg), ta_max = deg2rad(deg),
-                                            cost = pst_cost)
+                             Transformer(; common..., pst = true,
+                                           ta_min = -deg2rad(deg), ta_max = deg2rad(deg))
         push!(links, ZorbaLink(e, nm, String(from[r]), String(to[r]), false))
     end
 
@@ -552,9 +555,7 @@ ac     = solve_zorba(data, RedispatchProblem, IVRFormulation, opt)   # the same,
     couples one to an AC network is a converter station, which is a component in
     its own right — so a study carrying an `hvdc` table posed in an
     [`IVRFormulation`](@ref) raises rather than answering with a link that has no
-    reactive power. A phase shifter priced per radian is linearized-only for a
-    related reason, see [`redispatch_cost`](@ref); `pst_cost = 0.0` is what asks
-    the current based question about a study that has one.
+    reactive power.
 """
 solve_zorba(data::NetworkData, optimizer; kwargs...) =
     solve_zorba(data, RedispatchProblem, LPFFormulation, optimizer; kwargs...)
@@ -710,7 +711,7 @@ function _zorba_phase_shifts(data::NetworkData, result::Dict{String,Any})
             time_id[r] = zs.time_id[t]
 
             entry      = get(sol, "$(l.id)", nothing)
-            tap        = entry === nothing ? nothing : get(entry, "tap", nothing)
+            tap        = entry === nothing ? nothing : get(entry["terminal"]["1"], "tap", nothing)
             pst_deg[r] = tap === nothing ? missing : Float32(-rad2deg(tap["ta"]))
         end
     end

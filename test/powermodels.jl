@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.9.7 - a live PowerModels.jl solve is checked, not just a snapshot         #
 # v0.11.0 - the switch problems of PowerModels.jl                              #
+# v0.12.0 - case5, whose transformers shift the phase                          #
 ################################################################################
 
 # lf.jl, lpf.jl and opf.jl check against PowerModels.jl v0.21 values frozen at
@@ -43,6 +44,24 @@
         pm  = PowerModels.solve_dc_opf(case("case14"), OPTIMIZER)
 
         @test nmb["objective"] ≈ pm["objective"] rtol = 1e-6
+    end
+
+    # case14 has ratios and no shift; case5 has both, on the windings of a
+    # transformer that is a T here and a π there. PowerModels.jl's own current
+    # based model has no row for a shifted branch, so the reference is its ACP.
+    @testset "a transformer that shifts the phase matches a live ACP solve" begin
+        nmb = quiet(() -> solve_opf(case("case5"), IVRFormulation, OPTIMIZER))
+        pm  = PowerModels.solve_opf(case("case5"), PowerModels.ACPPowerModel, OPTIMIZER)
+
+        @test nmb["objective"] ≈ pm["objective"] rtol = 1e-6
+
+        nmb = quiet(() -> solve_lf(case("case5"), IVRFormulation, OPTIMIZER))
+        pm  = PowerModels.solve_ac_pf(case("case5"), OPTIMIZER)
+
+        for (i, bus) in pm["solution"]["bus"]
+            @test nw_solution(nmb)["node"][i]["vm"] ≈ bus["vm"] atol = 1e-6
+            @test nw_solution(nmb)["node"][i]["va"] ≈ bus["va"] atol = 1e-5
+        end
     end
 
     # PowerModels.jl keeps its switch problems behind an underscore, so they are

@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.3.0 - component hierarchy                                                 #
+# v0.12.0 - one Transformer; its controls are flags, not types                 #
 ################################################################################
 
 "case14 with every plain branch rebuilt as `T`, which must change nothing"
@@ -27,19 +28,19 @@ function as_branch_type(::Type{T}) where {T<:AbstractBranch}
                        name = "case14 as $T", baseMVA = baseMVA(data))
 end
 
-"case5 with edge 5, which has a turns ratio, rebuilt as `T` carrying `extra`"
-function as_transformer_type(::Type{T}; extra...) where {T<:AbstractTwoWindingTransformer}
+"case5 with edge 5, which has a turns ratio, rebuilt as a transformer carrying `extra`"
+function as_transformer(; extra...)
     data = quiet(() -> parse_file(case("case5")))
     net  = network(data)
     tf   = edge(net, 5)::Transformer
     E    = Dict{Int,AbstractEdge}(net.edge)
 
-    E[5] = T(; id = tf.id, name = tf.name, terminals = tf.terminals, r = tf.r, x = tf.x,
-             b_fr = tf.b_fr, b_to = tf.b_to, tm = tf.tm, ta = tf.ta, rate_a = tf.rate_a,
-             angmin = tf.angmin, angmax = tf.angmax, status = tf.status, extra...)
+    E[5] = Transformer(; id = tf.id, name = tf.name, terminals = tf.terminals, r = tf.r, x = tf.x,
+                       g_sh = tf.g_sh, b_sh = tf.b_sh, tm = tf.tm, ta = tf.ta, rate_a = tf.rate_a,
+                       angmin = tf.angmin, angmax = tf.angmax, status = tf.status, extra...)
 
     return NetworkData(Network(net.node, E, net.unit);
-                       name = "case5 with a $T", baseMVA = baseMVA(data))
+                       name = "case5 with a controlled transformer", baseMVA = baseMVA(data))
 end
 
 @testset "component hierarchy" begin
@@ -48,11 +49,7 @@ end
         @test Branch <: AbstractBranch <: AbstractEdge <: AbstractComponent
         @test Cable <: AbstractBranch
         @test OverheadLine <: AbstractBranch
-        @test Transformer <: AbstractTwoWindingTransformer <: AbstractTransformer <: AbstractEdge
-        @test PhaseShifter <: AbstractTwoWindingTransformer
-        @test TapChanger <: AbstractTwoWindingTransformer
-        @test MultiWindingTransformer <: AbstractTransformer
-        @test !(MultiWindingTransformer <: AbstractTwoWindingTransformer)
+        @test Transformer <: AbstractTransformer <: AbstractEdge
 
         @test Generator <: AbstractGenerator <: AbstractUnit
         @test FixedLoad <: AbstractLoad <: AbstractUnit
@@ -64,8 +61,7 @@ end
         @test :tm ∉ fieldnames(Branch)
         @test :tm ∈ fieldnames(Transformer)
 
-        for T in (Branch, Cable, OverheadLine, Transformer, PhaseShifter, TapChanger,
-                  MultiWindingTransformer)
+        for T in (Branch, Cable, OverheadLine, Transformer)
             @test T in edge_types()
         end
         for T in (Generator, FixedLoad, FlexibleLoad, Storage, Shunt)
@@ -90,12 +86,12 @@ end
     end
 
     @testset "a controllable tap is fixed in a load flow" begin
-        # a load flow has no freedom, so a phase shifter and a tap changer must
-        # behave exactly as the transformer they were built from
+        # a load flow has no freedom, so a transformer whose angle or magnitude can
+        # move must behave exactly as the one it was built from
         reference = quiet(() -> solve_lf(case("case5"), IVRFormulation, OPTIMIZER))
 
-        for data in (as_transformer_type(PhaseShifter; ta_min = -0.3, ta_max = 0.3),
-                     as_transformer_type(TapChanger; tm_min = 0.9, tm_max = 1.1))
+        for data in (as_transformer(; pst = true, ta_min = -0.3, ta_max = 0.3),
+                     as_transformer(; oltc = true, tm_min = 0.9, tm_max = 1.1))
             result = quiet(() -> solve_lf(data, IVRFormulation, OPTIMIZER))
 
             @test result["termination_status"] == JuMP.LOCALLY_SOLVED
@@ -109,9 +105,10 @@ end
     @testset "a controllable tap is a decision in a dispatch problem" begin
         fixed = quiet(() -> solve_opf(case("case5"), IVRFormulation, OPTIMIZER))
 
-        @testset "$T" for (T, extra) in ((PhaseShifter, (ta_min = -0.2, ta_max = 0.2)),
-                                         (TapChanger,   (tm_min = 0.9, tm_max = 1.1)))
-            data   = as_transformer_type(T; extra...)
+        @testset "$name" for (name, extra) in (
+                ("angle", (pst  = true, ta_min = -0.2, ta_max = 0.2)),
+                ("magnitude", (oltc = true, tm_min = 0.9, tm_max = 1.1)))
+            data   = as_transformer(; extra...)
             nm     = instantiate_model(data, OptimalPowerFlowProblem, IVRFormulation)
             result = quiet(() -> optimize_model!(nm, OPTIMIZER))
 
@@ -121,26 +118,26 @@ end
             @test result["objective"] <= fixed["objective"] + 1e-6
 
             # and the tap it chose sits inside its limits
-            tap = solution_tap(nm, edge(nm, 5), 5, 1)
-            if T === PhaseShifter
-                @test tap["tm"] ≈ edge(nm, 5).tm atol = 1e-6     # magnitude preserved
+            tap = nw_solution(result)["edge"]["5"]["terminal"]["1"]["tap"]
+            if name == "angle"
+                @test tap["tm"] ≈ edge(nm, 5).tm[1] atol = 1e-6     # magnitude preserved
                 @test -0.2 - 1e-6 <= tap["ta"] <= 0.2 + 1e-6
             else
                 @test 0.9 - 1e-6 <= tap["tm"] <= 1.1 + 1e-6
-                @test tap["ta"] ≈ edge(nm, 5).ta atol = 1e-6     # angle preserved
+                @test tap["ta"] ≈ edge(nm, 5).ta[1] atol = 1e-6     # angle preserved
             end
         end
     end
 
-    @testset "a multi-winding transformer hides its star point" begin
+    @testset "a transformer with three windings hides its star point" begin
         r, x = [0.010, 0.020, 0.030], [0.100, 0.200, 0.300]
 
         star = NetworkData(Network(
             Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.02),
                                    2 => Node(; id = 2), 3 => Node(; id = 3)),
-            Dict{Int,AbstractEdge}(1 => MultiWindingTransformer(; id = 1,
-                                                                terminals = [1, 2, 3],
-                                                                r = r, x = x)),
+            Dict{Int,AbstractEdge}(1 => Transformer(; id = 1,
+                                                    terminals = [1, 2, 3],
+                                                    r = r, x = x)),
             Dict{Int,AbstractUnit}(1 => Generator(; id = 1, node = 1),
                                    2 => FixedLoad(; id = 2, node = 2, pd = 0.40, qd = 0.15),
                                    3 => FixedLoad(; id = 3, node = 3, pd = 0.25, qd = 0.10)));

@@ -1,7 +1,7 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-05 by Tom Van Acker (B11: the
-unified-transformer plan is accepted, D28-D33 recorded; commit 1 (the tests) is in.
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Van Acker (B11: the
+unified-transformer plan is accepted, D28-D34 recorded; commits 1-3 are in, the swap is done).
 
 ## Where NMB stands
 
@@ -13,14 +13,13 @@ unified-transformer plan is accepted, D28-D33 recorded; commit 1 (the tests) is 
 
 ## Branches
 
-- `main` carries B5. `git log --oneline -1` has the real hash. The context files are current on
-  both branches; only `test-zorba-run` has the B9 loader change.
+- `main` carries B5 (`git log --oneline -1` has the hash); `test-zorba-run` has the B9 loader change.
 - `test-zorba-run` is `6cd0af1` (an earlier merge of `main`) plus 9 commits, all under `scripts/`: the
   price rescale (`4ef3472`), phases 0-3 (`20d88dc`, `f7571aa`, `e100616`, `f939763`: hour ids, parallel
   steps, N-1 screen, contingency fix, reactance floor), the `NMB_MERGE` flag (`9a8b676`), restored
   prices (`76a52ce`, D14), the `_diag_*` deletion (`9fc06d4`), the window/step settings (`3ea65d4`),
   then `main` merged in (`420b1aa`, so it has B5) and the B9 loader change in `SteeringPlanData.jl`.
-- `b11-unified-transformer` is `main` (`01122bd`), the plan and decisions, and commits 1-2 of the plan.
+- `b11-unified-transformer` is `main` (`01122bd`), the plan and decisions, and commits 1-3 of the plan.
 - `b5-switch-edge` is merged and can be deleted. Next free decision id: **D35**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
@@ -33,17 +32,17 @@ unified-transformer plan is accepted, D28-D33 recorded; commit 1 (the tests) is 
 - `islands`, `check_islands`, `connects`, `can_open`: an island needs a reference node or a source;
   opening every free switch may not island unless `islanding = :allow` (D22).
 - Checked against PowerModels.jl's `_solve_opf_sw`/`_solve_oswpf` in `test/powermodels.jl`: equal
-  except a closed loop, where PowerModels.jl leaves the flow free. Full suite 2890 passing with
-  `JULIA_NUM_THREADS=4`. Docs page `docs/src/components/switch.md`, cited through DocumenterCitations
-  (D27). To run one test file use `scratch/switch_spike/run_tests.jl <files in runtests order>`
-  (`hierarchy.jl` has helpers).
-
+  except a closed loop, where PowerModels.jl leaves the flow free. Docs page
+  `docs/src/components/switch.md`, cited through DocumenterCitations (D27). To run one test file use
+  `scratch/switch_spike/run_tests.jl <files in runtests order>` (`hierarchy.jl` has helpers).
 ## In progress
 
 - B11, one `Transformer` for every transformer: plan `context/knowledge/plan/unified-transformer.md` on
-  `b11-unified-transformer` (D28-D34). Commits 1 (`test/transformer.jl`, 77 tests) and 2 (arc-keyed
-  variables, `test/arc_controls.jl`; suite 2982) done. Next commit 3, the swap. Tom OK'd editing
-  `domain-invariants.instructions.md` there (log it as SC).
+  `b11-unified-transformer` (D28-D34). Commits 1 (`test/transformer.jl`, 89 tests), 2 (arc-keyed
+  variables) and 3 (the swap: `PhaseShifter`, `TapChanger`, `MultiWindingTransformer` gone, T-model,
+  `oltc`/`pst` as `TapMode`) done; full suite 2990. Docs still name the old types (commit 6). With
+  `pst_cost` gone (D34) Zorba flows are not unique, only the 11 MW overload is (`lessons.md`).
+  Next commit 4: both flags on one winding, controls on any winding of `n >= 3`.
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`), done with the original
   prices (D14) and the 1e-5 floor: `runs/_year_orig_prices`, 365 of 365 chunks sound, 0 fallback, 58
   min; overload rows 341,787 (step 2) and 5,720,514 (step 3), no load shedding or spillage (the
@@ -67,7 +66,7 @@ unified-transformer plan is accepted, D28-D33 recorded; commit 1 (the tests) is 
 
 ## Next
 
-1. Implement B11 on `b11-unified-transformer`, one commit per row of the plan's table.
+1. Implement B11 on `b11-unified-transformer`, one commit per row of the plan's table (4 is next).
 2. B10: re-run the full year with the switches (`_year_orig_prices` has the floor), recipe in the
    header of `scripts/run_year_redispatch.jl`.
 3. B7 (closed switches under network reduction), B8 (timing flake), B3/B6 (throughput) and B4

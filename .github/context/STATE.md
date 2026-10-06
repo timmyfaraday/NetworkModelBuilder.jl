@@ -1,11 +1,11 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-06 by Tom Van Acker (B11: commit 6,
-docs and 0.12.0, is in; the branch is complete and not merged).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-06 by Tom Van Acker (B11 is merged
+into `main` locally; not pushed, not tagged).
 
 ## Where NMB stands
 
-- v0.12.0 (D28-D36, on `b11-unified-transformer`): one `Transformer`, see below. v0.11.0 (D13,
+- v0.12.0 (D28-D36, merged into `main`, untagged): one `Transformer`, see below. v0.11.0 (D13,
   D15-D27): the `Switch` edge. v0.10.2 (D11): `solution_tables` and `docs/src/manual/concepts.md`.
   v0.10.1 (D10): `src/comp/` is auto-included by a directory walk (`_include_dir`) and each
   component file exports its own names. v0.10.0: `security_tables`.
@@ -14,14 +14,14 @@ docs and 0.12.0, is in; the branch is complete and not merged).
 
 ## Branches
 
-- `main` carries B5 (`git log --oneline -1` has the hash); `test-zorba-run` has the B9 loader change.
+- `main` carries B5 and B11 (`--no-ff`), ahead of `origin/main` (`01122bd`); `test-zorba-run` has the
+  B9 loader change.
 - `test-zorba-run` is `6cd0af1` (an earlier merge of `main`) plus 9 commits, all under `scripts/`: the
   price rescale (`4ef3472`), phases 0-3 (`20d88dc`, `f7571aa`, `e100616`, `f939763`: hour ids, parallel
   steps, N-1 screen, contingency fix, reactance floor), the `NMB_MERGE` flag (`9a8b676`), restored
   prices (`76a52ce`, D14), the `_diag_*` deletion (`9fc06d4`), the window/step settings (`3ea65d4`),
   then `main` merged in (`420b1aa`, so it has B5) and the B9 loader change in `SteeringPlanData.jl`.
-- `b11-unified-transformer` is `main` (`01122bd`), the plan and decisions, and the 6 commits of the plan.
-- `b5-switch-edge` is merged and can be deleted. Next free decision id: **D37**.
+- `b5-switch-edge` and `b11-unified-transformer` are merged, deletable. Next free decision id: **D37**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -39,10 +39,10 @@ docs and 0.12.0, is in; the branch is complete and not merged).
 
 ## In progress
 
-- B11 is done on `b11-unified-transformer` (plan `context/knowledge/plan/unified-transformer.md`, D28-D36):
+- B11 is done and merged into `main` (plan `context/knowledge/plan/unified-transformer.md`, D28-D36):
   one `Transformer` with a T-model, `oltc`/`pst` as `TapMode`, `STEPPED` windings, `is_held`; old types
   gone, no shims. Docs, `CHANGELOG.md` (with a migration table) and `version = "0.12.0"` are in.
-  Suite 3126, docs build clean. Not merged, not tagged. Zorba flows are not unique (D34).
+  Suite 3126, docs build clean. Not pushed, not tagged. Zorba flows are not unique (D34).
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`), done with the original
   prices (D14) and the 1e-5 floor: `runs/_year_orig_prices`, 365 of 365 chunks sound, 0 fallback, 58
   min; overload rows 341,787 (step 2) and 5,720,514 (step 3), no load shedding or spillage (the
@@ -66,7 +66,7 @@ docs and 0.12.0, is in; the branch is complete and not merged).
 
 ## Next
 
-1. Merge B11 and tag `v0.12.0` (Tom's OK), then B12: move `test-zorba-run` to `Transformer`.
+1. Push `main` and tag `v0.12.0` (Tom's OK), then B12: move `test-zorba-run` to `Transformer`.
 2. B10: re-run the full year with the switches (`_year_orig_prices` has the floor), recipe in the
    header of `scripts/run_year_redispatch.jl`.
 3. B7 (closed switches under network reduction), B8 (timing flake), B3/B6 (throughput) and B4

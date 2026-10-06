@@ -1,6 +1,6 @@
 # One `Transformer` for every transformer: windings, tap changers, phase shifters
 
-Status: implemented on `b11-unified-transformer`, awaiting merge (D28-D36 accepted and recorded 2026-10-05/06) · Author: Tom Van Acker · Date: 2026-10-05
+Status: implemented and merged into `main` (D28-D36 accepted and recorded 2026-10-05/06) · Author: Tom Van Acker · Date: 2026-10-05
 Decisions: D28-D36 (next free after: D37) · Priority: P2 · Effort: Large · Backlog: B11 (follow-ups B12, B13)
 
 ## Handoff instructions

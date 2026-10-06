@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.10.2 - initial implementation                                             #
+# v0.12.0 - the phase shifter is a Transformer                                 #
 ################################################################################
 
 # `solution_tables` is a view over the same kind of `result` every other test
@@ -110,9 +111,9 @@
         # polynomial — see `solution_edge!` in `transformer.jl`
         @test issubset([:tap_tm, :tap_ta], propertynames(tables.edge))
 
-        shifter = tables.edge.type .== "PhaseShifter"
+        shifter = tables.edge.type .== "Transformer"
         branch  = tables.edge.type .== "Branch"
-        @test count(shifter) == 2      # one phase shifter, two terminals
+        @test count(shifter) == 2      # one transformer, two terminals
         @test count(branch)  == 4      # two branches, two terminals each
 
         @test all(!ismissing, tables.edge.tap_tm[shifter])

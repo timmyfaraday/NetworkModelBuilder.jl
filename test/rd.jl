@@ -8,6 +8,10 @@
 # Changelog:                                                                   #
 # v0.5.0 - the redispatch problem                                              #
 # v0.11.0 - binary variables and integer gates                                 #
+# v0.12.0 - a phase shifter is a winding of a transformer, and free            #
+# v0.12.0 - the meshed network can carry a three-winding shifter               #
+# v0.12.0 - which measures are held at the base case                           #
+# v0.12.0 - the meshed network's shifter can step                              #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The
@@ -38,19 +42,27 @@ end
 """
 A three-node meshed network: a tight direct corridor `1–3` in parallel with a
 path `1–2–3` carrying a phase shifter, which can steer flow off the corridor at
-no cost. Edge 3 is what a contingency takes out.
+no cost. Edge 3 is what a contingency takes out. With `star`, the phase shifter has
+a third winding that ends on a node of its own, so it is the same device with an
+extra terminal. `tap` is what else the shifter is given, a way to make it step.
 """
 function meshed_network(; dim::Dimension = Dimension(), rate::Float64 = 0.5,
-                          shift::Bool = true, out = (), cost::Float64 = 0.0)
+                          shift::Bool = true, out = (), star::Bool = false, tap = (;))
     ps_limit = shift ? 0.3 : 0.0
     status   = isempty(out) ? true : nw_vector(dim, (n, c) -> n ∉ out)
 
     I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
                                2 => Node(; id = 2), 3 => Node(; id = 3))
+    shifter = star ?
+        Transformer(; id = 2, terminals = [1, 2, 4], r = 0.0, x = [0.05, 0.05, 0.1],
+                    pst = [true, false, false],
+                    ta_min = [-ps_limit, 0.0, 0.0], ta_max = [ps_limit, 0.0, 0.0], tap...) :
+        Transformer(; id = 2, terminals = [1, 2], r = 0.0, x = 0.1, pst = true,
+                    ta_min = -ps_limit, ta_max = ps_limit, tap...)
+    star && (I[4] = Node(; id = 4))
     E = Dict{Int,AbstractEdge}(
         1 => Branch(; id = 1, terminals = [1, 3], r = 0.0, x = 0.1, rate_a = rate),
-        2 => PhaseShifter(; id = 2, terminals = [1, 2], r = 0.0, x = 0.1,
-                          ta_min = -ps_limit, ta_max = ps_limit, cost = cost),
+        2 => shifter,
         3 => Branch(; id = 3, terminals = [2, 3], r = 0.0, x = 0.1, status = status))
     U = Dict{Int,AbstractUnit}(
         1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
@@ -61,6 +73,9 @@ function meshed_network(; dim::Dimension = Dimension(), rate::Float64 = 0.5,
 
     return NetworkData(Network(I, E, U; dim); name = "meshed", baseMVA = 100.0)
 end
+
+"the tap of the phase shifter, edge 2, at network index `n`"
+ps_tap(result, n = 1) = nw_solution(result, n)["edge"]["2"]["terminal"]["1"]["tap"]
 
 "the redispatch volumes of every generator of a solution at network index `n`"
 volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"],
@@ -191,7 +206,7 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         # corridor under 0.5 costs the same nothing, so the solver returns one of
         # them, and `-0.05` — the setting that just clears the rating — is only
         # the mildest of those.
-        @test nw_solution(with)["edge"]["2"]["tap"]["ta"] < -1e-3
+        @test ps_tap(with)["ta"] < -1e-3
         @test abs(nw_solution(with)["edge"]["3"]["terminal"]["1"]["p"]) > 0.5 - 1e-6
 
         # take the control away and the same congestion has to be paid for
@@ -200,71 +215,30 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         @test without["objective"] > 1.0
     end
 
-    @testset "a phase shifter that is priced moves no further than it has to" begin
-        # free, the shifter has no reason to stop at the mildest setting that
-        # clears the rating; priced, every radian past that one costs
-        free  = quiet(() -> solve_rd(meshed_network(), LPFFormulation, OPTIMIZER))
-        dear  = quiet(() -> solve_rd(meshed_network(; cost = 10.0),
-                                     LPFFormulation, OPTIMIZER))
+    @testset "a phase shifter is a non-costly measure" begin
+        # nothing is paid for moving it, so it settles on any angle that clears the
+        # rating, and nothing asks it to stop at the mildest one
+        result = quiet(() -> solve_rd(meshed_network(), LPFFormulation, OPTIMIZER))
+        tap    = ps_tap(result)
 
-        ta_free, ta_dear = (nw_solution(r)["edge"]["2"]["tap"]["ta"] for r in (free, dear))
+        @test result["objective"] ≈ 0.0 atol = 1e-5
+        @test -0.3 - 1e-6 <= tap["ta"] <= 0.3 + 1e-6
 
-        # -0.05 is the setting that just brings the corridor under its rating
-        @test ta_dear ≈ -0.05 atol = 1e-4
-        @test abs(ta_dear) ≤ abs(ta_free) + 1e-6
-
-        # and the congestion is still relieved, at the price of the movement
-        @test abs(nw_solution(dear)["edge"]["1"]["terminal"]["1"]["p"]) ≤ 0.5 + 1e-6
-        @test dear["objective"] ≈ 10.0 * abs(ta_dear) atol = 1e-4
-        @test free["objective"] ≈ 0.0 atol = 1e-5
-    end
-
-    @testset "the angle a phase shifter moved is the intervention" begin
-        result = quiet(() -> solve_rd(meshed_network(; cost = 10.0),
-                                      LPFFormulation, OPTIMIZER))
-        tap    = nw_solution(result)["edge"]["2"]["tap"]
-
-        # the split is the same one a generator makes between its market
-        # dispatch and the volumes it was moved
+        # the setpoint the market had is reported next to the angle it moved to
         @test tap["ta_market"] == 0.0
-        @test tap["ta"] ≈ tap["ta_market"] + tap["taup"] - tap["tadn"] atol = 1e-9
-        @test tap["tadn"] ≈ 0.05 atol = 1e-4
-        @test tap["taup"] ≈ 0.0  atol = 1e-4
+        @test tap["tm_market"] == 1.0
+        @test tap["tm"] == 1.0
 
-        # both volumes are written whatever the price, so an unpriced shifter
-        # still reports what it did
+        # the movement has no volumes of its own, since there is no price to pay
+        # them on
         nm = instantiate_model(meshed_network(), RedispatchProblem, LPFFormulation)
-        @test haskey(_NMB.var(nm), :taup)
-        @test haskey(_NMB.var(nm), :tadn)
-        @test haskey(_NMB.con(nm), :phase_shifter_redispatch)
-        @test JuMP.upper_bound(_NMB.var(nm, :taup, 2)) ≈ 0.3     # ta_max - ta
-        @test JuMP.upper_bound(_NMB.var(nm, :tadn, 2)) ≈ 0.3     # ta - ta_min
+        @test !haskey(_NMB.var(nm), :taup)
+        @test !haskey(_NMB.var(nm), :tadn)
+        @test !haskey(tap, "taup")
 
-        # and only a redispatch has them: an optimal power flow prices the level
-        # of a dispatch, and a phase shifter has no level to price
-        opf = instantiate_model(meshed_network(; cost = 10.0), OptimalPowerFlowProblem,
-                                LPFFormulation)
-        @test !haskey(_NMB.var(opf), :taup)
-    end
-
-    @testset "a priced phase shifter is linearized only" begin
-        # the price is on the angle, which the current based formulation does not
-        # carry — it holds the ratio as `tr + j*ti` to stay polynomial
-        err = try
-            instantiate_model(meshed_network(; cost = 10.0), RedispatchProblem,
-                              IVRFormulation)
-        catch e
-            e
-        end
-        @test err isa ErrorException
-        @test occursin("priced phase shifter", err.msg)
-
-        # an unpriced one is the non-costly measure it always was
+        # and the current based formulation takes the same shifter
         @test instantiate_model(meshed_network(), RedispatchProblem, IVRFormulation) isa
               NetworkModel
-
-        @test_throws ArgumentError PhaseShifter(; id = 1, terminals = [1, 2], r = 0.0,
-                                                  x = 0.1, cost = -1.0)
     end
 
     @testset "a storage unit is a measure over the time window" begin
@@ -352,6 +326,14 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         @test haskey(tied, (:unit, 1, :pgup, 2))
         @test !haskey(tied, (:unit, 2, :pgup, 2))
 
+        # held is what is tied: never the base case, never a corrective measure, and
+        # nothing at all without a redispatch
+        @test !is_held(nm, :unit, 1; nw = 1)
+        @test is_held(nm, :unit, 1; nw = 2)
+        @test !is_held(nm, :unit, 2; nw = 2)
+        @test !is_held(instantiate_model(data, OptimalPowerFlowProblem, LPFFormulation),
+                       :unit, 1; nw = 2)
+
         result = quiet(() -> optimize_model!(nm, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
         @test nw_solution(result, 1)["unit"]["1"]["pgdn"] ≈
@@ -407,14 +389,10 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         @test redispatch_controls(lpf, Generator) == (:pgup, :pgdn)
         @test redispatch_controls(ivr, Storage) == (:psc, :psd, :psup, :psdn)
 
-        # the ratio is carried differently in the two formulations
-        @test redispatch_controls(ivr, PhaseShifter) == (:tr, :ti)
-        @test redispatch_controls(lpf, PhaseShifter) == (:ta,)
-
-        # a tap changer is a control in the current based formulation and inert
-        # in the linearized one, so it holds nothing there
-        @test redispatch_controls(ivr, TapChanger) == (:tm,)
-        @test redispatch_controls(lpf, TapChanger) == ()
+        # the ratio is carried differently in the two formulations; the positions of a
+        # winding that steps are not tied, the preventive one reuses the base case's
+        @test redispatch_controls(ivr, Transformer) == (:tm, :tr, :ti)
+        @test redispatch_controls(lpf, Transformer) == (:ta,)
 
         # a load is no measure at all
         @test redispatch_controls(lpf, FixedLoad) == ()
@@ -443,12 +421,11 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         data = meshed_network(; dim, out = (2,))
 
         nm = instantiate_model(data, RedispatchProblem, LPFFormulation)
-        @test haskey(nm.ext[:redispatch_control], (:edge, 2, :ta, 2))
+        @test haskey(nm.ext[:redispatch_control], (:edge, Arc(2, 1, 1), :ta, 2))
 
         result = quiet(() -> optimize_model!(nm, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
-        @test nw_solution(result, 1)["edge"]["2"]["tap"]["ta"] ≈
-              nw_solution(result, 2)["edge"]["2"]["tap"]["ta"] atol = 1e-6
+        @test ps_tap(result, 1)["ta"] ≈ ps_tap(result, 2)["ta"] atol = 1e-6
 
         # left corrective it may steer differently in each state
         free = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
@@ -487,19 +464,17 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         @test market["objective"] > 0.0
 
         # and it leaves the network congested, which is the point of the exercise
-        @test any(abs(nw_solution(market)["edge"]["$e"]["terminal"]["1"]["p"]) >
-                  edge(network(data), e).rate_a + 1e-5
-                  for e in ids(network(data), AbstractEdge))
+        @test any(abs(nw_solution(market)["edge"]["$e"]["terminal"]["$k"]["p"]) >
+                  rating_at(edge(network(data), e), k) + 1e-5
+                  for e in ids(network(data), AbstractEdge), k in 1:2)
 
         # watching them all costs more, and every rating holds afterwards
         result = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
         @test result["objective"] > market["objective"] + 1e-6
-        for e in ids(network(data), AbstractEdge)
-            rate = edge(network(data), e).rate_a
-            for t in keys(nw_solution(result)["edge"]["$e"]["terminal"])
-                @test abs(nw_solution(result)["edge"]["$e"]["terminal"][t]["p"]) ≤ rate + 1e-5
-            end
+        for e in ids(network(data), AbstractEdge), k in 1:2
+            rate = rating_at(edge(network(data), e), k)
+            @test abs(nw_solution(result)["edge"]["$e"]["terminal"]["$k"]["p"]) ≤ rate + 1e-5
         end
     end
 

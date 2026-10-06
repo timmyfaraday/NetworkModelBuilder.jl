@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.6.0 - initial implementation                                              #
 # v0.10.1 - exports its own public names                                       #
+# v0.12.0 - names the transformer, not the phase shifter                       #
 ################################################################################
 
 export AbstractDCLink, DCLink, transfer_loss, transfer_limits
@@ -70,7 +71,7 @@ back, at a flow the problem chooses.
   moves away from it.
 - `cost`: the price of moving one per unit away from `pdc`, in either direction
   [currency/pu/h]. Zero — the default — makes the link a **non-costly** measure,
-  free to move, like a [`PhaseShifter`](@ref).
+  free to move, like a winding of a [`Transformer`](@ref) that can move.
 - `status`: whether the link is in service.
 - `ext`: free-form storage.
 

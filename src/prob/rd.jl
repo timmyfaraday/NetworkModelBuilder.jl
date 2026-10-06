@@ -8,6 +8,8 @@
 # Changelog:                                                                   #
 # v0.5.0 - initial implementation, including the rolling horizon               #
 # v0.6.0 - the objective pays for the congestion it left                       #
+# v0.12.0 - a measure may belong to one terminal of an edge                    #
+# v0.12.0 - a measure held at the base case builds no rows of its own          #
 ################################################################################
 
 ################################################################################
@@ -105,12 +107,20 @@ A no-op in a problem without a `:contingency` dimension, or with one that has a
 single coordinate: there is then only one state, and nothing to be preventive
 about. A measure at a network index where the component is out of service is
 skipped, so a generator that is itself the contingency constrains nothing.
+
+A measure that belongs to one terminal of an edge, such as the ratio of one
+winding of a transformer, is registered under an [`Arc`](@ref) rather than under
+the identifier of the edge, and is held equal terminal by terminal.
+
+Which measures are tied is [`is_held`](@ref). A component does not write again,
+at a network index where its measure is held, the rows that only restrict the
+measure: the base case's imply them.
 """
 function constraint_redispatch_control(nm::NetworkModel)
     has_dim(nm, :contingency) || return nothing
     dim_length(nm, :contingency) > 1 || return nothing
 
-    tie = Dict{Tuple{Symbol,Int,Symbol,Int},Any}()
+    tie = Dict{Tuple{Symbol,Any,Symbol,Int},Any}()
 
     for n in nw_ids(nm)
         is_first_id(nm, n, :contingency) && continue
@@ -120,17 +130,15 @@ function constraint_redispatch_control(nm::NetworkModel)
             controls = redispatch_controls(nm, T)
             isempty(controls) && continue
 
-            at_base = ids(nm, T; nw = base)
             for id in ids(nm, T; nw = n)
-                insorted(id, at_base) || continue
-                is_preventive(nm, family, id) || continue
+                is_held(nm, family, id; nw = n) || continue
 
-                for key in controls
-                    x = _control_variable(nm, key, id, n)
-                    y = _control_variable(nm, key, id, base)
+                for key in controls, sub in _control_ids(nm, key, id, n)
+                    x = _control_variable(nm, key, sub, n)
+                    y = _control_variable(nm, key, sub, base)
                     (x === nothing || y === nothing) && continue
-                    tie[(family, id, key, n)] = constrain!(nm, :redispatch_control,
-                        (family, id, key), JuMP.@build_constraint(x == y); nw = n)
+                    tie[(family, sub, key, n)] = constrain!(nm, :redispatch_control,
+                        (family, sub, key), JuMP.@build_constraint(x == y); nw = n)
                 end
             end
         end
@@ -141,13 +149,26 @@ function constraint_redispatch_control(nm::NetworkModel)
     return nothing
 end
 
-"the variable registered under `key` for component `id` at network index `n`, or `nothing`"
-function _control_variable(nm::NetworkModel, key::Symbol, id::Int, n::Int)
+"""
+    _control_ids(nm, key, id, n)
+
+What tells the variables registered under `key` for component `id` apart: `id`
+itself, or the arcs of the edge where they belong to a terminal each.
+"""
+function _control_ids(nm::NetworkModel, key::Symbol, id::Int, n::Int)
+    entry = get(var(nm; nw = n), key, nothing)
+    entry isa AbstractDict{Arc} || return (id,)
+
+    return [a for a in edge_arcs(nm, id; nw = n) if haskey(entry, a)]
+end
+
+"the variable registered under `key` for `sub`, an identifier or an arc, at network index `n`, or `nothing`"
+function _control_variable(nm::NetworkModel, key::Symbol, sub, n::Int)
     container = var(nm; nw = n)
     haskey(container, key) || return nothing
     entry = container[key]
 
-    return haskey(entry, id) ? entry[id] : nothing
+    return haskey(entry, sub) ? entry[sub] : nothing
 end
 
 ################################################################################
@@ -249,7 +270,7 @@ Minimize the price of the volumes moved away from the market schedule,
 with ``w_{n}`` the weight of network index ``n``, see [`network_weight`](@ref),
 and the sum running over every registered edge and unit type through
 [`redispatch_cost`](@ref). A component with no method there — a
-[`TapChanger`](@ref) — contributes nothing, and so does one whose price is zero,
+[`Transformer`](@ref) — contributes nothing, and so does one whose price is zero,
 which is what makes either a non-costly measure.
 
 Every network index enters this sum, contingencies included, which is what makes

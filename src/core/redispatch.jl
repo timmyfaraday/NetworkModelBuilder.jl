@@ -8,6 +8,9 @@
 # Changelog:                                                                   #
 # v0.5.0 - the redispatch problem                                              #
 # v0.6.0 - a rating can be priced instead of enforced                          #
+# v0.12.0 - a measure may belong to one terminal of an edge                    #
+# v0.12.0 - a measure held at the base case builds no rows of its own          #
+# v0.12.0 - a held measure may reuse the binaries of the base case             #
 ################################################################################
 
 ################################################################################
@@ -244,6 +247,34 @@ is_corrective(nm::NetworkModel, family::Symbol, id::Int) =
     control_mode(nm, family, id) === :corrective
 
 """
+    is_held(nm, family, id; nw)
+
+Whether component `id` of `family` takes, at network index `nw`, the setting it
+takes in the base case: it is preventive, `nw` is not itself the base case, and
+the component is in service in the base case too. Always `false` where there is
+no redispatch, or only one contingency.
+
+A held measure is tied to the base case by [`constraint_redispatch_control`](@ref),
+so every row that only restricts its setting is already implied there. A
+component builds none of them again at a network index where this is `true`:
+written twice, such rows are dependent, which a solver can stop on.
+
+A measure that is a binary variable is not tied at all: the component reuses the
+variable of the base case, since a copy tied to it is one more variable for a
+mixed-integer solver to branch on, for the same decision.
+"""
+is_held(::NetworkModel, ::Symbol, ::Int; nw::Int) = false
+
+function is_held(nm::NetworkModel{P}, family::Symbol, id::Int; nw::Int
+                ) where {P<:RedispatchProblem}
+    has_dim(nm, :contingency) && dim_length(nm, :contingency) > 1 || return false
+    is_first_id(nm, nw, :contingency) && return false
+    is_preventive(nm, family, id) || return false
+
+    return insorted(id, getproperty(topology(nm; nw = first_id(nm, nw, :contingency)), family))
+end
+
+"""
     redispatch_controls(nm, T)
 
 The variable keys of component type `T` that a **preventive** measure holds
@@ -253,9 +284,12 @@ is no measure at all.
 This is the single dispatch point [`constraint_redispatch_control`](@ref) walks,
 so an extension package that adds a controllable component gets it into the
 preventive-corrective split by giving it one method. The keys depend on the
-formulation as well as on the type: a [`PhaseShifter`](@ref) carries its ratio as
-`(:tr, :ti)` in the current based formulation and as `(:ta,)` in the linearized
-one.
+formulation as well as on the type: a [`Transformer`](@ref) carries the ratio of a
+winding as `(:tm, :tr, :ti)` in the current based formulation and as `(:ta,)` in
+the linearized one.
+
+A key may name a variable that belongs to one terminal of an edge, registered
+under an [`Arc`](@ref); each of those is held on its own.
 """
 redispatch_controls(::NetworkModel, ::Type{T}) where {T<:AbstractComponent} = ()
 
@@ -270,7 +304,7 @@ What moving component `id` of type `T` away from its market schedule costs at
 network index `nw`, as a JuMP expression or a number.
 
 Zero unless the type says otherwise, which is what makes a measure *non-costly*:
-a [`PhaseShifter`](@ref) is free to move and simply has no method here, while an
+a [`Transformer`](@ref) is free to move and simply has no method here, while an
 [`AbstractGenerator`](@ref) and an [`AbstractStorage`](@ref) price the volumes
 they moved. [`objective_redispatch_cost`](@ref) sums this over every registered
 edge and unit type.

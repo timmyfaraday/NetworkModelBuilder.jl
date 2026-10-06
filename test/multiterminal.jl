@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.12.0 - the star point keys differ from the ones a Transformer registers   #
 ################################################################################
 
 # An edge with more than two terminals is the reason the extended graph carries
@@ -37,8 +38,8 @@ function _NMB.variable_edge(nm::NetworkModel{P,F}, ::Type{StarEdge};
                            ) where {P<:AbstractProblemType,F<:IVRFormulation}
     E = ids(nm, StarEdge; nw)
 
-    _NMB.var(nm; nw)[:vsr] = JuMP.@variable(nm.model, [e in E], base_name = "$(nw)_vsr", start = 1.0)
-    _NMB.var(nm; nw)[:vsi] = JuMP.@variable(nm.model, [e in E], base_name = "$(nw)_vsi", start = 0.0)
+    _NMB.var(nm; nw)[:star_vr] = JuMP.@variable(nm.model, [e in E], base_name = "$(nw)_star_vr", start = 1.0)
+    _NMB.var(nm; nw)[:star_vi] = JuMP.@variable(nm.model, [e in E], base_name = "$(nw)_star_vi", start = 0.0)
 
     return nothing
 end
@@ -49,7 +50,7 @@ function _NMB.constraint_edge(nm::NetworkModel{P,F}, ::Type{StarEdge};
                              ) where {P<:AbstractProblemType,F<:IVRFormulation}
     vr,  vi  = _NMB.var(nm, :vr;  nw), _NMB.var(nm, :vi;  nw)
     cr,  ci  = _NMB.var(nm, :cr;  nw), _NMB.var(nm, :ci;  nw)
-    vsr, vsi = _NMB.var(nm, :vsr; nw), _NMB.var(nm, :vsi; nw)
+    vsr, vsi = _NMB.var(nm, :star_vr; nw), _NMB.var(nm, :star_vi; nw)
 
     for e in ids(nm, StarEdge; nw)
         se = edge(nm, e; nw)::StarEdge

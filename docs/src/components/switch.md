@@ -263,7 +263,8 @@ the caller.
 
 ## In a redispatch
 
-A free switch is a **measure**, like a [`PhaseShifter`](@ref) or a [`DCLink`](@ref): a
+A free switch is a **measure**, like the phase shifter of a [`Transformer`](@ref) or a
+[`DCLink`](@ref): a
 preventive one takes one position that has to serve every contingency, a corrective
 one is free to take a different position in each. Which is which is the
 [`Redispatch`](@ref) setup's to say, as it is for every other measure. The preventive

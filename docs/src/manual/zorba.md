@@ -60,9 +60,8 @@ something to strip out.
 
     Two things the package refuses outright, and says so: a [`DCLink`](@ref) has
     no model in an alternating current formulation, so a study with an `hvdc`
-    table cannot be posed in one, and a phase shifter priced per radian is
-    linearized-only — `pst_cost = 0.0` is what asks the current based question
-    about a study that has one.
+    table cannot be posed in one. A phase shifter is a non-costly measure, so
+    `pst_cost` of `parse_zorba` is deprecated: it warns, and has no effect.
 
 ## What becomes what
 
@@ -71,7 +70,7 @@ something to strip out.
 | a node of `net_position`             | a [`Node`](@ref), the first of them the reference              |
 | its `value_mw`                       | a [`FixedLoad`](@ref) withdrawing the negation of it           |
 | a row of `grid` with `pst_deg == 0`  | a [`Branch`](@ref)                                             |
-| a row with a phase shift range       | a [`PhaseShifter`](@ref) priced at `pst_cost` per radian       |
+| a row with a phase shift range       | a [`Transformer`](@ref) whose first winding is a phase shifter, `pst = true` |
 | its `capacity`                       | `rate_a`, in per unit; blank is unlimited                      |
 | an `Hvdc`                            | a [`DCLink`](@ref) scheduled at zero and priced per per-unit   |
 | an outage                            | a `:contingency` coordinate, carried on the `status` of the links it takes out |
@@ -129,6 +128,12 @@ function, not two similar ones. That is what `parse_zorba` does by default, and
 giving it real `contingency_weight` probabilities asks the expected-cost
 question instead, which drops the factor.
 
+The first term has no counterpart here. A phase shifter is a non-costly measure, so
+it moves before anything that is priced and no price picks the least movement that
+relieves a congestion; `pst_cost` is deprecated. The overload that is paid for is
+still the same, but how the flow splits between parallel paths is then not
+determined, and a comparison with Zorba is one of the overload and not of the flows.
+
 ## The sign of a phase shift
 
 This package writes the linearized flow as
@@ -166,7 +171,7 @@ not the description of a grid, which is how Zorba passes them too.
 ```julia
 using Arrow, HiGHS, NetworkModelBuilder
 
-data   = parse_zorba("study"; overload_penalty = 1e3, pst_cost = 1.0)
+data   = parse_zorba("study"; overload_penalty = 1e3)
 result = solve_zorba(data, HiGHS.Optimizer)
 write_zorba("study/out", zorba_tables(data, result))
 ```

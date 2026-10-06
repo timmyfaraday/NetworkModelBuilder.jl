@@ -10,9 +10,8 @@ equalities: nonconvex, exact, and solved as a feasibility problem.
 |:-------|:----|:----------|:-------|
 | ``v^{\text{r}}_{i}, v^{\text{i}}_{i}`` | `:vr`, `:vi` | ``i \in I`` | free |
 | ``c^{\text{r}}_{a}, c^{\text{i}}_{a}`` | `:cr`, `:ci` | ``a \in A`` | free |
-| ``c^{\text{sr}}_{e}, c^{\text{si}}_{e}`` | `:csr`, `:csi` | ``e \in E^{\text{br}} \cup E^{\text{tf}}`` | free |
-| ``v^{\text{tr}}_{e}, v^{\text{ti}}_{e}`` | `:vtr`, `:vti` | ``e \in E^{\text{tf}}`` | free |
-| ``v^{\text{sr}}_{e}, v^{\text{si}}_{e}`` | `:vsr`, `:vsi` | ``e \in E^{\text{mw}}`` | free |
+| ``c^{\text{sr}}_{e}, c^{\text{si}}_{e}`` | `:csr`, `:csi` | ``e \in E^{\text{br}}`` | free |
+| ``v^{\text{sr}}_{e}, v^{\text{si}}_{e}`` | `:vsr`, `:vsi` | ``e \in E^{\text{tf}}`` | free |
 | ``c^{\text{r}}_{u}, c^{\text{i}}_{u}`` | `:cru`, `:ciu` | ``u \in U`` | free |
 | ``p^{\text{g}}_{u}, q^{\text{g}}_{u}`` | `:pg`, `:qg` | ``u \in U^{\text{g}}`` | free |
 
@@ -67,37 +66,30 @@ v^{\text{i}}_{i} - v^{\text{i}}_{j} &= r_{e} c^{\text{si}}_{e} + x_{e} c^{\text{
 \end{aligned}
 ```
 
-Two-winding transformer, ``\forall e \in E^{\text{tf}}``, with
-``t^{\text{r}}_{e} = tm_{e}\cos ta_{e}`` and ``t^{\text{i}}_{e} = tm_{e}\sin ta_{e}``:
-first the ideal ratio,
+Transformer, ``\forall e \in E^{\text{tf}}``, for every winding ``k`` at node
+``i_k``. A load flow holds the ratio ``T_{e,k} = tm_{e,k} \exp(j \, ta_{e,k})`` at
+its setpoint, so the voltage and the current behind it are expressions, not
+variables,
 
 ```math
-v^{\text{r}}_{i} = t^{\text{r}}_{e} v^{\text{tr}}_{e} - t^{\text{i}}_{e} v^{\text{ti}}_{e},
+v^{\text{t}}_{e,k} = \overline{T_{e,k}} \, v_{i_k} / |T_{e,k}|^2,
 \qquad
-v^{\text{i}}_{i} = t^{\text{r}}_{e} v^{\text{ti}}_{e} + t^{\text{i}}_{e} v^{\text{tr}}_{e}
+c^{\text{t}}_{e,k} = \overline{T_{e,k}} \, c_{a_{e,k}} ,
 ```
 
-then the six branch equations above, with ``v^{\text{tr}}_{e}, v^{\text{ti}}_{e}``
-in place of ``v^{\text{r}}_{i}, v^{\text{i}}_{i}`` and with the from-side current
-referred through the ratio,
+and what is left is the star, with ``z_{e,k}`` the impedance and
+``y^{\text{sh}}_{e,k}`` the shunt of winding ``k``:
 
 ```math
-c^{\text{t,r}}_{e} = t^{\text{r}}_{e} c^{\text{r}}_{a^{\text{f}}_{e}} + t^{\text{i}}_{e} c^{\text{i}}_{a^{\text{f}}_{e}},
+v^{\text{t}}_{e,k} - v^{\text{s}}_{e} = z_{e,k} \left( c^{\text{t}}_{e,k} -
+y^{\text{sh}}_{e,k} \, v^{\text{t}}_{e,k} \right),
 \qquad
-c^{\text{t,i}}_{e} = t^{\text{r}}_{e} c^{\text{i}}_{a^{\text{f}}_{e}} - t^{\text{i}}_{e} c^{\text{r}}_{a^{\text{f}}_{e}}
+\sum_{k} \left( c^{\text{t}}_{e,k} - y^{\text{sh}}_{e,k} \, v^{\text{t}}_{e,k} \right)
+= y^{\text{m}}_{e} \, v^{\text{s}}_{e}
 ```
 
-in place of ``c^{\text{r}}_{a^{\text{f}}_{e}}, c^{\text{i}}_{a^{\text{f}}_{e}}``.
-
-Multi-winding transformer, ``\forall e \in E^{\text{mw}}``, for every winding
-``k`` at node ``i_k``, with ``T_{e,k}`` its ratio and
-``c^{\text{t}}_{e,k} = \overline{T_{e,k}} \, c_{a_{e,k}}``:
-
-```math
-v_{i_k} / T_{e,k} - v^{\text{s}}_{e} = z_{e,k} \, c^{\text{t}}_{e,k},
-\qquad
-\sum_{k} c^{\text{t}}_{e,k} = y^{\text{m}}_{e} \, v^{\text{s}}_{e}
-```
+A unit ratio is an alias: ``v^{\text{t}}_{e,k} = v_{i_k}`` and
+``c^{\text{t}}_{e,k} = c_{a_{e,k}}``.
 
 ### At the units
 
@@ -149,7 +141,7 @@ solver. On case14, which has 14 nodes, 20 edges and 17 units:
 
 | | variables | constraints |
 |:--|----------:|------------:|
-| case14 | 198 | 198 |
+| case14 | 192 | 192 |
 
 Square, as a determinate problem should be.
 

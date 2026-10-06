@@ -54,17 +54,18 @@ The ratio *angle* survives the linearization and the ratio *magnitude* does not.
 That is not an implementation choice — with every magnitude fixed at one there
 is nothing for ``tm`` to act on.
 
-So a [`PhaseShifter`](@ref) is a genuine control in this formulation, and a
-linear one: its angle enters the flow directly, where the current based
-formulation has to carry the ratio as a real and an imaginary part to stay
+So a winding of a [`Transformer`](@ref) that is `pst` is a genuine control in this
+formulation, and a linear one: its angle enters the flow directly, where the current
+based formulation has to carry the ratio as a real and an imaginary part to stay
 polynomial. Steering active power with a phase shifter is the classic use of a
-linearized model.
+linearized model. A phase shifter that steps, `pst = STEPPED`, is a mixed-integer
+linear program with one binary per position, which a solver such as HiGHS takes.
 
-A [`TapChanger`](@ref), by contrast, is **inert** here. It is built and solved as
-an ordinary transformer at its fixed phase angle, and the voltage control it
-offers an alternating current model is simply absent. It does not error, because
-the model is still a valid one; but a study whose point is the tap belongs in an
-[`IVRFormulation`](@ref).
+A winding that is `oltc`, a tap changer, is **inert** here. It is built and solved as
+an ordinary winding at its setpoint, with no variable and no binary even where it
+steps, and the voltage control it offers an alternating current model is simply
+absent. It does not error, because the model is still a valid one; but a study whose
+point is the tap belongs in an [`IVRFormulation`](@ref).
 
 ## The problem definition does not change
 

@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.12.0 - the measures are transformer windings, not types                   #
 ################################################################################
 
 ################################################################################
@@ -74,8 +75,8 @@ a different question is what is minimized and what is watched. Each generator
 and storage unit splits its dispatch into the market schedule it carries as a
 setpoint and the volumes it moved away from it, and only those volumes are
 priced. The rating is enforced on the edges the problem watches, which may be a
-subset of them, and a control that costs nothing to move — a
-[`PhaseShifter`](@ref), a [`TapChanger`](@ref) — is taken first because it is
+subset of them, and a control that costs nothing to move — a winding of a
+[`Transformer`](@ref) that can move — is taken first because it is
 free.
 
 Posed over a `:contingency` dimension the problem asks the same question of
@@ -191,7 +192,7 @@ nothing about it involves direct current. It is a linearization of the
 alternating current equations around a flat voltage profile.
 
 See the manual for what survives the approximations and what does not — most
-notably that a [`PhaseShifter`](@ref) remains a control here while a
-[`TapChanger`](@ref) becomes inert.
+notably that the angle of a [`Transformer`](@ref) winding remains a control here
+while its magnitude becomes inert.
 """
 abstract type LPFFormulation <: AbstractLinearizedFormulation end

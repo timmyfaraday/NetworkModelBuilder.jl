@@ -168,7 +168,8 @@ a link left at its schedule costs nothing however much it carries.
 
 A `cost` of zero, the default, makes it a **non-costly** measure, taken before
 anything that is priced, which is usually the right model of a link the operator
-already controls. It is then the DC counterpart of a [`PhaseShifter`](@ref), and
+already controls. It is then the DC counterpart of the phase shifter of a
+[`Transformer`](@ref), and
 [a redispatch](@ref Redispatch) will use it to relieve congestion for free.
 
 ```@docs

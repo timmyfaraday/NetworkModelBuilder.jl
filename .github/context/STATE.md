@@ -66,8 +66,9 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
 ## Next
 
 1. B6, plan agreed. Item 1 (`same_structure` gates, D43, v0.12.1, `edaca89`): week 1 chunk time -26.2 %.
-   Item 2 (feasibility check through MOI, `c7d26ac`): -16.5 % more, objectives bit-identical. Next: a
-   cheaper `build_solution`, then a full-year run. Detail in `backlog.md`.
+   Item 2 (feasibility check through MOI, `c7d26ac`): -16.5 % more, objectives bit-identical. Item 3 as
+   planned (bulk read of values) fails its stop rule; a profile points at `has_nw_data`/`nw_component`
+   and `_signature` instead. Awaiting Tom on the revised item 3, then a full-year run. See `backlog.md`.
 2. B7 (closed switches under network reduction), B8 (timing flake), B3 (throughput), B4 (bus factor),
    B13 and B19 remain, see `backlog.md`.
 

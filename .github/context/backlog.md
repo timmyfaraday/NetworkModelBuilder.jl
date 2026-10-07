@@ -53,6 +53,14 @@ older ones: git has them). Next id: **B20**.
     bound (0.25) and a HiGHS window. Week 1 (`runs/_b6i2a*`, `_b6i2b*`, two pairs, launch order swapped,
     control = item 1): 14 of 14 sound, 0 fallbacks, objectives and unit volumes bit-identical, chunk
     213 s against 255 s (-16.5 %, every chunk -13 to -18 %; predicted -18 %).
+  - Item 3 as planned (read all values in bulk) fails its stop rule, 2026-10-07: `JuMP.value` over all
+    249,118 variables of a step-3 window takes 0.07 s of the 1.0 s `build_solution`. A roll still spends
+    5.7 s of its own per window (update 35 %, `build_solution` 14 %, solve 7 %). Profile of a whole roll:
+    `has_nw_data` 12 % (a `getfield` with a runtime index inside `any`, called by `nw_component` for every
+    component of every network index), `topology` 18 % (`_signature` re-reads the status of every
+    switchable component on each call, through an abstract `Dict` value). Prototype of generated
+    `has_nw_data` and `nw_component` (scratch only): own work 5.68 s to 4.75 s a window, `build_solution`
+    1.13 s to 0.93 s, window solutions `isequal`. Revised item 3 proposed to Tom, not started.
   - B12 measured the one `Transformer` at +1.0 % a chunk against the old types, all non-solver time.
     Candidate, not measured: `nw_component` rebuilds a `Transformer` through its validating constructor
     for every network index.

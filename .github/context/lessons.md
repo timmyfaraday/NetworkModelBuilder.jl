@@ -140,6 +140,13 @@ again get retired.
   swapped between them): new slower in 11 of 14 chunks, +1.4 % then +0.7 %, pooled +1.0 % (3.6 s a
   chunk); non-solver time slower in step 2 in 14 of 14 (+0.8 s) and in step 3 in 13 of 14 (+4.2 s), the
   solver not. A small cost in NMB's own work, not the launch order; cause not measured. (unconfirmed)
+  B6 item 1 (the `same_structure` gates, reuse finally happening) the other way, two pairs of 7: 14 of
+  14 chunks faster, -26.2 % pooled (254 s against 344 s), the step 3 solver -60 to -75 % (warm basis),
+  objectives within 4e-10. Both pairs gave the same gain, so launch order is not the cause.
+- **A rolling roll with tied prices is path dependent: reuse and rebuild can differ.** A roll is a
+  sequence of LPs, so equal prices let each window pick another optimum (104.92 against 104.34 in a
+  test). Reuse-equivalence tests need distinct prices; the Zorba pipeline is unaffected, its windows
+  are independent. (unconfirmed)
 - **Threads inside one Julia process stop paying at a handful of tasks for NMB's per-window work;
   separate one-thread processes keep scaling.** Zorba week 1, same 7 daily chunks: 7 threads in one
   process 860 s per chunk; 7 processes 330-400 s. One 720-hour month on 30 threads had the same

@@ -41,6 +41,12 @@ older ones: git has them). Next id: **B20**.
     feasibility check in `scripts/ParallelRun.jl` (D44), a cheaper `build_solution` (v0.12.2), then a
     re-measure and a full-year run. Accepted when the objective of every chunk equals the control's
     within 1e-7 relative (an equal optimum, not equal unit volumes), with 0 fallbacks.
+  - Item 1 done (`edaca89`, v0.12.1), 2026-10-07. Week 1 beside a same-day control (`runs/_b6i1a*`,
+    `_b6i1b*`, two pairs, launch order swapped): 14 of 14 chunks sound, 0 fallbacks, objectives within
+    4.1e-10 (the rest 1e-14), `built` 1 of 3 (step 2) and 1 of ~23 (step 3) against 3 and ~23, chunk
+    254 s against 344 s (-26.2 %, every chunk -20 to -32 %; predicted -15 %), step 3 solver 16-24 s
+    against 45-105 s (the basis is kept). Largest unit-hour volume difference 1e-10 pu, except one
+    step-2 unit-hour in chunk 121-144 (1.25e-2 pu, equal objective: another optimum).
   - B12 measured the one `Transformer` at +1.0 % a chunk against the old types, all non-solver time.
     Candidate, not measured: `nw_component` rebuilds a `Transformer` through its validating constructor
     for every network index.

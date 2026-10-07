@@ -148,6 +148,12 @@ again get retired.
   dictionary of variable refs 0.14, listing the rows 0.4, `constraint_object` 0.55, evaluating 0.9-1.0);
   the same check read row by row from the solver's interface into a plain vector took 0.45 s, with the
   same violation to the last digit. Chunk time -16.5 % (two pairs of 7). (unconfirmed)
+- **A field loop with a runtime index is the first thing to look for when a hot path boxes.**
+  `any(is_nw_varying(getfield(c, k)) for k in 1:nfields(c))` and `T((... getfield(c, k) ...)...)`
+  were 12 % of a rolling horizon: every field of every component at every network index was boxed.
+  A `@generated` method that reads each field by a constant index, and drops a field whose declared
+  type cannot hold the thing asked for, gave -13.6 % of a chunk with bit-identical results. Look at a
+  flat profile for an anonymous-function frame with a large self count (`#has_nw_data##0`). (unconfirmed)
 - **A rolling roll with tied prices is path dependent: reuse and rebuild can differ.** A roll is a
   sequence of LPs, so equal prices let each window pick another optimum (104.92 against 104.34 in a
   test). Reuse-equivalence tests need distinct prices; the Zorba pipeline is unaffected, its windows

@@ -4,8 +4,9 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
 
 ## Where NMB stands
 
-- v0.12.0 (D28-D36, tagged): one `Transformer`, see below. v0.11.0 (D13,
-  D15-D27): the `Switch` edge. v0.10.2 (D11): `solution_tables` and `docs/src/manual/concepts.md`.
+- v0.12.1-v0.12.3 (B6, untagged): rolling-horizon reuse and cheaper per-window work. v0.12.0
+  (D28-D36, tagged): one `Transformer`. v0.11.0 (D13, D15-D27): the `Switch` edge. v0.10.2 (D11):
+  `solution_tables` and `docs/src/manual/concepts.md`.
   v0.10.1 (D10): `src/comp/` is auto-included by a directory walk (`_include_dir`) and each
   component file exports its own names. v0.10.0: `security_tables`.
 - Gap-closure items #1-9 of `context/knowledge/plan/GAP_CLOSURE_PLAN.md` are closed; #10-11 are
@@ -18,7 +19,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
   rescale `4ef3472`, phases 0-3 `20d88dc`..`f939763`, `NMB_MERGE` `9a8b676`, original prices `76a52ce`
   D14, `_diag_*` deletion `9fc06d4`, window settings `3ea65d4`), `main` merged in (`420b1aa`), the B9
   loader change, `main` merged in again (`a2d8897`, B11), the B12 migration (`40dc645`) and D42
-  (`ec4e49c`). Pushed up to `ec4e49c`; the B10 record is local.
+  (`ec4e49c`). Pushed up to `8090ab3` (the B10 record); the nine B6 commits are local.
 - `b5-switch-edge` and `b11-unified-transformer` are merged and deleted. Next free decision id: **D45**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
@@ -40,10 +41,9 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
 - Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
 - B11 is merged and tagged `v0.12.0` (plan `context/knowledge/plan/unified-transformer.md`, D28-D36),
   suite 3126. Zorba flows are not unique without a phase shifter price (D34).
-- B12 done: `scripts/` run on `Transformer`. Week 1 beside a same-day pre-B11 control, two pairs with
-  the launch order swapped (`runs/_b12*`): 14 of 14 chunks sound, objectives equal to 8e-14, overload
-  rows and volumes (3e-10 pu) equal to the control and `_week1_switches`; the new code is 1.0 % slower
-  a chunk, in NMB's own work, not the solver.
+- B12 done: `scripts/` run on `Transformer`. Week 1 beside a same-day pre-B11 control (`runs/_b12*`, two
+  pairs): 14 of 14 chunks sound, objectives equal to 8e-14, overload rows and volumes (3e-10 pu) equal
+  to the control; the new code is 1.0 % slower a chunk, in NMB's own work, not the solver.
 - B10 done, full year (`runs/_year_b10`, 73 processes, 52 min, original prices D14, couplers as
   switches, one `Transformer`): 365 of 365 chunks sound, 0 fallback, no shedding or spillage. Overload
   rows 340,623 (step 2) and 5,719,307 (step 3) against 341,787 and 5,720,514 with the floor
@@ -65,10 +65,10 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
 
 ## Next
 
-1. B6, plan agreed. Item 1 (`same_structure` gates, D43, v0.12.1, `edaca89`): week 1 chunk time -26.2 %.
-   Item 2 (feasibility check through MOI, `c7d26ac`): -16.5 % more, objectives bit-identical. Item 3 as
-   planned (bulk read of values) fails its stop rule; a profile points at `has_nw_data`/`nw_component`
-   and `_signature` instead. Awaiting Tom on the revised item 3, then a full-year run. See `backlog.md`.
+1. B6, plan agreed, items 1-3 done, each beside a same-day control in week 1: chunk time -26.2 % (gates,
+   v0.12.1), -16.5 % (feasibility check through MOI, scripts), -13.6 % (`nw_component`, v0.12.2), -15.6 %
+   (`Network.status`, v0.12.3); objectives bit-identical from item 2 on. Next: re-measure with
+   `scratch/b6_stages.jl`, then the full year against `_year_b10`. See `backlog.md`.
 2. B7 (closed switches under network reduction), B8 (timing flake), B3 (throughput), B4 (bus factor),
    B13 and B19 remain, see `backlog.md`.
 

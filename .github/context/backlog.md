@@ -61,6 +61,12 @@ older ones: git has them). Next id: **B20**.
     switchable component on each call, through an abstract `Dict` value). Prototype of generated
     `has_nw_data` and `nw_component` (scratch only): own work 5.68 s to 4.75 s a window, `build_solution`
     1.13 s to 0.93 s, window solutions `isequal`. Revised item 3 proposed to Tom, not started.
+  - Item 3 revised and done, 2026-10-07 (Tom: two versions). 3a v0.12.2 (`aa33f8d`): generated
+    `has_nw_data`/`nw_component`; 3b v0.12.3 (`5ea1a26`): `Network.status`, typed, for `_signature`. Suite
+    3142 of 3142 for 3b (3a: one `lf.jl:124` timer flake, B8, then 3 of 3 passes alone). Week 1 beside a
+    control, two pairs each, launch order swapped (`runs/_b6i3a*`, `_b6i3b*`): 14 of 14 sound, 0 fallbacks,
+    objectives and unit volumes bit-identical; 3a chunk 180 s against 208 s (-13.6 %, predicted -10 %), 3b
+    152 s against 180 s (-15.6 %, predicted -12 %); step-3 non-solver 140 s to 113 s a chunk.
   - B12 measured the one `Transformer` at +1.0 % a chunk against the old types, all non-solver time.
     Candidate, not measured: `nw_component` rebuilds a `Transformer` through its validating constructor
     for every network index.

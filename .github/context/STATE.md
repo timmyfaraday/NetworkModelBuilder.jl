@@ -19,7 +19,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
   D14, `_diag_*` deletion `9fc06d4`, window settings `3ea65d4`), `main` merged in (`420b1aa`), the B9
   loader change, `main` merged in again (`a2d8897`, B11), the B12 migration (`40dc645`) and D42
   (`ec4e49c`). Pushed up to `ec4e49c`; the B10 record is local.
-- `b5-switch-edge` and `b11-unified-transformer` are merged and deleted. Next free decision id: **D43**.
+- `b5-switch-edge` and `b11-unified-transformer` are merged and deleted. Next free decision id: **D45**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -65,8 +65,10 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
 
 ## Next
 
-1. B7 (closed switches under network reduction), B8 (timing flake), B3/B6 (throughput) and B4 (bus
-   factor) remain, see `backlog.md`.
+1. B6, plan agreed, to implement in this order: the `same_structure` gates (D43), a cheaper feasibility
+   check (D44), a cheaper `build_solution`, then a full-year run. Detail in `backlog.md`.
+2. B7 (closed switches under network reduction), B8 (timing flake), B3 (throughput), B4 (bus factor),
+   B13 and B19 remain, see `backlog.md`.
 
 ## Blocked / waiting
 

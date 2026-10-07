@@ -2,7 +2,7 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B19**.
+older ones: git has them). Next id: **B20**.
 
 ## Now
 
@@ -36,7 +36,11 @@ older ones: git has them). Next id: **B19**.
   - 2026-10-07, one window of step 3 (80 indices): build 4.2-4.8 s, the agent's feasibility check 2-3 s,
     `build_solution` 1.0-1.4 s, solve 1.4 s, GC 1.2-2.8 s, 2.2 GB allocated. No window ever reuses its
     model: the year built 1095 of 1095 (step 2) and 8353 of 8760 (step 3), because `same_structure`
-    reads a generator's `pmin`/`pmax` crossing +-pi/2 as a change of shape. Plan in the next session.
+    reads a generator's `pmin`/`pmax` crossing +-pi/2 as a change of shape.
+  - Plan agreed 2026-10-07 (Tom): full scope, in order: `same_structure` gates (D43, v0.12.1), a cheaper
+    feasibility check in `scripts/ParallelRun.jl` (D44), a cheaper `build_solution` (v0.12.2), then a
+    re-measure and a full-year run. Accepted when the objective of every chunk equals the control's
+    within solver tolerance (an equal optimum, not equal unit volumes), with 0 fallbacks.
   - B12 measured the one `Transformer` at +1.0 % a chunk against the old types, all non-solver time.
     Candidate, not measured: `nw_component` rebuilds a `Transformer` through its validating constructor
     for every network index.
@@ -48,6 +52,10 @@ older ones: git has them). Next id: **B19**.
   closed switch would merge its nodes · Tom · 2026-10-04
 - [ ] B8 · `test/lf.jl:124` (`solve_time > 0.0`) fails now and then on Windows: `time()` has a coarse
   resolution and case14 solves faster; seen once in a full run, passes alone. Likely `>= 0.0` · Tom · 2026-10-04
+- [ ] B19 · Re-evaluate the per-window feasibility check (`worst_violation`) once the pipeline has proven
+  stable: sample it or drop it · Tom · 2026-10-07
+  - D44 keeps it for now. It cost 2.4 s of 9.6 s a step-3 window; 365 of 365 chunks of `_year_b10` had a
+    first violation of 0.
 
 ## Done
 

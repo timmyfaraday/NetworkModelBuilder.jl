@@ -30,6 +30,11 @@ facts `(unverified)` and remove the marker once checked.
   instead of the `.log`; a sync `Wait-Process -Timeout` call is moved to the background when idle, and
   a second `Wait-Process` call in a new command blocks until the processes are gone (found by Tom Van
   Acker, 2026-10-05).
+- A same-day control run of an older commit: `git worktree add --detach $env:TEMP\nmb-control-wt <commit>`,
+  one `julia --project=<wt>\scripts -e "using NetworkModelBuilder, Xpress ..."` to warm its compile
+  cache, then `Start-Process julia ... -WorkingDirectory <root>` per process, `--project=scripts` being
+  relative to it. Week 1 as 7 + 7 processes took 7 min. Copy `<wt>\runs\<id>` out before `git worktree
+  remove --force` (found by Tom Van Acker, 2026-10-07).
 - `Pkg.activate(temp=true)` is ephemeral — gone by the next separate `julia` process invocation
   even after a clean exit. Use `Pkg.activate("C:/explicit/persistent/path")` (forward slashes) for
   any scratch environment reused across multiple terminal calls.

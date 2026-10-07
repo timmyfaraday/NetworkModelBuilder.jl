@@ -1,6 +1,6 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Van Acker.
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Van Acker (B12 done).
 
 ## Where NMB stands
 
@@ -13,12 +13,12 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
 
 ## Branches
 
-- `main` carries B5 and B11 (`--no-ff`), tagged `v0.12.0`; `test-zorba-run` has it merged in, plus B9.
-- `test-zorba-run` is `6cd0af1` (an earlier merge of `main`) plus 9 commits, all under `scripts/`: the
-  price rescale (`4ef3472`), phases 0-3 (`20d88dc`, `f7571aa`, `e100616`, `f939763`: hour ids, parallel
-  steps, N-1 screen, contingency fix, reactance floor), the `NMB_MERGE` flag (`9a8b676`), restored
-  prices (`76a52ce`, D14), the `_diag_*` deletion (`9fc06d4`), the window/step settings (`3ea65d4`),
-  then `main` merged in (`420b1aa`, so it has B5) and the B9 loader change in `SteeringPlanData.jl`.
+- `main` carries B5 and B11 (`--no-ff`), tagged `v0.12.0`, and the setup commits D37-D41.
+- `test-zorba-run` is `6cd0af1` (an earlier merge of `main`) plus 9 commits under `scripts/` (price
+  rescale `4ef3472`, phases 0-3 `20d88dc`..`f939763`, `NMB_MERGE` `9a8b676`, original prices `76a52ce`
+  D14, `_diag_*` deletion `9fc06d4`, window settings `3ea65d4`), `main` merged in (`420b1aa`), the B9
+  loader change, `main` merged in again (`a2d8897`, B11) and the B12 migration (`40dc645`). Not
+  pushed: `40dc645` and the setup commits `c2d401f`, `4a3db48` (same as `main`'s `2aa61db`, `4d0d3c3`).
 - `b5-switch-edge` and `b11-unified-transformer` are merged and deleted. Next free decision id: **D42**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
@@ -38,10 +38,12 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
 ## In progress
 
 - Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
-- B11 is done and merged into `main` (plan `context/knowledge/plan/unified-transformer.md`, D28-D36):
-  one `Transformer` with a T-model, `oltc`/`pst` as `TapMode`, `STEPPED` windings, `is_held`; old types
-  gone, no shims. Docs, `CHANGELOG.md` (with a migration table) and `version = "0.12.0"` are in.
-  Suite 3126, docs build clean. Pushed, tag `v0.12.0` on the merge. Zorba flows are not unique (D34).
+- B11 is merged and tagged `v0.12.0` (plan `context/knowledge/plan/unified-transformer.md`, D28-D36),
+  suite 3126. Zorba flows are not unique without a phase shifter price (D34).
+- B12 done: `scripts/` run on `Transformer`. Week 1 beside a same-day pre-B11 control, 14 processes
+  (`runs/_b12_new`, `runs/_b12_control`): 7 of 7 chunks sound, objectives equal to 8e-14, overload
+  rows equal, largest volume difference 3e-10 pu, against the control and `_week1_switches`; chunks
+  320-382 s against 316-372 s, new slower in 7 of 7 by 0.2-2.8 % (mean 1.4 %), one pair, so unproven.
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`), done with the original
   prices (D14) and the 1e-5 floor: `runs/_year_orig_prices`, 365 of 365 chunks sound, 0 fallback, 58
   min; overload rows 341,787 (step 2) and 5,720,514 (step 3), no load shedding or spillage (the
@@ -58,19 +60,16 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
   least as long as the horizon). `runs/_phase6_h48_probe`, hours 1-48: same results (objectives
   within 5e-11, identical overload rows) but 4,944 s against ~670 s, 27 GB, 6 builds per step; see
   `lessons.md`. Awaiting Tom: keep 8/8 and 1/1 (recommended).
-- Run it with processes, not threads: 7 threads in one process give 860 s per 24 h chunk, 7
-  processes 330-400 s, and 30 threads no more throughput than 7. Recipe in the header of
-  `scripts/run_year_redispatch.jl`. About 85% of a chunk's wall time is NMB's own per-window work
-  (B6), not the solver.
+- Run it with processes, not threads: 7 threads in one process give 860 s per 24 h chunk, 7 processes
+  330-400 s; 30 threads no more throughput than 7. Recipe in the header of `scripts/run_year_redispatch.jl`.
+  About 85% of a chunk's wall time is NMB's own per-window work (B6), not the solver.
 
 ## Next
 
-1. B12: move `test-zorba-run` to `Transformer` (its scripts name `PhaseShifter`, so they do not run
-   until then), then re-run week 1 beside a control run.
-2. B10: re-run the full year with the switches (`_year_orig_prices` has the floor), recipe in the
-   header of `scripts/run_year_redispatch.jl`.
-3. B7 (closed switches under network reduction), B8 (timing flake), B3/B6 (throughput) and B4
-   (bus factor) remain, see `backlog.md`.
+1. B10: re-run the full year with the switches and the one `Transformer` (`_year_orig_prices` has the
+   floor and the old types), recipe in the header of `scripts/run_year_redispatch.jl`.
+2. B7 (closed switches under network reduction), B8 (timing flake), B3/B6 (throughput), B4 (bus
+   factor) and B18 (is `NMinusOneScreen.jl` still wanted?) remain, see `backlog.md`.
 
 ## Blocked / waiting
 

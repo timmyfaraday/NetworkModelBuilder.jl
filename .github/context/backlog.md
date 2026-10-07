@@ -2,20 +2,16 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B18**.
+older ones: git has them). Next id: **B19**.
 
 ## Now
 
-- (nothing: B11 is done on its branch and waits for the merge)
+- (nothing: B12 is done on `test-zorba-run`, which has 3 commits to push)
 
 ## Next
 
-- [ ] B12 · After B11 merges: move `test-zorba-run` (`scripts/SteeringPlanData.jl`, `NMinusOneScreen.jl`,
-  `ContingencyData.jl`) to `Transformer`, then re-run week 1 beside a control run made the same day
-  · Tom · 2026-10-05
-  - Objective equal to 1e-9 relative to `runs/_week1_switches`; chunk time within the control's spread.
-- [ ] B10 · Re-run the full year on `test-zorba-run` with the couplers as switches; `runs/_year_orig_prices`
-  has the 1e-5 floor · Tom · 2026-10-05
+- [ ] B10 · Re-run the full year on `test-zorba-run` with the couplers as switches and the one
+  `Transformer`; `runs/_year_orig_prices` has the 1e-5 floor and the old types · Tom · 2026-10-05
   - Week 1 moved the objective by under 0.02 % (B9), so expect the year's overload rows within
     about 0.1 % of 341,787 (step 2) and 5,720,514 (step 3). Recipe in the header of
     `scripts/run_year_redispatch.jl`.
@@ -49,8 +45,16 @@ older ones: git has them). Next id: **B18**.
   closed switch would merge its nodes · Tom · 2026-10-04
 - [ ] B8 · `test/lf.jl:124` (`solve_time > 0.0`) fails now and then on Windows: `time()` has a coarse
   resolution and case14 solves faster; seen once in a full run, passes alone. Likely `>= 0.0` · Tom · 2026-10-04
+- [ ] B18 · Decide whether `scripts/NMinusOneScreen.jl` stays: the driver no longer includes it and it
+  refuses a `Switch`, so it cannot run on today's data · Tom · 2026-10-07
+  - Moved to `Transformer` in B12 and checked against a closed form on a three-node network only.
 
 ## Done
+
+- [x] B12 · `test-zorba-run`'s scripts on `Transformer`, then week 1 beside a same-day control · Tom ·
+  2026-10-05
+  - `40dc645`; `runs/_b12_new` against `runs/_b12_control`: 7 of 7 sound, objectives within 8e-14,
+    overload rows equal, volumes within 3e-10 pu; chunks 0.2-2.8 % slower, mean 1.4 % (STATE.md).
 
 - [x] B11 · One `Transformer` for every transformer (windings, tap changer, phase shifter), replacing
   `TapChanger`, `PhaseShifter` and `MultiWindingTransformer` · Tom · 2026-10-05

@@ -4,7 +4,7 @@ The rules that still constrain NMB. Read the section for the area you are touchi
 changing it.
 
 How to use this file:
-- A new decision gets the next free id (**D42**), goes in the Log at the bottom, and is written by
+- A new decision gets the next free id (**D45**), goes in the Log at the bottom, and is written by
   the `record-decision` skill. `Decided by` is a person's username, never an agent.
 - A decision that changes a rule below edits the rule in place and cites the new id. The old
   wording goes to the archive line of the id it came from.
@@ -154,6 +154,10 @@ How to use this file:
 - **A preventive winding that steps has no binaries of its own at the network indices it is held at:
   it reuses the base case's, and nothing is tied; its continuous ratio stays tied. A corrective one
   keeps a set per contingency** (D36).
+- **A structure gate asks what the model's own guard asks of that field** (D43): `isfinite` of a limit,
+  the ±π/2 test of an angle limit, `iszero` of a `DCLink`'s `loss_prop`. A generator limit that crosses
+  1.571 pu is not a change of the shape of the model, and was read as one, so a rolling horizon with
+  `reuse = true` rebuilt almost every window.
 
 ## Zorba pipeline (`scripts/`)
 
@@ -161,6 +165,12 @@ How to use this file:
   $/pu), 5x that overload price for spillage and 10x for load shedding** (D14), not the 3x/2x/4x
   rescaling tried while the false `INFEASIBLE` was being chased. The rescaling was never the fix;
   the reactance floor was (D13).
+- **The pipeline has no N-1 screen; every hour is solved** (D42): a closed-form screen flagged 96.5 %
+  (step 2) and 97.7 % (step 3) of the year's hours, so it skipped about 3 %. It never ran in the
+  driver and refuses a `Switch`. `scripts/NMinusOneScreen.jl` is deleted; git has it at `e100616`.
+- **The per-window feasibility check stays, made cheaper, and is to be re-evaluated** (D44): it costs
+  2.4 s of 9.6 s a step-3 window. Once the pipeline has proven stable, whether to sample or drop it is
+  Tom's call (B19).
 
 ## Validation against a reference implementation
 
@@ -464,3 +474,31 @@ Date: 2026-10-07 · Decided by: Tom Van Acker · Area: Agent setup
 Why: the plugin's template carries this rule, and Tom asks for a plan first before most changes.
 It is hard rule 8 of `copilot-instructions.md`.
 Changes: new.
+
+### D42 — The pipeline has no N-1 screen; `scripts/NMinusOneScreen.jl` is deleted
+Date: 2026-10-07 · Decided by: Tom Van Acker · Area: Zorba pipeline
+Why: over the year it flags 8,453 of 8,760 hours for step 2 and 8,555 for step 3, so a screen skips
+about 3 % and the driver never used it. It cannot run on today's data (it refuses the 21 coupler
+`Switch`es) and it broke when v0.12.0 removed `PhaseShifter`. Its independent check of the redispatch
+flows goes with it; B12 used a same-day control run instead.
+Changes: new rule in the Zorba pipeline section. Removes the file, closes B18.
+
+### D43 — A structure gate asks what the model's own guard asks of that field
+Date: 2026-10-07 · Decided by: Tom Van Acker · Area: Component model
+Why: measured on the Zorba year, `same_structure` called two windows different whenever a generator's
+`pmin` or `pmax` crossed ±π/2 = 1.571 pu, so the year built 1095 of 1095 step-2 and 8353 of 8760 step-3
+windows from scratch with `reuse = true`. With the angle test off those fields, 5 of 6 step-3 windows
+reused the model, 17 % less wall time, and a step-2 objective equal to 2.9e-14. The rows do not change.
+The audit of the guards found the opposite hole too: a `DCLink`'s transfer variable exists only where
+`loss_prop` is non-zero, which no gate told apart, so an update kept a dead transfer variable and loss
+row (32 variables against 31 fresh); the objective was equal in the three cases checked.
+Changes: new rule in the Component model section; edits `_gate` in `src/core/window.jl`.
+
+### D44 — The per-window feasibility check stays, cheaper, and is re-evaluated later
+Date: 2026-10-07 · Decided by: Tom Van Acker · Area: Zorba pipeline
+Why: the check guards against a solver returning OPTIMAL for a point that breaks node balance, found
+with the 1e-7 couplers; those are switches now and 365 of 365 chunks of the year run had zero first
+violation, but one run is not proof, and the check costs 25 % of a step-3 window. It is made cheaper
+without dropping any of what it checks; whether to sample or drop it comes back once the pipeline has
+proven stable (B19).
+Changes: new rule in the Zorba pipeline section.

@@ -30,7 +30,7 @@ Owner: **Tom Van Acker**.
 ## Log
 
 Format: `- F<n> · YYYY-MM-DD · <user> · <what happened> · cost: <turns/result> · status: open`
-Next id: **F6**.
+Next id: **F8**.
 
 - F1 · 2026-09-30 · Tom Van Acker · `probe-environment` found the SessionStart/PreToolUse/Stop
   hooks have never fired: no `.git/agent-session/` dir, no `.git/agent-hooks.log`, and this
@@ -57,3 +57,11 @@ Next id: **F6**.
 - F5 · 2026-10-07 · Tom Van Acker · `launch.py` adds "no .venv found, tell the user to create it" to
   every session start of a repo without a Python of its own · cost: an empty `.venv` kept only to
   silence it · status: applied SC6 (D39); plugin key in B16
+- F6 · 2026-10-07 · Tom Van Acker · `environment.md` already says a `Get-Content -Raw` round trip
+  without `-Encoding UTF8` turns `≈` into mojibake, and a scratch script was rewritten that way
+  anyway · cost: one broken script, 3 calls. `INDEX.md` sends the agent to `environment.md` only after
+  something fails, and nothing points to it before rewriting a file through the shell · status: open
+- F7 · 2026-10-07 · Tom Van Acker · A sync `run_in_terminal` call came back with only the tail of the
+  echoed prompt (`lder.jl> ^C`) five times in one session, the command having run; a second call
+  returned the output · cost: 5 extra calls; cause not found, seen while a background terminal
+  existed · status: open

@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.12.4 - solve_time test allows a solve faster than the clock               #
 ################################################################################
 
 # The reference values below are the AC power flow solution of PowerModels.jl
@@ -121,7 +122,7 @@ const CASE5_LF_VA = Dict(1 => 3.585141, 2 => 0.031853, 3 => 0.482437,
         @test result["problem_type"] === LoadFlowProblem
         @test result["formulation_type"] === IVRFormulation
         @test result["baseMVA"] == 100.0
-        @test result["solve_time"] > 0.0
+        @test result["solve_time"] >= 0.0
         @test_throws KeyError nw_solution(result, 2)
 
         io = IOBuffer()

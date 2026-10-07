@@ -10,6 +10,56 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+## [0.12.4] - 2026-10-07
+
+### Fixed
+
+- `test/lf.jl` asserted `solve_time > 0.0`, which failed whenever a small case solved
+  faster than the resolution of `time()` on Windows. It now asserts `>= 0.0`, which still
+  fails for the `NaN` a solve that never recorded its time would leave. Tests only.
+
+## [0.12.3] - 2026-10-07
+
+### Changed
+
+- `Network` has a new field, `status`: the status of each switchable component, in the
+  order of `switchable`. `topology` is asked for every node, edge and unit of every
+  network index, and picked the topology of an index by reading the status of each
+  switchable component through the component, an abstract `Dict` value, on every call.
+  It now reads the typed vectors. Results are unchanged; a Zorba week of 24 h chunks
+  against 0.12.2, side by side, took 15.6 % less wall time (152 s against 180 s a chunk).
+  Together with 0.12.1 and 0.12.2 the Zorba year, as 73 one-thread processes, took 24
+  minutes against 52 with 0.12.0, for the same objectives to 3e-8.
+
+## [0.12.2] - 2026-10-07
+
+### Changed
+
+- `has_nw_data` and `nw_component`, which resolve a component at a network index, are
+  generated per component type and read every field by a constant index. The loop over
+  `getfield(c, k)` with a runtime `k` boxed every field of every component at every
+  network index, in the model build, `update_model!` and `build_solution` alike. Results
+  are unchanged; a Zorba week of 24 h chunks against 0.12.1 with the same feasibility
+  check, side by side, took 13.6 % less wall time (180 s against 208 s a chunk).
+
+## [0.12.1] - 2026-10-07
+
+### Fixed
+
+- A rolling horizon with `reuse = true` built almost every window from scratch when a
+  generator's limit varied over the network index: `same_structure` read a power limit
+  or a rating that crossed ±π/2 = 1.571 pu as a change of the shape of the model. That
+  test is now asked only of an angle limit, `angmin` or `angmax`; every other limit is
+  asked whether it is finite. On the Zorba year 8,353 of 8,760 windows of the internal
+  redispatch were built from scratch; a Zorba week of 24 h chunks, side by side with
+  0.12.0, now takes 26 % less wall time (254 s against 344 s a chunk) for the same
+  objective to 4e-10.
+- `same_structure` did not tell a `DCLink` whose `loss_prop` is zero from one whose
+  `loss_prop` is positive, although the transfer variable of the link exists only for
+  the second. A model updated across the change kept a transfer variable and a loss row
+  the window does not have; the objective was equal in the cases checked, and it is now
+  rebuilt.
+
 ## [0.12.0] - 2026-10-06
 
 This release replaces four transformer types with one, and breaks the code that

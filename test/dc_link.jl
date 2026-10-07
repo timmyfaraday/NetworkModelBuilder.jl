@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.6.0 - initial implementation                                              #
+# v0.12.1 - a loss that depends on the transfer is another shape               #
 ################################################################################
 
 # Two nodes with no alternating current path between them, joined only by a dc
@@ -209,6 +210,36 @@ link(result, n = 1) = nw_solution(result, n)["edge"]["1"]
         @test occursin("DCLink", err.msg)
         @test occursin("converter station", err.msg)
         @test occursin("LPFFormulation", err.msg)
+    end
+
+    @testset "a loss that depends on the transfer is another shape" begin
+        # the transfer variable exists only where loss_prop is not zero, so 0.0 and
+        # 0.02 are two shapes and 0.02 and 0.03 are one
+        dim = Dimension(:time => 4)
+        function lossy(loss)
+            net = network(island_network(; dim))
+            net.edge[1] = DCLink(; id = 1, terminals = [1, 2], reverse = true,
+                                 loss_prop = nw_vector(dim, loss))
+            return NetworkData(Network(net.node, net.edge, net.unit; dim); name = "islands",
+                               baseMVA = 100.0)
+        end
+
+        data = lossy([0.0, 0.02, 0.03, 0.0])
+        @test same_structure(data, 2, 3)
+        @test !same_structure(data, 1, 2)
+        @test !same_structure(data, 3, 4)
+
+        # a roll on one model has to see it, or the loss row of a window that has
+        # none is left behind from the one before
+        for (loss, built) in (([0.02, 0.03, 0.02, 0.03], 2), ([0.02, 0.02, 0.0, 0.0], 4))
+            data   = lossy(loss)
+            plain  = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1))
+            reused = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1,
+                                          reuse = true))
+
+            @test reused["objective"] ≈ plain["objective"] rtol = 1e-7
+            @test reused["horizon"]["built"] == built
+        end
     end
 end
 

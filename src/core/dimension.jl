@@ -9,6 +9,7 @@
 # v0.1.0 - initial implementation                                              #
 # v0.2.0 - network dependent data stored per component                         #
 # v0.6.0 - periods group the coordinates of a dimension                        #
+# v0.12.2 - has_nw_data and nw_component read each field by constant index     #
 ################################################################################
 
 ################################################################################
@@ -419,8 +420,23 @@ Base.show(io::IO, x::NetworkVector{T}) where T =
 "whether `x` varies over the network index"
 is_nw_varying(x) = x isa NetworkVector
 
-"whether any field of the component `c` varies over the network index"
-has_nw_data(c) = any(is_nw_varying(getfield(c, k)) for k in 1:nfields(c))
+"""
+    has_nw_data(c)
+
+Whether any field of the component `c` varies over the network index.
+
+The method is generated per component type: a field whose declared type cannot
+hold a [`NetworkVector`](@ref) is dropped when the type is compiled and the rest
+are read by a constant index. This is asked for every component at every network
+index, so a field loop with a runtime index, which boxes every field, was the
+largest single cost of a rolling horizon.
+"""
+@generated function has_nw_data(c::T) where T
+    checks = [:(is_nw_varying(getfield(c, $k))) for k in 1:fieldcount(T)
+              if typeintersect(fieldtype(T, k), NetworkVector) !== Union{}]
+
+    return isempty(checks) ? :(false) : foldr((a, b) -> :($a || $b), checks)
+end
 
 ################################################################################
 # The generalized getters                                                      #
@@ -478,10 +494,13 @@ field is returned untouched, without allocating.
 The component type must accept its fields positionally, in declaration order,
 which is what `Base.@kwdef` generates.
 """
-function nw_component(dim::Dimension, c::T, n::Int) where T
-    has_nw_data(c) || return c
+@generated function nw_component(dim::Dimension, c::T, n::Int) where T
+    fields = [:(nw_value(dim, getfield(c, $k), n)) for k in 1:fieldcount(T)]
 
-    return T((nw_value(dim, getfield(c, k), n) for k in 1:fieldcount(T))...)
+    return quote
+        has_nw_data(c) || return c
+        $T($(fields...))
+    end
 end
 
 ################################################################################

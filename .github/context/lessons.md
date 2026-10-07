@@ -118,6 +118,11 @@ again get retired.
   the least movement among equal-overload solutions; free, the solver returns another split with the
   same 11 MW overload (D34). Assert what is determined (total overload, conservation, ratings) and
   say so in the test. (unconfirmed)
+- **Compare two redispatch solves by overload volume, not by the number of overload rows.** The year
+  with the couplers as switches against the floor run: step 2 had 340,623 rows against 341,787
+  (-0.34 %), but 1,382 rows only in the old run (median 2e-5 pu, 47.7 pu in all) and 218 only in the
+  new (47.4 pu); total overload +0.010 %. A row is any overload above 1e-6 pu, and alternative optima
+  trade many tiny rows for a few larger. B10 predicted rows within 0.1 %. (unconfirmed)
 
 ## Performance
 
@@ -131,15 +136,38 @@ again get retired.
   total; that did not survive a paired run: 8 processes at once, floor and switches on the same four
   days, gave step 3 non-solver 213-219 s with switches against 217-222 s with the floor, solver 67-101 s
   against 85-139 s, chunk 330-370 s against 354-410 s. Run the variants side by side on the same
-  hours, not one after the other. (unconfirmed)
+  hours, not one after the other. B12 (v0.12.0 against v0.11.0, two pairs of 7 chunks, launch order
+  swapped between them): new slower in 11 of 14 chunks, +1.4 % then +0.7 %, pooled +1.0 % (3.6 s a
+  chunk); non-solver time slower in step 2 in 14 of 14 (+0.8 s) and in step 3 in 13 of 14 (+4.2 s), the
+  solver not. A small cost in NMB's own work, not the launch order; cause not measured. (unconfirmed)
+  B6 item 1 (the `same_structure` gates, reuse finally happening) the other way, two pairs of 7: 14 of
+  14 chunks faster, -26.2 % pooled (254 s against 344 s), the step 3 solver -60 to -75 % (warm basis),
+  objectives within 4e-10. Both pairs gave the same gain, so launch order is not the cause.
+- **Reading a solved model back through JuMP costs an object per row; through MOI it does not.**
+  `JuMP.primal_feasibility_report` on a 249,118-variable, 433,305-row step-3 window took 2.24 s (a
+  dictionary of variable refs 0.14, listing the rows 0.4, `constraint_object` 0.55, evaluating 0.9-1.0);
+  the same check read row by row from the solver's interface into a plain vector took 0.45 s, with the
+  same violation to the last digit. Chunk time -16.5 % (two pairs of 7). (unconfirmed)
+- **A field loop with a runtime index is the first thing to look for when a hot path boxes.**
+  `any(is_nw_varying(getfield(c, k)) for k in 1:nfields(c))` and `T((... getfield(c, k) ...)...)`
+  were 12 % of a rolling horizon: every field of every component at every network index was boxed.
+  A `@generated` method that reads each field by a constant index, and drops a field whose declared
+  type cannot hold the thing asked for, gave -13.6 % of a chunk with bit-identical results. Look at a
+  flat profile for an anonymous-function frame with a large self count (`#has_nw_data##0`). (unconfirmed)
+- **A rolling roll with tied prices is path dependent: reuse and rebuild can differ.** A roll is a
+  sequence of LPs, so equal prices let each window pick another optimum (104.92 against 104.34 in a
+  test). Reuse-equivalence tests need distinct prices; the Zorba pipeline is unaffected, its windows
+  are independent. (unconfirmed)
 - **Threads inside one Julia process stop paying at a handful of tasks for NMB's per-window work;
   separate one-thread processes keep scaling.** Zorba week 1, same 7 daily chunks: 7 threads in one
   process 860 s per chunk; 7 processes 330-400 s. One 720-hour month on 30 threads had the same
   throughput as the week on 7 (0.17 vs 0.19 h/s). The year as 73 processes took 63 min (chunks
-  327-911 s, mean 632 s, so some contention remains at 73). The Xpress solve is only ~15-20% of a
-  chunk (step 3: 137 s of 3,680 s on 30 threads); the rest is `update_model!` (~3 s/window),
-  `build_solution` (~1 s) and the agent's per-window feasibility check (~1.9 s), plus GC (13-20%
-  of wall). The cause (shared GC or allocator, a GC held up by threads inside a long Xpress call) is
+  327-911 s, mean 632 s, so some contention remains at 73); after B6 it took 24 min (chunks 167-321 s,
+  mean 237 s, peak 7.3 GB a process). The Xpress solve is only ~15-20% of a
+  chunk (step 3: 137 s of 3,680 s on 30 threads); the rest is the model build (~4.5 s a step-3 window;
+  it was called `update_model!` here, but no window ever reused its model, see B6), `build_solution`
+  (~1 s) and the agent's per-window feasibility check (~2.5 s), plus GC (13-20% of wall). The cause
+  (shared GC or allocator, a GC held up by threads inside a long Xpress call) is
   not proven. Before building parallelism into a long run, time a one-chunk run alone, then at the
   intended concurrency, as threads and as processes. (unconfirmed)
 - **A longer window buys nothing in the Zorba pipeline and costs in proportion to the hours it

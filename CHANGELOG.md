@@ -10,6 +10,16 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+## [0.12.3] - 2026-10-07
+
+### Changed
+
+- `Network` has a new field, `status`: the status of each switchable component, in the
+  order of `switchable`. `topology` is asked for every node, edge and unit of every
+  network index, and picked the topology of an index by reading the status of each
+  switchable component through the component, an abstract `Dict` value, on every call.
+  It now reads the typed vectors. Results are unchanged.
+
 ## [0.12.2] - 2026-10-07
 
 ### Changed

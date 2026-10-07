@@ -9,6 +9,7 @@
 # v0.1.0 - initial implementation                                              #
 # v0.2.0 - network dependent data stored per component                         #
 # v0.11.0 - what an edge connects, and the islands of a network                #
+# v0.12.3 - a topology is picked from stored statuses, not looked up per call  #
 ################################################################################
 
 ################################################################################
@@ -206,6 +207,9 @@ each network index.
 - `switchable`: the components whose status varies over the network index, as
   `(family, id)` pairs. These, and only these, decide which [`Topology`](@ref) a
   network index has.
+- `status`: the status of each switchable component, in the order of `switchable`,
+  kept here so that asking which topology an index has reads typed vectors and
+  does not look a component up.
 - `topology`: the distinct topologies, keyed by the statuses of the switchable
   components that produce them, and materialized as they are first asked for.
 - `fixed`: the single topology, when no component's status varies at all; the
@@ -229,6 +233,7 @@ struct Network
     edge      ::Dict{Int,AbstractEdge}
     unit      ::Dict{Int,AbstractUnit}
     switchable::Vector{Tuple{Symbol,Int}}
+    status    ::Vector{NetworkVector{Bool}}
     topology  ::Dict{BitVector,Topology}
     fixed     ::Union{Nothing,Topology}
     ext       ::Dict{Symbol,Any}
@@ -275,6 +280,7 @@ function Network(I::AbstractDict{Int,<:AbstractNode},
             _topology_at(dim, nodes, edges, units, nw_id_default(dim)) : nothing
 
     return Network(dim, nodes, edges, units, switchable,
+                   _switch_status(nodes, edges, units, switchable),
                    Dict{BitVector,Topology}(), fixed, ext)
 end
 
@@ -290,15 +296,16 @@ function _switchable(nodes, edges, units)
     return out
 end
 
-"the stored component behind a `(family, id)` pair"
-_stored(net::Network, family::Symbol, id::Int) =
-    family === :node ? net.node[id] : family === :edge ? net.edge[id] : net.unit[id]
+"the stored status of each switchable component, in the order of `switchable`"
+_switch_status(nodes, edges, units, switchable) = NetworkVector{Bool}[
+    (family === :node ? nodes[id] : family === :edge ? edges[id] : units[id]).status
+    for (family, id) in switchable]
 
 "the statuses of the switchable components at network index `n`, which pick out a topology"
 function _signature(net::Network, n::Int)
-    sig = BitVector(undef, length(net.switchable))
-    for (k, (family, id)) in enumerate(net.switchable)
-        sig[k] = nw_value(net.dim, _stored(net, family, id).status, n)
+    sig = BitVector(undef, length(net.status))
+    for k in eachindex(net.status)
+        sig[k] = nw_value(net.dim, net.status[k], n)
     end
 
     return sig

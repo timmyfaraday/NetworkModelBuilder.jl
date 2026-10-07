@@ -6,7 +6,7 @@ older ones: git has them). Next id: **B19**.
 
 ## Now
 
-- (nothing: B12 is done on `test-zorba-run`, which has 3 commits to push)
+- (nothing)
 
 ## Next
 
@@ -48,11 +48,11 @@ older ones: git has them). Next id: **B19**.
   closed switch would merge its nodes · Tom · 2026-10-04
 - [ ] B8 · `test/lf.jl:124` (`solve_time > 0.0`) fails now and then on Windows: `time()` has a coarse
   resolution and case14 solves faster; seen once in a full run, passes alone. Likely `>= 0.0` · Tom · 2026-10-04
-- [ ] B18 · Decide whether `scripts/NMinusOneScreen.jl` stays: the driver no longer includes it and it
-  refuses a `Switch`, so it cannot run on today's data · Tom · 2026-10-07
-  - Moved to `Transformer` in B12 and checked against a closed form on a three-node network only.
 
 ## Done
+
+- [x] B18 · `scripts/NMinusOneScreen.jl`: deleted (D42), it skipped about 3 % of hours and could not run on
+  the data with `Switch`es · Tom · 2026-10-07
 
 - [x] B12 · `test-zorba-run`'s scripts on `Transformer`, then week 1 beside a same-day control · Tom ·
   2026-10-05

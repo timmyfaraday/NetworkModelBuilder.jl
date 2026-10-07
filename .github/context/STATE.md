@@ -19,7 +19,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
   D14, `_diag_*` deletion `9fc06d4`, window settings `3ea65d4`), `main` merged in (`420b1aa`), the B9
   loader change, `main` merged in again (`a2d8897`, B11) and the B12 migration (`40dc645`). Not
   pushed: `40dc645` and the setup commits `c2d401f`, `4a3db48` (same as `main`'s `2aa61db`, `4d0d3c3`).
-- `b5-switch-edge` and `b11-unified-transformer` are merged and deleted. Next free decision id: **D42**.
+- `b5-switch-edge` and `b11-unified-transformer` are merged and deleted. Next free decision id: **D43**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -69,8 +69,8 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
 
 1. B10: re-run the full year with the switches and the one `Transformer` (`_year_orig_prices` has the
    floor and the old types), recipe in the header of `scripts/run_year_redispatch.jl`.
-2. B7 (closed switches under network reduction), B8 (timing flake), B3/B6 (throughput), B4 (bus
-   factor) and B18 (is `NMinusOneScreen.jl` still wanted?) remain, see `backlog.md`.
+2. B7 (closed switches under network reduction), B8 (timing flake), B3/B6 (throughput) and B4 (bus
+   factor) remain, see `backlog.md`.
 
 ## Blocked / waiting
 

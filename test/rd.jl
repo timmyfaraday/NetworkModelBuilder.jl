@@ -12,6 +12,7 @@
 # v0.12.0 - the meshed network can carry a three-winding shifter               #
 # v0.12.0 - which measures are held at the base case                           #
 # v0.12.0 - the meshed network's shifter can step                              #
+# v0.12.1 - a limit past pi/2 does not change the shape of a model             #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The
@@ -983,6 +984,53 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         end
         @test counts[1] == counts[2]
         @test counts[3] < counts[1]
+    end
+
+    @testset "a limit that crosses ±π/2 does not change the shape" begin
+        # π/2 = 1.571 is where an angle limit stops being one. It means nothing to a power
+        # limit or a rating, which only the boundary with unlimited can change
+        dim = Dimension(:time => 3)
+        v(x) = nw_vector(dim, x)
+        function limited(; pmax = 5.0, rate_a = 0.5, angmin = -pi / 2)
+            net = network(rolling_network([10.0, 40.0, 90.0]))
+            net.unit[1] = Generator(; id = 1, node = 1, qmin = -5.0, qmax = 5.0, pg = 1.0,
+                                    pmax, cost = [0.0, 10.0])
+            net.edge[1] = Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, rate_a, angmin)
+            return NetworkData(Network(net.node, net.edge, net.unit; dim))
+        end
+
+        data = limited(; pmax = v([1.0, 2.0, Inf]))
+        @test same_structure(data, 1, 2)                    # 1.0 and 2.0 pu both bound
+        @test !same_structure(data, 1, 3)                   # Inf writes no bound
+
+        data = limited(; rate_a = v([1.0, 2.0, Inf]))
+        @test same_structure(data, 1, 2)
+        @test !same_structure(data, 1, 3)
+
+        # an angle limit still is one only inside (-π/2, π/2)
+        data = limited(; angmin = v([-1.0, -1.2, -1.6]))
+        @test same_structure(data, 1, 2)
+        @test !same_structure(data, 1, 3)
+    end
+
+    @testset "a roll reuses its model across a limit that crosses ±π/2" begin
+        # four different prices, so no window is tied and reuse and rebuild must agree
+        prices = [10.0, 40.0, 90.0, 200.0]
+        dim    = Dimension(:time => 4)
+        net    = network(rolling_network(prices))
+        net.unit[2] = Generator(; id = 2, node = 2, qmin = -5.0, qmax = 5.0, pg = 0.0,
+                                pmax = nw_vector(dim, [1.0, 2.0, 1.0, 2.0]),
+                                cost = nw_vector(dim, :time, [[0.0, c] for c in prices]))
+        data = NetworkData(Network(net.node, net.edge, net.unit; dim); name = "rolling",
+                           baseMVA = 100.0)
+
+        built  = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1))
+        reused = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1,
+                                      reuse = true))
+
+        @test reused["objective"] ≈ built["objective"] rtol = 1e-7
+        @test built["horizon"]["built"] == 4
+        @test reused["horizon"]["built"] == 2               # the first window and the short last one
     end
 
     @testset "an integer gate separates two shapes" begin

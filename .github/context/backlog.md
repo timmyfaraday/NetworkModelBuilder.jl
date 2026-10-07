@@ -40,7 +40,7 @@ older ones: git has them). Next id: **B20**.
   - Plan agreed 2026-10-07 (Tom): full scope, in order: `same_structure` gates (D43, v0.12.1), a cheaper
     feasibility check in `scripts/ParallelRun.jl` (D44), a cheaper `build_solution` (v0.12.2), then a
     re-measure and a full-year run. Accepted when the objective of every chunk equals the control's
-    within solver tolerance (an equal optimum, not equal unit volumes), with 0 fallbacks.
+    within 1e-7 relative (an equal optimum, not equal unit volumes), with 0 fallbacks.
   - B12 measured the one `Transformer` at +1.0 % a chunk against the old types, all non-solver time.
     Candidate, not measured: `nw_component` rebuilds a `Transformer` through its validating constructor
     for every network index.

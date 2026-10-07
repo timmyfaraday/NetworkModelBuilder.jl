@@ -9,6 +9,7 @@
 # v0.5.0 - the redispatch problem                                              #
 # v0.6.0 - a window carries the periods it cut                                 #
 # v0.11.0 - two integers are two shapes                                        #
+# v0.12.1 - a structure gate asks what the model's own guard asks              #
 ################################################################################
 
 ################################################################################
@@ -256,7 +257,8 @@ about it will be wrong.
 The methods in this package correspond one for one to the guards in the model:
 the `isfinite` tests in `constraint_edge_rating!`, `constraint_linear_limits!`,
 `_variable_generator_power`, `_variable_generator_active` and the flexible load,
-and the `±π/2` test in `constraint_edge_angle_difference!`.
+the `±π/2` test in `constraint_edge_angle_difference!`, and the `iszero` test of a
+DC link's `loss_prop`, which decides whether the link has a transfer variable.
 """
 structure_gates(::AbstractComponent) = ()
 
@@ -301,10 +303,10 @@ Two things have to agree, and the second is the one that is easy to miss:
    one index and `Inf` at another writes a rating at one and not at the other
    while the topology sits perfectly still.
 
-The test is **conservative**: it compares whether each gate bounds anything at
-all, so it may call two indices different where the model would in fact have
-come out the same. It never calls them the same where the model would differ,
-which is the direction that matters for anything built on top of it.
+The test is **conservative**: it compares what each gate decides, so it may call two
+indices different where the model would in fact have come out the same. It never
+calls them the same where the model would differ, which is the direction that
+matters for anything built on top of it.
 
 # Examples
 A rolling horizon reuses a model between two windows only where the whole window
@@ -328,7 +330,7 @@ function same_structure(net::Network, a::Int, b::Int)
         for f in structure_gates(c)
             x = getfield(c, f)
             is_nw_varying(x) || continue
-            _gate(nw_value(net.dim, x, a)) == _gate(nw_value(net.dim, x, b)) || return false
+            _gate(f, nw_value(net.dim, x, a)) == _gate(f, nw_value(net.dim, x, b)) || return false
         end
     end
 
@@ -337,19 +339,30 @@ end
 
 same_structure(data::NetworkData, a::Int, b::Int) = same_structure(network(data), a, b)
 
+const _ANGLE_GATES = (:angmin, :angmax)
+const _ZERO_GATES  = (:loss_prop,)
+
 """
-    _gate(x)
+    _gate(field, x)
 
-What a [`structure_gates`](@ref) value means structurally: whether it bounds
-anything at all, and whether it lies inside `(-π/2, π/2)`.
+What the value `x` of a [`structure_gates`](@ref) `field` means structurally: the
+answer to the question the model asks of that field before it writes anything.
 
-The pair covers both kinds of guard the package writes — `isfinite` for a rating
-or an operating limit, `±π/2` for an angle difference — without the caller
-having to know which kind a given field is.
+- an angle limit, `angmin` or `angmax`, is asked whether it bounds anything and
+  whether it lies inside `(-π/2, π/2)`, where it stops being a limit;
+- `loss_prop` is asked whether it is zero, which is whether a DC link has a
+  transfer variable;
+- every other limit, a rating or an operating limit, is asked only whether it is
+  finite. `π/2` is where an angle stops being a limit and means nothing to a
+  power, so a limit that crosses it is no change of shape.
 
 An integer is its own gate. It is no limit that bounds or does not: it picks which
 rows are written, as the position of a switch does, so two values are two shapes.
+
+A type whose guard asks something else of a gate field needs a case here.
 """
-_gate(x::Real) = (isfinite(x), -pi / 2 < x < pi / 2)
-_gate(x::Integer) = x
-_gate(x::AbstractVector) = map(_gate, x)
+_gate(f::Symbol, x::Real) =
+    f in _ANGLE_GATES ? (isfinite(x), -pi / 2 < x < pi / 2) :
+    f in _ZERO_GATES  ? iszero(x) : isfinite(x)
+_gate(::Symbol, x::Integer) = x
+_gate(f::Symbol, x::AbstractVector) = map(v -> _gate(f, v), x)

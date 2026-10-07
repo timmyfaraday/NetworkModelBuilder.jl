@@ -10,6 +10,23 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-10-07
+
+### Fixed
+
+- A rolling horizon with `reuse = true` built almost every window from scratch when a
+  generator's limit varied over the network index: `same_structure` read a power limit
+  or a rating that crossed ±π/2 = 1.571 pu as a change of the shape of the model. That
+  test is now asked only of an angle limit, `angmin` or `angmax`; every other limit is
+  asked whether it is finite. On the Zorba year 8,353 of 8,760 windows of the internal
+  redispatch were built from scratch, and 5 of 6 windows of a short roll now reuse the
+  model, which took about 17 % off its wall time.
+- `same_structure` did not tell a `DCLink` whose `loss_prop` is zero from one whose
+  `loss_prop` is positive, although the transfer variable of the link exists only for
+  the second. A model updated across the change kept a transfer variable and a loss row
+  the window does not have; the objective was equal in the cases checked, and it is now
+  rebuilt.
+
 ## [0.12.0] - 2026-10-06
 
 This release replaces four transformer types with one, and breaks the code that

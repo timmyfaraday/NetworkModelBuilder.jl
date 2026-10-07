@@ -154,9 +154,10 @@ How to use this file:
 - **A preventive winding that steps has no binaries of its own at the network indices it is held at:
   it reuses the base case's, and nothing is tied; its continuous ratio stays tied. A corrective one
   keeps a set per contingency** (D36).
-- **A structure gate asks `isfinite` of a limit; the ±π/2 test is for angle limits only** (D43): a
-  generator limit that crosses 1.571 pu is not a change of the shape of the model, and was read as one,
-  so a rolling horizon with `reuse = true` rebuilt almost every window.
+- **A structure gate asks what the model's own guard asks of that field** (D43): `isfinite` of a limit,
+  the ±π/2 test of an angle limit, `iszero` of a `DCLink`'s `loss_prop`. A generator limit that crosses
+  1.571 pu is not a change of the shape of the model, and was read as one, so a rolling horizon with
+  `reuse = true` rebuilt almost every window.
 
 ## Zorba pipeline (`scripts/`)
 
@@ -482,12 +483,15 @@ about 3 % and the driver never used it. It cannot run on today's data (it refuse
 flows goes with it; B12 used a same-day control run instead.
 Changes: new rule in the Zorba pipeline section. Removes the file, closes B18.
 
-### D43 — A structure gate asks `isfinite` of a limit; the ±π/2 test is for angle limits only
+### D43 — A structure gate asks what the model's own guard asks of that field
 Date: 2026-10-07 · Decided by: Tom Van Acker · Area: Component model
 Why: measured on the Zorba year, `same_structure` called two windows different whenever a generator's
 `pmin` or `pmax` crossed ±π/2 = 1.571 pu, so the year built 1095 of 1095 step-2 and 8353 of 8760 step-3
 windows from scratch with `reuse = true`. With the angle test off those fields, 5 of 6 step-3 windows
 reused the model, 17 % less wall time, and a step-2 objective equal to 2.9e-14. The rows do not change.
+The audit of the guards found the opposite hole too: a `DCLink`'s transfer variable exists only where
+`loss_prop` is non-zero, which no gate told apart, so an update kept a dead transfer variable and loss
+row (32 variables against 31 fresh); the objective was equal in the three cases checked.
 Changes: new rule in the Component model section; edits `_gate` in `src/core/window.jl`.
 
 ### D44 — The per-window feasibility check stays, cheaper, and is re-evaluated later

@@ -20,6 +20,8 @@ against the per-file changelog comments the source already carries.
   switchable component through the component, an abstract `Dict` value, on every call.
   It now reads the typed vectors. Results are unchanged; a Zorba week of 24 h chunks
   against 0.12.2, side by side, took 15.6 % less wall time (152 s against 180 s a chunk).
+  Together with 0.12.1 and 0.12.2 the Zorba year, as 73 one-thread processes, took 24
+  minutes against 52 with 0.12.0, for the same objectives to 3e-8.
 
 ## [0.12.2] - 2026-10-07
 

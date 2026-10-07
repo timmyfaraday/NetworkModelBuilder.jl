@@ -1,6 +1,6 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Van Acker (B10 done).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Van Acker (B6 done).
 
 ## Where NMB stands
 
@@ -19,7 +19,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
   rescale `4ef3472`, phases 0-3 `20d88dc`..`f939763`, `NMB_MERGE` `9a8b676`, original prices `76a52ce`
   D14, `_diag_*` deletion `9fc06d4`, window settings `3ea65d4`), `main` merged in (`420b1aa`), the B9
   loader change, `main` merged in again (`a2d8897`, B11), the B12 migration (`40dc645`) and D42
-  (`ec4e49c`). Pushed up to `8090ab3` (the B10 record); the nine B6 commits are local.
+  (`ec4e49c`). Pushed up to `8090ab3` (the B10 record); the B6 commits are local.
 - `b5-switch-edge` and `b11-unified-transformer` are merged and deleted. Next free decision id: **D45**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
@@ -50,10 +50,10 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
   (`_year_orig_prices`); step 2's 0.34 % is 1,382 tiny overloads (median 2e-5 pu) against 218 of the
   same volume: total overload +0.010 % and +0.018 %, objectives per chunk median 1e-4, max 7e-4. Peak
   6.2 GB. `with_contingencies` fixed, the old script and `_diag_*` retired; see `lessons.md`.
-- B9 done, week 1 (`runs/_week1_switches`): `load_network` loads the 21 couplers (reactance <
-  `max_coupler_reactance` = 1e-6) as locked, closed `Switch`es, none in a contingency list; against the
-  floor run `_phase5_week_orig` 7 of 7 chunks sound, objective +0.009 % and +0.018 %, flows within
-  0.14 % of rating (spec: 2.2 %).
+- B6 done (v0.12.1-v0.12.3, D43, D44): a window reuses its model, the feasibility check reads rows through
+  MOI, `nw_component` is generated, `Network.status` is typed. Full year `runs/_year_b6` against
+  `_year_b10`: 24 min against 52 min, chunk mean 237 s against 549 s (-57 %), 365 of 365 sound, 0 fallback,
+  objectives max 2.6e-8 (median 1e-14), overload rows equal, peak 7.3 GB (was 6.2). Rest: B20.
 - Tom asked for 48 h windows committing 8 h in both steps; tried, and worse. They are settings now
   (`NMB_HORIZON_CB/STEP_CB/HORIZON_BE/STEP_BE`, defaults unchanged 8/8 and 1/1; the chunk must be at
   least as long as the horizon). `runs/_phase6_h48_probe`, hours 1-48: same results (objectives
@@ -61,16 +61,14 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
   `lessons.md`. Awaiting Tom: keep 8/8 and 1/1 (recommended).
 - Run it with processes, not threads: 7 threads in one process give 860 s per 24 h chunk, 7 processes
   330-400 s; 30 threads no more throughput than 7. Recipe in the header of `scripts/run_year_redispatch.jl`.
-  About 85% of a chunk's wall time is NMB's own per-window work (B6), not the solver.
+  About 85% of a chunk's wall time is NMB's own per-window work, not the solver (B6: 549 s to 237 s a chunk).
 
 ## Next
 
-1. B6, plan agreed, items 1-3 done, each beside a same-day control in week 1: chunk time -26.2 % (gates,
-   v0.12.1), -16.5 % (feasibility check through MOI, scripts), -13.6 % (`nw_component`, v0.12.2), -15.6 %
-   (`Network.status`, v0.12.3); objectives bit-identical from item 2 on. Next: re-measure with
-   `scratch/b6_stages.jl`, then the full year against `_year_b10`. See `backlog.md`.
-2. B7 (closed switches under network reduction), B8 (timing flake), B3 (throughput), B4 (bus factor),
-   B13 and B19 remain, see `backlog.md`.
+1. B20 (the rest of the per-window cost: `update_model!`, `build_solution`, `_signature`), B7 (closed
+   switches under network reduction), B8 (timing flake, one-line fix awaiting Tom's OK), B3 (throughput),
+   B4 (bus factor), B13 and B19 remain, see `backlog.md`.
+2. `main` lacks the `test-zorba-run` work (B12, B10, D42, B6); merging it back and pushing is Tom's call.
 
 ## Blocked / waiting
 

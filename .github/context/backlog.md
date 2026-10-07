@@ -2,7 +2,7 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B20**.
+older ones: git has them). Next id: **B21**.
 
 ## Now
 
@@ -28,48 +28,15 @@ older ones: git has them). Next id: **B20**.
 - [ ] B3 · No parallel-throughput option for long-horizon solves (gap #10, P2/Large) · Tom · 2026-09-30
   - Needs a design decision first (chunked-parallel vs. document-the-trade-off) — see
     `open-questions.md` Q1.
-- [ ] B6 · Cut NMB's per-window overhead in rolling-horizon solves: ~85% of a Zorba chunk is
-  `update_model!` (~3 s/window), `build_solution` (~1 s) and allocation/GC, not the solver · Tom · 2026-10-02
-  - Measured, cause of the loss of thread scaling not proven. Profile one window under `-t 1` first.
-    Relates to B3. Longer windows do not help: the overhead follows the hour-states solved, not the
-    number of windows (`lessons.md`, Performance), so the target is the cost per hour-state.
-  - 2026-10-07, one window of step 3 (80 indices): build 4.2-4.8 s, the agent's feasibility check 2-3 s,
-    `build_solution` 1.0-1.4 s, solve 1.4 s, GC 1.2-2.8 s, 2.2 GB allocated. No window ever reuses its
-    model: the year built 1095 of 1095 (step 2) and 8353 of 8760 (step 3), because `same_structure`
-    reads a generator's `pmin`/`pmax` crossing +-pi/2 as a change of shape.
-  - Plan agreed 2026-10-07 (Tom): full scope, in order: `same_structure` gates (D43, v0.12.1), a cheaper
-    feasibility check in `scripts/ParallelRun.jl` (D44), a cheaper `build_solution` (v0.12.2), then a
-    re-measure and a full-year run. Accepted when the objective of every chunk equals the control's
-    within 1e-7 relative (an equal optimum, not equal unit volumes), with 0 fallbacks.
-  - Item 1 done (`edaca89`, v0.12.1), 2026-10-07. Week 1 beside a same-day control (`runs/_b6i1a*`,
-    `_b6i1b*`, two pairs, launch order swapped): 14 of 14 chunks sound, 0 fallbacks, objectives within
-    4.1e-10 (the rest 1e-14), `built` 1 of 3 (step 2) and 1 of ~23 (step 3) against 3 and ~23, chunk
-    254 s against 344 s (-26.2 %, every chunk -20 to -32 %; predicted -15 %), step 3 solver 16-24 s
-    against 45-105 s (the basis is kept). Largest unit-hour volume difference 1e-10 pu, except one
-    step-2 unit-hour in chunk 121-144 (1.25e-2 pu, equal objective: another optimum).
-  - Item 2 done (`c7d26ac`, scripts only), 2026-10-07. `worst_violation` reads every row through MOI
-    instead of `primal_feasibility_report`: 2.24 s to 0.45 s a step-3 window, 1.35 s to 0.30 s a step-2
-    window; same violation on 27 solved windows, on 27 perturbed points, on a moved row (0.7), a cut
-    bound (0.25) and a HiGHS window. Week 1 (`runs/_b6i2a*`, `_b6i2b*`, two pairs, launch order swapped,
-    control = item 1): 14 of 14 sound, 0 fallbacks, objectives and unit volumes bit-identical, chunk
-    213 s against 255 s (-16.5 %, every chunk -13 to -18 %; predicted -18 %).
-  - Item 3 as planned (read all values in bulk) fails its stop rule, 2026-10-07: `JuMP.value` over all
-    249,118 variables of a step-3 window takes 0.07 s of the 1.0 s `build_solution`. A roll still spends
-    5.7 s of its own per window (update 35 %, `build_solution` 14 %, solve 7 %). Profile of a whole roll:
-    `has_nw_data` 12 % (a `getfield` with a runtime index inside `any`, called by `nw_component` for every
-    component of every network index), `topology` 18 % (`_signature` re-reads the status of every
-    switchable component on each call, through an abstract `Dict` value). Prototype of generated
-    `has_nw_data` and `nw_component` (scratch only): own work 5.68 s to 4.75 s a window, `build_solution`
-    1.13 s to 0.93 s, window solutions `isequal`. Revised item 3 proposed to Tom, not started.
-  - Item 3 revised and done, 2026-10-07 (Tom: two versions). 3a v0.12.2 (`aa33f8d`): generated
-    `has_nw_data`/`nw_component`; 3b v0.12.3 (`5ea1a26`): `Network.status`, typed, for `_signature`. Suite
-    3142 of 3142 for 3b (3a: one `lf.jl:124` timer flake, B8, then 3 of 3 passes alone). Week 1 beside a
-    control, two pairs each, launch order swapped (`runs/_b6i3a*`, `_b6i3b*`): 14 of 14 sound, 0 fallbacks,
-    objectives and unit volumes bit-identical; 3a chunk 180 s against 208 s (-13.6 %, predicted -10 %), 3b
-    152 s against 180 s (-15.6 %, predicted -12 %); step-3 non-solver 140 s to 113 s a chunk.
-  - B12 measured the one `Transformer` at +1.0 % a chunk against the old types, all non-solver time.
-    Candidate, not measured: `nw_component` rebuilds a `Transformer` through its validating constructor
-    for every network index.
+- [ ] B20 · Cut the rest of the per-window cost of a rolling horizon · Tom · 2026-10-07
+  - After B6 a step-3 roll spends its own time on `update_model!` 26 %, `build_solution` 19 %, the solve
+    12 %, `_signature` 11 % (profile of 8 windows, 29.6 s; `scratch/b6_roll_profile.jl`). `_signature` still
+    builds a `BitVector` bit by bit for every node, edge and unit lookup of every network index; a packed
+    status matrix read by column would not tabulate topologies, but check it against the invariant first.
+    `build_solution` is dominated by building the result `Dict`s, not by reading values (0.07 s of 0.7 s).
+    Candidate, not measured: `nw_component` rebuilds a `Transformer` through its validating constructor.
+  - Peak memory per process rose from 6.2 GB to 7.3 GB (mean 5.9 GB), the held model; 73 processes fit in
+    1 TB, watch it if the process count grows.
 - [ ] B4 · Bus factor: solo maintainer, get a second reviewer/co-committer (gap #11, P3/Large) · Tom · 2026-09-30
 - [ ] B13 · A `Transformer` constructor from datasheet values (winding resistances, pairwise short-circuit
   reactances, no-load power) and a mesh instead of a star for four or more windings · Tom · 2026-10-05
@@ -85,6 +52,17 @@ older ones: git has them). Next id: **B20**.
 
 ## Done
 
+- [x] B6 · Cut NMB's per-window overhead in rolling-horizon solves (D43, D44) · Tom · 2026-10-07
+  - v0.12.1-v0.12.3 and `scripts/ParallelRun.jl`, 9 commits `123d895`..`8b84c14`: the `same_structure` gates
+    so a window reuses the model, a feasibility check read through MOI, generated `nw_component`, a typed
+    `Network.status`. Each step beside a same-day control in week 1 (two pairs, launch order swapped):
+    chunk time -26.2 %, -16.5 %, -13.6 %, -15.6 %, objectives within 4e-10 and from item 2 on bit-identical.
+  - Full year `runs/_year_b6` against `_year_b10`: 24 min against 52 min, chunk mean 237 s against 549 s
+    (-57 %; target -35 %), 365 of 365 sound, 0 fallback, 0 violation; objectives median 1e-14, max 2.6e-8
+    (one chunk above 1e-8, none above 1e-7); overload rows equal (step 3: -7 of 5.7 M), total overload
+    equal; largest unit-hour volume difference 0.14 pu (step 2, another optimum). Peak 7.3 GB.
+  - The planned bulk read of values for `build_solution` failed its stop rule (0.07 s of 0.7 s); the
+    profile found `has_nw_data` and `_signature` instead. Rest of the cost: B20.
 - [x] B10 · Re-run the full year on `test-zorba-run` with the couplers as switches and the one
   `Transformer` · Tom · 2026-10-05
   - `runs/_year_b10`, 73 processes, 52 min: 365 of 365 sound, 0 fallback; step 3 rows -0.02 %, step 2

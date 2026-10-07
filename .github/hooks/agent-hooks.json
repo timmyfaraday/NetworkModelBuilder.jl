@@ -3,28 +3,28 @@
     "SessionStart": [
       {
         "type": "command",
-        "command": "python3 .github/hooks/scripts/session_start.py",
-        "windows": "python .github\\hooks\\scripts\\session_start.py",
+        "command": "python3 .github/hooks/launch.py session_start",
+        "windows": "py -3 .github\\hooks\\launch.py session_start",
         "cwd": ".",
-        "timeout": 15
+        "timeout": 20
       }
     ],
     "PreToolUse": [
       {
         "type": "command",
-        "command": "python3 .github/hooks/scripts/guard.py",
-        "windows": "python .github\\hooks\\scripts\\guard.py",
+        "command": "python3 .github/hooks/launch.py guard",
+        "windows": "py -3 .github\\hooks\\launch.py guard",
         "cwd": ".",
-        "timeout": 10
+        "timeout": 15
       }
     ],
     "Stop": [
       {
         "type": "command",
-        "command": "python3 .github/hooks/scripts/stop_check.py",
-        "windows": "python .github\\hooks\\scripts\\stop_check.py",
+        "command": "python3 .github/hooks/launch.py stop_check",
+        "windows": "py -3 .github\\hooks\\launch.py stop_check",
         "cwd": ".",
-        "timeout": 20
+        "timeout": 25
       }
     ]
   }

@@ -1,7 +1,6 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-06 by Tom Van Acker (`main` is merged
-into `test-zorba-run`, which now has B11; its scripts still name the old transformer types, B12).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Van Acker.
 
 ## Where NMB stands
 
@@ -20,7 +19,7 @@ into `test-zorba-run`, which now has B11; its scripts still name the old transfo
   steps, N-1 screen, contingency fix, reactance floor), the `NMB_MERGE` flag (`9a8b676`), restored
   prices (`76a52ce`, D14), the `_diag_*` deletion (`9fc06d4`), the window/step settings (`3ea65d4`),
   then `main` merged in (`420b1aa`, so it has B5) and the B9 loader change in `SteeringPlanData.jl`.
-- `b5-switch-edge` and `b11-unified-transformer` are merged and deleted. Next free decision id: **D37**.
+- `b5-switch-edge` and `b11-unified-transformer` are merged and deleted. Next free decision id: **D42**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -38,6 +37,7 @@ into `test-zorba-run`, which now has B11; its scripts still name the old transfo
 
 ## In progress
 
+- Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
 - B11 is done and merged into `main` (plan `context/knowledge/plan/unified-transformer.md`, D28-D36):
   one `Transformer` with a T-model, `oltc`/`pst` as `TapMode`, `STEPPED` windings, `is_held`; old types
   gone, no shims. Docs, `CHANGELOG.md` (with a migration table) and `version = "0.12.0"` are in.

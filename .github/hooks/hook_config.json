@@ -1,8 +1,12 @@
 {
+  "engine_version": "0.2.0",
   "state_file": ".github/context/STATE.md",
   "session_context_header": "Project memory: .github/context/STATE.md (injected at session start). Open .github/context/INDEX.md for anything else. Finish tasks with the wrap-up skill.",
   "memory_prefixes": [".github/context/"],
   "ignored_prefixes": ["scratch/", "runs/"],
+  "docs_prefix": "docs/",
+  "docs_watch_prefixes": ["src/"],
+  "docs_hint": "Update the pages under docs/src that describe them and run julia --project=docs docs/make.jl",
   "setup_paths": [
     ".github/copilot-instructions.md",
     ".github/instructions/",

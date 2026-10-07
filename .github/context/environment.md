@@ -50,7 +50,7 @@ facts `(unverified)` and remove the marker once checked.
   `$LASTEXITCODE` after a plain, unpiped run instead of trusting a piped call's reported exit code
   (found by Tom Van Acker, 2026-10-01).
 - Python 3.14.7 is on PATH as `python`; `python3` does **not** resolve. Harmless today because
-  `agent-hooks.json` has a `windows` override (`python ...`) for every hook, but would break if a
+  `agent-hooks.json` has a `windows` override (`py -3 ...` since SC6) for every hook, but would break if a
   hook config ever dropped that override. Git 2.43.0.windows.1; `git config user.name` → `Tom Van
   Acker`; `core.autocrlf` → `true` (found by Tom Van Acker, 2026-09-30).
 - Agent hooks (`.github/hooks/`) are Python, stdlib-only, need a 3.9+ interpreter on PATH — present
@@ -60,6 +60,14 @@ facts `(unverified)` and remove the marker once checked.
   Code's hook config, not a known VS Code Copilot Chat feature — likely why. See
   `setup-feedback.md` F1; the "read `STATE.md` yourself if you don't see it injected" fallback in
   `copilot-instructions.md` is carrying this alone for now.
+- Since SC6 the hooks run through `.github/hooks/launch.py`, which finds the plugin's engine under
+  `~/.vscode/agent-plugins/` (plugin 0.2.0, installed, its source allowed in the user's
+  `chat.plugins.strictMarketplaces`). From the repo root, `session_start`, `guard` and `stop_check`
+  each work through `py -3 .github\hooks\launch.py <name>` with `{}` on stdin. Whether VS Code runs
+  them is not yet re-tested: delete `.git/agent-session/` and `.git/agent-hooks.log` first, since a
+  manual run creates both (found by Tom Van Acker, 2026-10-07).
+- The repo's `.venv` is empty on purpose (D39): it only stops `launch.py` from adding a "no .venv"
+  note, and is gitignored, so a fresh clone needs `py -3 -m venv .venv` (2026-10-07).
 
 ## CI
 

@@ -2,7 +2,7 @@
 
 Every change to the setup (instructions, skills, hooks, settings), newest at the bottom.
 Format: `- SC<n> · YYYY-MM-DD · approved by <user> · <what changed> · why: <feedback ids or reason>`.
-Next id: **SC6**.
+Next id: **SC7**.
 
 - SC1 · 2026-09-30 · approved by Tom Van Acker · Initial setup, ported from a colleague's
   FlowBasedDomains (fbd) repo and adapted for Julia/GitHub/solo maintainer: `copilot-instructions`,
@@ -24,3 +24,11 @@ Next id: **SC6**.
 - SC5 · 2026-10-06 · approved by Tom Van Acker · `domain-invariants.instructions.md`: the
   load-order bullet no longer names `transformer/transformer.jl` as an example · why: B11, D28 —
   `transformer/` holds the one file and has no siblings left to load after it.
+- SC6 · 2026-10-07 · approved by Tom Van Acker · Moved to the `sma-coding-second-brain` plugin (D37):
+  hooks run through `.github/hooks/launch.py` (`py -3`), `hook_config.json` moved up from
+  `hooks/scripts/` (added `engine_version`, `docs_*`, D40), `hooks/scripts/*.py` and the `wrap-up`,
+  `record-decision`, `setup-review` skills deleted, five NMB skills kept as overrides;
+  `setup-files.instructions.md` rule 4 reworded; `copilot-instructions.md` rule 8 (D41) and a plugin
+  line; `AGENT-SETUP.md` and `TRANSFER-SETUP.md` rewritten; empty `.venv` gitignored (D39); no
+  `copilot/settings.json` (D38) · why: one maintained engine instead of a vendored copy; the rule 8
+  line adds a rule and cuts the vendored scripts and three skill copies, 4 + 3 files.

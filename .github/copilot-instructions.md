@@ -36,6 +36,8 @@ The repo carries its own memory. Use it instead of re-deriving things from the c
    cross-check) or the existing frozen-value tests (`lf.jl`/`opf.jl`/`lpf.jl`) — frozen tests catch
    NMB's own regressions, the live one catches divergence from a reference implementation.
 7. Docstrings say what and why. No decision ids, no phase names, in comments.
+8. **A question, observation or open idea is not a go-ahead to edit.** "What do you think?" or a
+   described problem with no explicit "do it" means state the plan first; edit only once confirmed.
 
 ## Decisions
 
@@ -52,4 +54,5 @@ decisions, environment/lessons if you learned something.
 
 Files under `.github/` other than `context/`, and `.vscode/`, are the setup (instructions, skills,
 hooks). **Never edit them without Tom's explicit OK in this conversation.** Propose instead: the
-diff, the evidence, what it removes.
+diff, the evidence, what it removes. Skills and the hook engine come from the
+`sma-coding-second-brain` plugin; five NMB skills override it in `.github/skills/`.

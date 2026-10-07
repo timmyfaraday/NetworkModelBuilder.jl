@@ -2,7 +2,7 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B15**.
+older ones: git has them). Next id: **B18**.
 
 ## Now
 
@@ -22,6 +22,17 @@ older ones: git has them). Next id: **B15**.
 
 ## Later
 
+- [ ] B15 · Plugin PR: make `new-spec`, `new-run-prompt`, `review-run-report`, `probe-environment` and
+  `pr-description` project-neutral, so NMB's five overrides in `.github/skills/` can be deleted (D37)
+  · Tom · 2026-10-07
+  - What NMB's versions have that the plugin's lack: spec and run folders from `conventions.md` or
+    `hook_config.json` (`knowledge/plan/`, `agent-runs/`, not `specs/`, `runs/`); the reference-
+    implementation checks; probe steps that follow the repo's language (Julia/juliaup/threads here);
+    a PR skill that does not assume Azure DevOps (4,000 characters, mypy/ruff/lint-imports).
+- [ ] B16 · Plugin PR: a `hook_config.json` key to turn off the "no .venv" note in `launch.py`, then
+  delete the empty `.venv` (D39) · Tom · 2026-10-07
+- [ ] B17 · When the package moves internal: add `.github/copilot/settings.json` from the plugin's
+  template and drop the public-repo caution (D38) · Tom · 2026-10-07
 - [ ] B3 · No parallel-throughput option for long-horizon solves (gap #10, P2/Large) · Tom · 2026-09-30
   - Needs a design decision first (chunked-parallel vs. document-the-trade-off) — see
     `open-questions.md` Q1.

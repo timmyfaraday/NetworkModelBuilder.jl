@@ -38,7 +38,8 @@ and with each of `outages` — a vector of the edge identifiers that go out
 together — taken one at a time.
 
 The flows are those of the linearized load flow the redispatch is built on: with
-`B` the series susceptance of an edge and `ta` its phase shift,
+`B` the series susceptance of an edge and `ta` its phase shift (for a transformer
+the angle of its first winding less that of its second),
 
 ```math
 p_{e} = B_{e}\\left(\\theta_{i} - \\theta_{j} - ta_{e}\\right),
@@ -60,9 +61,9 @@ largest `max_loading` (flow over rating), and the `worst_edge` and `worst_case`
 every hour of each monitored edge still in service, for checking against another
 solve.
 
-The screen models branches and phase shifters and the generators, storage units
-and fixed loads that go with them; anything else is refused rather than left
-out. So is a data set whose dispatch does not balance, or any case that
+The screen models branches and two-winding transformers and the generators,
+storage units and fixed loads that go with them; anything else is refused rather
+than left out. So is a data set whose dispatch does not balance, or any case that
 disconnects the network, since neither has a flow to report.
 """
 function screen_hours(data::NetworkData, outages::AbstractVector{<:AbstractVector{Int}},
@@ -87,17 +88,21 @@ function screen_hours(data::NetworkData, outages::AbstractVector{<:AbstractVecto
     TA       = zeros(m, T)
     for (k, e) in enumerate(edge_ids)
         c = edges(net)[e]
-        c isa Union{Branch,PhaseShifter} ||
+        c isa Union{Branch,Transformer} ||
             throw(ArgumentError("edge $e is a $(nameof(typeof(c))), which the screen does not model"))
+        c isa Transformer && length(c.terminals) != 2 &&
+            throw(ArgumentError("edge $e is a transformer with $(length(c.terminals)) windings, which the screen does not model"))
         all(nw_values(dim, c.status)) ||
             throw(ArgumentError("edge $e is out of service in the base case, which the screen does not model"))
         c.rate_a isa NetworkVector &&
             throw(ArgumentError("edge $e has a rating that varies over the hours, which the screen does not model"))
         i, j        = terminals(c)
         from[k], to[k] = npos[i], npos[j]
-        B[k]        = -NetworkModelBuilder.susceptance(c.r, c.x)
-        rate[k]     = c.rate_a
-        c isa PhaseShifter && (TA[k, :] = nw_values(dim, c.ta))
+        r, x, rating = c isa Transformer ? (sum(c.r), sum(c.x), minimum(c.rate_a)) :
+                                           (c.r, c.x, c.rate_a)
+        B[k]        = -NetworkModelBuilder.susceptance(r, x)
+        rate[k]     = rating
+        c isa Transformer && (TA[k, :] = [ta[1] - ta[2] for ta in nw_values(dim, c.ta)])
     end
     shifting = [k for k in 1:m if any(!iszero, view(TA, k, :))]
 

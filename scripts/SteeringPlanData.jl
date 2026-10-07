@@ -124,8 +124,9 @@ end
 """
     _load_psts!(E, e, dir, baseMVA)
 
-One [`PhaseShifter`](@ref) per row of `pst.csv`, appended to `E` from edge
-identifier `e`.
+One [`Transformer`](@ref) per row of `pst.csv`, appended to `E` from edge
+identifier `e`, with a phase shift on its first winding and nothing else: no
+ratio, no shunt, and the whole reactance on that winding.
 
 `pst.csv`'s `angle_min`/`angle_max` are the *control* range of the ratio angle,
 mapped onto `ta_min`/`ta_max`; they are not the edge's own stability range,
@@ -137,12 +138,12 @@ function _load_psts!(E::Dict{Int,AbstractEdge}, e::Int, dir::AbstractString, bas
     df = DataFrame(CSV.File(joinpath(dir, "pst.csv")))
     for row in eachrow(df)
         e += 1
-        E[e] = PhaseShifter(; id = e, name = row.name, terminals = [row.from, row.to],
-                            r = 0.0, x = row.reactance,
-                            rate_a = row.capacity_max / baseMVA,
-                            ta = 0.0, ta_min = row.angle_min, ta_max = row.angle_max,
-                            angmin = -pi / 2, angmax = pi / 2,
-                            ext = Dict{Symbol,Any}(:source_id => row.id))
+        E[e] = Transformer(; id = e, name = row.name, terminals = [row.from, row.to],
+                           r = 0.0, x = row.reactance,
+                           rate_a = row.capacity_max / baseMVA,
+                           pst = true, ta = 0.0, ta_min = row.angle_min, ta_max = row.angle_max,
+                           angmin = -pi / 2, angmax = pi / 2,
+                           ext = Dict{Symbol,Any}(:source_id => row.id))
     end
 
     return e
@@ -474,7 +475,8 @@ _fields(c::T) where {T} = NamedTuple{fieldnames(T)}(map(f -> getfield(c, f), fie
     freeze_dispatch(data, result; positions = 1:dim_length(data, :time)) -> NetworkData
 
 `data` with every [`Generator`](@ref)'s `pg`, every [`Storage`](@ref)'s `ps` and
-every [`PhaseShifter`](@ref)'s `ta` replaced by their solved values in `result`.
+the `ta` of every phase-shifting winding of a [`Transformer`](@ref) replaced by
+their solved values in `result`.
 
 `positions[i]` is the position along `:time` in `data` of the `i`-th hour
 `result` solved, so a `result` that only covered some of the hours of `data` —
@@ -530,12 +532,15 @@ function freeze_dispatch(data::NetworkData, result::Dict{String,Any};
             end
         end
         for (e, c) in net.edge
-            c isa PhaseShifter || continue
-            ta = nw_values(dim, c.ta)
+            c isa Transformer && any(!=(FIXED), c.pst) || continue
+            ta = [copy(w) for w in nw_values(dim, c.ta)]
             for (i, t) in enumerate(positions)
-                ta[t] = nw_solution(result, i)["edge"]["$e"]["tap"]["ta"]
+                terminal = nw_solution(result, i)["edge"]["$e"]["terminal"]
+                for k in findall(!=(FIXED), c.pst)
+                    ta[t][k] = terminal["$k"]["tap"]["ta"]
+                end
             end
-            net.edge[e] = PhaseShifter(; _fields(c)..., ta = nw_vector(dim, :time, ta))
+            net.edge[e] = Transformer(; _fields(c)..., ta = nw_vector(dim, :time, ta))
         end
     end)
 end
@@ -602,11 +607,11 @@ end
 `data` prepared for a redispatch confined to Belgium:
 
 - a non-BE [`Generator`](@ref) is pinned at its current `pg` (`pmin = pmax = pg`);
-- a non-BE [`PhaseShifter`](@ref) is pinned at its current `ta` (`ta_min =
-  ta_max = ta`);
+- a non-BE [`Transformer`](@ref) that can move a winding is pinned at its current
+  `ta` and `tm` (`ta_min = ta_max = ta`, `tm_min = tm_max = tm`);
 - every [`Storage`](@ref) unit, Belgian included, not just outside it, is
   excluded via [`exclude_all_storage!`](@ref) — with no exemption; unlike
-  `Generator`/`PhaseShifter` above, storage is dropped as a *redispatch
+  `Generator`/`Transformer` above, storage is dropped as a *redispatch
   resource* for this step rather than pinned by geography.
 
 `Network`/`NetworkData` are immutable, so despite the `!` — kept because the
@@ -626,10 +631,11 @@ function restrict_to_belgium!(data::NetworkData)
     end
 
     for (e, c) in E
-        c isa PhaseShifter || continue
+        c isa Transformer && (any(!=(FIXED), c.oltc) || any(!=(FIXED), c.pst)) || continue
         i, j = terminals(c)
         country(data, i) == "BE" && country(data, j) == "BE" && continue
-        E[e] = PhaseShifter(; _fields(c)..., ta_min = c.ta, ta_max = c.ta)
+        E[e] = Transformer(; _fields(c)..., ta_min = c.ta, ta_max = c.ta,
+                           tm_min = c.tm, tm_max = c.tm)
     end
 
     net  = Network(I, E, U; dim, ext = deepcopy(net.ext))

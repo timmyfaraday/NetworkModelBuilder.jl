@@ -235,7 +235,7 @@ Resolve every [`RawContingencyEvent`](@ref) in `raw` against `network(data)`,
 returning the [`ContingencyEvent`](@ref)s that resolved at least one asset
 name, and a `DataFrame` reporting every event in `raw`, resolved or not.
 
-Names are matched against edges (`Branch`, `PhaseShifter`, ...) by exact
+Names are matched against edges (`Branch`, `Transformer`, ...) by exact
 `.name`, and against generators by case-insensitive `.name` — a
 [`Generator`](@ref) is the one unit type this package lets an outage act on
 the same way it does an edge (it carries the same `status` field, see

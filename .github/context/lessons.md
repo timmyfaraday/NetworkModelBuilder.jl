@@ -118,6 +118,11 @@ again get retired.
   the least movement among equal-overload solutions; free, the solver returns another split with the
   same 11 MW overload (D34). Assert what is determined (total overload, conservation, ratings) and
   say so in the test. (unconfirmed)
+- **Compare two redispatch solves by overload volume, not by the number of overload rows.** The year
+  with the couplers as switches against the floor run: step 2 had 340,623 rows against 341,787
+  (-0.34 %), but 1,382 rows only in the old run (median 2e-5 pu, 47.7 pu in all) and 218 only in the
+  new (47.4 pu); total overload +0.010 %. A row is any overload above 1e-6 pu, and alternative optima
+  trade many tiny rows for a few larger. B10 predicted rows within 0.1 %. (unconfirmed)
 
 ## Performance
 

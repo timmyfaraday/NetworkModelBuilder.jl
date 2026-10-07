@@ -10,11 +10,7 @@ older ones: git has them). Next id: **B19**.
 
 ## Next
 
-- [ ] B10 · Re-run the full year on `test-zorba-run` with the couplers as switches and the one
-  `Transformer`; `runs/_year_orig_prices` has the 1e-5 floor and the old types · Tom · 2026-10-05
-  - Week 1 moved the objective by under 0.02 % (B9), so expect the year's overload rows within
-    about 0.1 % of 341,787 (step 2) and 5,720,514 (step 3). Recipe in the header of
-    `scripts/run_year_redispatch.jl`.
+- (nothing)
 
 ## Later
 
@@ -51,6 +47,10 @@ older ones: git has them). Next id: **B19**.
 
 ## Done
 
+- [x] B10 · Re-run the full year on `test-zorba-run` with the couplers as switches and the one
+  `Transformer` · Tom · 2026-10-05
+  - `runs/_year_b10`, 73 processes, 52 min: 365 of 365 sound, 0 fallback; step 3 rows -0.02 %, step 2
+    rows -0.34 % (predicted 0.1 %) but total overload +0.010 % / +0.018 % (STATE.md, lessons.md).
 - [x] B18 · `scripts/NMinusOneScreen.jl`: deleted (D42), it skipped about 3 % of hours and could not run on
   the data with `Switch`es · Tom · 2026-10-07
 

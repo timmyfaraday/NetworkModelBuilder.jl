@@ -1,6 +1,6 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Van Acker (B12 done).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Van Acker (B10 done).
 
 ## Where NMB stands
 
@@ -17,8 +17,8 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
 - `test-zorba-run` is `6cd0af1` (an earlier merge of `main`) plus 9 commits under `scripts/` (price
   rescale `4ef3472`, phases 0-3 `20d88dc`..`f939763`, `NMB_MERGE` `9a8b676`, original prices `76a52ce`
   D14, `_diag_*` deletion `9fc06d4`, window settings `3ea65d4`), `main` merged in (`420b1aa`), the B9
-  loader change, `main` merged in again (`a2d8897`, B11) and the B12 migration (`40dc645`). Not
-  pushed: `40dc645` and the setup commits `c2d401f`, `4a3db48` (same as `main`'s `2aa61db`, `4d0d3c3`).
+  loader change, `main` merged in again (`a2d8897`, B11), the B12 migration (`40dc645`) and D42
+  (`ec4e49c`). Pushed up to `ec4e49c`; the B10 record is local.
 - `b5-switch-edge` and `b11-unified-transformer` are merged and deleted. Next free decision id: **D43**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
@@ -40,22 +40,20 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
 - Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
 - B11 is merged and tagged `v0.12.0` (plan `context/knowledge/plan/unified-transformer.md`, D28-D36),
   suite 3126. Zorba flows are not unique without a phase shifter price (D34).
-- B12 done: `scripts/` run on `Transformer`. Week 1 beside a same-day pre-B11 control, 14 processes
-  (`runs/_b12_new`, `runs/_b12_control`): 7 of 7 chunks sound, objectives equal to 8e-14, overload
-  rows equal, largest volume difference 3e-10 pu, against the control and `_week1_switches`; chunks
-  320-382 s against 316-375 s, a repeat with the launch order swapped gave the same results and the
-  new code slower in 11 of 14 chunks, 1.0 % pooled, all in NMB's own work, not the solver.
-- Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`), done with the original
-  prices (D14) and the 1e-5 floor: `runs/_year_orig_prices`, 365 of 365 chunks sound, 0 fallback, 58
-  min; overload rows 341,787 (step 2) and 5,720,514 (step 3), no load shedding or spillage (the
-  rescaled-price run `_year_full` had 352,540, 5,953,226, 0 and 635). `with_contingencies` fixed,
-  N-1 screen dropped, the old script and `_diag_*` retired. See `lessons.md`.
-- B9 done, week 1 (`runs/_week1_switches`, 7 processes): `load_network` loads the 21 couplers (reactance
-  < `max_coupler_reactance` = 1e-6, all 1e-7) as locked, closed `Switch`es, none in a contingency list.
-  Against the floor run `runs/_phase5_week_orig`: 7 of 7 chunks sound, 0 fallback, 0 violation, no
-  shedding or spillage, objective +0.009 % (step 2) and +0.018 % (step 3), overload rows 7,718 against
-  7,729 and 127,323 against 127,368, step 1 flows on the 2,853 congested rows within 0.14 % of rating
-  (spec: 2.2 %); chunks 376 s against 358 s, the machine's: 8 % faster side by side (`lessons.md`).
+- B12 done: `scripts/` run on `Transformer`. Week 1 beside a same-day pre-B11 control, two pairs with
+  the launch order swapped (`runs/_b12*`): 14 of 14 chunks sound, objectives equal to 8e-14, overload
+  rows and volumes (3e-10 pu) equal to the control and `_week1_switches`; the new code is 1.0 % slower
+  a chunk, in NMB's own work, not the solver.
+- B10 done, full year (`runs/_year_b10`, 73 processes, 52 min, original prices D14, couplers as
+  switches, one `Transformer`): 365 of 365 chunks sound, 0 fallback, no shedding or spillage. Overload
+  rows 340,623 (step 2) and 5,719,307 (step 3) against 341,787 and 5,720,514 with the floor
+  (`_year_orig_prices`); step 2's 0.34 % is 1,382 tiny overloads (median 2e-5 pu) against 218 of the
+  same volume: total overload +0.010 % and +0.018 %, objectives per chunk median 1e-4, max 7e-4. Peak
+  6.2 GB. `with_contingencies` fixed, the old script and `_diag_*` retired; see `lessons.md`.
+- B9 done, week 1 (`runs/_week1_switches`): `load_network` loads the 21 couplers (reactance <
+  `max_coupler_reactance` = 1e-6) as locked, closed `Switch`es, none in a contingency list; against the
+  floor run `_phase5_week_orig` 7 of 7 chunks sound, objective +0.009 % and +0.018 %, flows within
+  0.14 % of rating (spec: 2.2 %).
 - Tom asked for 48 h windows committing 8 h in both steps; tried, and worse. They are settings now
   (`NMB_HORIZON_CB/STEP_CB/HORIZON_BE/STEP_BE`, defaults unchanged 8/8 and 1/1; the chunk must be at
   least as long as the horizon). `runs/_phase6_h48_probe`, hours 1-48: same results (objectives
@@ -67,9 +65,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
 
 ## Next
 
-1. B10: re-run the full year with the switches and the one `Transformer` (`_year_orig_prices` has the
-   floor and the old types), recipe in the header of `scripts/run_year_redispatch.jl`.
-2. B7 (closed switches under network reduction), B8 (timing flake), B3/B6 (throughput) and B4 (bus
+1. B7 (closed switches under network reduction), B8 (timing flake), B3/B6 (throughput) and B4 (bus
    factor) remain, see `backlog.md`.
 
 ## Blocked / waiting

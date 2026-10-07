@@ -33,6 +33,10 @@ older ones: git has them). Next id: **B19**.
   - Measured, cause of the loss of thread scaling not proven. Profile one window under `-t 1` first.
     Relates to B3. Longer windows do not help: the overhead follows the hour-states solved, not the
     number of windows (`lessons.md`, Performance), so the target is the cost per hour-state.
+  - 2026-10-07, one window of step 3 (80 indices): build 4.2-4.8 s, the agent's feasibility check 2-3 s,
+    `build_solution` 1.0-1.4 s, solve 1.4 s, GC 1.2-2.8 s, 2.2 GB allocated. No window ever reuses its
+    model: the year built 1095 of 1095 (step 2) and 8353 of 8760 (step 3), because `same_structure`
+    reads a generator's `pmin`/`pmax` crossing +-pi/2 as a change of shape. Plan in the next session.
   - B12 measured the one `Transformer` at +1.0 % a chunk against the old types, all non-solver time.
     Candidate, not measured: `nw_component` rebuilds a `Transformer` through its validating constructor
     for every network index.

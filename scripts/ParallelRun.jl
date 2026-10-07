@@ -105,11 +105,47 @@ its own constraints, or `0` if none by more than `atol`.
 A solver's status says what it believes, not what it returned: Xpress has
 reported `OPTIMAL` for a vector that breaks node balance by 30 per unit. `atol` is
 0.1 MW on a 100 MVA base, far above what tolerance noise produces.
+
+Every row and bound is read back from the solver and evaluated at the primal
+values it returned, not taken from the solver's own row activity. It is what
+`JuMP.primal_feasibility_report` does, asked of the solver's interface directly:
+going through JuMP builds an object per row, 2 s of a 9.6 s step-3 window.
+Constraints are linear or quadratic; legacy nonlinear ones are not checked.
 """
 function worst_violation(nm; atol::Float64 = 1e-3)
-    report = JuMP.primal_feasibility_report(nm.model; atol)
+    backend = JuMP.backend(nm.model)
+    x       = _primal_vector(backend)
+    worst   = 0.0
+    for (F, S) in MOI.get(backend, MOI.ListOfConstraintTypesPresent())
+        worst = max(worst, _worst_violation(backend, F, S, x, atol))
+    end
 
-    return isempty(report) ? 0.0 : maximum(values(report))
+    return worst
+end
+
+# the primal values of `backend`, indexed by `VariableIndex.value`
+function _primal_vector(backend)
+    variables = MOI.get(backend, MOI.ListOfVariableIndices())
+    x         = zeros(maximum(v.value for v in variables; init = 0))
+    for (v, value) in zip(variables, MOI.get(backend, MOI.VariablePrimal(), variables))
+        x[v.value] = value
+    end
+
+    return x
+end
+
+# one function barrier per constraint type, so that the loop over its rows is typed
+function _worst_violation(backend, ::Type{F}, ::Type{S}, x::Vector{Float64}, atol::Float64) where {F,S}
+    value = v -> @inbounds x[v.value]
+    worst = 0.0
+    for ci in MOI.get(backend, MOI.ListOfConstraintIndices{F,S}())
+        f = MOI.get(backend, MOI.ConstraintFunction(), ci)
+        s = MOI.get(backend, MOI.ConstraintSet(), ci)
+        d = MOI.Utilities.distance_to_set(MOI.Utilities.eval_variables(value, f), s)
+        d > atol && (worst = max(worst, d))
+    end
+
+    return worst
 end
 
 """

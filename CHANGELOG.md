@@ -10,6 +10,14 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+## [0.12.4] - 2026-10-07
+
+### Fixed
+
+- `test/lf.jl` asserted `solve_time > 0.0`, which failed whenever a small case solved
+  faster than the resolution of `time()` on Windows. It now asserts `>= 0.0`, which still
+  fails for the `NaN` a solve that never recorded its time would leave. Tests only.
+
 ## [0.12.3] - 2026-10-07
 
 ### Changed

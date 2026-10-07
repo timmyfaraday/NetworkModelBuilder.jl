@@ -43,8 +43,6 @@ older ones: git has them). Next id: **B21**.
   - Claeys et al. 2020, Algorithm 1; follows B11 (D30).
 - [ ] B7 · Revisit closed switches as equality rows (D17) in the context of network reduction, where a
   closed switch would merge its nodes · Tom · 2026-10-04
-- [ ] B8 · `test/lf.jl:124` (`solve_time > 0.0`) fails now and then on Windows: `time()` has a coarse
-  resolution and case14 solves faster; seen once in a full run, passes alone. Likely `>= 0.0` · Tom · 2026-10-04
 - [ ] B19 · Re-evaluate the per-window feasibility check (`worst_violation`) once the pipeline has proven
   stable: sample it or drop it · Tom · 2026-10-07
   - D44 keeps it for now. It cost 2.4 s of 9.6 s a step-3 window, 0.45 s since B6 item 2; 365 of 365
@@ -52,6 +50,9 @@ older ones: git has them). Next id: **B21**.
 
 ## Done
 
+- [x] B8 · `test/lf.jl:124` asserted `solve_time > 0.0` and failed when a small case solved faster than
+  the `time()` tick on Windows (2 failures in 7 runs on 2026-10-07) · Tom · 2026-10-07
+  - Now `>= 0.0`, which still fails for the `NaN` of an unrecorded time; v0.12.4, tests only.
 - [x] B6 · Cut NMB's per-window overhead in rolling-horizon solves (D43, D44) · Tom · 2026-10-07
   - v0.12.1-v0.12.3 and `scripts/ParallelRun.jl`, 9 commits `123d895`..`8b84c14`: the `same_structure` gates
     so a window reuses the model, a feasibility check read through MOI, generated `nw_component`, a typed

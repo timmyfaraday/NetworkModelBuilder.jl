@@ -1,10 +1,10 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Van Acker (B6 done).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Van Acker (B8 done, merged into main).
 
 ## Where NMB stands
 
-- v0.12.1-v0.12.3 (B6, untagged): rolling-horizon reuse and cheaper per-window work. v0.12.0
+- v0.12.1-v0.12.4 (B6, B8, untagged): rolling-horizon reuse and cheaper per-window work. v0.12.0
   (D28-D36, tagged): one `Transformer`. v0.11.0 (D13, D15-D27): the `Switch` edge. v0.10.2 (D11):
   `solution_tables` and `docs/src/manual/concepts.md`.
   v0.10.1 (D10): `src/comp/` is auto-included by a directory walk (`_include_dir`) and each
@@ -14,12 +14,9 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
 
 ## Branches
 
-- `main` carries B5 and B11 (`--no-ff`), tagged `v0.12.0`, and the setup commits D37-D41.
-- `test-zorba-run` is `6cd0af1` (an earlier merge of `main`) plus 9 commits under `scripts/` (price
-  rescale `4ef3472`, phases 0-3 `20d88dc`..`f939763`, `NMB_MERGE` `9a8b676`, original prices `76a52ce`
-  D14, `_diag_*` deletion `9fc06d4`, window settings `3ea65d4`), `main` merged in (`420b1aa`), the B9
-  loader change, `main` merged in again (`a2d8897`, B11), the B12 migration (`40dc645`) and D42
-  (`ec4e49c`). Pushed up to `8090ab3` (the B10 record); the B6 commits are local.
+- `main` carries B5 and B11 (`--no-ff`), tagged `v0.12.0`, the setup commits D37-D41 and, merged `--no-ff`
+  on 2026-10-07, all of `test-zorba-run`: `scripts/` (the Zorba pipeline), B9, B10, B12, B6, B8 (v0.12.4).
+- `test-zorba-run` is merged into `main` and kept; the next Zorba change can start from `main`.
 - `b5-switch-edge` and `b11-unified-transformer` are merged and deleted. Next free decision id: **D45**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
@@ -66,9 +63,8 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
 ## Next
 
 1. B20 (the rest of the per-window cost: `update_model!`, `build_solution`, `_signature`), B7 (closed
-   switches under network reduction), B8 (timing flake, one-line fix awaiting Tom's OK), B3 (throughput),
-   B4 (bus factor), B13 and B19 remain, see `backlog.md`.
-2. `main` lacks the `test-zorba-run` work (B12, B10, D42, B6); merging it back and pushing is Tom's call.
+   switches under network reduction), B3 (throughput), B4 (bus factor), B13 and B19 remain, see
+   `backlog.md`.
 
 ## Blocked / waiting
 

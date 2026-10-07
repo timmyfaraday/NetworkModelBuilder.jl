@@ -10,6 +10,17 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-10-07
+
+### Changed
+
+- `has_nw_data` and `nw_component`, which resolve a component at a network index, are
+  generated per component type and read every field by a constant index. The loop over
+  `getfield(c, k)` with a runtime `k` boxed every field of every component at every
+  network index, in the model build, `update_model!` and `build_solution` alike. A window
+  of the Zorba internal redispatch (80 network indices) took about 0.9 s less of its 5.7 s
+  outside the solver; results are unchanged.
+
 ## [0.12.1] - 2026-10-07
 
 ### Fixed

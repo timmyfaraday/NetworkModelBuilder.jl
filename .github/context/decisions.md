@@ -33,6 +33,24 @@ How to use this file:
   Log, `setup-changelog.md`, a tag's own pinned reference commit) were left as the accurate record
   of what was true at the time.
 
+## Agent setup
+
+- **The hook engine and the generic skills come from the `sma-coding-second-brain` plugin; the repo
+  keeps `launch.py`, `agent-hooks.json`, `hook_config.json` and five override skills** (D37):
+  `new-spec`, `new-run-prompt`, `review-run-report`, `probe-environment` and `pr-description` stay in
+  `.github/skills/` and shadow the plugin's, until the plugin's versions are project-neutral (B15).
+- **No `.github/copilot/settings.json` while NMB is public** (D38): the plugin's template names its
+  internal repository URL and recommends a plugin an outside contributor cannot install. Add the
+  file from the template when the package moves internal (B17).
+- **An empty, gitignored `.venv` at the repo root** (D39): `launch.py` adds a "no .venv" note to
+  every session start, and the engine is stdlib-only, so the venv holds nothing. It goes when the
+  plugin can turn the note off (B16).
+- **The Stop hook asks once per session for a docs update when `src/` changed and `docs/` did not**
+  (D40): `docs_watch_prefixes` in `hook_config.json`, since `README.md` and the docs examples are
+  load-bearing.
+- **"A question, observation or open idea is not a go-ahead to edit" is hard rule 8 of
+  `copilot-instructions.md`** (D41), taken from the plugin's template.
+
 ## Code conventions
 
 - **`src/comp/{node,edge,unit}/` is included by walking the directory tree, not by naming every
@@ -411,3 +429,38 @@ binaries and the same optimum as reuse, which leaves P: HiGHS takes 0.01-0.02 s 
 0.07-23 s tied against 0.05-0.2 s reused. A corrective winding is the same under both, 100 and 200
 binaries and about two minutes of Juniper at N = 4 and 8 with P = 25.
 Changes: D35, its open question. Only the binaries; `tr`, `ti` and `ta` stay tied.
+
+### D37 — The hook engine and the generic skills come from the second-brain plugin
+Date: 2026-10-07 · Decided by: Tom Van Acker · Area: Agent setup
+Why: the setup was ported into NMB and then extracted as a plugin shared by several repos; keeping a
+vendored copy means fixes land twice. Five skills carry NMB content the plugin's versions lack: the
+spec and run folders (`knowledge/plan/`, `agent-runs/`), the PowerModels.jl cross-check rules, the
+Julia probe steps, and a GitHub pull request (the plugin's is Azure DevOps, with mypy and ruff gates).
+Changes: new. Removes `.github/hooks/scripts/` and the `wrap-up`, `record-decision` and `setup-review`
+copies. For the plugin: make those five skills project-neutral (B15).
+
+### D38 — No `.github/copilot/settings.json` while NMB is public
+Date: 2026-10-07 · Decided by: Tom Van Acker · Area: Agent setup
+Why: the plugin's template file publishes the plugin's internal repository URL and recommends a plugin
+that an outside contributor cannot install. The package is to move internal, and then the file is wanted.
+Changes: new. Revert at the move: add the file from the plugin's `templates/copilot/settings.json` (B17).
+
+### D39 — An empty, gitignored `.venv` for the hook launcher
+Date: 2026-10-07 · Decided by: Tom Van Acker · Area: Agent setup
+Why: `launch.py` appends "no .venv found, tell the user to create it" to every session start of a repo
+without one, and NMB is Julia with no Python of its own. The engine is stdlib-only, so an empty venv
+silences the note at no cost. For the plugin: a `hook_config.json` key to turn the note off (B16).
+Changes: new.
+
+### D40 — The Stop hook watches `src/` for a docs update
+Date: 2026-10-07 · Decided by: Tom Van Acker · Area: Agent setup
+Why: `README.md` claims are load-bearing and the docs examples run in `test/docs.jl` (hard rule 3), but
+nothing asked for a docs page when `src/` changed. `docs_watch_prefixes` is `["src/"]`, `docs_prefix`
+is `docs/`; the hook asks once per session, and the wrap-up may say why the docs do not change.
+Changes: new.
+
+### D41 — A question or observation is not a go-ahead to edit
+Date: 2026-10-07 · Decided by: Tom Van Acker · Area: Agent setup
+Why: the plugin's template carries this rule, and Tom asks for a plan first before most changes.
+It is hard rule 8 of `copilot-instructions.md`.
+Changes: new.

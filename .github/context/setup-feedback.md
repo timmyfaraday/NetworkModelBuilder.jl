@@ -30,7 +30,7 @@ Owner: **Tom Van Acker**.
 ## Log
 
 Format: `- F<n> · YYYY-MM-DD · <user> · <what happened> · cost: <turns/result> · status: open`
-Next id: **F4**.
+Next id: **F6**.
 
 - F1 · 2026-09-30 · Tom Van Acker · `probe-environment` found the SessionStart/PreToolUse/Stop
   hooks have never fired: no `.git/agent-session/` dir, no `.git/agent-hooks.log`, and this
@@ -49,3 +49,11 @@ Next id: **F4**.
   version bumps are the patch digit only; Tom decided B5 (a new component type and the first integer
   model) is v0.11.0 (D20), so the rule is wrong for that case · cost: none yet, but the next agent
   will read "patch only" and push back · status: applied SC4
+- F4 · 2026-10-07 · Tom Van Acker · Five plugin skills do not fit a Julia/GitHub repo: `pr-description`
+  is Azure DevOps (4,000 characters, mypy/ruff), `probe-environment` probes Python/venv/data paths,
+  `new-spec` writes to `specs/`, `new-run-prompt` and `review-run-report` to `runs/` and name "the
+  legacy" · cost: the five stay in `.github/skills/` as copies that get no plugin fixes · status:
+  open (B15, D37)
+- F5 · 2026-10-07 · Tom Van Acker · `launch.py` adds "no .venv found, tell the user to create it" to
+  every session start of a repo without a Python of its own · cost: an empty `.venv` kept only to
+  silence it · status: applied SC6 (D39); plugin key in B16

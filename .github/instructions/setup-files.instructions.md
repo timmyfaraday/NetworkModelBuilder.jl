@@ -14,7 +14,10 @@ these files.
    or check; adding a rule. Additions name what they cut.
 3. Keep within budgets: `copilot-instructions.md` ≤ 80 lines, each instruction file ≤ 60, each
    `SKILL.md` ≤ 120. Project facts belong in `context/`, not here.
-4. Keep the generic layer generic: skills and hooks don't mention NMB specifics, so another repo
-   can reuse them. NMB specifics go in `copilot-instructions.md`, `instructions/` or `context/`.
+4. Skills and the hook engine come from the `sma-coding-second-brain` plugin and are shared by
+   several repos: never edit them here; propose a change as a PR against the plugin. The five
+   project overrides in `.github/skills/` (listed in `AGENT-SETUP.md`) are the exception: edit
+   them here, with Tom's OK; each one is a gap in the plugin (B15). NMB specifics go in
+   `copilot-instructions.md`, `instructions/` or `context/`.
 5. After applying: add `SC<n>` to `setup-changelog.md` (what, why, approved by) and mark the
    feedback entries as applied.

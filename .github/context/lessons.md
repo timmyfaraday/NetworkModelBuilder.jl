@@ -131,9 +131,10 @@ again get retired.
   total; that did not survive a paired run: 8 processes at once, floor and switches on the same four
   days, gave step 3 non-solver 213-219 s with switches against 217-222 s with the floor, solver 67-101 s
   against 85-139 s, chunk 330-370 s against 354-410 s. Run the variants side by side on the same
-  hours, not one after the other. B12 (v0.12.0 against v0.11.0, one pair, the new code launched first in
-  each): 7 of 7 chunks 0.2-2.8 % slower, mean 1.4 %; swapping the launch order would separate noise
-  from cost. (unconfirmed)
+  hours, not one after the other. B12 (v0.12.0 against v0.11.0, two pairs of 7 chunks, launch order
+  swapped between them): new slower in 11 of 14 chunks, +1.4 % then +0.7 %, pooled +1.0 % (3.6 s a
+  chunk); non-solver time slower in step 2 in 14 of 14 (+0.8 s) and in step 3 in 13 of 14 (+4.2 s), the
+  solver not. A small cost in NMB's own work, not the launch order; cause not measured. (unconfirmed)
 - **Threads inside one Julia process stop paying at a handful of tasks for NMB's per-window work;
   separate one-thread processes keep scaling.** Zorba week 1, same 7 daily chunks: 7 threads in one
   process 860 s per chunk; 7 processes 330-400 s. One 720-hour month on 30 threads had the same

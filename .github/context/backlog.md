@@ -37,6 +37,9 @@ older ones: git has them). Next id: **B19**.
   - Measured, cause of the loss of thread scaling not proven. Profile one window under `-t 1` first.
     Relates to B3. Longer windows do not help: the overhead follows the hour-states solved, not the
     number of windows (`lessons.md`, Performance), so the target is the cost per hour-state.
+  - B12 measured the one `Transformer` at +1.0 % a chunk against the old types, all non-solver time.
+    Candidate, not measured: `nw_component` rebuilds a `Transformer` through its validating constructor
+    for every network index.
 - [ ] B4 · Bus factor: solo maintainer, get a second reviewer/co-committer (gap #11, P3/Large) · Tom · 2026-09-30
 - [ ] B13 · A `Transformer` constructor from datasheet values (winding resistances, pairwise short-circuit
   reactances, no-load power) and a mesh instead of a star for four or more windings · Tom · 2026-10-05
@@ -54,7 +57,8 @@ older ones: git has them). Next id: **B19**.
 - [x] B12 · `test-zorba-run`'s scripts on `Transformer`, then week 1 beside a same-day control · Tom ·
   2026-10-05
   - `40dc645`; `runs/_b12_new` against `runs/_b12_control`: 7 of 7 sound, objectives within 8e-14,
-    overload rows equal, volumes within 3e-10 pu; chunks 0.2-2.8 % slower, mean 1.4 % (STATE.md).
+    overload rows equal, volumes within 3e-10 pu; chunks 1.0 % slower, pooled over two pairs with the
+    launch order swapped (STATE.md).
 
 - [x] B11 · One `Transformer` for every transformer (windings, tap changer, phase shifter), replacing
   `TapChanger`, `PhaseShifter` and `MultiWindingTransformer` · Tom · 2026-10-05

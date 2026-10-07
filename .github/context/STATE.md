@@ -43,7 +43,8 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
 - B12 done: `scripts/` run on `Transformer`. Week 1 beside a same-day pre-B11 control, 14 processes
   (`runs/_b12_new`, `runs/_b12_control`): 7 of 7 chunks sound, objectives equal to 8e-14, overload
   rows equal, largest volume difference 3e-10 pu, against the control and `_week1_switches`; chunks
-  320-382 s against 316-372 s, new slower in 7 of 7 by 0.2-2.8 % (mean 1.4 %), one pair, so unproven.
+  320-382 s against 316-375 s, a repeat with the launch order swapped gave the same results and the
+  new code slower in 11 of 14 chunks, 1.0 % pooled, all in NMB's own work, not the solver.
 - Zorba three-step redispatch, full year (`test-zorba-run`, `scripts/`), done with the original
   prices (D14) and the 1e-5 floor: `runs/_year_orig_prices`, 365 of 365 chunks sound, 0 fallback, 58
   min; overload rows 341,787 (step 2) and 5,720,514 (step 3), no load shedding or spillage (the

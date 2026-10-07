@@ -53,20 +53,18 @@ older ones: git has them). Next id: **B19**.
     rows -0.34 % (predicted 0.1 %) but total overload +0.010 % / +0.018 % (STATE.md, lessons.md).
 - [x] B18 · `scripts/NMinusOneScreen.jl`: deleted (D42), it skipped about 3 % of hours and could not run on
   the data with `Switch`es · Tom · 2026-10-07
-
 - [x] B12 · `test-zorba-run`'s scripts on `Transformer`, then week 1 beside a same-day control · Tom ·
   2026-10-05
   - `40dc645`; `runs/_b12_new` against `runs/_b12_control`: 7 of 7 sound, objectives within 8e-14,
     overload rows equal, volumes within 3e-10 pu; chunks 1.0 % slower, pooled over two pairs with the
     launch order swapped (STATE.md).
-
 - [x] B11 · One `Transformer` for every transformer (windings, tap changer, phase shifter), replacing
   `TapChanger`, `PhaseShifter` and `MultiWindingTransformer` · Tom · 2026-10-05
   - Plan `knowledge/plan/unified-transformer.md` (D28-D36), branch `b11-unified-transformer`, v0.12.0,
     6 commits, suite 3126. Merged into `main`, pushed, tagged `v0.12.0` on the merge.
 - [x] B14 · A preventive phase shifter set at exactly zero stopped Ipopt in the current-based
   redispatch: the tie and each state's magnitude row were dependent. A held measure now builds no
-  restricting rows of its own (D35); reuse of the base case's variables is Q6 · Tom · 2026-10-06
+  restricting rows of its own (D35); reusing the base case's binaries is D36 · Tom · 2026-10-06
 - [x] B9 · On `test-zorba-run`, load the couplers as locked-closed `Switch`es, drop the 1e-5
   reactance floor, re-run week 1 and compare · Tom · 2026-10-05
   - `scripts/SteeringPlanData.jl`; `runs/_week1_switches` against `runs/_phase5_week_orig`: 7 of 7

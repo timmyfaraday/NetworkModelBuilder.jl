@@ -47,6 +47,12 @@ older ones: git has them). Next id: **B20**.
     254 s against 344 s (-26.2 %, every chunk -20 to -32 %; predicted -15 %), step 3 solver 16-24 s
     against 45-105 s (the basis is kept). Largest unit-hour volume difference 1e-10 pu, except one
     step-2 unit-hour in chunk 121-144 (1.25e-2 pu, equal objective: another optimum).
+  - Item 2 done (`c7d26ac`, scripts only), 2026-10-07. `worst_violation` reads every row through MOI
+    instead of `primal_feasibility_report`: 2.24 s to 0.45 s a step-3 window, 1.35 s to 0.30 s a step-2
+    window; same violation on 27 solved windows, on 27 perturbed points, on a moved row (0.7), a cut
+    bound (0.25) and a HiGHS window. Week 1 (`runs/_b6i2a*`, `_b6i2b*`, two pairs, launch order swapped,
+    control = item 1): 14 of 14 sound, 0 fallbacks, objectives and unit volumes bit-identical, chunk
+    213 s against 255 s (-16.5 %, every chunk -13 to -18 %; predicted -18 %).
   - B12 measured the one `Transformer` at +1.0 % a chunk against the old types, all non-solver time.
     Candidate, not measured: `nw_component` rebuilds a `Transformer` through its validating constructor
     for every network index.
@@ -60,8 +66,8 @@ older ones: git has them). Next id: **B20**.
   resolution and case14 solves faster; seen once in a full run, passes alone. Likely `>= 0.0` · Tom · 2026-10-04
 - [ ] B19 · Re-evaluate the per-window feasibility check (`worst_violation`) once the pipeline has proven
   stable: sample it or drop it · Tom · 2026-10-07
-  - D44 keeps it for now. It cost 2.4 s of 9.6 s a step-3 window; 365 of 365 chunks of `_year_b10` had a
-    first violation of 0.
+  - D44 keeps it for now. It cost 2.4 s of 9.6 s a step-3 window, 0.45 s since B6 item 2; 365 of 365
+    chunks of `_year_b10` had a first violation of 0.
 
 ## Done
 

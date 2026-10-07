@@ -143,6 +143,11 @@ again get retired.
   B6 item 1 (the `same_structure` gates, reuse finally happening) the other way, two pairs of 7: 14 of
   14 chunks faster, -26.2 % pooled (254 s against 344 s), the step 3 solver -60 to -75 % (warm basis),
   objectives within 4e-10. Both pairs gave the same gain, so launch order is not the cause.
+- **Reading a solved model back through JuMP costs an object per row; through MOI it does not.**
+  `JuMP.primal_feasibility_report` on a 249,118-variable, 433,305-row step-3 window took 2.24 s (a
+  dictionary of variable refs 0.14, listing the rows 0.4, `constraint_object` 0.55, evaluating 0.9-1.0);
+  the same check read row by row from the solver's interface into a plain vector took 0.45 s, with the
+  same violation to the last digit. Chunk time -16.5 % (two pairs of 7). (unconfirmed)
 - **A rolling roll with tied prices is path dependent: reuse and rebuild can differ.** A roll is a
   sequence of LPs, so equal prices let each window pick another optimum (104.92 against 104.34 in a
   test). Reuse-equivalence tests need distinct prices; the Zorba pipeline is unaffected, its windows

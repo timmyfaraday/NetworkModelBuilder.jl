@@ -182,4 +182,12 @@ again get retired.
   outside the solver (214, 243, 273, 497 s) follows the hour-states processed, overlap included, not
   the number of windows, so fewer windows saves nothing. Keep 8/8 and 1/1 unless a component couples
   the hours again (storage back in). (unconfirmed)
-
+- **Quote a profile's shares against the wall time, not against its samples.** `scratch/b6_roll_profile_flat.txt`
+  holds 9,782 samples at 2 ms, 19.6 s of a 29.6 s wall: `build_solution` is 28 % of the samples and 19 % of
+  the wall, which is the figure B20 carries; `topology` 20 % and 13 %. Two numbers for one function
+  came from reading the same file two ways. (unconfirmed)
+- **Count the calls before making one call cheaper.** `topology(net; nw)` costs 432 B and 0.7 µs a call
+  with 17 switchable statuses, and it is 13 % of a roll because `edge_arcs(nm, e; nw)` calls it once per
+  edge (30 call sites under `src/comp/edge/`, all reached from loops over edges). `grep` the call sites of a
+  hot callee first; B20's "pack the signature" would have cut the cost of one call, not their number.
+  (unconfirmed)

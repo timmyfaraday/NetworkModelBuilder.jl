@@ -2,7 +2,7 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B21**.
+older ones: git has them). Next id: **B29**.
 
 ## Now
 
@@ -35,8 +35,38 @@ older ones: git has them). Next id: **B21**.
     status matrix read by column would not tabulate topologies, but check it against the invariant first.
     `build_solution` is dominated by building the result `Dict`s, not by reading values (0.07 s of 0.7 s).
     Candidate, not measured: `nw_component` rebuilds a `Transformer` through its validating constructor.
+    The first two moves are B21 and B22; for `nw_component`, `Generator` is 0.8 % of the profile (plan
+    `julia-guide-review.md`, "Considered, not proposed").
   - Peak memory per process rose from 6.2 GB to 7.3 GB (mean 5.9 GB), the held model; 73 processes fit in
     1 TB, watch it if the process count grows.
+- [ ] B21 · Answer a repeated `topology` lookup from the last answer instead of deriving the signature again;
+  make `topology` return a concrete type · Tom · 2026-10-08 · proposed, first move of B20
+  - `topology` is 13 % of a roll's wall (`_signature` 11 %), 9 % through `edge_arcs`; 432 B and 0.7 µs a call
+    with 17 switchable statuses, more with more outages; infers `Union{Nothing,Topology}`. A topology slot
+    per index would change "derived, never tabulated" and needs a decision. Plan item 1.
+- [ ] B22 · `build_solution` only for the network indices a roll keeps; fewer strings and `Dict`s per entry
+  · Tom · 2026-10-08 · proposed, second move of B20
+  - 19 % of a roll's wall, 1.5 GB and 13-25 % GC per 1-hour step-3 window. A typed core under the nested
+    `Dict` is Q9 (D11). Plan item 2.
+- [ ] B23 · Validate in the inner constructors what `Node`, `Generator`, `FixedLoad` and the branch family accept
+  today: ordered limits, finite impedance, non-negative rating, no NaN · Tom · 2026-10-08 · proposed
+  - 11 of 11 invalid inputs accepted; `pmin > pmax` gives an `INFEASIBLE` OPF with no pointer. Load the
+    Zorba data and the Matpower cases before deciding a rule. Plan item 3.
+- [ ] B24 · Move the package's own registers (nine keys) out of `nm.ext` into typed fields; refuse a `var`/`con`
+  key reused with another index set · Tom · 2026-10-08 · proposed
+  - The refusal changes the extension contract: a decision. Plan item 4.
+- [ ] B25 · Guard rails for the measure step: `test/inference.jl` (`@inferred`), a `benchmark/` script on a
+  synthetic N-1 network, GC time and bytes per chunk in `chunk.csv` · Tom · 2026-10-08 · proposed
+  - The B6 profiles are in the gitignored `scratch/`. Plan item 5.
+- [ ] B26 · The pipeline's settings in a TOML file copied into `runs/<id>/`, `main(config)`, no absolute paths in
+  the script, no `NMB_*` variables · Tom · 2026-10-08 · proposed
+  - 12 variables and two absolute paths today. Plan item 6.
+- [ ] B27 · `[sources]` in `docs/`, `[compat]` for `docs/`, `scripts/` and the test solvers; decide on
+  `test/Project.toml`, on the export surface (Q7) and on tags (Q8) · Tom · 2026-10-08 · proposed
+  - 267 exported names; tags only for 0.6.0, 0.9.1-0.9.7, 0.12.0. Plan item 7.
+- [ ] B28 · Measure NMB's share of the first-call latency (8.7-11.8 s on case14); a `PrecompileTools` workload
+  only if it is large · Tom · 2026-10-08 · proposed
+  - Plan item 8.
 - [ ] B4 · Bus factor: solo maintainer, get a second reviewer/co-committer (gap #11, P3/Large) · Tom · 2026-09-30
 - [ ] B13 · A `Transformer` constructor from datasheet values (winding resistances, pairwise short-circuit
   reactances, no-load power) and a mesh instead of a star for four or more windings · Tom · 2026-10-05

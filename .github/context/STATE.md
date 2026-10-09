@@ -1,6 +1,6 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Van Acker (B8 done, merged into main).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-08 by Tom Van Acker (review of main against the Julia Modeling knowledge base, proposals only).
 
 ## Where NMB stands
 
@@ -35,6 +35,9 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
 
 ## In progress
 
+- Review of `main` (v0.12.4) against the Julia Modeling knowledge base: proposals only, no code changed.
+  Plan `context/knowledge/plan/julia-guide-review.md`, backlog B21-B28, questions Q7-Q9. Measured: the
+  topology lookup is 13 % and `build_solution` 19 % of a roll's wall; 11 of 11 invalid inputs are accepted.
 - Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
 - B11 is merged and tagged `v0.12.0` (plan `context/knowledge/plan/unified-transformer.md`, D28-D36),
   suite 3126. Zorba flows are not unique without a phase shifter price (D34).
@@ -62,12 +65,12 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
 
 ## Next
 
-1. B20 (the rest of the per-window cost: `update_model!`, `build_solution`, `_signature`), B7 (closed
-   switches under network reduction), B3 (throughput), B4 (bus factor), B13 and B19 remain, see
-   `backlog.md`.
+1. B21, B22 and B25 first (measured, no API change, the plan's order), then B23, B24, B26, B27. B20 keeps
+   the rest of the per-window cost; B7, B3, B4, B13, B19, B28 remain, see `backlog.md`.
 
 ## Blocked / waiting
 
+- Q7 (exports), Q8 (tags) and Q9 (typed solution) wait for Tom; B22 item (b) and B24 item (b) need them.
 - Gap #10 (parallel rolling-horizon throughput) needs a design decision before implementation
   (chunked-parallel vs. document-the-trade-off) — see `open-questions.md` Q1.
 

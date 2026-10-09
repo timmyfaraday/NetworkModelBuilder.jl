@@ -38,6 +38,9 @@ facts `(unverified)` and remove the marker once checked.
 - `Pkg.activate(temp=true)` is ephemeral — gone by the next separate `julia` process invocation
   even after a clean exit. Use `Pkg.activate("C:/explicit/persistent/path")` (forward slashes) for
   any scratch environment reused across multiple terminal calls.
+- `$env:TEMP` is `C:\Users\<user>\AppData\Local\Temp\4`, not `...\Local\Temp`: a script written with the
+  file tools to `...\Local\Temp\x\a.jl` is not at `"$env:TEMP\x\a.jl"` · works instead: give `julia` the
+  full path the file was created at (found by Tom Van Acker, 2026-10-08).
 - `Threads.@threads` only creates real concurrency if the Julia *process* starts with
   `JULIA_NUM_THREADS` > 1 (fixed at startup, can't change at runtime). CI sets it to `4` on the
   `julia-actions/julia-runtest@v1` step specifically so `test/thread_safety.jl` can't silently

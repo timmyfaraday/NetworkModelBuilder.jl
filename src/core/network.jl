@@ -545,7 +545,8 @@ components at `nw` are read, and the topology they produce is built the first
 time it is asked for and shared by every index that produces the same statuses.
 """
 function topology(net::Network; nw::Int = nw_id_default(net))
-    net.fixed === nothing || return net.fixed
+    fixed = net.fixed
+    fixed === nothing || return fixed
 
     return get!(() -> _topology_at(net.dim, net.node, net.edge, net.unit, nw),
                 net.topology, _signature(net, nw))

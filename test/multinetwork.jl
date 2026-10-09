@@ -185,6 +185,16 @@ const PROFILE = [0.9, 1.0, 1.1]
         @test !haskey(nw_solution(result, 2)["edge"], "1")
     end
 
+    @testset "a topology lookup has one type, whether or not a status varies" begin
+        data = quiet(() -> parse_file(case("case5")))
+        out  = network(set_dimension(data, Dimension(:contingency => 2); apply! = (net, d) ->
+                   net.edge[1] = outaged(net.edge[1]::Branch, d, (2,))))
+        same = network(set_dimension(data, Dimension(:time => 2)))
+
+        @test @inferred(topology(out; nw = 1)) isa Topology
+        @test @inferred(topology(same; nw = 1)) isa Topology
+    end
+
     @testset "the dimension is visible from the model" begin
         data = quiet(() -> parse_file(case("case5")))
         mn   = set_dimension(data, Dimension(:time => 2, :contingency => 3))

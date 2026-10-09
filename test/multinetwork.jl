@@ -215,6 +215,25 @@ const PROFILE = [0.9, 1.0, 1.1]
         @test asked(net, 2) == 0
     end
 
+    @testset "a solution holds the network indices asked for" begin
+        data = quiet(() -> parse_file(case("case5")))
+        mn   = set_dimension(data, Dimension(:time => 3); apply! = scale_loads(PROFILE))
+        nm   = instantiate_model(mn, OptimalPowerFlowProblem, IVRFormulation)
+        full = quiet(() -> optimize_model!(nm, OPTIMIZER))
+        part = build_solution(nm; nws = [2])
+
+        @test collect(keys(part["solution"]["nw"])) == ["2"]
+        @test isequal(part["solution"]["nw"]["2"], full["solution"]["nw"]["2"])
+        @test part["objective"] == full["objective"]
+        @test_throws ArgumentError build_solution(nm; nws = [4])
+
+        # optimize_model! builds those and no others
+        nm2   = instantiate_model(mn, OptimalPowerFlowProblem, IVRFormulation)
+        asked = quiet(() -> optimize_model!(nm2, OPTIMIZER; solution_indices = [1, 3]))
+        @test sort(collect(keys(asked["solution"]["nw"]))) == ["1", "3"]
+        @test nw_solution(asked, 3)["node"]["1"]["vm"] ≈ nw_solution(full, 3)["node"]["1"]["vm"] atol = 1e-6
+    end
+
     @testset "the dimension is visible from the model" begin
         data = quiet(() -> parse_file(case("case5")))
         mn   = set_dimension(data, Dimension(:time => 2, :contingency => 3))

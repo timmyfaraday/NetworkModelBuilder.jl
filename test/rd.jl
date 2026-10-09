@@ -1080,6 +1080,20 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         end
     end
 
+    @testset "a window builds the solution of the indices it commits" begin
+        data = rolling_network()
+        seen = Vector{Vector{Int}}()
+        look = (nm, sol) -> push!(seen, sort(parse.(Int, collect(keys(sol["solution"]["nw"])))))
+
+        result = quiet(() -> solve_rolling_horizon(data, RedispatchProblem, LPFFormulation,
+                                                   OPTIMIZER; horizon = 3, step = 1,
+                                                   solution_processors = [look]))
+
+        # four windows of 3, 3, 2 and 1 steps each commit their first step, and build only that
+        @test seen == fill([1], 4)
+        @test sort(parse.(Int, collect(keys(result["solution"]["nw"])))) == [1, 2, 3, 4]
+    end
+
     @testset "the lookahead is what stops a window from being myopic" begin
         data = rolling_network()
         objectives = map(1:4) do horizon

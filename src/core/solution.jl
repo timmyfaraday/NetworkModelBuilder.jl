@@ -15,7 +15,7 @@
 ################################################################################
 
 """
-    build_solution(nm)
+    build_solution(nm; nws = nw_ids(nm))
 
 Assemble the solution of `nm` into a dictionary.
 
@@ -31,8 +31,17 @@ result["solution"]["nw"]["1"]["node"]["4"]["vm"]
 Use [`nw_solution`](@ref) to reach one network index without spelling out the
 path. All quantities are in per unit on `result["baseMVA"]`, all angles in
 radians.
+
+`nws` says which network indices the entry holds, all of them by default. Building
+a solution is most of what asking for one costs, so a caller that keeps a few of
+the indices, as a rolling horizon does, asks for those. An index the model does
+not have is an error.
 """
-function build_solution(nm::NetworkModel{P,F}) where {P,F}
+function build_solution(nm::NetworkModel{P,F}; nws::AbstractVector{Int} = nm.nws) where {P,F}
+    missing_nws = [n for n in nws if !insorted(n, nm.nws)]
+    isempty(missing_nws) ||
+        throw(ArgumentError("a solution was asked for network indices $missing_nws, which this model does not have"))
+
     result = Dict{String,Any}(
         "name"               => nm.data.name,
         "baseMVA"            => nm.data.baseMVA,
@@ -54,7 +63,7 @@ function build_solution(nm::NetworkModel{P,F}) where {P,F}
         "$n" => Dict{String,Any}("node" => solution_node(nm, n),
                                  "edge" => solution_edge(nm, n),
                                  "unit" => solution_unit(nm, n))
-        for n in nw_ids(nm)))
+        for n in nws))
 
     return result
 end

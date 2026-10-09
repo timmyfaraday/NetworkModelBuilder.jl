@@ -258,14 +258,18 @@ function build_model!(nm::NetworkModel{P,F}) where {P,F}
 end
 
 """
-    optimize_model!(nm, optimizer; solution_processors = [])
+    optimize_model!(nm, optimizer; solution_processors = [], solution_indices = nw_ids(nm))
 
 Attach `optimizer`, solve the model, and store the solution in `nm.sol`.
+
+`solution_indices` are the network indices the solution is built for, all of
+them by default, see [`build_solution`](@ref).
 
 Each entry of `solution_processors` is called as `f(nm, nm.sol)` after the
 solution has been assembled.
 """
-function optimize_model!(nm::NetworkModel, optimizer; solution_processors = [])
+function optimize_model!(nm::NetworkModel, optimizer; solution_processors = [],
+                         solution_indices::AbstractVector{Int} = nm.nws)
     if JuMP.mode(nm.model) != JuMP.DIRECT && JuMP.backend(nm.model).optimizer === nothing
         JuMP.set_optimizer(nm.model, optimizer)
     end
@@ -274,7 +278,7 @@ function optimize_model!(nm::NetworkModel, optimizer; solution_processors = [])
     JuMP.optimize!(nm.model)
     elapsed = time() - start
 
-    nm.sol = build_solution(nm)
+    nm.sol = build_solution(nm; nws = solution_indices)
     nm.sol["solve_time"] = elapsed
     for f in solution_processors
         f(nm, nm.sol)

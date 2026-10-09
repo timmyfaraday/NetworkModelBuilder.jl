@@ -1,6 +1,6 @@
 # A roll builds the solution it keeps, and only what is asked for (B22)
 
-Status: implemented on `b22-build-solution` (v0.12.6), measured, not merged · Author: Tom Van Acker (requested) · Date: 2026-10-09
+Status: implemented, merged into `main` and tagged `v0.12.6` · Author: Tom Van Acker (requested) · Date: 2026-10-09
 Decisions: D46 recorded 2026-10-09 (next free after: D47); Q9 stays open
 Priority: P2 · Effort: Medium. Branch `b22-build-solution`, cut from `main` at `047fe4b` (v0.12.5);
 becomes v0.12.6. Second move of B20; the review it comes from is `julia-guide-review.md`, item 2.

@@ -46,9 +46,12 @@ older ones: git has them). Next id: **B30**.
 - [ ] B24 · Move the package's own registers (nine keys) out of `nm.ext` into typed fields; refuse a `var`/`con`
   key reused with another index set · Tom · 2026-10-08 · proposed
   - The refusal changes the extension contract: a decision. Plan item 4.
-- [ ] B25 · Guard rails for the measure step: `test/inference.jl` (`@inferred`), a `benchmark/` script on a
-  synthetic N-1 network, GC time and bytes per chunk in `chunk.csv` · Tom · 2026-10-08 · proposed
-  - The B6 profiles are in the gitignored `scratch/`. Plan item 5.
+- [ ] B25 · Guard rails for the measure step: an allocation test that reproduces B6's defect, a `benchmark/`
+  environment on a synthetic N-1 network, GC time and bytes per chunk in `chunk.csv` · Tom · 2026-10-08 · branch
+  `b25-guard-rails`
+  - Plan `knowledge/plan/guard-rails.md`, D47. `@inferred` passes on the B6 defect; `has_nw_data` allocated
+    1,248-2,176 B a call before v0.12.2 and 0 now. A same-day pair, 7 threads against 7 processes, settles the GC
+    lesson once the columns exist.
 - [ ] B26 · The pipeline's settings in a TOML file copied into `runs/<id>/`, `main(config)`, no absolute paths in
   the script, no `NMB_*` variables · Tom · 2026-10-08 · proposed
   - 12 variables and two absolute paths today. Plan item 6.

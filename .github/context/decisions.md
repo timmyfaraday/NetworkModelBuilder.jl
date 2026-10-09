@@ -65,6 +65,12 @@ How to use this file:
   with NMB's own exports breaks unrelated test files with a confusing `UndefVarError`. Solver
   packages (Ipopt, HiGHS) are low-risk and stay `using`d — they only export their own `Optimizer`
   type.
+- **The measure step has guard rails that reproduce defects that happened** (D47): a test that a
+  lookup a model build calls in loops allocates nothing, red on the code before v0.12.2; a
+  `benchmark/` environment of its own with BenchmarkTools, never a dependency of the package, run by
+  hand beside a same-day control and not in CI; and `chunk.csv` carries the GC time and the bytes
+  allocated of the chunk and of steps 2 and 3. `@inferred` is not added where it would have passed on
+  the defect it is meant to catch.
 
 ## Concurrency
 
@@ -520,3 +526,8 @@ Changes: new rule in the Component model section. Revise to two entries if, afte
 Date: 2026-10-09 · Decided by: Tom Van Acker · Area: Results access
 Why: `build_solution` was 16 % of a rolling horizon's wall time and a step-3 window of the pipeline holds 91 MB of it, until the chunk ends, yet a roll keeps only the committed indices and the pipeline reads no node and 113 of 439 edges. Building only what is kept and what is asked for (estimated -66 % of the entries on step 3) needs no change to what a default solve returns; a typed core under the nested `Dict` (Q9) is left until that is measured.
 Changes: new rule in the Results access section; D11 stands, the nested `Dict` is still the default result. A roll's `solution_processors` see the committed indices only; its one user reads the model.
+
+### D47 — The measure step has guard rails: a hot-path allocation test, a `benchmark/` environment, and GC columns in `chunk.csv`
+Date: 2026-10-09 · Decided by: Tom Van Acker · Area: Code conventions
+Why: B6's boxed field loop cost 12 % of a roll and no correctness test saw it, and `@inferred` would not have either: on the sources before v0.12.2 it passes for `has_nw_data` and `nw_component`, while `has_nw_data` allocates 1,248-2,176 B a call there and 0 now. The profiles behind B6 sit in the gitignored `scratch/`, and `lessons.md` still says the cause of the threads not scaling (a shared garbage collector) is not proven.
+Changes: new rule in Code conventions. Tom chose the allocation checks only, BenchmarkTools in its own `benchmark/` environment, six GC columns in `chunk.csv` (chunk, step 2, step 3) and one same-day pair of 7 threads against 7 processes after they land. The `chunk.csv` columns are a change to a file format.

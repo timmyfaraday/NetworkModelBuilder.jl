@@ -24,4 +24,5 @@ Verification per item — the shape `GAP_CLOSURE_PLAN.md` already uses).
 | `unified-transformer.md` | implemented and merged into `main` (6 commits); tagged v0.12.0 | D28-D36 |
 | `julia-guide-review.md` | proposed, awaiting Tom's order (B21-B28, Q7-Q9); nothing implemented | — |
 | `topology-lookup.md` | implemented, merged and tagged `v0.12.5`; week 1 -10.7 % a chunk | D45 |
-| `build-solution.md` | decided (D46), not started; B22 on `b22-build-solution`, v0.12.6 | D46 |
+| `build-solution.md` | implemented, merged and tagged `v0.12.6`; week 1 -12.3 % a chunk, peak 5.0 to 2.9 GB | D46 |
+| `guard-rails.md` | decided (D47), not started; B25 on `b25-guard-rails`, v0.12.7 | D47 |

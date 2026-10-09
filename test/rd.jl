@@ -1094,6 +1094,27 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         @test sort(parse.(Int, collect(keys(result["solution"]["nw"])))) == [1, 2, 3, 4]
     end
 
+    @testset "a roll holds the report it was asked for" begin
+        data = rolling_network()
+        full = quiet(() -> solve_rolling_horizon(data, RedispatchProblem, LPFFormulation,
+                                                 OPTIMIZER; horizon = 2, step = 1))
+        kept = quiet(() -> solve_rolling_horizon(data, RedispatchProblem, LPFFormulation,
+                                                 OPTIMIZER; horizon = 2, step = 1,
+                                                 report = (; node = false)))
+        also = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1,
+                                    report = (; node = false)))
+        held(result, n, family) = result["solution"]["nw"]["$n"][family]
+
+        @test kept["objective"] ≈ full["objective"]
+        for n in 1:4
+            @test !isempty(held(full, n, "node"))
+            @test isempty(held(kept, n, "node")) && isempty(held(also, n, "node"))
+            for family in ("edge", "unit")
+                @test sort(collect(keys(held(kept, n, family)))) == sort(collect(keys(held(full, n, family))))
+            end
+        end
+    end
+
     @testset "the lookahead is what stops a window from being myopic" begin
         data = rolling_network()
         objectives = map(1:4) do horizon

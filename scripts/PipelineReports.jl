@@ -16,7 +16,29 @@ using ..SteeringPlanData: hour_ids
 using ..ContingencyData: ContingencyEvent
 
 export is_solved, congestion_report, solve_summary, write_csv, redispatch_volumes,
-       overload_report, load_shedding_report, spillage_report
+       overload_report, load_shedding_report, spillage_report, pipeline_report
+
+"""
+    pipeline_report(data, monitored)
+
+The `report` of a solve of `data`, see `build_solution`, that holds what the
+pipeline reads of it and no more: no node; the `monitored` edges, whose overload
+[`overload_report`](@ref) reads, and the transformers with a phase shifter, whose
+tap `freeze_dispatch` reads; every generator and storage unit, which
+[`redispatch_volumes`](@ref), the shedding and spillage reports and
+`freeze_dispatch` read.
+
+Take it from the `data` the solve is run on, after the units it adds, so that those
+are named too. Hold nothing less: a reader that tests with `haskey` takes what is
+not held for what is not there, and says nothing.
+"""
+function pipeline_report(data::NetworkData, monitored::AbstractVector{Int})
+    net     = network(data)
+    shifter = [e for (e, c) in edges(net) if c isa Transformer && any(!=(FIXED), c.pst)]
+    held    = [u for (u, c) in units(net) if c isa Union{AbstractGenerator,AbstractStorage}]
+
+    return (; node = false, edge = sort!(union(monitored, shifter)), unit = sort!(held))
+end
 
 """
     is_solved(result, n)

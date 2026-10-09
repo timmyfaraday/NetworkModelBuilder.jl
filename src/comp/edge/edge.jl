@@ -193,17 +193,22 @@ constraint_edge_coupling(::NetworkModel, ::Type{T}) where {T<:AbstractEdge} = no
 ################################################################################
 
 """
-    solution_edge(nm, nw)
+    solution_edge(nm, nw; only = true)
 
 The edge part of the solution at network index `nw`: for every arc the terminal
 current and the active and reactive power flowing from the node into that
 terminal.
+
+`only` is `true` for every edge, `false` for none, or the `Set` of the identifiers
+of the edges to hold.
 """
-function solution_edge(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:IVRFormulation}
+function solution_edge(nm::NetworkModel{P,F}, nw::Int; only::Union{Bool,Set{Int}} = true
+                      ) where {P<:AbstractProblemType,F<:IVRFormulation}
     sol = Dict{String,Any}()
-    sizehint!(sol, length(topology(nm; nw).edge))
+    only === false && return sol
+    sizehint!(sol, _room(length(topology(nm; nw).edge), only))
     for T in _EDGE_TYPES
-        es = ids(nm, T; nw)
+        es = _asked(ids(nm, T; nw), only)
         isempty(es) && continue
 
         vrs, vis = var(nm, :vr; nw), var(nm, :vi; nw)
@@ -259,11 +264,13 @@ solution_edge!(::Dict{String,Any}, ::NetworkModel, ::Type{T}, ::Int, ::Int) wher
     nothing
 
 "the edge part of the solution under a linearized formulation"
-function solution_edge(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:LPFFormulation}
+function solution_edge(nm::NetworkModel{P,F}, nw::Int; only::Union{Bool,Set{Int}} = true
+                      ) where {P<:AbstractProblemType,F<:LPFFormulation}
     sol = Dict{String,Any}()
-    sizehint!(sol, length(topology(nm; nw).edge))
+    only === false && return sol
+    sizehint!(sol, _room(length(topology(nm; nw).edge), only))
     for T in _EDGE_TYPES
-        es = ids(nm, T; nw)
+        es = _asked(ids(nm, T; nw), only)
         isempty(es) && continue
 
         ps = var(nm, :p; nw)

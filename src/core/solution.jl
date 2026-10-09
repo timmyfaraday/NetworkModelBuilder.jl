@@ -15,7 +15,7 @@
 ################################################################################
 
 """
-    build_solution(nm; nws = nw_ids(nm))
+    build_solution(nm; nws = nw_ids(nm), report = (;))
 
 Assemble the solution of `nm` into a dictionary.
 
@@ -36,11 +36,32 @@ radians.
 a solution is most of what asking for one costs, so a caller that keeps a few of
 the indices, as a rolling horizon does, asks for those. An index the model does
 not have is an error.
+
+`report` says which components the entry holds, all of them by default. It is a
+`NamedTuple` whose `node`, `edge` and `unit` are each `true`, `false` or a vector
+of identifiers, and a family it leaves out is `true`:
+
+```julia
+build_solution(nm; report = (; node = false, edge = [3, 7]))
+```
+
+A family that is not asked for stays in the result, empty, so
+`nw_solution(result)["node"]` still works. An identifier the model does not have
+is an error; one that is out of service at a network index is absent there, as it
+is from a full solution.
+
+!!! warning
+    [`solution_tables`](@ref) and [`print_summary`](@ref) show what the result
+    holds, no more. [`zorba_tables`](@ref) and [`security_tables`](@ref) read every
+    edge, and read one that is not held as one an outage took out, with no flow:
+    leave `report` alone for a result they are to read.
 """
-function build_solution(nm::NetworkModel{P,F}; nws::AbstractVector{Int} = nm.nws) where {P,F}
+function build_solution(nm::NetworkModel{P,F}; nws::AbstractVector{Int} = nm.nws,
+                        report::NamedTuple = (;)) where {P,F}
     missing_nws = [n for n in nws if !insorted(n, nm.nws)]
     isempty(missing_nws) ||
         throw(ArgumentError("a solution was asked for network indices $missing_nws, which this model does not have"))
+    asked = _report(nm, report)
 
     result = Dict{String,Any}(
         "name"               => nm.data.name,
@@ -60,13 +81,46 @@ function build_solution(nm::NetworkModel{P,F}; nws::AbstractVector{Int} = nm.nws
 
     result["objective"] = JuMP.objective_value(nm.model)
     result["solution"]  = Dict{String,Any}("nw" => Dict{String,Any}(
-        "$n" => Dict{String,Any}("node" => solution_node(nm, n),
-                                 "edge" => solution_edge(nm, n),
-                                 "unit" => solution_unit(nm, n))
+        "$n" => Dict{String,Any}("node" => solution_node(nm, n; only = asked.node),
+                                 "edge" => solution_edge(nm, n; only = asked.edge),
+                                 "unit" => solution_unit(nm, n; only = asked.unit))
         for n in nws))
 
     return result
 end
+
+"`report` as `(; node, edge, unit)`, each `true`, `false` or the `Set` of identifiers it asks for"
+function _report(nm::NetworkModel, report::NamedTuple)
+    unknown = [f for f in keys(report) if f ∉ (:node, :edge, :unit)]
+    isempty(unknown) ||
+        throw(ArgumentError("`report` has no family $(join(repr.(unknown), ", ")), the families are :node, :edge and :unit"))
+
+    return (; node = _family(nm, :node, get(report, :node, true)),
+            edge = _family(nm, :edge, get(report, :edge, true)),
+            unit = _family(nm, :unit, get(report, :unit, true)))
+end
+
+_family(::NetworkModel, ::Symbol, only::Bool) = only
+
+function _family(nm::NetworkModel, family::Symbol, only::AbstractVector{<:Integer})
+    held   = getproperty(network(nm), family)
+    absent = [i for i in only if !haskey(held, i)]
+    isempty(absent) ||
+        throw(ArgumentError("`report` asks for $family $absent, which this model does not have"))
+
+    return Set{Int}(only)
+end
+
+_family(::NetworkModel, family::Symbol, only) =
+    throw(ArgumentError("`report` says $family is `$only`, which is not `true`, `false` or a vector of identifiers"))
+
+"the sorted identifiers `is` that `only` asks for: all of them, none, or those in a set"
+_asked(is::AbstractVector{Int}, only::Bool) = only ? is : Int[]
+_asked(is::AbstractVector{Int}, only::Set{Int}) = filter(in(only), is)
+
+"room for the entries of a family of `n` components, of which `only` asks for some"
+_room(n::Int, only::Bool) = only ? n : 0
+_room(n::Int, only::Set{Int}) = min(n, length(only))
 
 """
     nw_solution(result, n = 1)

@@ -585,14 +585,16 @@ end
 # Node — solution                                                              #
 ################################################################################
 
-"the node part of the solution at network index `nw`"
-function solution_node(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:IVRFormulation}
+"the node part of the solution at network index `nw`, of the nodes `only` asks for: `true` for all, `false` for none, or a `Set` of identifiers"
+function solution_node(nm::NetworkModel{P,F}, nw::Int; only::Union{Bool,Set{Int}} = true
+                      ) where {P<:AbstractProblemType,F<:IVRFormulation}
     sol   = Dict{String,Any}()
+    only === false && return sol
     real  = get(con(nm; nw), :node_balance_real, nothing)
     imag  = get(con(nm; nw), :node_balance_imag, nothing)
     duals = JuMP.has_duals(nm.model) && real !== nothing && imag !== nothing
 
-    is = ids(nm, Node; nw)
+    is = _asked(ids(nm, Node; nw), only)
     isempty(is) && return sol
     sizehint!(sol, length(is))
     vrs, vis = var(nm, :vr; nw), var(nm, :vi; nw)
@@ -625,12 +627,14 @@ function solution_node(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblem
 end
 
 "the node part of the solution under a linearized formulation"
-function solution_node(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:LPFFormulation}
+function solution_node(nm::NetworkModel{P,F}, nw::Int; only::Union{Bool,Set{Int}} = true
+                      ) where {P<:AbstractProblemType,F<:LPFFormulation}
     sol     = Dict{String,Any}()
+    only === false && return sol
     balance = get(con(nm; nw), :node_balance, nothing)
     duals   = JuMP.has_duals(nm.model) && balance !== nothing
 
-    is = ids(nm, Node; nw)
+    is = _asked(ids(nm, Node; nw), only)
     isempty(is) && return sol
     sizehint!(sol, length(is))
     vas = var(nm, :va; nw)

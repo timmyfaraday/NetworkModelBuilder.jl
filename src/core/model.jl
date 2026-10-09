@@ -258,18 +258,20 @@ function build_model!(nm::NetworkModel{P,F}) where {P,F}
 end
 
 """
-    optimize_model!(nm, optimizer; solution_processors = [], solution_indices = nw_ids(nm))
+    optimize_model!(nm, optimizer; solution_processors = [], solution_indices = nw_ids(nm), report = (;))
 
 Attach `optimizer`, solve the model, and store the solution in `nm.sol`.
 
 `solution_indices` are the network indices the solution is built for, all of
-them by default, see [`build_solution`](@ref).
+them by default, and `report` the components it holds, all of them by default,
+see [`build_solution`](@ref).
 
 Each entry of `solution_processors` is called as `f(nm, nm.sol)` after the
 solution has been assembled.
 """
 function optimize_model!(nm::NetworkModel, optimizer; solution_processors = [],
-                         solution_indices::AbstractVector{Int} = nm.nws)
+                         solution_indices::AbstractVector{Int} = nm.nws,
+                         report::NamedTuple = (;))
     if JuMP.mode(nm.model) != JuMP.DIRECT && JuMP.backend(nm.model).optimizer === nothing
         JuMP.set_optimizer(nm.model, optimizer)
     end
@@ -278,7 +280,7 @@ function optimize_model!(nm::NetworkModel, optimizer; solution_processors = [],
     JuMP.optimize!(nm.model)
     elapsed = time() - start
 
-    nm.sol = build_solution(nm; nws = solution_indices)
+    nm.sol = build_solution(nm; nws = solution_indices, report)
     nm.sol["solve_time"] = elapsed
     for f in solution_processors
         f(nm, nm.sol)
@@ -294,7 +296,8 @@ Instantiate, build and solve a model in one call, and return its solution.
 
 `data` may be a [`NetworkData`](@ref) or the path of a file that
 [`parse_file`](@ref) understands. Keyword arguments are split between
-[`instantiate_model`](@ref) and [`optimize_model!`](@ref).
+[`instantiate_model`](@ref) and [`optimize_model!`](@ref); `report` and
+`solution_processors` go to the second.
 
 # Examples
 ```julia
@@ -304,11 +307,11 @@ julia> result = solve_model("case14.m", LoadFlowProblem, IVRFormulation, Ipopt.O
 ```
 """
 function solve_model(data::NetworkData, ::Type{P}, ::Type{F}, optimizer;
-                     solution_processors = [], kwargs...
+                     solution_processors = [], report::NamedTuple = (;), kwargs...
                     ) where {P<:AbstractProblemType,F<:AbstractFormulationType}
     nm = instantiate_model(data, P, F; kwargs...)
 
-    return optimize_model!(nm, optimizer; solution_processors)
+    return optimize_model!(nm, optimizer; solution_processors, report)
 end
 
 solve_model(file::AbstractString, P::Type, F::Type, optimizer; kwargs...) =

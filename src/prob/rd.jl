@@ -443,7 +443,7 @@ Give it a `horizon` and it becomes a **rolling** redispatch: a sequence of
 windows along `:time`, each looking `horizon` steps ahead and committing the
 first `step` of them, rather than one problem decided over the whole horizon at
 once. That is [`solve_rolling_horizon`](@ref), which is what this forwards to —
-`step`, `reuse`, `warm_start` and `new_model` along with it — and the result is shaped the same either
+`step`, `reuse`, `warm_start`, `new_model` and `report` along with it — and the result is shaped the same either
 way.
 
 # Examples
@@ -488,7 +488,7 @@ end
 # far — and because `solve_rd` is the entry point that forwards to it.
 
 """
-    solve_rolling_horizon(data, P, F, optimizer; horizon, step = 1, reuse = false, warm_start = false, new_model = () -> JuMP.Model(), kwargs...)
+    solve_rolling_horizon(data, P, F, optimizer; horizon, step = 1, reuse = false, warm_start = false, new_model = () -> JuMP.Model(), report = (;), kwargs...)
 
 Solve `data` as a sequence of overlapping problems along `:time` rather than as
 one problem over the whole of it, and return a single solution covering every
@@ -542,6 +542,9 @@ committed.
 - `solution_processors`: called once per window as `f(nm, nm.sol)`, after it is
   solved. A window builds the solution of the network indices it commits and no
   others, so `nm.sol["solution"]` holds those and not the lookahead.
+- `report`: the components every window's solution holds, all of them by
+  default, see [`build_solution`](@ref). A roll that is read for a few edges and
+  units asks for those, and builds and keeps only them.
 
 Remaining keyword arguments reach [`instantiate_model`](@ref) and
 [`optimize_model!`](@ref), as they do for [`solve_model`](@ref).
@@ -644,7 +647,7 @@ julia> nw_solution(result, 17)["unit"]["3"]["pgup"]
 function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimizer;
                                horizon::Int, step::Int = 1, reuse::Bool = false,
                                warm_start::Bool = false, new_model = () -> JuMP.Model(),
-                               solution_processors = [], kwargs...
+                               solution_processors = [], report::NamedTuple = (;), kwargs...
                               ) where {P<:AbstractProblemType,F<:AbstractFormulationType}
     haskey(kwargs, :jump_model) &&
         throw(ArgumentError("a rolling horizon builds one model per window, so it takes a " *
@@ -691,7 +694,7 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
 
         # a window builds the solution of the network indices it commits and no others
         settled = [m for m in nw_ids(nm) if coordinates(nm, m).time in 1:length(committed)]
-        optimize_model!(nm, optimizer; solution_processors, solution_indices = settled)
+        optimize_model!(nm, optimizer; solution_processors, solution_indices = settled, report)
 
         record = Dict{String,Any}(
             "first"              => first,

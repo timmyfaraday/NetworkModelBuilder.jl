@@ -46,12 +46,6 @@ older ones: git has them). Next id: **B30**.
 - [ ] B24 · Move the package's own registers (nine keys) out of `nm.ext` into typed fields; refuse a `var`/`con`
   key reused with another index set · Tom · 2026-10-08 · proposed
   - The refusal changes the extension contract: a decision. Plan item 4.
-- [ ] B25 · Guard rails for the measure step: an allocation test that reproduces B6's defect, a `benchmark/`
-  environment on a synthetic N-1 network, GC time and bytes per chunk in `chunk.csv` · Tom · 2026-10-08 · branch
-  `b25-guard-rails`
-  - Plan `knowledge/plan/guard-rails.md`, D47. `@inferred` passes on the B6 defect; `has_nw_data` allocated
-    1,248-2,176 B a call before v0.12.2 and 0 now. A same-day pair, 7 threads against 7 processes, settles the GC
-    lesson once the columns exist.
 - [ ] B26 · The pipeline's settings in a TOML file copied into `runs/<id>/`, `main(config)`, no absolute paths in
   the script, no `NMB_*` variables · Tom · 2026-10-08 · proposed
   - 12 variables and two absolute paths today. Plan item 6.
@@ -77,9 +71,16 @@ older ones: git has them). Next id: **B30**.
 
 ## Done
 
+- [x] B25 · Guard rails for the measure step: an allocation test that reproduces B6's defect, a `benchmark/`
+  environment on a synthetic N-1 network, GC time and bytes per chunk in `chunk.csv` (D47) · Tom · 2026-10-08
+  - v0.12.7 on `b25-guard-rails`, not merged; tests and tooling only; plan `knowledge/plan/guard-rails.md`. The test
+    fails on the sources before v0.12.2 (1,248-2,176 B a call) and passes now; `@inferred` passes on both. The
+    benchmark agrees with itself within 3 % and shows B21 and B22 against v0.12.4. Week 1, 7 threads against 7
+    processes: 224 s against 125 s a chunk, GC 14.4 % against 14.2 %, so the collector is not what threads lose to.
+
 - [x] B22 · A roll builds the solution of the network indices it keeps, a `report` keyword says which families
   and identifiers a solution holds, and the builders get cheaper (D46) · Tom · 2026-10-08
-  - v0.12.6 on `b22-build-solution`, not merged; plan `knowledge/plan/build-solution.md`. Week 1, 7 + 7 processes
+  - v0.12.6, merged into `main` and tagged `v0.12.6` on 2026-10-09; plan `knowledge/plan/build-solution.md`. Week 1, 7 + 7 processes
     at once against `main`: 14 of 14 sound, objectives, overload, shedding, spillage and congestion files
     bit-identical, the redispatch volume files the same rows in another order (B29); chunk 871 s against 993 s
     (-12.3 %, faster in 7 of 7; predicted -9 to -12 %), peak 2.9 GB against 5.0 (predicted -1.0 to -1.6).

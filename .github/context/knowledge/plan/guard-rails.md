@@ -1,6 +1,6 @@
 # Guard rails for the measure step: a hot-path allocation test, a benchmark, GC columns (B25)
 
-Status: decided (D47), not started · Author: Tom Van Acker (requested) · Date: 2026-10-09
+Status: implemented on `b25-guard-rails` (v0.12.7), measured, not merged · Author: Tom Van Acker (requested) · Date: 2026-10-09
 Decisions: D47 recorded 2026-10-09 (next free after: D48); no open question
 Priority: P2 · Effort: Medium. Branch `b25-guard-rails`, cut from `main` at `0e28585` (v0.12.6);
 becomes v0.12.7. Third move of the review `julia-guide-review.md`, item 5; B22 was the second.
@@ -102,3 +102,17 @@ anything: report it and fix the setup before it is merged. Otherwise B25 is done
 - A baseline kept in the repository, or the benchmark in CI: numbers are per machine, a CI runner is noisy.
 - Other functions under test than the two B6 changed; a new one earns its place with its own defect.
 - Q9 and B20's rest; the GC lesson's conclusion (the pair of runs gives numbers, `lessons.md` draws it).
+
+## Result (2026-10-09)
+
+- Commits `d449261` (test), `1ba9524` (benchmark), `41dc47d` (columns), `933c1f3` (0.12.7); suite 3223.
+- Part 1: `test/hot_path.jl` fails all six checks on `aa33f8d^` (1,248, 1,664, 2,176 bytes, twice each), passes on the
+  branch, five of five runs with 4 threads. `@inferred` passes on the old sources.
+- Part 2: every minimum agrees within 3 % between two runs; against v0.12.4 on the same day `update_model!` 30.4 to
+  26.9 ms, `build_solution` 9.3 to 4.7 ms, the roll 868 to 706 ms, the solve unchanged (35.8, 35.6 ms). It is a
+  case14 benchmark (52 indices a window, 17 rated edges, 1,143 overloaded rows), about 1/25 of a pipeline window.
+- Part 3: one chunk in one process, `gc_s` 14.7 s against the `[run]` line's 15.4 s (4.7 %); the merged `chunks.csv` of 7
+  processes has 7 rows of 32 fields.
+- The pair (`runs/_b25_proc`, `_b25_thread`, side by side): 7 processes 125.0 s a chunk, GC 17.7 s = 14.2 %, 24.4 GB
+  allocated, peak 2.9 GB each; 1 process on 7 threads 224.1 s a chunk (238.5 s wall), GC 14.4 % (34.3 s), peak
+  14.3 GB. Threads cost 1.79x and the collector's share is the same, so GC is not what they lose to.

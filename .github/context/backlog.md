@@ -35,17 +35,10 @@ older ones: git has them). Next id: **B29**.
     status matrix read by column would not tabulate topologies, but check it against the invariant first.
     `build_solution` is dominated by building the result `Dict`s, not by reading values (0.07 s of 0.7 s).
     Candidate, not measured: `nw_component` rebuilds a `Transformer` through its validating constructor.
-    The first two moves are B21 and B22; for `nw_component`, `Generator` is 0.8 % of the profile (plan
-    `julia-guide-review.md`, "Considered, not proposed").
+    The first two moves are B21 (done, `_signature` now 0.6 % of the samples) and B22; for `nw_component`,
+    `Generator` is 0.8 % of the profile (plan `julia-guide-review.md`, "Considered, not proposed").
   - Peak memory per process rose from 6.2 GB to 7.3 GB (mean 5.9 GB), the held model; 73 processes fit in
     1 TB, watch it if the process count grows.
-- [ ] B21 · Answer a repeated `topology` lookup from the last answer instead of deriving the signature again;
-  make `topology` return a concrete type · Tom · 2026-10-08 · branch `b21-topology-lookup`, first move of B20
-  - `topology` is 13 % of a roll's wall (`_signature` 11 %), 9 % through `edge_arcs`; 432 B and 0.7 µs a call
-    with 17 switchable statuses, more with more outages; infers `Union{Nothing,Topology}`. Plan
-    `knowledge/plan/topology-lookup.md`: a one-entry memo, `update_model!` -26 % on case14. One entry
-    (D45, Tom, 2026-10-09), two if the stop rule fires (`topology` above 3 % after). A topology slot
-    per index would change "derived, never tabulated" and needs a decision. Plan item 1.
 - [ ] B22 · `build_solution` only for the network indices a roll keeps; fewer strings and `Dict`s per entry
   · Tom · 2026-10-08 · proposed, second move of B20
   - 19 % of a roll's wall, 1.5 GB and 13-25 % GC per 1-hour step-3 window. A typed core under the nested
@@ -81,6 +74,13 @@ older ones: git has them). Next id: **B29**.
     chunks of `_year_b10` had a first violation of 0.
 
 ## Done
+
+- [x] B21 · A repeated `topology` lookup is answered from the last answer, and returns one concrete type
+  (D45) · Tom · 2026-10-08
+  - v0.12.5 on `b21-topology-lookup`, not merged, plan `knowledge/plan/topology-lookup.md`. Week 1, 7 + 7
+    processes at once against `main`: 14 of 14 sound, objectives, overload rows and volumes bit-identical,
+    chunk 135.2 s against 151.3 s (-10.7 %); `topology` 16 % of the wall before, 1.7 % after (stop rule,
+    3 %, not fired, so one entry stays). First move of B20; B22 is next.
 
 - [x] B8 · `test/lf.jl:124` asserted `solve_time > 0.0` and failed when a small case solved faster than
   the `time()` tick on Windows (2 failures in 7 runs on 2026-10-07) · Tom · 2026-10-07

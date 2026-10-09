@@ -23,6 +23,9 @@ against the per-file changelog comments the source already carries.
   `Topology`, where it inferred `Union{Nothing,Topology}`. Results are unchanged;
   `update_model!` of a redispatch on case14 with an outage per branch, against 0.12.4 on
   the same machine, took 4.8 ms against 6.7 ms (-28 %) and allocated 3.1 MB against 4.0 MB.
+  A Zorba week of 24 h chunks against 0.12.4, side by side, took 10.7 % less wall time
+  (135 s against 151 s a chunk, faster in 7 of 7), with objectives, overload rows and
+  redispatch volumes bit-identical.
 
 ## [0.12.4] - 2026-10-07
 

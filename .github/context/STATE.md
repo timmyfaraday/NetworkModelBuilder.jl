@@ -1,12 +1,12 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-09 by Tom Van Acker (B21 planned on `b21-topology-lookup`; review of main against the Julia Modeling knowledge base recorded).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-09 by Tom Van Acker (B21 done on `b21-topology-lookup`, not merged).
 
 ## Where NMB stands
 
-- v0.12.1-v0.12.4 (B6, B8, untagged): rolling-horizon reuse and cheaper per-window work. v0.12.0
-  (D28-D36, tagged): one `Transformer`. v0.11.0 (D13, D15-D27): the `Switch` edge. v0.10.2 (D11):
-  `solution_tables` and `docs/src/manual/concepts.md`.
+- v0.12.1-v0.12.5 (B6, B8, B21; v0.12.5 only on `b21-topology-lookup`, all untagged): rolling-horizon
+  reuse and cheaper per-window work. v0.12.0 (D28-D36, tagged): one `Transformer`. v0.11.0 (D13,
+  D15-D27): the `Switch` edge. v0.10.2 (D11): `solution_tables` and `docs/src/manual/concepts.md`.
   v0.10.1 (D10): `src/comp/` is auto-included by a directory walk (`_include_dir`) and each
   component file exports its own names. v0.10.0: `security_tables`.
 - Gap-closure items #1-9 of `context/knowledge/plan/GAP_CLOSURE_PLAN.md` are closed; #10-11 are
@@ -18,6 +18,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-09 by Tom Va
   on 2026-10-07, all of `test-zorba-run`: `scripts/` (the Zorba pipeline), B9, B10, B12, B6, B8 (v0.12.4).
 - `test-zorba-run` is merged into `main` and kept; the next Zorba change can start from `main`.
 - `b5-switch-edge` and `b11-unified-transformer` are merged and deleted. Next free decision id: **D46**.
+- `b21-topology-lookup` (v0.12.5, B21): 7 commits ahead of `main`, not merged, not pushed.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -38,9 +39,8 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-09 by Tom Va
 - Review of `main` (v0.12.4) against the Julia Modeling knowledge base: proposals only, no code changed.
   Plan `context/knowledge/plan/julia-guide-review.md`, backlog B21-B28, questions Q7-Q9. Measured: the
   topology lookup is 13 % and `build_solution` 19 % of a roll's wall; 11 of 11 invalid inputs are accepted.
-- B21 planned, not started: branch `b21-topology-lookup`, plan `context/knowledge/plan/topology-lookup.md`:
-  a one-entry atomic memo of the last `topology` answer (`update_model!` -26 % on case14), two entries
-  if the stop rule fires (D45, Tom, 2026-10-09). Next: implement, in the plan's commit order.
+- B21 done (v0.12.5, D45, plan `context/knowledge/plan/topology-lookup.md`): week 1 beside `main`, chunk
+  -10.7 %, results bit-identical, `topology` 16 % of the wall to 1.7 %; one entry stays (stop rule not fired).
 - Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
 - B11 is merged and tagged `v0.12.0` (plan `context/knowledge/plan/unified-transformer.md`, D28-D36),
   suite 3126. Zorba flows are not unique without a phase shifter price (D34).
@@ -68,8 +68,9 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-09 by Tom Va
 
 ## Next
 
-1. B21, B22 and B25 first (measured, no API change, the plan's order), then B23, B24, B26, B27. B20 keeps
-   the rest of the per-window cost; B7, B3, B4, B13, B19, B28 remain, see `backlog.md`.
+1. Tom reviews `b21-topology-lookup`, then merge. B22 and B25 next (measured, no API change, the review's
+   order), then B23, B24, B26, B27. B20 keeps the rest of the per-window cost; B7, B3, B4, B13, B19, B28
+   remain, see `backlog.md`.
 
 ## Blocked / waiting
 

@@ -1,18 +1,14 @@
 # Topology lookups: answer a repeat from the last answer (B21)
 
-Status: draft, decided (D45), not started · Author: Tom Van Acker (requested) · Date: 2026-10-09
+Status: implemented on `b21-topology-lookup` (v0.12.5), not merged · Author: Tom Van Acker · Date: 2026-10-09
 Decisions: D45 recorded 2026-10-09 (next free after: D46); one entry, two if the stop rule fires
 Priority: P2 · Effort: Small. Branch `b21-topology-lookup`, cut from `main` at `6d6f6f1` (v0.12.4);
 becomes v0.12.5. First move of B20; the review it comes from is `julia-guide-review.md`, item 1.
 
 ## Handoff instructions
 
-- Implement on `b21-topology-lookup`, the commits in "Commit order", no AI attribution.
-- Per-file changelog header (80-column box) of every file touched, `version = "0.12.5"` in `Project.toml`,
-  a `## [0.12.5]` section in `CHANGELOG.md`.
-- Targeted tests per commit; the full suite once at the end with `$env:JULIA_NUM_THREADS = '4'`, and
-  `julia --project=docs docs/make.jl`.
-- Everything needed is quoted here; the study script is `scratch/b21_topology_study.jl` (local, gitignored).
+- Done on `b21-topology-lookup` in four commits (the D45 record, the concrete type, the memo, the version
+  and changelog), tests first. The study script is `scratch/b21_topology_study.jl` (local, gitignored).
 
 ## Evidence
 
@@ -125,17 +121,25 @@ statuses that vary, never tabulated" holds, and so does "nothing is stored per n
   bit-identical; chunk time **-8 to -13 %** (13 % is `topology`'s share, the ceiling); flat profile with
   `scratch/b6_roll_profile.jl`: `topology` under 3 % of the samples.
 
-## Commit order
-
-1. `topology` returns a concrete type, with the `@inferred` test (the one-line change, red then green).
-2. The memo, `Network.last`, the allocation, sequence and (if it earns it) thread tests, docstring and docs.
-3. `Project.toml` 0.12.5, `CHANGELOG.md`, changelog headers; then, after the pipeline run, STATE and B21.
-
 ## Stop rule, and what follows
 
 If `topology` is still above 3 % of the profile: in order, two entries (the redispatch rate goes 0.913 to
 0.967; this revises D45, see "Decisions"); B20's packed status matrix; a slot per
 index, which needs its own decision. At or below 3 %, B21 is done and B22 (`build_solution`, 19 %) is next.
+
+## Result (2026-10-09)
+
+- Suite 3156 passed with 4 threads, docs build clean. Red then green: the `@inferred` test (`Union{Nothing,
+  Topology}`), the allocation test (112 B on case5); a naive two-field slot fails the threaded test with
+  563-777 wrong answers in 128,000 lookups every run, the atomic one with none in 8 runs.
+- Toy, `main` beside the branch, 2 rounds: `update_model!` 6.71-6.88 ms against 4.80-4.91 ms (-28 %),
+  4.01 MB against 3.06 MB allocated.
+- Profile, 8 windows (`scratch/b21_roll_profile.jl`): `topology` 2,429 of 10,031 samples (24 %, 16 % of the
+  30.3 s wall) on `main`, 217 of 8,340 (2.6 %, 1.7 % of 25.2 s) on the branch. **The stop rule does not fire.**
+- Week 1, 7 + 7 processes at once, 3.5 min (`scratch/b21_compare.jl`, `runs/_b21_new`, `runs/_b21_control`):
+  14 of 14 chunks sound; objectives, overload rows and redispatch volumes bit-identical; chunk 135.2 s
+  against 151.3 s (**-10.7 %**, -9.9 to -12.2 %, 7 of 7 faster, predicted -8 to -13 %); step 3 98.1 s
+  against 113.8 s (-13.7 %), step 2 -0.3 to -0.8 s, solver time equal.
 
 ## What this deliberately does not decide
 

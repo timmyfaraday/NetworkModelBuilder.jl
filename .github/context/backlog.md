@@ -77,7 +77,7 @@ older ones: git has them). Next id: **B29**.
 
 - [x] B21 · A repeated `topology` lookup is answered from the last answer, and returns one concrete type
   (D45) · Tom · 2026-10-08
-  - v0.12.5 on `b21-topology-lookup`, not merged, plan `knowledge/plan/topology-lookup.md`. Week 1, 7 + 7
+  - v0.12.5, merged into `main` and tagged `v0.12.5` on 2026-10-09, plan `knowledge/plan/topology-lookup.md`. Week 1, 7 + 7
     processes at once against `main`: 14 of 14 sound, objectives, overload rows and volumes bit-identical,
     chunk 135.2 s against 151.3 s (-10.7 %); `topology` 16 % of the wall before, 1.7 % after (stop rule,
     3 %, not fired, so one entry stays). First move of B20; B22 is next.

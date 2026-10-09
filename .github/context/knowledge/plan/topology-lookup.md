@@ -1,6 +1,6 @@
 # Topology lookups: answer a repeat from the last answer (B21)
 
-Status: implemented on `b21-topology-lookup` (v0.12.5), not merged · Author: Tom Van Acker · Date: 2026-10-09
+Status: implemented (v0.12.5), merged into `main` and tagged on 2026-10-09 · Author: Tom Van Acker · Date: 2026-10-09
 Decisions: D45 recorded 2026-10-09 (next free after: D46); one entry, two if the stop rule fires
 Priority: P2 · Effort: Small. Branch `b21-topology-lookup`, cut from `main` at `6d6f6f1` (v0.12.4);
 becomes v0.12.5. First move of B20; the review it comes from is `julia-guide-review.md`, item 1.

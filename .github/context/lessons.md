@@ -95,6 +95,11 @@ again get retired.
   same starting text and interleaved: a docstring lost its closing quotes and a call was left half
   written, which showed up only as a `LoadError` at precompile. A `read_file` or `grep_search` issued
   next to an edit also returns the text from before it. (unconfirmed)
+- **Never rewrite a source file through PowerShell 5.1 `Get-Content` / `Set-Content`.** `Get-Content -Raw`
+  reads UTF-8 as ANSI and `Set-Content -Encoding utf8` writes a BOM, so one `.Replace` on
+  `test/multinetwork.jl` turned every `∈`, `∉` and `≈` into mojibake and added a BOM; `git diff --stat`
+  showed 14 deletions where 0 were expected. `git checkout -- <file>` and the edit tool put it right. A
+  one-line change of a test goes through the edit tool, however small. (unconfirmed)
 - **A restriction written in every state, plus a tie of the state to the base case, makes rows
   dependent, and Ipopt can stop on it at the first iteration.** B14: a preventive three-winding phase
   shifter set at exactly zero gave `OTHER_ERROR` (restoration failed) under every Ipopt setting tried,
@@ -197,3 +202,12 @@ again get retired.
   in the world age it started in. Make each redefinition its own top-level statement (or `Base.invokelatest`),
   and read a variant that should be 100x faster and is not as "not running", before as "no effect". Time
   loops inside functions, not at global scope: that alone read 1.5 µs where 0.7 µs is true. (unconfirmed)
+- **A stop rule at a threshold needs the call timed inside the run, not read off a sampled profile.** B22's
+  rule was `build_solution` above 8 % of the wall. A 2 ms profile said 12.9 % of the samples (22.1 % without the
+  `report`); `@elapsed` around the call, put there with one `@eval NetworkModelBuilder function optimize_model!`
+  in `scratch/b22_share.jl`, said 7.8-9.3 % of the wall (12.6-13.3 % without), run to run on a shared machine. Say
+  "at the threshold" and give the range; do not call it fired or not fired. (unconfirmed)
+- **A change to how a `Dict` is built can reorder what iterates it, and a byte-for-byte comparison of the pipeline's
+  CSVs finds that first.** `sizehint!` and assigning entries in B22 left every value alone and reordered
+  `0[23]_redispatch_volumes.csv`, which loops `for (u, entry) in sol["unit"]`. Compare sorted frames to
+  separate "another order" from "another number", and sort in the report that has no order (B29). (unconfirmed)

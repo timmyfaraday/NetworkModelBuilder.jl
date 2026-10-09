@@ -1,6 +1,6 @@
 # A roll builds the solution it keeps, and only what is asked for (B22)
 
-Status: decided (D46), not started · Author: Tom Van Acker (requested) · Date: 2026-10-09
+Status: implemented on `b22-build-solution` (v0.12.6), measured, not merged · Author: Tom Van Acker (requested) · Date: 2026-10-09
 Decisions: D46 recorded 2026-10-09 (next free after: D47); Q9 stays open
 Priority: P2 · Effort: Medium. Branch `b22-build-solution`, cut from `main` at `047fe4b` (v0.12.5);
 becomes v0.12.6. Second move of B20; the review it comes from is `julia-guide-review.md`, item 2.
@@ -96,3 +96,15 @@ If after levels 1 and 2 `build_solution` is still above 8 % of the wall, or a 24
 - Q9, and B20's rest (`update_model!`, 26 % of the wall, the next biggest).
 - `JuMP.value` (22 % of `build_solution`): a bulk read through MOI was B6's stop-rule failure; revisit only after
   level 2 has cut the number of reads.
+
+## Result (2026-10-09)
+
+- Commits `abb5dc6` (indices), `88dbc6c` (builders), `735b7e2` (`report`), then the release commit; suite 3217.
+- One real window, `build_solution` over every index, minimum of five: step 3 (80 indices) 0.43 s to 0.29 s with
+  the builders alone, 0.14 s and 89 MB to 31 MB with the pipeline's `report` (9,762 of 34,962 edges, 32,880 of
+  51,600 units, no node); step 2 (42 indices) 0.134 to 0.080 to 0.018 s, 39 MB to 5 MB. Equal to the old result.
+- Week 1, 7 + 7 against `main` (`runs/_b22_new`, `_b22_control`): chunk -12.3 %, peak 5.0 to 2.9 GB, objectives
+  bit-identical. `redispatch_volumes` reads a `Dict`, so its CSVs came in another row order (B29).
+- Stop rule, timed inside an 8-window step-3 roll (`scratch/b22_share.jl`): 7.8-9.3 % of the wall with the
+  report, 12.6-13.3 % without; a 24 h chunk holds under 1 GB. The 8 % line is crossed or not by the noise of
+  a shared machine: Tom decides on Q9. A sampled profile said 12.9 % of samples, 22.1 % without the report.

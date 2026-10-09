@@ -49,3 +49,8 @@ nested entry on access: same reads, a different type behind them (`AbstractDict{
 that does `result["solution"] isa Dict` or mutates it breaks; (C) (B) with the `Dict` removed.
 Plan `knowledge/plan/build-solution.md` does (A) and a `report` filter first (est. -66 % of the entries the
 pipeline builds); this question comes back only if that plan's stop rule fires.
+Status 2026-10-09, after (A) and the filter (B22, v0.12.6): the stop rule sits at its line. `build_solution` is
+7.8-9.3 % of a step-3 roll's wall (line: 8 %), about 6 % of a chunk; a 24 h chunk holds under 1 GB (line:
+1.5 GB) and peaked at 2.9 GB, was 5.0. What is left of it is `JuMP.value` and one boxed `Float64` per entry, which
+(B) or (C) would remove; (B) breaks `result["solution"] isa Dict`. Recommended: not now, B25 first so a later
+change is measured by a benchmark; Tom decides.

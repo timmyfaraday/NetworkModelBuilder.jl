@@ -2,7 +2,7 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B29**.
+older ones: git has them). Next id: **B30**.
 
 ## Now
 
@@ -36,14 +36,9 @@ older ones: git has them). Next id: **B29**.
     `build_solution` is dominated by building the result `Dict`s, not by reading values (0.07 s of 0.7 s).
     Candidate, now measured and closed: `nw_component` takes 0.01 s for the 53,112 resolutions of a step-3
     window (`build-solution.md`), so no unchecked constructor. The first two moves are B21 (done,
-    `_signature` now 0.6 % of the samples) and B22.
+    `_signature` now 0.6 % of the samples) and B22 (done, `build_solution` now 7.8-9.3 % of a step-3 roll).
   - Peak memory per process rose from 6.2 GB to 7.3 GB (mean 5.9 GB), the held model; 73 processes fit in
-    1 TB, watch it if the process count grows.
-- [ ] B22 · A roll builds the solution of the network indices it keeps, a `report` keyword says which families
-  and identifiers a solution holds, and the builders get cheaper · Tom · 2026-10-08 · branch `b22-build-solution`
-  - 16 % of a roll's wall, 91 MB and 105,282 entries a step-3 window, held until the chunk ends; the pipeline
-    reads no node and 113 of 439 edges. Plan `knowledge/plan/build-solution.md`: D46 (levels 1 and 2,
-    est. -9 to -12 % a chunk); a typed core under the nested `Dict` stays Q9 behind a stop rule.
+    1 TB, watch it if the process count grows. B22 took it to 2.9 GB a 24 h chunk in week 1 (was 5.0).
 - [ ] B23 · Validate in the inner constructors what `Node`, `Generator`, `FixedLoad` and the branch family accept
   today: ordered limits, finite impedance, non-negative rating, no NaN · Tom · 2026-10-08 · proposed
   - 11 of 11 invalid inputs accepted; `pmin > pmax` gives an `INFEASIBLE` OPF with no pointer. Load the
@@ -63,6 +58,9 @@ older ones: git has them). Next id: **B29**.
 - [ ] B28 · Measure NMB's share of the first-call latency (8.7-11.8 s on case14); a `PrecompileTools` workload
   only if it is large · Tom · 2026-10-08 · proposed
   - Plan item 8.
+- [ ] B29 · `redispatch_volumes` writes its rows in `Dict` order, so a change to how a solution `Dict` is built
+  reorders the CSV: sort by (unit, hour) as the other reports do · Tom · 2026-10-09 · proposed
+  - Seen in B22: 14 of 14 `0[23]_redispatch_volumes.csv` held the same rows, once sorted, in another order.
 - [ ] B4 · Bus factor: solo maintainer, get a second reviewer/co-committer (gap #11, P3/Large) · Tom · 2026-09-30
 - [ ] B13 · A `Transformer` constructor from datasheet values (winding resistances, pairwise short-circuit
   reactances, no-load power) and a mesh instead of a star for four or more windings · Tom · 2026-10-05
@@ -75,6 +73,15 @@ older ones: git has them). Next id: **B29**.
     chunks of `_year_b10` had a first violation of 0.
 
 ## Done
+
+- [x] B22 · A roll builds the solution of the network indices it keeps, a `report` keyword says which families
+  and identifiers a solution holds, and the builders get cheaper (D46) · Tom · 2026-10-08
+  - v0.12.6 on `b22-build-solution`, not merged; plan `knowledge/plan/build-solution.md`. Week 1, 7 + 7 processes
+    at once against `main`: 14 of 14 sound, objectives, overload, shedding, spillage and congestion files
+    bit-identical, the redispatch volume files the same rows in another order (B29); chunk 871 s against 993 s
+    (-12.3 %, faster in 7 of 7; predicted -9 to -12 %), peak 2.9 GB against 5.0 (predicted -1.0 to -1.6).
+  - Stop rule (`build_solution` above 8 % of the wall, or a chunk holding over 1.5 GB of result): 7.8-9.3 % of a
+    step-3 roll's wall timed inside the roll, ~6 % of a chunk, a chunk holds under 1 GB. At the threshold: Q9.
 
 - [x] B21 · A repeated `topology` lookup is answered from the last answer, and returns one concrete type
   (D45) · Tom · 2026-10-08

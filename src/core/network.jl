@@ -10,6 +10,7 @@
 # v0.2.0 - network dependent data stored per component                         #
 # v0.11.0 - what an edge connects, and the islands of a network                #
 # v0.12.3 - a topology is picked from stored statuses, not looked up per call  #
+# v0.12.5 - a topology lookup remembers the answer it gave last                #
 ################################################################################
 
 ################################################################################
@@ -231,8 +232,8 @@ each network index.
   components that produce them, and materialized as they are first asked for.
 - `fixed`: the single topology, when no component's status varies at all; the
   common case, and the one [`topology`](@ref) answers without doing any work.
-- `last`: the [`LastTopology`](@ref), so that asking [`topology`](@ref) again for
-  the index it answered last does not derive it again.
+- `last`: a `LastTopology`, so that asking [`topology`](@ref) again for the index
+  it answered last does not derive it again.
 - `ext`: free-form storage for extension packages.
 
 Nothing here is stored per network index: `last` is one entry however many there

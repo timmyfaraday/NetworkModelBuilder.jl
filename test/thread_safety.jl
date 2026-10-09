@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.9.4 - initial implementation                                              #
+# v0.12.5 - concurrent topology lookups                                        #
 ################################################################################
 
 # `register_edge_type!`, `register_unit_type!` and `register_model!` are called

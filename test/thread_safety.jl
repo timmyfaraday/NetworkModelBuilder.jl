@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.9.4 - initial implementation                                              #
+# v0.12.5 - concurrent topology lookups                                        #
 ################################################################################
 
 # `register_edge_type!`, `register_unit_type!` and `register_model!` are called
@@ -53,6 +54,26 @@ end
             end
         end
         @test true
+    end
+
+    @testset "concurrent topology lookups answer for the index asked" begin
+        data = quiet(() -> parse_file(case("case5")))
+        net  = network(set_dimension(data, Dimension(:contingency => 3); apply! = function (net, d)
+                   br = net.edge[1]::Branch
+                   net.edge[1] = Branch(; id = br.id, terminals = br.terminals, r = br.r, x = br.x,
+                                        status = nw_vector(d, (n, c) -> n != 2))
+               end))
+        # derived before the threads start: what they share and write is the remembered answer
+        tops = [topology(net; nw = n) for n in 1:3]
+
+        wrong = Threads.Atomic{Int}(0)
+        Threads.@threads for t in 1:64
+            for i in 1:2000
+                n = 1 + (i + t) % 3
+                topology(net; nw = n) === tops[n] || Threads.atomic_add!(wrong, 1)
+            end
+        end
+        @test wrong[] == 0
     end
 
 end

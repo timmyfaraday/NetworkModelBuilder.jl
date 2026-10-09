@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
 # v0.2.0 - network dependent data stored per component                         #
+# v0.12.5 - a topology lookup has one type and answers repeats                 #
 ################################################################################
 
 "a copy of load `ld` whose demand follows `profile` over dimension `:time`"
@@ -183,6 +184,35 @@ const PROFILE = [0.9, 1.0, 1.1]
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
         @test haskey(nw_solution(result, 1)["edge"], "1")
         @test !haskey(nw_solution(result, 2)["edge"], "1")
+    end
+
+    @testset "a topology lookup has one type, whether or not a status varies" begin
+        data = quiet(() -> parse_file(case("case5")))
+        out  = network(set_dimension(data, Dimension(:contingency => 2); apply! = (net, d) ->
+                   net.edge[1] = outaged(net.edge[1]::Branch, d, (2,))))
+        same = network(set_dimension(data, Dimension(:time => 2)))
+
+        @test @inferred(topology(out; nw = 1)) isa Topology
+        @test @inferred(topology(same; nw = 1)) isa Topology
+    end
+
+    @testset "a repeated lookup is answered from the last one" begin
+        data = quiet(() -> parse_file(case("case5")))
+        net  = network(set_dimension(data, Dimension(:contingency => 3); apply! = (net, d) ->
+                   net.edge[1] = outaged(net.edge[1]::Branch, d, (2,))))
+        tops = [topology(net; nw = n) for n in 1:3]
+
+        @test tops[1] === tops[3]
+        @test tops[1] !== tops[2]
+
+        # whatever the order of the questions, each index gets its own topology
+        for n in (1, 1, 2, 3, 2, 2, 1, 3)
+            @test topology(net; nw = n) === tops[n]
+        end
+
+        # and the index just asked is not derived again
+        asked(net, n) = (topology(net; nw = n); @allocated topology(net; nw = n))
+        @test asked(net, 2) == 0
     end
 
     @testset "the dimension is visible from the model" begin

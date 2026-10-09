@@ -10,6 +10,7 @@
 # v0.2.0 - network dependent data stored per component                         #
 # v0.11.0 - what an edge connects, and the islands of a network                #
 # v0.12.3 - a topology is picked from stored statuses, not looked up per call  #
+# v0.12.5 - a topology lookup remembers the answer it gave last                #
 ################################################################################
 
 ################################################################################
@@ -187,6 +188,23 @@ struct Topology
     edge_arc ::Dict{Int,Vector{Arc}}
 end
 
+"""
+    LastTopology
+
+The [`Topology`](@ref) a [`Network`](@ref) answered last, with the network index it
+answered for, in one slot that is replaced whole.
+
+A model build asks for the topology of one network index many times in a row, and
+deriving it reads the status of every switchable component each time. Remembering
+the last answer turns the repeats into a comparison. It is one entry however many
+network indices there are, not a table of them, and the pair is written
+atomically, so a thread that reads it never gets one index with the topology of
+another.
+"""
+mutable struct LastTopology
+    @atomic seen::Union{Nothing,Pair{Int,Topology}}
+end
+
 ################################################################################
 # Network                                                                      #
 ################################################################################
@@ -214,13 +232,15 @@ each network index.
   components that produce them, and materialized as they are first asked for.
 - `fixed`: the single topology, when no component's status varies at all; the
   common case, and the one [`topology`](@ref) answers without doing any work.
+- `last`: a `LastTopology`, so that asking [`topology`](@ref) again for the index
+  it answered last does not derive it again.
 - `ext`: free-form storage for extension packages.
 
-Nothing here is stored per network index. A problem over 8760 hours holds one
-copy of each component, and one topology, exactly as a problem over one hour
-does; a problem over 8760 hours with two switching patterns holds two
-topologies. Both the components and the topology therefore scale with the data
-rather than with the size of the network index.
+Nothing here is stored per network index: `last` is one entry however many there
+are. A problem over 8760 hours holds one copy of each component, and one
+topology, exactly as a problem over one hour does; a problem over 8760 hours with
+two switching patterns holds two topologies. Both the components and the topology
+therefore scale with the data rather than with the size of the network index.
 
 Out-of-service components are retained in `node`, `edge` and `unit` so that they
 survive a round trip through the data layer; they are absent from the topology at
@@ -236,6 +256,7 @@ struct Network
     status    ::Vector{NetworkVector{Bool}}
     topology  ::Dict{BitVector,Topology}
     fixed     ::Union{Nothing,Topology}
+    last      ::LastTopology
     ext       ::Dict{Symbol,Any}
 end
 
@@ -281,7 +302,7 @@ function Network(I::AbstractDict{Int,<:AbstractNode},
 
     return Network(dim, nodes, edges, units, switchable,
                    _switch_status(nodes, edges, units, switchable),
-                   Dict{BitVector,Topology}(), fixed, ext)
+                   Dict{BitVector,Topology}(), fixed, LastTopology(nothing), ext)
 end
 
 "the components whose status varies over the network index, in a stable order"
@@ -543,12 +564,22 @@ status varies, never looked up in a table indexed by `nw`. When no status varies
 stored topology and this costs nothing. Otherwise the statuses of the switchable
 components at `nw` are read, and the topology they produce is built the first
 time it is asked for and shared by every index that produces the same statuses.
+The answer for the index asked last is remembered, so a loop at one index derives
+it once.
 """
 function topology(net::Network; nw::Int = nw_id_default(net))
-    net.fixed === nothing || return net.fixed
+    fixed = net.fixed
+    fixed === nothing || return fixed
 
-    return get!(() -> _topology_at(net.dim, net.node, net.edge, net.unit, nw),
-                net.topology, _signature(net, nw))
+    memo = net.last
+    seen = @atomic memo.seen
+    seen !== nothing && seen.first == nw && return seen.second
+
+    top = get!(() -> _topology_at(net.dim, net.node, net.edge, net.unit, nw),
+               net.topology, _signature(net, nw))
+    @atomic memo.seen = nw => top
+
+    return top
 end
 
 "the distinct topologies of a network that have been materialized so far"

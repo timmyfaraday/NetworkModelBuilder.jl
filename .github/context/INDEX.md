@@ -16,5 +16,7 @@
 | `archive/` | Only to resolve an old decision id. |
 
 Detailed specs (gap write-ups, integration handoffs) live in `context/knowledge/plan/` — see
-`context/knowledge/plan/README.md`. NMB's own simulation output lives in the top-level `runs/`,
-unrelated to `context/agent-runs/`.
+`context/knowledge/plan/README.md`. Open `plan/julia-guide-review.md` before touching performance,
+constructor validation, `nm.ext`, the scripts' configuration or the package metadata: it holds the
+measured evidence of the review against the Julia Modeling knowledge base. NMB's own simulation
+output lives in the top-level `runs/`, unrelated to `context/agent-runs/`.

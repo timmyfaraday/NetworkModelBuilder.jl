@@ -4,7 +4,7 @@ The rules that still constrain NMB. Read the section for the area you are touchi
 changing it.
 
 How to use this file:
-- A new decision gets the next free id (**D45**), goes in the Log at the bottom, and is written by
+- A new decision gets the next free id (**D46**), goes in the Log at the bottom, and is written by
   the `record-decision` skill. `Decided by` is a person's username, never an agent.
 - A decision that changes a rule below edits the rule in place and cites the new id. The old
   wording goes to the archive line of the id it came from.
@@ -158,6 +158,9 @@ How to use this file:
   the ±π/2 test of an angle limit, `iszero` of a `DCLink`'s `loss_prop`. A generator limit that crosses
   1.571 pu is not a change of the shape of the model, and was read as one, so a rolling horizon with
   `reuse = true` rebuilt almost every window.
+- **A repeated `topology` lookup is answered from the last answer, held in one atomic slot on the
+  `Network`: a cache of a derivation, one entry however many network indices, not a table** (D45).
+  Two entries if, after B21, `topology` is still above 3 % of the pipeline profile.
 
 ## Zorba pipeline (`scripts/`)
 
@@ -502,3 +505,8 @@ violation, but one run is not proof, and the check costs 25 % of a step-3 window
 without dropping any of what it checks; whether to sample or drop it comes back once the pipeline has
 proven stable (B19).
 Changes: new rule in the Zorba pipeline section.
+
+### D45 — A repeated topology lookup is answered from the last answer, held in one atomic slot on the `Network`
+Date: 2026-10-09 · Decided by: Tom Van Acker · Area: Component model
+Why: `topology` derived its answer on every call, 80-142 times per network index in a model build, and was 13 % of a rolling horizon's wall time; one remembered answer took `update_model!` of a redispatch on case14 from 6.6-7.1 ms to 4.8-5.3 ms, and it keeps "derived, never tabulated" true, being one entry however many indices there are. Hoisting the lookup meant over 130 call sites in 16 files; one entry, not two, since two gave 4.76 against 4.86 ms.
+Changes: new rule in the Component model section. Revise to two entries if, after B21, `topology` is still above 3 % of the pipeline profile (the redispatch hit rate goes 0.913 to 0.967); edit this rule in place then.

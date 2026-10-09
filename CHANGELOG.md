@@ -10,6 +10,23 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+## [0.12.5] - 2026-10-09
+
+### Changed
+
+- `topology` remembers the answer it gave last. `Network` has a new field, `last`: one
+  slot, written atomically, holding the network index asked last and its topology. A model
+  build asks for the topology of one index many times in a row (80 to 142 times per index
+  on case14), and each ask derived the statuses of every switchable component again; a
+  repeat is now a comparison and allocates nothing. It is one entry however many network
+  indices there are, not a table of them. `topology` also returns one concrete type,
+  `Topology`, where it inferred `Union{Nothing,Topology}`. Results are unchanged;
+  `update_model!` of a redispatch on case14 with an outage per branch, against 0.12.4 on
+  the same machine, took 4.8 ms against 6.7 ms (-28 %) and allocated 3.1 MB against 4.0 MB.
+  A Zorba week of 24 h chunks against 0.12.4, side by side, took 10.7 % less wall time
+  (135 s against 151 s a chunk, faster in 7 of 7), with objectives, overload rows and
+  redispatch volumes bit-identical.
+
 ## [0.12.4] - 2026-10-07
 
 ### Fixed

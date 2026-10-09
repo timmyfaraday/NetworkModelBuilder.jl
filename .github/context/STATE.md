@@ -1,23 +1,25 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Van Acker (B8 done, merged into main).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-09 by Tom Van Acker (B21 merged into main, tagged `v0.12.5`, pushed).
 
 ## Where NMB stands
 
-- v0.12.1-v0.12.4 (B6, B8, untagged): rolling-horizon reuse and cheaper per-window work. v0.12.0
-  (D28-D36, tagged): one `Transformer`. v0.11.0 (D13, D15-D27): the `Switch` edge. v0.10.2 (D11):
-  `solution_tables` and `docs/src/manual/concepts.md`.
+- v0.12.1-v0.12.5 (B6, B8, B21; v0.12.5 tagged, the others not): rolling-horizon reuse and cheaper
+  per-window work. v0.12.0 (D28-D36, tagged): one `Transformer`. v0.11.0 (D13, D15-D27): the `Switch`
+  edge. v0.10.2 (D11): `solution_tables` and `docs/src/manual/concepts.md`.
   v0.10.1 (D10): `src/comp/` is auto-included by a directory walk (`_include_dir`) and each
   component file exports its own names. v0.10.0: `security_tables`.
-- Gap-closure items #1-9 of `context/knowledge/plan/GAP_CLOSURE_PLAN.md` are closed; #10-11 are
-  open, see `backlog.md`. Tags: `v0.6.0`, `v0.9.1`-`v0.9.7` and `v0.12.0`; v0.10.x and v0.11.0 are untagged.
+- Gap-closure items #1-9 of `context/knowledge/plan/GAP_CLOSURE_PLAN.md` are closed; #10-11 are open
+  (`backlog.md`). Tags: `v0.6.0`, `v0.9.1`-`v0.9.7`, `v0.12.0`, `v0.12.5`; v0.10.x, v0.11.0, v0.12.1-v0.12.4 not.
 
 ## Branches
 
 - `main` carries B5 and B11 (`--no-ff`), tagged `v0.12.0`, the setup commits D37-D41 and, merged `--no-ff`
-  on 2026-10-07, all of `test-zorba-run`: `scripts/` (the Zorba pipeline), B9, B10, B12, B6, B8 (v0.12.4).
+  on 2026-10-07, all of `test-zorba-run`: `scripts/` (the Zorba pipeline), B9, B10, B12, B6, B8 (v0.12.4);
+  on 2026-10-09 B21 (v0.12.5, tagged) and the Julia guide review.
 - `test-zorba-run` is merged into `main` and kept; the next Zorba change can start from `main`.
-- `b5-switch-edge` and `b11-unified-transformer` are merged and deleted. Next free decision id: **D45**.
+- `b5-switch-edge`, `b11-unified-transformer` merged and deleted; `b21-topology-lookup` merged, kept. Next
+  free decision id: **D46**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -35,6 +37,11 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
 
 ## In progress
 
+- Review of `main` (v0.12.4) against the Julia Modeling knowledge base: proposals only, no code changed.
+  Plan `context/knowledge/plan/julia-guide-review.md`, backlog B21-B28, questions Q7-Q9. Measured: the
+  topology lookup is 13 % and `build_solution` 19 % of a roll's wall; 11 of 11 invalid inputs are accepted.
+- B21 done (v0.12.5, D45, plan `context/knowledge/plan/topology-lookup.md`): week 1 beside `main`, chunk
+  -10.7 %, results bit-identical, `topology` 16 % of the wall to 1.7 %; one entry stays (stop rule not fired).
 - Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
 - B11 is merged and tagged `v0.12.0` (plan `context/knowledge/plan/unified-transformer.md`, D28-D36),
   suite 3126. Zorba flows are not unique without a phase shifter price (D34).
@@ -62,12 +69,12 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-07 by Tom Va
 
 ## Next
 
-1. B20 (the rest of the per-window cost: `update_model!`, `build_solution`, `_signature`), B7 (closed
-   switches under network reduction), B3 (throughput), B4 (bus factor), B13 and B19 remain, see
-   `backlog.md`.
+1. B22 and B25 next (measured, no API change, the review's order), then B23, B24, B26, B27. B20 keeps the
+   rest of the per-window cost; B7, B3, B4, B13, B19, B28 remain, see `backlog.md`.
 
 ## Blocked / waiting
 
+- Q7 (exports), Q8 (tags) and Q9 (typed solution) wait for Tom; B22 item (b) and B24 item (b) need them.
 - Gap #10 (parallel rolling-horizon throughput) needs a design decision before implementation
   (chunked-parallel vs. document-the-trade-off) — see `open-questions.md` Q1.
 

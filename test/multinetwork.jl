@@ -195,6 +195,25 @@ const PROFILE = [0.9, 1.0, 1.1]
         @test @inferred(topology(same; nw = 1)) isa Topology
     end
 
+    @testset "a repeated lookup is answered from the last one" begin
+        data = quiet(() -> parse_file(case("case5")))
+        net  = network(set_dimension(data, Dimension(:contingency => 3); apply! = (net, d) ->
+                   net.edge[1] = outaged(net.edge[1]::Branch, d, (2,))))
+        tops = [topology(net; nw = n) for n in 1:3]
+
+        @test tops[1] === tops[3]
+        @test tops[1] !== tops[2]
+
+        # whatever the order of the questions, each index gets its own topology
+        for n in (1, 1, 2, 3, 2, 2, 1, 3)
+            @test topology(net; nw = n) === tops[n]
+        end
+
+        # and the index just asked is not derived again
+        asked(net, n) = (topology(net; nw = n); @allocated topology(net; nw = n))
+        @test asked(net, 2) == 0
+    end
+
     @testset "the dimension is visible from the model" begin
         data = quiet(() -> parse_file(case("case5")))
         mn   = set_dimension(data, Dimension(:time => 2, :contingency => 3))

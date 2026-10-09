@@ -68,6 +68,8 @@ Only the `status` of a component can change which components are in service, so
 which topology a network index has is **derived** from the statuses of the
 components whose status varies, never looked up in a table indexed by ``n``. A
 problem without contingencies has one topology however many indices it spans.
+The answer for the index asked last is remembered, so a loop at one index, such
+as the sum over `node_arcs` above, derives it once.
 
 ## Islands
 

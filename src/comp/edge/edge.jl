@@ -201,20 +201,34 @@ terminal.
 """
 function solution_edge(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:IVRFormulation}
     sol = Dict{String,Any}()
-    for T in _EDGE_TYPES, e in ids(nm, T; nw)
-        entry = Dict{String,Any}("terminal" => Dict{String,Any}())
-        for a in edge_arcs(nm, e; nw)
-            vr = JuMP.value(var(nm, :vr, a.node; nw))
-            vi = JuMP.value(var(nm, :vi, a.node; nw))
-            cr = JuMP.value(var(nm, :cr, a;      nw))
-            ci = JuMP.value(var(nm, :ci, a;      nw))
-            entry["terminal"]["$(a.terminal)"] = Dict{String,Any}(
-                "node" => a.node, "cr" => cr, "ci" => ci,
-                "p" => vr * cr + vi * ci, "q" => vi * cr - vr * ci)
+    sizehint!(sol, length(topology(nm; nw).edge))
+    for T in _EDGE_TYPES
+        es = ids(nm, T; nw)
+        isempty(es) && continue
+
+        vrs, vis = var(nm, :vr; nw), var(nm, :vi; nw)
+        crs, cis = var(nm, :cr; nw), var(nm, :ci; nw)
+        for e in es
+            terminals = Dict{String,Any}()
+            for a in edge_arcs(nm, e; nw)
+                vr = JuMP.value(vrs[a.node])
+                vi = JuMP.value(vis[a.node])
+                cr = JuMP.value(crs[a])
+                ci = JuMP.value(cis[a])
+
+                terminal        = Dict{String,Any}()
+                terminal["node"] = a.node
+                terminal["cr"]   = cr
+                terminal["ci"]   = ci
+                terminal["p"]    = vr * cr + vi * ci
+                terminal["q"]    = vi * cr - vr * ci
+                terminals[string(a.terminal)] = terminal
+            end
+            entry = Dict{String,Any}("terminal" => terminals)
+            _solution_edge_overload!(entry, nm, e, nw)
+            solution_edge!(entry, nm, T, e, nw)
+            sol[string(e)] = entry
         end
-        _solution_edge_overload!(entry, nm, e, nw)
-        solution_edge!(entry, nm, T, e, nw)
-        sol["$e"] = entry
     end
 
     return sol
@@ -247,15 +261,25 @@ solution_edge!(::Dict{String,Any}, ::NetworkModel, ::Type{T}, ::Int, ::Int) wher
 "the edge part of the solution under a linearized formulation"
 function solution_edge(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:LPFFormulation}
     sol = Dict{String,Any}()
-    for T in _EDGE_TYPES, e in ids(nm, T; nw)
-        entry = Dict{String,Any}("terminal" => Dict{String,Any}())
-        for a in edge_arcs(nm, e; nw)
-            entry["terminal"]["$(a.terminal)"] = Dict{String,Any}(
-                "node" => a.node, "p" => JuMP.value(var(nm, :p, a; nw)))
+    sizehint!(sol, length(topology(nm; nw).edge))
+    for T in _EDGE_TYPES
+        es = ids(nm, T; nw)
+        isempty(es) && continue
+
+        ps = var(nm, :p; nw)
+        for e in es
+            terminals = Dict{String,Any}()
+            for a in edge_arcs(nm, e; nw)
+                terminal         = Dict{String,Any}()
+                terminal["node"] = a.node
+                terminal["p"]    = JuMP.value(ps[a])
+                terminals[string(a.terminal)] = terminal
+            end
+            entry = Dict{String,Any}("terminal" => terminals)
+            _solution_edge_overload!(entry, nm, e, nw)
+            solution_edge!(entry, nm, T, e, nw)
+            sol[string(e)] = entry
         end
-        _solution_edge_overload!(entry, nm, e, nw)
-        solution_edge!(entry, nm, T, e, nw)
-        sol["$e"] = entry
     end
 
     return sol

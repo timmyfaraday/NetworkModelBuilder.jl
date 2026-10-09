@@ -10,6 +10,34 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+## [0.12.7] - 2026-10-09
+
+Tests and tooling only; nothing under `src/` changed.
+
+### Added
+
+- `test/hot_path.jl`: `has_nw_data` and `nw_component` of a node, a branch and a generator without
+  network data allocate nothing. Run against the sources before 0.12.2 the same file fails all six
+  checks, with the 1,248, 1,664 and 2,176 bytes a call that the boxed field loop cost; `@inferred` passes
+  on those sources, so it is not used.
+- `benchmark/`, an environment of its own (BenchmarkTools, HiGHS, JuMP and the package by path), and
+  `benchmark/window.jl`: one window of a rolling redispatch on case14 with an outage per branch, timed stage
+  by stage (cutting the window, `instantiate_model`, `update_model!`, the solve, `build_solution` whole and with
+  a `report`, the whole roll). Run by hand beside a worktree of the other version. Two runs apart every
+  minimum agrees within 3 %; against 0.12.4 it shows `update_model!` 30.4 to 26.9 ms, `build_solution`
+  9.3 to 4.7 ms and the roll 868 to 706 ms, and leaves the solve at 35.7 ms.
+- `scripts/run_year_redispatch.jl`: `chunk.csv` gains `gc_s` and `alloc_gb` for the chunk and for steps 2 and 3
+  (six columns), the seconds of garbage-collection pause and the gigabytes allocated, read from the process's
+  own counters, so exact for a process that runs one chunk. A run begun before them must not be resumed
+  after. Zorba week 1, 7 one-thread processes against one process on 7 threads, side by side: a chunk takes
+  125 s against 224 s and spends 14.2 % against 14.4 % of it in pauses (step 3: 16.7 % against 14.9 %), so
+  the collector does not explain why threads stop paying.
+
+### Changed
+
+- The `[run]` lines of that script report the pause since the start of the solve, which is what the
+  elapsed time beside them measures, rather than the process total with its set-up.
+
 ## [0.12.6] - 2026-10-09
 
 ### Added

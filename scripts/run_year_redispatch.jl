@@ -22,9 +22,11 @@
 #   hours a window of step 2 / step 3 sees and how many it commits; a chunk   #
 #   shorter than the horizon caps it, so set NMB_CHUNK_HOURS to at least it.  #
 #                                                                             #
-# More threads in one process stop paying off at a handful of tasks: the      #
-# garbage collector and the allocator are shared. To use the whole machine    #
-# run many one-thread processes, each on its own range of hours with a shared #
+# More threads in one process stop paying off at a handful of tasks: 7        #
+# threads take 224 s a chunk and 7 processes 125 s, and not through the       #
+# garbage collector, which is 14 % of a chunk either way (lessons.md). To     #
+# use the whole machine run many one-thread processes, each on its own        #
+# range of hours with a shared                                                #
 # NMB_RUN_ID and NMB_MERGE=0, then one last run over the full range with      #
 # NMB_RESUME=1, which finds every chunk done and only merges them.            #
 #                                                                             #

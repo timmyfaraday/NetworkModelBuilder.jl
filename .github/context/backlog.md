@@ -44,7 +44,7 @@ older ones: git has them). Next id: **B29**.
   - `topology` is 13 % of a roll's wall (`_signature` 11 %), 9 % through `edge_arcs`; 432 B and 0.7 µs a call
     with 17 switchable statuses, more with more outages; infers `Union{Nothing,Topology}`. Plan
     `knowledge/plan/topology-lookup.md`: a one-entry memo, `update_model!` -26 % on case14. One entry
-    (Tom, 2026-10-09), two if the stop rule fires (`topology` above 3 % after); D45 pending. A topology slot
+    (D45, Tom, 2026-10-09), two if the stop rule fires (`topology` above 3 % after). A topology slot
     per index would change "derived, never tabulated" and needs a decision. Plan item 1.
 - [ ] B22 · `build_solution` only for the network indices a roll keeps; fewer strings and `Dict`s per entry
   · Tom · 2026-10-08 · proposed, second move of B20

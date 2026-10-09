@@ -1,7 +1,7 @@
 # Review of `main` against the Julia Modeling knowledge base
 
 Status: proposed, nothing decided · Requested by: Tom Van Acker · Date: 2026-10-08
-Decisions: none yet (next free: D45) · Backlog: B21-B28 · Questions: Q7-Q9
+Decisions: D45 (item 1, see `topology-lookup.md`); next free: D46 · Backlog: B21-B28 · Questions: Q7-Q9
 
 Reviewed: `main` at `6d6f6f1` (v0.12.4): `src/`, `ext/`, `scripts/`, `docs/`, `test/`, CI. Guide: the
 node *Julia Modeling* of the knowledge base (`D:\KnowledgeBase\Julia Modeling`), one source, a 2026

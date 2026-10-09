@@ -1,7 +1,7 @@
 # Topology lookups: answer a repeat from the last answer (B21)
 
-Status: draft, awaiting Tom's decision on D45 · Author: Tom Van Acker (requested) · Date: 2026-10-09
-Decisions: D45 pending, not recorded until confirmed (next free after: D46); one entry chosen
+Status: draft, decided (D45), not started · Author: Tom Van Acker (requested) · Date: 2026-10-09
+Decisions: D45 recorded 2026-10-09 (next free after: D46); one entry, two if the stop rule fires
 Priority: P2 · Effort: Small. Branch `b21-topology-lookup`, cut from `main` at `6d6f6f1` (v0.12.4);
 becomes v0.12.5. First move of B20; the review it comes from is `julia-guide-review.md`, item 1.
 
@@ -96,16 +96,15 @@ line, and the next component written from the docs repeats the pattern. Why not 
 tabulates by index and changes the invariant; one entry does not (`domain-invariants`: "derived from the
 statuses that vary, never tabulated" holds, and so does "nothing is stored per network index").
 
-## Decisions needed
+## Decisions
 
-- **D45, pending Tom** (context given 2026-10-09, not yet decided): a repeated topology lookup is
-  answered from the last answer, held in one atomic slot on the `Network`; it is a cache of a
-  derivation, one entry however many network indices, not a table.
-- **Entries: one, chosen by Tom 2026-10-09, conditional on D45.** The toy shows no gain from two (4.86
-  against 4.76 ms) and one is the smaller change. **Revise to two if the stop rule below fires**: after
-  B21, `topology` is still above 3 % of the pipeline profile (redispatch hit rate 0.913 to 0.967 on
-  case14). The revision adds a second slot to `LastTopology` and edits D45 in place; when D45 is
-  recorded it carries this choice and this trigger.
+- **D45, recorded 2026-10-09 (Tom Van Acker):** a repeated topology lookup is answered from the last
+  answer, held in one atomic slot on the `Network`; it is a cache of a derivation, one entry however many
+  network indices, not a table.
+- **Entries: one, part of D45.** The toy shows no gain from two (4.86 against 4.76 ms) and one is the
+  smaller change. **Revise to two if the stop rule below fires**: after B21, `topology` is still above
+  3 % of the pipeline profile (redispatch hit rate 0.913 to 0.967 on case14). The revision adds a second
+  slot to `LastTopology` and edits D45 in place.
 
 ## Verification
 
@@ -135,7 +134,7 @@ statuses that vary, never tabulated" holds, and so does "nothing is stored per n
 ## Stop rule, and what follows
 
 If `topology` is still above 3 % of the profile: in order, two entries (the redispatch rate goes 0.913 to
-0.967; this revises Tom's choice of one, see "Decisions needed"); B20's packed status matrix; a slot per
+0.967; this revises D45, see "Decisions"); B20's packed status matrix; a slot per
 index, which needs its own decision. At or below 3 %, B21 is done and B22 (`build_solution`, 19 %) is next.
 
 ## What this deliberately does not decide

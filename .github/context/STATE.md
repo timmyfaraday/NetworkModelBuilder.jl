@@ -17,7 +17,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-09 by Tom Va
 - `main` carries B5 and B11 (`--no-ff`), tagged `v0.12.0`, the setup commits D37-D41 and, merged `--no-ff`
   on 2026-10-07, all of `test-zorba-run`: `scripts/` (the Zorba pipeline), B9, B10, B12, B6, B8 (v0.12.4).
 - `test-zorba-run` is merged into `main` and kept; the next Zorba change can start from `main`.
-- `b5-switch-edge` and `b11-unified-transformer` are merged and deleted. Next free decision id: **D45**.
+- `b5-switch-edge` and `b11-unified-transformer` are merged and deleted. Next free decision id: **D46**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -40,7 +40,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-09 by Tom Va
   topology lookup is 13 % and `build_solution` 19 % of a roll's wall; 11 of 11 invalid inputs are accepted.
 - B21 planned, not started: branch `b21-topology-lookup`, plan `context/knowledge/plan/topology-lookup.md`:
   a one-entry atomic memo of the last `topology` answer (`update_model!` -26 % on case14), two entries
-  if the stop rule fires (Tom, 2026-10-09). Awaiting Tom's decision on D45 (not recorded).
+  if the stop rule fires (D45, Tom, 2026-10-09). Next: implement, in the plan's commit order.
 - Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
 - B11 is merged and tagged `v0.12.0` (plan `context/knowledge/plan/unified-transformer.md`, D28-D36),
   suite 3126. Zorba flows are not unique without a phase shifter price (D34).

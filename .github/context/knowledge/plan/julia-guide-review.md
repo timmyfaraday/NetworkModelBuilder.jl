@@ -38,7 +38,7 @@ wall, 9,782 samples at 2 ms; `b6_stages_after_out.txt`) or run on 2026-10-08 (re
   `Base.return_types(topology, ...)` is `Union{Nothing,Topology}`: `net.fixed === nothing || return
   net.fixed` reads the field twice.
 - Proposal: (a) bind `fixed = net.fixed` once; (b) answer a repeat of the last index from a one-entry memo
-  on the `Network`, rather than hoisting the lookup at over 130 call sites (measured);
+  on the `Network`, rather than hoisting the lookup at over 130 call sites (measured, `topology-lookup.md`);
   (c) only if still hot, B20's packed status matrix; (d) a slot per index would **change the invariant
   "derived, never tabulated"**, so it needs a decision first.
 - Check: `@inferred topology(net; nw = 1)`; flat profile share of `topology` under 3 %; same-day control:

@@ -40,9 +40,11 @@ older ones: git has them). Next id: **B29**.
   - Peak memory per process rose from 6.2 GB to 7.3 GB (mean 5.9 GB), the held model; 73 processes fit in
     1 TB, watch it if the process count grows.
 - [ ] B21 · Answer a repeated `topology` lookup from the last answer instead of deriving the signature again;
-  make `topology` return a concrete type · Tom · 2026-10-08 · proposed, first move of B20
+  make `topology` return a concrete type · Tom · 2026-10-08 · branch `b21-topology-lookup`, first move of B20
   - `topology` is 13 % of a roll's wall (`_signature` 11 %), 9 % through `edge_arcs`; 432 B and 0.7 µs a call
-    with 17 switchable statuses, more with more outages; infers `Union{Nothing,Topology}`. A topology slot
+    with 17 switchable statuses, more with more outages; infers `Union{Nothing,Topology}`. Plan
+    `knowledge/plan/topology-lookup.md`: a one-entry memo, `update_model!` -26 % on case14. One entry
+    (Tom, 2026-10-09), two if the stop rule fires (`topology` above 3 % after); D45 pending. A topology slot
     per index would change "derived, never tabulated" and needs a decision. Plan item 1.
 - [ ] B22 · `build_solution` only for the network indices a roll keeps; fewer strings and `Dict`s per entry
   · Tom · 2026-10-08 · proposed, second move of B20

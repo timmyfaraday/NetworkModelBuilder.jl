@@ -1,6 +1,6 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-08 by Tom Van Acker (review of main against the Julia Modeling knowledge base, proposals only).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-09 by Tom Van Acker (B21 planned on `b21-topology-lookup`; review of main against the Julia Modeling knowledge base recorded).
 
 ## Where NMB stands
 
@@ -38,6 +38,9 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-08 by Tom Va
 - Review of `main` (v0.12.4) against the Julia Modeling knowledge base: proposals only, no code changed.
   Plan `context/knowledge/plan/julia-guide-review.md`, backlog B21-B28, questions Q7-Q9. Measured: the
   topology lookup is 13 % and `build_solution` 19 % of a roll's wall; 11 of 11 invalid inputs are accepted.
+- B21 planned, not started: branch `b21-topology-lookup`, plan `context/knowledge/plan/topology-lookup.md`:
+  a one-entry atomic memo of the last `topology` answer (`update_model!` -26 % on case14), two entries
+  if the stop rule fires (Tom, 2026-10-09). Awaiting Tom's decision on D45 (not recorded).
 - Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
 - B11 is merged and tagged `v0.12.0` (plan `context/knowledge/plan/unified-transformer.md`, D28-D36),
   suite 3126. Zorba flows are not unique without a phase shifter price (D34).

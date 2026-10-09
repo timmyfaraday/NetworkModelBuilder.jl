@@ -10,6 +10,7 @@
 # v0.2.0 - network dependent data stored per component                         #
 # v0.10.1 - exports its own public names                                       #
 # v0.11.0 - an island without a reference node is anchored                     #
+# v0.12.6 - the solution builders are cheaper and hold what is asked           #
 ################################################################################
 
 export Node, NodeType, PQ, PV, REF, ISOLATED, reference_nodes

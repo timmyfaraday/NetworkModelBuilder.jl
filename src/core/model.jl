@@ -10,6 +10,7 @@
 # v0.2.0 - network dependent data stored per component                         #
 # v0.9.4 - registering a model is safe from concurrent threads                 #
 # v0.11.0 - a model refuses an island it cannot supply                         #
+# v0.12.6 - a solve passes on which indices and components to keep             #
 ################################################################################
 
 ################################################################################

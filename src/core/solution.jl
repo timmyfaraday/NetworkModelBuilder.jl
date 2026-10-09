@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
 # v0.10.2 - a tidy solution_tables view, alongside nw_solution                 #
+# v0.12.6 - a solution holds the indices and components asked for              #
 ################################################################################
 
 ################################################################################

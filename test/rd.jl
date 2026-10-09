@@ -13,6 +13,7 @@
 # v0.12.0 - which measures are held at the base case                           #
 # v0.12.0 - the meshed network's shifter can step                              #
 # v0.12.1 - a limit past pi/2 does not change the shape of a model             #
+# v0.12.6 - a window builds only what it commits, and what is reported         #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The

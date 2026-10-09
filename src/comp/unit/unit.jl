@@ -9,6 +9,7 @@
 # v0.1.0 - initial implementation                                              #
 # v0.9.4 - registering a unit type is safe from concurrent threads             #
 # v0.10.1 - exports its own public names                                       #
+# v0.12.6 - the solution builders are cheaper and hold what is asked           #
 ################################################################################
 
 export register_unit_type!, unit_types

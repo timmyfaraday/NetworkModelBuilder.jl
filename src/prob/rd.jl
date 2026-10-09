@@ -10,6 +10,7 @@
 # v0.6.0 - the objective pays for the congestion it left                       #
 # v0.12.0 - a measure may belong to one terminal of an edge                    #
 # v0.12.0 - a measure held at the base case builds no rows of its own          #
+# v0.12.6 - a window builds the solution of what it commits                    #
 ################################################################################
 
 ################################################################################

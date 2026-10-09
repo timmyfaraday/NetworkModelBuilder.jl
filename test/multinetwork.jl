@@ -9,6 +9,7 @@
 # v0.1.0 - initial implementation                                              #
 # v0.2.0 - network dependent data stored per component                         #
 # v0.12.5 - a topology lookup has one type and answers repeats                 #
+# v0.12.6 - a solution holds the indices and components asked for              #
 ################################################################################
 
 "a copy of load `ld` whose demand follows `profile` over dimension `:time`"

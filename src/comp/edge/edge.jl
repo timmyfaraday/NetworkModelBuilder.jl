@@ -10,6 +10,7 @@
 # v0.6.0 - the overload of an edge is reported                                 #
 # v0.9.4 - registering an edge type is safe from concurrent threads            #
 # v0.10.1 - exports its own public names                                       #
+# v0.12.6 - the solution builders are cheaper and hold what is asked           #
 ################################################################################
 
 export register_edge_type!, edge_types

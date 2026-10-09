@@ -47,3 +47,5 @@ Options: (A) keep the `Dict` and build only the indices a roll keeps (no API cha
 (B) fill the columns `solution_tables` already produces and make `result["solution"]` a view that builds a
 nested entry on access: same reads, a different type behind them (`AbstractDict{String,Any}`), so code
 that does `result["solution"] isa Dict` or mutates it breaks; (C) (B) with the `Dict` removed.
+Plan `knowledge/plan/build-solution.md` does (A) and a `report` filter first (est. -66 % of the entries the
+pipeline builds); this question comes back only if that plan's stop rule fires.

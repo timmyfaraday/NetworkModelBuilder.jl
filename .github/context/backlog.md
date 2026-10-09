@@ -34,15 +34,16 @@ older ones: git has them). Next id: **B29**.
     builds a `BitVector` bit by bit for every node, edge and unit lookup of every network index; a packed
     status matrix read by column would not tabulate topologies, but check it against the invariant first.
     `build_solution` is dominated by building the result `Dict`s, not by reading values (0.07 s of 0.7 s).
-    Candidate, not measured: `nw_component` rebuilds a `Transformer` through its validating constructor.
-    The first two moves are B21 (done, `_signature` now 0.6 % of the samples) and B22; for `nw_component`,
-    `Generator` is 0.8 % of the profile (plan `julia-guide-review.md`, "Considered, not proposed").
+    Candidate, now measured and closed: `nw_component` takes 0.01 s for the 53,112 resolutions of a step-3
+    window (`build-solution.md`), so no unchecked constructor. The first two moves are B21 (done,
+    `_signature` now 0.6 % of the samples) and B22.
   - Peak memory per process rose from 6.2 GB to 7.3 GB (mean 5.9 GB), the held model; 73 processes fit in
     1 TB, watch it if the process count grows.
-- [ ] B22 · `build_solution` only for the network indices a roll keeps; fewer strings and `Dict`s per entry
-  · Tom · 2026-10-08 · proposed, second move of B20
-  - 19 % of a roll's wall, 1.5 GB and 13-25 % GC per 1-hour step-3 window. A typed core under the nested
-    `Dict` is Q9 (D11). Plan item 2.
+- [ ] B22 · A roll builds the solution of the network indices it keeps, a `report` keyword says which families
+  and identifiers a solution holds, and the builders get cheaper · Tom · 2026-10-08 · branch `b22-build-solution`
+  - 16 % of a roll's wall, 91 MB and 105,282 entries a step-3 window, held until the chunk ends; the pipeline
+    reads no node and 113 of 439 edges. Plan `knowledge/plan/build-solution.md`: D46 (levels 1 and 2,
+    est. -9 to -12 % a chunk); a typed core under the nested `Dict` stays Q9 behind a stop rule.
 - [ ] B23 · Validate in the inner constructors what `Node`, `Generator`, `FixedLoad` and the branch family accept
   today: ordered limits, finite impedance, non-negative rating, no NaN · Tom · 2026-10-08 · proposed
   - 11 of 11 invalid inputs accepted; `pmin > pmax` gives an `INFEASIBLE` OPF with no pointer. Load the

@@ -1,6 +1,6 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-09 by Tom Van Acker (B21 merged into main, tagged `v0.12.5`, pushed).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-09 by Tom Van Acker (B21 merged and pushed; B22 planned on `b22-build-solution`).
 
 ## Where NMB stands
 
@@ -18,8 +18,8 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-09 by Tom Va
   on 2026-10-07, all of `test-zorba-run`: `scripts/` (the Zorba pipeline), B9, B10, B12, B6, B8 (v0.12.4);
   on 2026-10-09 B21 (v0.12.5, tagged) and the Julia guide review.
 - `test-zorba-run` is merged into `main` and kept; the next Zorba change can start from `main`.
-- `b5-switch-edge`, `b11-unified-transformer` merged and deleted; `b21-topology-lookup` merged, kept. Next
-  free decision id: **D46**.
+- `b5-switch-edge`, `b11-unified-transformer` merged and deleted; `b21-topology-lookup` merged, kept;
+  `b22-build-solution` holds B22's plan. Next free decision id: **D47**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -37,11 +37,11 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-09 by Tom Va
 
 ## In progress
 
-- Review of `main` (v0.12.4) against the Julia Modeling knowledge base: proposals only, no code changed.
-  Plan `context/knowledge/plan/julia-guide-review.md`, backlog B21-B28, questions Q7-Q9. Measured: the
-  topology lookup is 13 % and `build_solution` 19 % of a roll's wall; 11 of 11 invalid inputs are accepted.
-- B21 done (v0.12.5, D45, plan `context/knowledge/plan/topology-lookup.md`): week 1 beside `main`, chunk
-  -10.7 %, results bit-identical, `topology` 16 % of the wall to 1.7 %; one entry stays (stop rule not fired).
+- Julia guide review (plan `context/knowledge/plan/julia-guide-review.md`, B21-B28, Q7-Q9): B21 done and
+  merged (v0.12.5, D45), week 1 chunk -10.7 %, `topology` 16 % of the wall to 1.7 %, results bit-identical.
+- B22 decided (D46), not started: branch `b22-build-solution`, plan `context/knowledge/plan/build-solution.md`: a roll
+  builds the committed indices, a `report` keyword (a `NamedTuple`), cheaper builders; estimated -9 to -12 % a
+  chunk. Next: implement, in the plan's commit order.
 - Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
 - B11 is merged and tagged `v0.12.0` (plan `context/knowledge/plan/unified-transformer.md`, D28-D36),
   suite 3126. Zorba flows are not unique without a phase shifter price (D34).
@@ -74,7 +74,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-09 by Tom Va
 
 ## Blocked / waiting
 
-- Q7 (exports), Q8 (tags) and Q9 (typed solution) wait for Tom; B22 item (b) and B24 item (b) need them.
+- Q7 (exports) and Q8 (tags) wait for Tom, Q9 (typed solution) only if B22's stop rule fires; B24 item (b) too.
 - Gap #10 (parallel rolling-horizon throughput) needs a design decision before implementation
   (chunked-parallel vs. document-the-trade-off) — see `open-questions.md` Q1.
 

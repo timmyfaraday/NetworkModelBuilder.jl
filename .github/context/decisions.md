@@ -4,7 +4,7 @@ The rules that still constrain NMB. Read the section for the area you are touchi
 changing it.
 
 How to use this file:
-- A new decision gets the next free id (**D46**), goes in the Log at the bottom, and is written by
+- A new decision gets the next free id (**D47**), goes in the Log at the bottom, and is written by
   the `record-decision` skill. `Decided by` is a person's username, never an agent.
 - A decision that changes a rule below edits the rule in place and cites the new id. The old
   wording goes to the archive line of the id it came from.
@@ -100,6 +100,11 @@ How to use this file:
   dimension `data` is posed over becomes its own column; a column no component or network index
   reports at all is dropped rather than kept `missing` throughout. No new dependency —
   `DataFrame(tables.node)` works for a caller who already has DataFrames.jl.
+- **A solution holds what was asked for: a rolling horizon builds the solution of the network indices
+  it commits, and `report`, a `NamedTuple` whose `node`, `edge` and `unit` are each `true`, `false` or
+  a vector of identifiers, says which families and components a solution holds** (D46). The default
+  is everything, as before. A roll's `solution_processors` see the committed indices only. A typed core
+  under the nested `Dict` stays open as Q9, behind the stop rule of its plan.
 
 ## Component model
 
@@ -510,3 +515,8 @@ Changes: new rule in the Zorba pipeline section.
 Date: 2026-10-09 · Decided by: Tom Van Acker · Area: Component model
 Why: `topology` derived its answer on every call, 80-142 times per network index in a model build, and was 13 % of a rolling horizon's wall time; one remembered answer took `update_model!` of a redispatch on case14 from 6.6-7.1 ms to 4.8-5.3 ms, and it keeps "derived, never tabulated" true, being one entry however many indices there are. Hoisting the lookup meant over 130 call sites in 16 files; one entry, not two, since two gave 4.76 against 4.86 ms.
 Changes: new rule in the Component model section. Revise to two entries if, after B21, `topology` is still above 3 % of the pipeline profile (the redispatch hit rate goes 0.913 to 0.967); edit this rule in place then.
+
+### D46 — A solution holds what was asked for: a roll builds the committed indices, and `report` names the rest
+Date: 2026-10-09 · Decided by: Tom Van Acker · Area: Results access
+Why: `build_solution` was 16 % of a rolling horizon's wall time and a step-3 window of the pipeline holds 91 MB of it, until the chunk ends, yet a roll keeps only the committed indices and the pipeline reads no node and 113 of 439 edges. Building only what is kept and what is asked for (estimated -66 % of the entries on step 3) needs no change to what a default solve returns; a typed core under the nested `Dict` (Q9) is left until that is measured.
+Changes: new rule in the Results access section; D11 stands, the nested `Dict` is still the default result. A roll's `solution_processors` see the committed indices only; its one user reads the model.

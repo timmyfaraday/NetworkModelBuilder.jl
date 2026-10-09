@@ -10,6 +10,7 @@
 # v0.6.0 - the objective pays for the congestion it left                       #
 # v0.12.0 - a measure may belong to one terminal of an edge                    #
 # v0.12.0 - a measure held at the base case builds no rows of its own          #
+# v0.12.6 - a window builds the solution of what it commits                    #
 ################################################################################
 
 ################################################################################
@@ -443,7 +444,7 @@ Give it a `horizon` and it becomes a **rolling** redispatch: a sequence of
 windows along `:time`, each looking `horizon` steps ahead and committing the
 first `step` of them, rather than one problem decided over the whole horizon at
 once. That is [`solve_rolling_horizon`](@ref), which is what this forwards to —
-`step`, `reuse`, `warm_start` and `new_model` along with it — and the result is shaped the same either
+`step`, `reuse`, `warm_start`, `new_model` and `report` along with it — and the result is shaped the same either
 way.
 
 # Examples
@@ -488,7 +489,7 @@ end
 # far — and because `solve_rd` is the entry point that forwards to it.
 
 """
-    solve_rolling_horizon(data, P, F, optimizer; horizon, step = 1, reuse = false, warm_start = false, new_model = () -> JuMP.Model(), kwargs...)
+    solve_rolling_horizon(data, P, F, optimizer; horizon, step = 1, reuse = false, warm_start = false, new_model = () -> JuMP.Model(), report = (;), kwargs...)
 
 Solve `data` as a sequence of overlapping problems along `:time` rather than as
 one problem over the whole of it, and return a single solution covering every
@@ -539,6 +540,12 @@ committed.
   in. A roll needs a *fresh* model each time, so it takes the constructor rather
   than the model — passing `jump_model` here would give every window the same
   one, and is refused.
+- `solution_processors`: called once per window as `f(nm, nm.sol)`, after it is
+  solved. A window builds the solution of the network indices it commits and no
+  others, so `nm.sol["solution"]` holds those and not the lookahead.
+- `report`: the components every window's solution holds, all of them by
+  default, see [`build_solution`](@ref). A roll that is read for a few edges and
+  units asks for those, and builds and keeps only them.
 
 Remaining keyword arguments reach [`instantiate_model`](@ref) and
 [`optimize_model!`](@ref), as they do for [`solve_model`](@ref).
@@ -641,7 +648,7 @@ julia> nw_solution(result, 17)["unit"]["3"]["pgup"]
 function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimizer;
                                horizon::Int, step::Int = 1, reuse::Bool = false,
                                warm_start::Bool = false, new_model = () -> JuMP.Model(),
-                               solution_processors = [], kwargs...
+                               solution_processors = [], report::NamedTuple = (;), kwargs...
                               ) where {P<:AbstractProblemType,F<:AbstractFormulationType}
     haskey(kwargs, :jump_model) &&
         throw(ArgumentError("a rolling horizon builds one model per window, so it takes a " *
@@ -685,7 +692,10 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
               instantiate_model(w, P, F; jump_model = new_model(), kwargs...))
         held, before = nm, kept
         warm_start && !reuse && _warm_start!(nm, previous, kept)
-        optimize_model!(nm, optimizer; solution_processors)
+
+        # a window builds the solution of the network indices it commits and no others
+        settled = [m for m in nw_ids(nm) if coordinates(nm, m).time in 1:length(committed)]
+        optimize_model!(nm, optimizer; solution_processors, solution_indices = settled, report)
 
         record = Dict{String,Any}(
             "first"              => first,
@@ -711,12 +721,9 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
         priced &= nm.sol["dual_status"] == JuMP.FEASIBLE_POINT
 
         # keep what the window committed, under the network indices it came from
-        settled = Int[]
-        for m in nw_ids(nm)
-            coordinates(nm, m).time in 1:length(committed) || continue
+        for m in settled
             solution["$(kept[m])"] = nm.sol["solution"]["nw"]["$m"]
             cost += network_weight(nm, m) * _value(network_cost(nm, m))
-            push!(settled, m)
         end
 
         # and pay for the periods this window both saw whole and committed whole

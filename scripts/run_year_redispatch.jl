@@ -184,7 +184,7 @@ function run_chunk(data::NetworkData, hours::Vector{Int})
         rd2 = Redispatch(; monitored = cb_monitored, control = :preventive, overload = OVERLOAD_PRICE)
         run2 = solve_checked(d2, rd2; horizon = min(HORIZON_CB, T), step = min(STEP_CB, T),
                              primary = xpress_model(threads = XPRESS_THREADS), fallback = highs_model(),
-                             tol = VIOLATION_TOL)
+                             tol = VIOLATION_TOL, report = pipeline_report(d2, cb_monitored))
         result2 = run2.result
         write_csv(joinpath(dir, "02_summary.csv"), summary_of(hours, result2))
         write_csv(joinpath(dir, "02_redispatch_volumes.csv"), redispatch_volumes(d2, result2))
@@ -218,7 +218,7 @@ function run_chunk(data::NetworkData, hours::Vector{Int})
                           overload = OVERLOAD_PRICE)
         run3 = solve_checked(d3, rd3; horizon = min(HORIZON_BE, T), step = min(STEP_BE, T),
                              primary = xpress_model(threads = XPRESS_THREADS), fallback = highs_model(),
-                             tol = VIOLATION_TOL)
+                             tol = VIOLATION_TOL, report = pipeline_report(d3, monitored_all))
         result3 = run3.result
         write_csv(joinpath(dir, "03_summary.csv"), summary_of(hours, result3))
         write_csv(joinpath(dir, "03_redispatch_volumes.csv"), redispatch_volumes(d3, result3))

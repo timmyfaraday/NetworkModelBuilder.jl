@@ -10,6 +10,41 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+## [0.12.6] - 2026-10-09
+
+### Added
+
+- A solution holds what it is asked for. `build_solution(nm; nws, report)` and
+  `optimize_model!(nm, optimizer; solution_indices, report)` take the network indices to build
+  and a `report`, a `NamedTuple` whose `node`, `edge` and `unit` are each `true`, `false` or a
+  vector of identifiers; a family left out is `true`, so the default is the whole solution, as
+  before. A family that is not asked for stays in the result, empty. An unknown family, an
+  identifier the model does not have, or any other value is an `ArgumentError`. `solve_model`,
+  `solve_rd` and `solve_rolling_horizon` take `report` too. `solution_tables` and `print_summary`
+  show what the result holds; `zorba_tables` and `security_tables` read every edge, so leave
+  `report` alone for a result they are to read.
+
+### Changed
+
+- A rolling horizon builds, for each window, the solution of the network indices that window
+  commits and no others, where it built the lookahead too and threw it away. The `solution_processors`
+  of a roll therefore see the committed indices in `nm.sol["solution"]`. The result of the roll
+  is unchanged.
+- The six solution builders (node, edge and unit, in current and linearized form) look a container
+  up once per component type, make a component's key once and assign each entry, where they looked
+  up per component, made the key up to five times and built each entry through the vararg `Dict`
+  constructor. The result is `isequal` to the old one on case14, on case5 with time and contingency
+  dimensions, and on real windows. One real window, `build_solution` over every index, minimum of
+  five: 80 indices 0.43 s to 0.29 s and 0.20 to 0.18 GB, 42 indices 0.134 s to 0.080 s.
+- With the `report` the Zorba pipeline reads (`pipeline_report` in `scripts/PipelineReports.jl`: no
+  node, the monitored edges and the phase shifting transformers, every generator and storage
+  unit), the same window builds 9,762 of 34,962 edges and 32,880 of 51,600 units: 0.31 s to 0.14 s
+  and 89 MB to 31 MB. A Zorba week of 24 h chunks against 0.12.5, side by side, took 12.3 % less
+  wall time (871 s against 993 s over the 7 chunks, faster in 7 of 7), and a chunk peaked at 2.9 GB
+  where it peaked at 5.0 GB. Objectives are bit-identical and so are the overload, shedding,
+  spillage and congestion files; the redispatch volume files hold the same rows in another order,
+  since `redispatch_volumes` reads them in `Dict` order.
+
 ## [0.12.5] - 2026-10-09
 
 ### Changed

@@ -149,11 +149,12 @@ function _worst_violation(backend, ::Type{F}, ::Type{S}, x::Vector{Float64}, ato
 end
 
 """
-    solve_checked(data, redispatch; horizon, step, primary, fallback, tol = 1e-3)
+    solve_checked(data, redispatch; horizon, step, primary, fallback, tol = 1e-3, report = (;))
 
 `solve_rd` of `data` rolled `step` hours at a time over `horizon`, with every
 window's model checked against its own constraints once it is solved, see
-[`worst_violation`](@ref).
+[`worst_violation`](@ref). `report` is the one `build_solution` takes: what every
+window's solution holds.
 
 If the roll is not `OPTIMAL`, or any window breaks a constraint by more than
 `tol`, it is solved again with `fallback`. `primary` and `fallback` are model
@@ -164,13 +165,14 @@ Returns a `NamedTuple`: the `result`, the `solver` that produced it
 result returned, its `worst_violation`, and what the first attempt had said
 (`first_status`, `first_violation`).
 """
-function solve_checked(data, redispatch; horizon::Int, step::Int, primary, fallback, tol::Float64 = 1e-3)
+function solve_checked(data, redispatch; horizon::Int, step::Int, primary, fallback, tol::Float64 = 1e-3,
+                       report::NamedTuple = (;))
     function attempt(model, optimizer)
         worst = Ref(0.0)
         check = (nm, sol) -> haskey(sol, "solution") && (worst[] = max(worst[], worst_violation(nm)))
         result = solve_rd(data, LPFFormulation, optimizer; redispatch, horizon, step,
                           reuse = true, warm_start = false, new_model = model,
-                          solution_processors = [check])
+                          solution_processors = [check], report)
 
         return result, worst[]
     end

@@ -10,6 +10,7 @@
 # v0.6.0 - the overload of an edge is reported                                 #
 # v0.9.4 - registering an edge type is safe from concurrent threads            #
 # v0.10.1 - exports its own public names                                       #
+# v0.12.6 - the solution builders are cheaper and hold what is asked           #
 ################################################################################
 
 export register_edge_type!, edge_types
@@ -193,28 +194,47 @@ constraint_edge_coupling(::NetworkModel, ::Type{T}) where {T<:AbstractEdge} = no
 ################################################################################
 
 """
-    solution_edge(nm, nw)
+    solution_edge(nm, nw; only = true)
 
 The edge part of the solution at network index `nw`: for every arc the terminal
 current and the active and reactive power flowing from the node into that
 terminal.
+
+`only` is `true` for every edge, `false` for none, or the `Set` of the identifiers
+of the edges to hold.
 """
-function solution_edge(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:IVRFormulation}
+function solution_edge(nm::NetworkModel{P,F}, nw::Int; only::Union{Bool,Set{Int}} = true
+                      ) where {P<:AbstractProblemType,F<:IVRFormulation}
     sol = Dict{String,Any}()
-    for T in _EDGE_TYPES, e in ids(nm, T; nw)
-        entry = Dict{String,Any}("terminal" => Dict{String,Any}())
-        for a in edge_arcs(nm, e; nw)
-            vr = JuMP.value(var(nm, :vr, a.node; nw))
-            vi = JuMP.value(var(nm, :vi, a.node; nw))
-            cr = JuMP.value(var(nm, :cr, a;      nw))
-            ci = JuMP.value(var(nm, :ci, a;      nw))
-            entry["terminal"]["$(a.terminal)"] = Dict{String,Any}(
-                "node" => a.node, "cr" => cr, "ci" => ci,
-                "p" => vr * cr + vi * ci, "q" => vi * cr - vr * ci)
+    only === false && return sol
+    sizehint!(sol, _room(length(topology(nm; nw).edge), only))
+    for T in _EDGE_TYPES
+        es = _asked(ids(nm, T; nw), only)
+        isempty(es) && continue
+
+        vrs, vis = var(nm, :vr; nw), var(nm, :vi; nw)
+        crs, cis = var(nm, :cr; nw), var(nm, :ci; nw)
+        for e in es
+            terminals = Dict{String,Any}()
+            for a in edge_arcs(nm, e; nw)
+                vr = JuMP.value(vrs[a.node])
+                vi = JuMP.value(vis[a.node])
+                cr = JuMP.value(crs[a])
+                ci = JuMP.value(cis[a])
+
+                terminal        = Dict{String,Any}()
+                terminal["node"] = a.node
+                terminal["cr"]   = cr
+                terminal["ci"]   = ci
+                terminal["p"]    = vr * cr + vi * ci
+                terminal["q"]    = vi * cr - vr * ci
+                terminals[string(a.terminal)] = terminal
+            end
+            entry = Dict{String,Any}("terminal" => terminals)
+            _solution_edge_overload!(entry, nm, e, nw)
+            solution_edge!(entry, nm, T, e, nw)
+            sol[string(e)] = entry
         end
-        _solution_edge_overload!(entry, nm, e, nw)
-        solution_edge!(entry, nm, T, e, nw)
-        sol["$e"] = entry
     end
 
     return sol
@@ -245,17 +265,29 @@ solution_edge!(::Dict{String,Any}, ::NetworkModel, ::Type{T}, ::Int, ::Int) wher
     nothing
 
 "the edge part of the solution under a linearized formulation"
-function solution_edge(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:LPFFormulation}
+function solution_edge(nm::NetworkModel{P,F}, nw::Int; only::Union{Bool,Set{Int}} = true
+                      ) where {P<:AbstractProblemType,F<:LPFFormulation}
     sol = Dict{String,Any}()
-    for T in _EDGE_TYPES, e in ids(nm, T; nw)
-        entry = Dict{String,Any}("terminal" => Dict{String,Any}())
-        for a in edge_arcs(nm, e; nw)
-            entry["terminal"]["$(a.terminal)"] = Dict{String,Any}(
-                "node" => a.node, "p" => JuMP.value(var(nm, :p, a; nw)))
+    only === false && return sol
+    sizehint!(sol, _room(length(topology(nm; nw).edge), only))
+    for T in _EDGE_TYPES
+        es = _asked(ids(nm, T; nw), only)
+        isempty(es) && continue
+
+        ps = var(nm, :p; nw)
+        for e in es
+            terminals = Dict{String,Any}()
+            for a in edge_arcs(nm, e; nw)
+                terminal         = Dict{String,Any}()
+                terminal["node"] = a.node
+                terminal["p"]    = JuMP.value(ps[a])
+                terminals[string(a.terminal)] = terminal
+            end
+            entry = Dict{String,Any}("terminal" => terminals)
+            _solution_edge_overload!(entry, nm, e, nw)
+            solution_edge!(entry, nm, T, e, nw)
+            sol[string(e)] = entry
         end
-        _solution_edge_overload!(entry, nm, e, nw)
-        solution_edge!(entry, nm, T, e, nw)
-        sol["$e"] = entry
     end
 
     return sol

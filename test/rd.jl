@@ -13,6 +13,7 @@
 # v0.12.0 - which measures are held at the base case                           #
 # v0.12.0 - the meshed network's shifter can step                              #
 # v0.12.1 - a limit past pi/2 does not change the shape of a model             #
+# v0.12.6 - a window builds only what it commits, and what is reported         #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The
@@ -1077,6 +1078,41 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
             # the committed steps of the windows partition the horizon exactly once
             committed = reduce(vcat, w["committed"] for w in result["horizon"]["window"])
             @test sort(committed) == [1, 2, 3, 4]
+        end
+    end
+
+    @testset "a window builds the solution of the indices it commits" begin
+        data = rolling_network()
+        seen = Vector{Vector{Int}}()
+        look = (nm, sol) -> push!(seen, sort(parse.(Int, collect(keys(sol["solution"]["nw"])))))
+
+        result = quiet(() -> solve_rolling_horizon(data, RedispatchProblem, LPFFormulation,
+                                                   OPTIMIZER; horizon = 3, step = 1,
+                                                   solution_processors = [look]))
+
+        # four windows of 3, 3, 2 and 1 steps each commit their first step, and build only that
+        @test seen == fill([1], 4)
+        @test sort(parse.(Int, collect(keys(result["solution"]["nw"])))) == [1, 2, 3, 4]
+    end
+
+    @testset "a roll holds the report it was asked for" begin
+        data = rolling_network()
+        full = quiet(() -> solve_rolling_horizon(data, RedispatchProblem, LPFFormulation,
+                                                 OPTIMIZER; horizon = 2, step = 1))
+        kept = quiet(() -> solve_rolling_horizon(data, RedispatchProblem, LPFFormulation,
+                                                 OPTIMIZER; horizon = 2, step = 1,
+                                                 report = (; node = false)))
+        also = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1,
+                                    report = (; node = false)))
+        held(result, n, family) = result["solution"]["nw"]["$n"][family]
+
+        @test kept["objective"] ≈ full["objective"]
+        for n in 1:4
+            @test !isempty(held(full, n, "node"))
+            @test isempty(held(kept, n, "node")) && isempty(held(also, n, "node"))
+            for family in ("edge", "unit")
+                @test sort(collect(keys(held(kept, n, family)))) == sort(collect(keys(held(full, n, family))))
+            end
         end
     end
 

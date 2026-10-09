@@ -10,6 +10,7 @@
 # v0.2.0 - network dependent data stored per component                         #
 # v0.10.1 - exports its own public names                                       #
 # v0.11.0 - an island without a reference node is anchored                     #
+# v0.12.6 - the solution builders are cheaper and hold what is asked           #
 ################################################################################
 
 export Node, NodeType, PQ, PV, REF, ISOLATED, reference_nodes
@@ -585,48 +586,68 @@ end
 # Node — solution                                                              #
 ################################################################################
 
-"the node part of the solution at network index `nw`"
-function solution_node(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:IVRFormulation}
+"the node part of the solution at network index `nw`, of the nodes `only` asks for: `true` for all, `false` for none, or a `Set` of identifiers"
+function solution_node(nm::NetworkModel{P,F}, nw::Int; only::Union{Bool,Set{Int}} = true
+                      ) where {P<:AbstractProblemType,F<:IVRFormulation}
     sol   = Dict{String,Any}()
+    only === false && return sol
     real  = get(con(nm; nw), :node_balance_real, nothing)
     imag  = get(con(nm; nw), :node_balance_imag, nothing)
     duals = JuMP.has_duals(nm.model) && real !== nothing && imag !== nothing
 
-    for i in ids(nm, Node; nw)
-        vr = JuMP.value(var(nm, :vr, i; nw))
-        vi = JuMP.value(var(nm, :vi, i; nw))
-        sol["$i"] = Dict{String,Any}("vr" => vr, "vi" => vi,
-                                     "vm" => hypot(vr, vi), "va" => atan(vi, vr))
+    is = _asked(ids(nm, Node; nw), only)
+    isempty(is) && return sol
+    sizehint!(sol, length(is))
+    vrs, vis = var(nm, :vr; nw), var(nm, :vi; nw)
+
+    for i in is
+        vr = JuMP.value(vrs[i])
+        vi = JuMP.value(vis[i])
+        entry = Dict{String,Any}()
+        entry["vr"] = vr
+        entry["vi"] = vi
+        entry["vm"] = hypot(vr, vi)
+        entry["va"] = atan(vi, vr)
+        sol[string(i)] = entry
 
         # the balance is in current here, so `lambda_real` and `lambda_imag` price
         # a per unit of current; `lambda` and `lambda_q` are the power prices
         # behind them, see `nodal_prices`
         duals && haskey(real, i) || continue
         lr, li = _balance_price(real[i]), _balance_price(imag[i])
-        sol["$i"]["lambda_real"] = lr
-        sol["$i"]["lambda_imag"] = li
+        entry["lambda_real"] = lr
+        entry["lambda_imag"] = li
 
         λ = _rotate_price(lr, li, vr, vi)
         λ === nothing && continue
-        sol["$i"]["lambda"]   = first(λ)
-        sol["$i"]["lambda_q"] = last(λ)
+        entry["lambda"]   = first(λ)
+        entry["lambda_q"] = last(λ)
     end
 
     return sol
 end
 
 "the node part of the solution under a linearized formulation"
-function solution_node(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:LPFFormulation}
+function solution_node(nm::NetworkModel{P,F}, nw::Int; only::Union{Bool,Set{Int}} = true
+                      ) where {P<:AbstractProblemType,F<:LPFFormulation}
     sol     = Dict{String,Any}()
+    only === false && return sol
     balance = get(con(nm; nw), :node_balance, nothing)
     duals   = JuMP.has_duals(nm.model) && balance !== nothing
 
-    for i in ids(nm, Node; nw)
-        va = JuMP.value(var(nm, :va, i; nw))
-        sol["$i"] = Dict{String,Any}("va" => va, "vm" => 1.0)
+    is = _asked(ids(nm, Node; nw), only)
+    isempty(is) && return sol
+    sizehint!(sol, length(is))
+    vas = var(nm, :va; nw)
+
+    for i in is
+        entry = Dict{String,Any}()
+        entry["va"] = JuMP.value(vas[i])
+        entry["vm"] = 1.0
+        sol[string(i)] = entry
 
         duals && haskey(balance, i) || continue
-        sol["$i"]["lambda"] = _balance_price(balance[i])
+        entry["lambda"] = _balance_price(balance[i])
     end
 
     return sol

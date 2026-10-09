@@ -9,6 +9,7 @@
 # v0.1.0 - initial implementation                                              #
 # v0.9.4 - registering a unit type is safe from concurrent threads             #
 # v0.10.1 - exports its own public names                                       #
+# v0.12.6 - the solution builders are cheaper and hold what is asked           #
 ################################################################################
 
 export register_unit_type!, unit_types
@@ -243,25 +244,44 @@ end
 ################################################################################
 
 """
-    solution_unit(nm, nw)
+    solution_unit(nm, nw; only = true)
 
 The unit part of the solution at network index `nw`: for every unit the injected
 current and the active and reactive power it injects into its node. Unit types
 add their own entries through [`solution_unit`](@ref) methods.
+
+`only` is `true` for every unit, `false` for none, or the `Set` of the identifiers
+of the units to hold.
 """
-function solution_unit(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:IVRFormulation}
+function solution_unit(nm::NetworkModel{P,F}, nw::Int; only::Union{Bool,Set{Int}} = true
+                      ) where {P<:AbstractProblemType,F<:IVRFormulation}
     sol = Dict{String,Any}()
-    for T in _UNIT_TYPES, u in ids(nm, T; nw)
-        i   = node(unit(nm, u; nw))
-        vr  = JuMP.value(var(nm, :vr,  i; nw))
-        vi  = JuMP.value(var(nm, :vi,  i; nw))
-        cru = JuMP.value(var(nm, :cru, u; nw))
-        ciu = JuMP.value(var(nm, :ciu, u; nw))
-        sol["$u"] = Dict{String,Any}("type" => string(nameof(T)), "node" => i,
-                                     "cru" => cru, "ciu" => ciu,
-                                     "p" => vr * cru + vi * ciu,
-                                     "q" => vi * cru - vr * ciu)
-        solution_unit!(sol["$u"], nm, T, u, nw)
+    only === false && return sol
+    sizehint!(sol, _room(length(topology(nm; nw).unit), only))
+    for T in _UNIT_TYPES
+        us = _asked(ids(nm, T; nw), only)
+        isempty(us) && continue
+
+        type       = string(nameof(T))
+        vrs, vis   = var(nm, :vr; nw), var(nm, :vi; nw)
+        crus, cius = var(nm, :cru; nw), var(nm, :ciu; nw)
+        for u in us
+            i   = node(unit(nm, u; nw))
+            vr  = JuMP.value(vrs[i])
+            vi  = JuMP.value(vis[i])
+            cru = JuMP.value(crus[u])
+            ciu = JuMP.value(cius[u])
+
+            entry         = Dict{String,Any}()
+            entry["type"] = type
+            entry["node"] = i
+            entry["cru"]  = cru
+            entry["ciu"]  = ciu
+            entry["p"]    = vr * cru + vi * ciu
+            entry["q"]    = vi * cru - vr * ciu
+            solution_unit!(entry, nm, T, u, nw)
+            sol[string(u)] = entry
+        end
     end
 
     return sol
@@ -272,13 +292,25 @@ solution_unit!(::Dict{String,Any}, ::NetworkModel, ::Type{T}, ::Int, ::Int) wher
     nothing
 
 "the unit part of the solution under a linearized formulation"
-function solution_unit(nm::NetworkModel{P,F}, nw::Int) where {P<:AbstractProblemType,F<:LPFFormulation}
+function solution_unit(nm::NetworkModel{P,F}, nw::Int; only::Union{Bool,Set{Int}} = true
+                      ) where {P<:AbstractProblemType,F<:LPFFormulation}
     sol = Dict{String,Any}()
-    for T in _UNIT_TYPES, u in ids(nm, T; nw)
-        sol["$u"] = Dict{String,Any}("type" => string(nameof(T)),
-                                     "node" => node(unit(nm, u; nw)),
-                                     "p"    => JuMP.value(var(nm, :pu, u; nw)))
-        solution_unit!(sol["$u"], nm, T, u, nw)
+    only === false && return sol
+    sizehint!(sol, _room(length(topology(nm; nw).unit), only))
+    for T in _UNIT_TYPES
+        us = _asked(ids(nm, T; nw), only)
+        isempty(us) && continue
+
+        type = string(nameof(T))
+        pus  = var(nm, :pu; nw)
+        for u in us
+            entry         = Dict{String,Any}()
+            entry["type"] = type
+            entry["node"] = node(unit(nm, u; nw))
+            entry["p"]    = JuMP.value(pus[u])
+            solution_unit!(entry, nm, T, u, nw)
+            sol[string(u)] = entry
+        end
     end
 
     return sol

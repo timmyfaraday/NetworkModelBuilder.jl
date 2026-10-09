@@ -9,6 +9,7 @@
 # v0.1.0 - initial implementation                                              #
 # v0.2.0 - network dependent data stored per component                         #
 # v0.12.5 - a topology lookup has one type and answers repeats                 #
+# v0.12.6 - a solution holds the indices and components asked for              #
 ################################################################################
 
 "a copy of load `ld` whose demand follows `profile` over dimension `:time`"
@@ -213,6 +214,81 @@ const PROFILE = [0.9, 1.0, 1.1]
         # and the index just asked is not derived again
         asked(net, n) = (topology(net; nw = n); @allocated topology(net; nw = n))
         @test asked(net, 2) == 0
+    end
+
+    @testset "a solution holds the network indices asked for" begin
+        data = quiet(() -> parse_file(case("case5")))
+        mn   = set_dimension(data, Dimension(:time => 3); apply! = scale_loads(PROFILE))
+        nm   = instantiate_model(mn, OptimalPowerFlowProblem, IVRFormulation)
+        full = quiet(() -> optimize_model!(nm, OPTIMIZER))
+        part = build_solution(nm; nws = [2])
+
+        @test collect(keys(part["solution"]["nw"])) == ["2"]
+        @test isequal(part["solution"]["nw"]["2"], full["solution"]["nw"]["2"])
+        @test part["objective"] == full["objective"]
+        @test_throws ArgumentError build_solution(nm; nws = [4])
+
+        # optimize_model! builds those and no others
+        nm2   = instantiate_model(mn, OptimalPowerFlowProblem, IVRFormulation)
+        asked = quiet(() -> optimize_model!(nm2, OPTIMIZER; solution_indices = [1, 3]))
+        @test sort(collect(keys(asked["solution"]["nw"]))) == ["1", "3"]
+        @test nw_solution(asked, 3)["node"]["1"]["vm"] ≈ nw_solution(full, 3)["node"]["1"]["vm"] atol = 1e-6
+    end
+
+    @testset "a report names what a solution holds" begin
+        data = quiet(() -> parse_file(case("case5")))
+        mn   = set_dimension(data, Dimension(:time => 3); apply! = scale_loads(PROFILE))
+        nm   = instantiate_model(mn, OptimalPowerFlowProblem, IVRFormulation)
+        full = quiet(() -> optimize_model!(nm, OPTIMIZER))
+        held(result, n, family) = result["solution"]["nw"]["$n"][family]
+        eds  = ids(network(mn), AbstractEdge)[[1, 3]]
+        gen  = ids(network(mn), Generator)[1]
+
+        # nothing said, or everything said, is the whole solution
+        @test isequal(build_solution(nm)["solution"], full["solution"])
+        @test isequal(build_solution(nm; report = (; node = true, edge = true, unit = true))["solution"],
+                      full["solution"])
+
+        # a family left out stays in the result, empty, and the others are as they were
+        nodeless = build_solution(nm; report = (; node = false))
+        for n in 1:3
+            @test isempty(held(nodeless, n, "node"))
+            @test isequal(held(nodeless, n, "edge"), held(full, n, "edge"))
+            @test isequal(held(nodeless, n, "unit"), held(full, n, "unit"))
+        end
+
+        # identifiers keep those components and no others
+        some = build_solution(nm; report = (; edge = eds, unit = [gen]))
+        for n in 1:3
+            @test sort(parse.(Int, collect(keys(held(some, n, "edge"))))) == sort(eds)
+            @test collect(keys(held(some, n, "unit"))) == ["$gen"]
+            @test isequal(held(some, n, "edge")["$(eds[2])"], held(full, n, "edge")["$(eds[2])"])
+            @test isequal(held(some, n, "unit")["$gen"], held(full, n, "unit")["$gen"])
+            @test isequal(held(some, n, "node"), held(full, n, "node"))
+        end
+
+        # a family that does not exist, an identifier that does not exist, and a
+        # value that says neither yes nor no nor which are all refused
+        @test_throws ArgumentError build_solution(nm; report = (; bus = true))
+        @test_throws ArgumentError build_solution(nm; report = (; edge = [999]))
+        @test_throws ArgumentError build_solution(nm; report = (; node = 1))
+
+        # the solve asks for it the same way
+        nm2   = instantiate_model(mn, OptimalPowerFlowProblem, IVRFormulation)
+        asked = quiet(() -> optimize_model!(nm2, OPTIMIZER; report = (; node = false)))
+        @test isempty(held(asked, 1, "node")) && !isempty(held(asked, 1, "edge"))
+
+        solved = quiet(() -> solve_model(mn, OptimalPowerFlowProblem, IVRFormulation, OPTIMIZER;
+                                         report = (; edge = false, unit = false)))
+        @test isempty(held(solved, 2, "edge")) && isempty(held(solved, 2, "unit"))
+        @test !isempty(held(solved, 2, "node"))
+
+        # and the tables hold what the result holds
+        tables = solution_tables(mn, some)
+        @test sort(unique(tables.edge.id)) == sort(eds)
+        @test unique(tables.unit.id) == [gen]
+        @test length(tables.node.id) == length(solution_tables(mn, full).node.id)
+        @test isempty(solution_tables(mn, nodeless).node)
     end
 
     @testset "the dimension is visible from the model" begin

@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.8.0 - the zorba adapter                                                   #
 # v0.12.0 - a phase shifter is a winding that can move                         #
+# v0.13.0 - a branch holds one entry per terminal of a field                   #
 ################################################################################
 
 # The network below is the one Zorba's own `BaseTestCase.get_ref_minimal_study`
@@ -245,7 +246,7 @@ end
         grid = merge(ref_grid(), (capacity = [8.0, missing, 11.0],))
         data = parse_zorba(; grid, net_position = ref_net_position())
 
-        @test edge(network(data), 2; nw = 1).rate_a == Inf
+        @test edge(network(data), 2; nw = 1).rate_a == [Inf, Inf]
 
         # an edge with no rating has no overload to report, and reports zero
         # rather than dropping the row

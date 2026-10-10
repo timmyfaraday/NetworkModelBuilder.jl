@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
 # v0.12.0 - a transformer has an entry per winding                             #
+# v0.13.0 - a branch holds one entry per terminal of a field                   #
 ################################################################################
 
 # The reference objectives below are those of PowerModels.jl v0.21, computed in
@@ -76,7 +77,7 @@
         for e in ids(net, Branch)
             br = edge(net, e)::Branch
             E[e] = Branch(; id = br.id, name = br.name, terminals = br.terminals,
-                          r = br.r, x = br.x, b_fr = br.b_fr, b_to = br.b_to,
+                          r = br.r, x = br.x, b_sh = br.b_sh,
                           rate_a = Inf, angmin = br.angmin, angmax = br.angmax,
                           status = br.status)
         end

@@ -14,6 +14,7 @@
 # v0.12.0 - a winding can step through the positions of a range                #
 # v0.13.0 - a two-winding transformer is rated at each terminal                #
 # v0.13.0 - its per-winding data is normalised in edge.jl                      #
+# v0.13.0 - a table may give a scalar where it takes an entry per winding      #
 ################################################################################
 
 export AbstractTransformer, Transformer, TapMode, FIXED, CONTINUOUS, STEPPED
@@ -183,6 +184,8 @@ Base.@kwdef struct Transformer <: AbstractTransformer
                    status, ext)
     end
 end
+
+_per_terminal_data(::Type{Transformer}) = true
 
 "a `Bool` or a `TapMode` as a `TapMode`"
 _tap_mode(m::TapMode) = m

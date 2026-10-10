@@ -9,6 +9,7 @@
 # v0.1.0 - initial implementation                                              #
 # v0.9.1 - a bare case file name is found from the bundled test data           #
 # v0.12.0 - a transformer has an entry per winding                             #
+# v0.13.0 - a branch holds one entry per terminal of a field                   #
 ################################################################################
 
 @testset "matpower" begin
@@ -46,8 +47,8 @@
         @test edge(net, 8)::Transformer isa Transformer
         @test edge(net, 8).tm   ≈ [0.978, 1.0]     # the ratio sits on the from winding
         @test edge(net, 8).ta   ≈ [0.0, 0.0]
-        @test edge(net, 1).b_fr ≈ 0.0528 / 2
-        @test edge(net, 1).rate_a == Inf          # a zero rating means unlimited
+        @test edge(net, 1).b_sh ≈ [0.0528, 0.0]   # the charging of the whole line, half at each end
+        @test edge(net, 1).rate_a == [Inf, Inf]   # a zero rating means unlimited
         @test edge(net, 1).angmax ≈ deg2rad(360)
 
         # the cost polynomial is stored ascending and rescaled to per unit

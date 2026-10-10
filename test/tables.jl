@@ -9,6 +9,8 @@
 # v0.6.0 - initial implementation                                              #
 # v0.9.2 - a column-length mismatch is a clear error, not a BoundsError        #
 # v0.9.3 - an all-empty table set warns instead of silently building nothing   #
+# v0.13.0 - a branch holds one entry per terminal of a field                   #
+# v0.13.0 - a cell may be a scalar or a list for such a field                  #
 ################################################################################
 
 # The radial network of `test/rd.jl` written as tables: the market ran generator
@@ -56,11 +58,38 @@ radial_tables() = (node = TBL_NODE, edge = TBL_EDGE, unit = TBL_UNIT)
         @test nodes(net)[2].type === PQ
         @test edges(net)[1] isa Branch
         @test edges(net)[1].terminals == [1, 2]
-        @test edges(net)[1].rate_a == 0.5
+        @test edges(net)[1].rate_a == [0.5, 0.5]
         @test units(net)[1] isa Generator
         @test units(net)[1].cost == [0.0, 10.0]
         @test units(net)[3] isa FixedLoad
         @test units(net)[3].pd == 1.0
+    end
+
+    @testset "a field with an entry per terminal takes a scalar or a list" begin
+        node = (id = [1, 2, 3], type = ["REF", "PQ", "PQ"], vm = [1.0, 1.0, 1.0])
+        edge = (id        = [1, 2, 3],
+                component = ["Branch", "Branch", "Transformer"],
+                terminals = [[1, 2], [1, 2, 3], [2, 3]],
+                r         = [0.0, [0.0, 0.0, 0.0], 0.0],
+                x         = [0.1, [0.1, 0.2, 0.3], 0.1],
+                rate_a    = [0.5, 0.5, [0.5, 0.8]])
+        net  = network(parse_tables(; node, edge, unit = TBL_UNIT))
+
+        @test edges(net)[1].x == [0.1, 0.0]
+        @test edges(net)[1].rate_a == [0.5, 0.5]
+        @test edges(net)[2].x == [0.1, 0.2, 0.3]
+        @test edges(net)[2].rate_a == [0.5, 0.5, 0.5]
+        @test edges(net)[3] isa Transformer
+        @test edges(net)[3].rate_a == [0.5, 0.8]
+
+        # a scalar does not stand for three terminals, whoever reads it
+        three = merge(edge, (id = [1], component = ["Branch"], terminals = [[1, 2, 3]],
+                             r = [0.0], x = [0.1], rate_a = [0.5]))
+        @test_throws ArgumentError parse_tables(; node, edge = three, unit = TBL_UNIT)
+
+        # and a generator's cost is still a list
+        poly = merge(TBL_UNIT, (cost = [0.0, 10.0, missing],))
+        @test_throws ArgumentError parse_tables(; node, edge, unit = poly)
     end
 
     @testset "what it reads solves to the answer worked out by hand" begin

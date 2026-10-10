@@ -14,6 +14,7 @@
 # v0.13.0 - the fragments a branch and a transformer share are here            #
 # v0.13.0 - the linearized rating and angle limit are two constraints          #
 # v0.13.0 - the per-terminal data of an edge is normalised here                #
+# v0.13.0 - an edge type says whether a table may give a scalar for it         #
 ################################################################################
 
 export register_edge_type!, edge_types
@@ -90,6 +91,15 @@ function _per_terminal(x, n::Int, neutral, owner::String, part::String, id, fiel
                         "terminal; a scalar stands for the first $part of a two-$part " *
                         "$owner only"))
 end
+
+"""
+    _per_terminal_data(T)
+
+Whether the constructor of the type `T` takes a scalar for a field with an entry per
+terminal, through [`_per_terminal`](@ref). A table may then give a scalar cell
+where it would otherwise have to give a list.
+"""
+_per_terminal_data(::Type) = false
 
 ################################################################################
 # Edge — variables                                                             #

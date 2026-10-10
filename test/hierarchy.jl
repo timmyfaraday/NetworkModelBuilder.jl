@@ -9,6 +9,7 @@
 # v0.3.0 - component hierarchy                                                 #
 # v0.12.0 - one Transformer; its controls are flags, not types                 #
 # v0.13.0 - one Branch, so no branch type is compared with another             #
+# v0.13.0 - a branch holds one entry per terminal of a field                   #
 ################################################################################
 
 "case5 with edge 5, which has a turns ratio, rebuilt as a transformer carrying `extra`"
@@ -52,7 +53,7 @@ end
 
         # a rating that follows the weather is a profile in the `rate_a` of any branch
         br = Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, rate_a = 1.5)
-        @test dynamic_rating(br) == 1.5
+        @test dynamic_rating(br) == [1.5, 1.5]
         for T in (Generator, FixedLoad, FlexibleLoad, Storage, Shunt)
             @test T in unit_types()
         end

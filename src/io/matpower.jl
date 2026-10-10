@@ -9,6 +9,7 @@
 # v0.1.0 - initial implementation                                              #
 # v0.9.1 - a bare case file name is found from the bundled test data           #
 # v0.12.0 - a branch with a ratio is a transformer of two windings             #
+# v0.13.0 - a branch takes the charging b as the shunt of its section          #
 ################################################################################
 
 ################################################################################
@@ -210,7 +211,7 @@ function _matpower_edges(branch::Matrix{Float64}, baseMVA::Float64)
         ratio  = branch[e, 9]
         angle  = branch[e, 10]
         common = (id = e, terminals = [f, t],
-                  r = branch[e, 3], x = branch[e, 4], b_fr = b / 2, b_to = b / 2,
+                  r = branch[e, 3], x = branch[e, 4], b_sh = b,
                   rate_a = rate <= 0 ? Inf : rate / baseMVA,
                   angmin = size(branch, 2) >= 12 ? deg2rad(branch[e, 12]) : -pi / 2,
                   angmax = size(branch, 2) >= 13 ? deg2rad(branch[e, 13]) :  pi / 2,

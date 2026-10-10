@@ -1,6 +1,6 @@
 # Guard rails for the measure step: a hot-path allocation test, a benchmark, GC columns (B25)
 
-Status: implemented on `b25-guard-rails` (v0.12.7), measured, not merged · Author: Tom Van Acker (requested) · Date: 2026-10-09
+Status: implemented, merged into `main` and tagged `v0.12.7` · Author: Tom Van Acker (requested) · Date: 2026-10-09
 Decisions: D47 recorded 2026-10-09 (next free after: D48); no open question
 Priority: P2 · Effort: Medium. Branch `b25-guard-rails`, cut from `main` at `0e28585` (v0.12.6);
 becomes v0.12.7. Third move of the review `julia-guide-review.md`, item 5; B22 was the second.

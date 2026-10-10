@@ -25,4 +25,5 @@ Verification per item — the shape `GAP_CLOSURE_PLAN.md` already uses).
 | `julia-guide-review.md` | proposed, awaiting Tom's order (B21-B28, Q7-Q9); nothing implemented | — |
 | `topology-lookup.md` | implemented, merged and tagged `v0.12.5`; week 1 -10.7 % a chunk | D45 |
 | `build-solution.md` | implemented, merged and tagged `v0.12.6`; week 1 -12.3 % a chunk, peak 5.0 to 2.9 GB | D46 |
-| `guard-rails.md` | implemented on `b25-guard-rails` (v0.12.7), not merged; threads 1.79x slower than processes, GC 14 % in both | D47 |
+| `guard-rails.md` | implemented, merged and tagged `v0.12.7`; threads 1.79x slower than processes, GC 14 % in both | D47 |
+| `validation.md` | implemented on `b23-validation` (v0.12.8), not merged; Zorba year breaks no rule, chunk byte-identical | D48 |

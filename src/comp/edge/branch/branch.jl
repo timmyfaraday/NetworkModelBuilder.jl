@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.3.0 - component hierarchy                                                 #
 # v0.10.1 - exports its own public names                                       #
+# v0.12.8 - a branch refuses an impedance or a rating no model can use         #
 ################################################################################
 
 export AbstractBranch, Branch, impedance, shunt_admittance
@@ -57,6 +58,11 @@ the edge has a turns ratio it is a [`Transformer`](@ref), not a branch.
 - `angmin`, `angmax`: the limits on the voltage angle difference [rad].
 - `status`: whether the branch is in service.
 - `ext`: free-form storage.
+
+A branch is refused when its `r` or `x` is not finite, when both are 0, when a
+shunt admittance is not finite, when `rate_a` is negative or NaN, or when its
+angle limits are out of order. A bus coupler has no impedance to give: it is a
+[`Switch`](@ref).
 """
 Base.@kwdef struct Branch <: AbstractBranch
     id       ::Int
@@ -76,17 +82,34 @@ Base.@kwdef struct Branch <: AbstractBranch
 
     function Branch(id, name, terminals, r, x, g_fr, b_fr, g_to, b_to,
                     rate_a, angmin, angmax, status, ext)
-        _check_branch(id, terminals, angmin, angmax)
+        _check_branch(id, terminals, r, x, g_fr, b_fr, g_to, b_to, rate_a, angmin, angmax)
         return new(id, name, terminals, r, x, g_fr, b_fr, g_to, b_to,
                    rate_a, angmin, angmax, status, ext)
     end
 end
 
-function _check_branch(id, terminals, angmin, angmax)
+function _check_branch(id, terminals, r, x, g_fr, b_fr, g_to, b_to, rate_a, angmin, angmax)
     length(terminals) == 2 ||
         throw(ArgumentError("branch $id has $(length(terminals)) terminals, a branch has exactly two"))
+    all_nw(isfinite, r) && all_nw(isfinite, x) ||
+        throw(ArgumentError("branch $id has an impedance that is not finite"))
+    all_nw((r, x) -> r^2 + x^2 > 0, r, x) ||
+        throw(ArgumentError("branch $id has no impedance, r and x are both 0: " *
+                            "a bus coupler is a Switch"))
+    all(y -> all_nw(isfinite, y), (g_fr, b_fr, g_to, b_to)) ||
+        throw(ArgumentError("branch $id has a shunt admittance that is not finite"))
+    all_nw(>=(0), rate_a) ||
+        throw(ArgumentError("branch $id has a rating that is negative or NaN"))
     all_nw(<=, angmin, angmax) ||
         throw(ArgumentError("branch $id has angmin above angmax"))
+
+    return nothing
+end
+
+"refuse a route length that is negative or not finite, for the branches that carry one"
+function _check_length(id, length_km)
+    isfinite(length_km) && length_km >= 0 ||
+        throw(ArgumentError("branch $id has a length that is negative or not finite"))
 
     return nothing
 end

@@ -10,6 +10,30 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+## [0.12.8] - 2026-10-10
+
+### Changed
+
+- A constructor refuses input a model cannot use. Before, 19 of 19 such inputs built, and the solver
+  answered `INFEASIBLE` with nothing pointing at the component, or a row held a `NaN`. Each now raises an
+  `ArgumentError` that names the component, and checks a `NetworkVector` at every network index, whether
+  or not the component is in service:
+  - `Node`: `vmin` below 0 or above `vmax`, a `base_kv` below 0, a `vm` or `va` that is not finite.
+    A `base_kv` of 0 stands for unknown, as Matpower's case14 has it.
+  - `Generator`: `pmin` above `pmax`, `qmin` above `qmax`, a NaN limit, a setpoint or a cost coefficient
+    that is not finite. An infinite limit is how a bound is left out, and `cost_up` and `cost_dn` may be NaN.
+  - `FixedLoad` and `Shunt`: a demand or an admittance that is not finite.
+  - `Branch`, `Cable` and `OverheadLine`: `r` or `x` not finite, `r` and `x` both 0 (a bus coupler is a
+    `Switch`), a shunt admittance not finite, a negative or NaN `rate_a` (`Inf` is unlimited); `Cable`
+    and `OverheadLine` also a `length_km` negative or not finite.
+  - Not refused: the sign of `r` and `x` (a series capacitor has a negative `x`), a negative demand, a
+    negative `bs`, and `pg` outside its limits.
+  Code that built such a component now fails where it builds it. The rules were run over the four bundled
+  Matpower cases and the Zorba year of 8,760 hours (234 nodes, 93 generators, 234 loads, 399 branches):
+  only `base_kv > 0` failed, on case14, hence the 0. Cutting a real step-3 window, which rebuilds 1,437
+  components, takes 7.5 ms against 7.7 ms before, and a 24 h chunk of the Zorba pipeline comes out
+  byte-identical to the same chunk of 0.12.7.
+
 ## [0.12.7] - 2026-10-09
 
 Tests and tooling only; nothing under `src/` changed.

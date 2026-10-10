@@ -71,6 +71,11 @@ How to use this file:
   hand beside a same-day control and not in CI; and `chunk.csv` carries the GC time and the bytes
   allocated of the chunk and of steps 2 and 3. `@inferred` is not added where it would have passed on
   the defect it is meant to catch.
+- **A constructor refuses input a model cannot use, in service or not** (D48): `Node`, `Generator`,
+  `FixedLoad`, `Shunt` and the branch family check ordered limits, finite setpoints and impedances,
+  `r² + x² > 0`, `rate_a >= 0` and `length_km >= 0`, with `all_nw` so that a `NetworkVector` is checked at
+  every index, and raise an `ArgumentError` naming the component. `base_kv` may be 0, which means
+  unknown. The signs of `r` and `x`, and `pg` against its limits, are not checked.
 
 ## Concurrency
 
@@ -531,3 +536,8 @@ Changes: new rule in the Results access section; D11 stands, the nested `Dict` i
 Date: 2026-10-09 · Decided by: Tom Van Acker · Area: Code conventions
 Why: B6's boxed field loop cost 12 % of a roll and no correctness test saw it, and `@inferred` would not have either: on the sources before v0.12.2 it passes for `has_nw_data` and `nw_component`, while `has_nw_data` allocates 1,248-2,176 B a call there and 0 now. The profiles behind B6 sit in the gitignored `scratch/`, and `lessons.md` still says the cause of the threads not scaling (a shared garbage collector) is not proven.
 Changes: new rule in Code conventions. Tom chose the allocation checks only, BenchmarkTools in its own `benchmark/` environment, six GC columns in `chunk.csv` (chunk, step 2, step 3) and one same-day pair of 7 threads against 7 processes after they land. The `chunk.csv` columns are a change to a file format.
+
+### D48 — A constructor refuses input a model cannot use, in service or not
+Date: 2026-10-10 · Decided by: Tom Van Acker · Area: Code conventions
+Why: 19 of 19 invalid inputs built without complaint (`Generator(pmin = 2, pmax = 1)`, `Node(vmin = 1.1, vmax = 0.9)`, `Branch(r = 0, x = 0)`, NaN in a setpoint, a negative rating or length), and one reached the solver as an `INFEASIBLE` with nothing pointing at it. The rules were run over the four bundled Matpower cases and the Zorba year (8,760 hours, 234 nodes, 93 generators, 234 loads, 399 branches): only `base_kv > 0` failed, on case14, whose buses carry 0, so `base_kv` may be 0 for unknown.
+Changes: new rule in Code conventions. Tom chose the proposed set over a smaller one (ordered limits and NaN only) and a larger one (the signs of `r` and `x`, `pg` inside its limits, which would refuse series capacitors and a market dispatch the redispatch is there to fix), validation of components out of service too, and v0.12.8 over v0.13.0.

@@ -39,10 +39,6 @@ older ones: git has them). Next id: **B30**.
     `_signature` now 0.6 % of the samples) and B22 (done, `build_solution` now 7.8-9.3 % of a step-3 roll).
   - Peak memory per process rose from 6.2 GB to 7.3 GB (mean 5.9 GB), the held model; 73 processes fit in
     1 TB, watch it if the process count grows. B22 took it to 2.9 GB a 24 h chunk in week 1 (was 5.0).
-- [ ] B23 · Validate in the inner constructors what `Node`, `Generator`, `FixedLoad` and the branch family accept
-  today: ordered limits, finite impedance, non-negative rating, no NaN · Tom · 2026-10-08 · proposed
-  - 11 of 11 invalid inputs accepted; `pmin > pmax` gives an `INFEASIBLE` OPF with no pointer. Load the
-    Zorba data and the Matpower cases before deciding a rule. Plan item 3.
 - [ ] B24 · Move the package's own registers (nine keys) out of `nm.ext` into typed fields; refuse a `var`/`con`
   key reused with another index set · Tom · 2026-10-08 · proposed
   - The refusal changes the extension contract: a decision. Plan item 4.
@@ -71,9 +67,15 @@ older ones: git has them). Next id: **B30**.
 
 ## Done
 
+- [x] B23 · A constructor refuses input a model cannot use: `Node`, `Generator`, `FixedLoad`, `Shunt` and the branch
+  family (D48) · Tom · 2026-10-08
+  - v0.12.8 on `b23-validation`, not merged; plan `knowledge/plan/validation.md`. 19 of 19 invalid inputs built
+    before; the Zorba year (8,760 h) loads in 36 s and breaks none of the rules, case14's `base_kv` 0 is allowed.
+    Cutting a real step-3 window 7.5 ms (was 7.7; stop rule 16), a 24 h chunk byte-identical to v0.12.7, suite 3295.
+
 - [x] B25 · Guard rails for the measure step: an allocation test that reproduces B6's defect, a `benchmark/`
   environment on a synthetic N-1 network, GC time and bytes per chunk in `chunk.csv` (D47) · Tom · 2026-10-08
-  - v0.12.7 on `b25-guard-rails`, not merged; tests and tooling only; plan `knowledge/plan/guard-rails.md`. The test
+  - v0.12.7, merged into `main` and tagged `v0.12.7` on 2026-10-10; tests and tooling only; plan `knowledge/plan/guard-rails.md`. The test
     fails on the sources before v0.12.2 (1,248-2,176 B a call) and passes now; `@inferred` passes on both. The
     benchmark agrees with itself within 3 % and shows B21 and B22 against v0.12.4. Week 1, 7 threads against 7
     processes: 224 s against 125 s a chunk, GC 14.4 % against 14.2 %, so the collector is not what threads lose to.

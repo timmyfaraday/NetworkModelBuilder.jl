@@ -10,6 +10,7 @@
 # v0.5.0 - the redispatch problem                                              #
 # v0.7.0 - cycle limits, the throughput cost, the inflow hook and the end target#
 # v0.10.1 - exports its own public names                                       #
+# v0.12.9 - the balance, cycle and end rows are registered by constrain! alone #
 ################################################################################
 
 export AbstractStorage, Storage, inflow, storage_cycles
@@ -292,8 +293,6 @@ function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
     isempty(ids(nm, T; nw = nw_id_default(nm))) && return nothing
     require_time_dimension(nm, T)
 
-    balance = Dict{Tuple{Int,Int},Any}()
-
     for n in nw_ids(nm)
         psc, psd, es = var(nm, :psc; nw = n), var(nm, :psd; nw = n), var(nm, :es; nw = n)
 
@@ -303,14 +302,12 @@ function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
             start = is_first_id(nm, n, :time) ? st.energy_initial :
                                                 var(nm, :es, u; nw = prev_id(nm, n, :time))
 
-            balance[(u, n)] = constrain!(nm, :storage_balance, u, JuMP.@build_constraint(
+            constrain!(nm, :storage_balance, u, JuMP.@build_constraint(
                 es[u] == start + dt * (st.charge_efficiency * psc[u] -
                                        psd[u] / st.discharge_efficiency +
                                        inflow(st, nm, n))); nw = n)
         end
     end
-
-    nm.ext[:storage_balance] = balance
 
     constraint_storage_cycles!(nm, T)
     constraint_storage_final_energy!(nm, T)
@@ -337,8 +334,6 @@ infeasible, which is the honest answer to a question that has none. A unit
 without a target — `NaN`, the default — gets no row.
 """
 function constraint_storage_final_energy!(nm::NetworkModel, ::Type{T}) where {T<:AbstractStorage}
-    target = Dict{Tuple{Int,Int},Any}()
-
     for n in nw_ids(nm)
         is_last_id(nm, n, :time) || continue
 
@@ -346,12 +341,10 @@ function constraint_storage_final_energy!(nm::NetworkModel, ::Type{T}) where {T<
             st = unit(nm, u; nw = n)::T
             isnan(st.energy_final) && continue
 
-            target[(u, n)] = constrain!(nm, :storage_final, u, JuMP.@build_constraint(
+            constrain!(nm, :storage_final, u, JuMP.@build_constraint(
                 var(nm, :es, u; nw = n) == st.energy_final); nw = n)
         end
     end
-
-    isempty(target) || (nm.ext[:storage_final] = target)
 
     return nothing
 end
@@ -422,8 +415,6 @@ infinity is not a row with an infinite right hand side; it is the absence of a
 row, and a solver handed the first would be given a constraint it can never use.
 """
 function constraint_storage_cycles!(nm::NetworkModel, ::Type{T}) where {T<:AbstractStorage}
-    limit = Dict{Tuple{Int,Int},Any}()
-
     for n in nw_ids(nm)
         is_first_period_id(nm, n, :time) || continue
         window = period_ids(nm, n, :time)
@@ -433,14 +424,12 @@ function constraint_storage_cycles!(nm::NetworkModel, ::Type{T}) where {T<:Abstr
             isfinite(st.max_cycles_per_period) || continue
 
             capacity = nw_value(nm, st.energy_capacity, n)
-            limit[(u, n)] = constrain!(nm, :storage_cycles, u, JuMP.@build_constraint(
+            constrain!(nm, :storage_cycles, u, JuMP.@build_constraint(
                 sum(time_step(nm, m) * var(nm, :psd, u; nw = m)
                     for m in window if haskey(var(nm, :psd; nw = m), u); init = 0.0) <=
                 st.max_cycles_per_period * capacity); nw = n)
         end
     end
-
-    isempty(limit) || (nm.ext[:storage_cycles] = limit)
 
     return nothing
 end

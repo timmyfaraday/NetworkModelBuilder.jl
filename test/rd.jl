@@ -14,6 +14,7 @@
 # v0.12.0 - the meshed network's shifter can step                              #
 # v0.12.1 - a limit past pi/2 does not change the shape of a model             #
 # v0.12.6 - a window builds only what it commits, and what is reported         #
+# v0.12.9 - the held controls are read through held_controls                   #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The
@@ -324,9 +325,9 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         @test is_corrective(nm, :unit, 2)
 
         # generator 1 is tied across the states, generator 2 is not
-        tied = nm.ext[:redispatch_control]
-        @test haskey(tied, (:unit, 1, :pgup, 2))
-        @test !haskey(tied, (:unit, 2, :pgup, 2))
+        tied = held_controls(nm)
+        @test (:unit, 1, :pgup, 2) in tied
+        @test (:unit, 2, :pgup, 2) ∉ tied
 
         # held is what is tied: never the base case, never a corrective measure, and
         # nothing at all without a redispatch
@@ -423,7 +424,7 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         data = meshed_network(; dim, out = (2,))
 
         nm = instantiate_model(data, RedispatchProblem, LPFFormulation)
-        @test haskey(nm.ext[:redispatch_control], (:edge, Arc(2, 1, 1), :ta, 2))
+        @test (:edge, Arc(2, 1, 1), :ta, 2) in held_controls(nm)
 
         result = quiet(() -> optimize_model!(nm, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
@@ -432,9 +433,9 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         # left corrective it may steer differently in each state
         free = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
                                     redispatch = Redispatch(; control = :corrective)))
-        @test isempty(instantiate_model(data, RedispatchProblem, LPFFormulation;
+        @test isempty(held_controls(instantiate_model(data, RedispatchProblem, LPFFormulation;
                           ext = Dict{Symbol,Any}(:redispatch =>
-                              Redispatch(; control = :corrective))).ext[:redispatch_control])
+                              Redispatch(; control = :corrective)))))
         @test free["objective"] ≤ result["objective"] + 1e-6
     end
 

@@ -12,6 +12,7 @@
 # v0.11.0 - a model refuses an island it cannot supply                         #
 # v0.12.6 - a solve passes on which indices and components to keep             #
 # v0.12.9 - a model knows when it is being built for the first time            #
+# v0.12.9 - the constraints a model registered are a field, not a key of ext   #
 ################################################################################
 
 ################################################################################
@@ -37,7 +38,11 @@ minimized — and `F` decides *in which variables the physics are written*.
   keyed first by network index and then by name.
 - `sol`: the solution, populated by [`optimize_model!`](@ref).
 - `nws`: the sorted network indices of `data`.
-- `ext`: free-form storage for extension packages.
+- `ext`: free-form storage, the caller's: what an extension keeps in a model,
+  and the [`Redispatch`](@ref) a redispatch problem is posed with. Nothing else
+  in the package writes into it.
+- `registered`: the constraints [`constrain!`](@ref) has added, keyed by network
+  index, name and id, see [`registered_constraints`](@ref).
 - `building`: whether [`instantiate_model`](@ref) is building the model for the
   first time, which is when [`constrain!`](@ref) refuses an id it has already
   been given.
@@ -51,6 +56,7 @@ mutable struct NetworkModel{P<:AbstractProblemType,F<:AbstractFormulationType}
     sol  ::Dict{String,Any}
     nws  ::Vector{Int}
     ext  ::Dict{Symbol,Any}
+    registered::Dict{Tuple{Int,Symbol,Any},Tuple{JuMP.ConstraintRef,JuMP.ScalarConstraint}}
     building::Bool
 end
 
@@ -210,10 +216,10 @@ over, see [`check_islands`](@ref): an island that has load but nothing to supply
 it, and, unless `islanding = :allow`, a free switch whose opening would split an
 island. A network with none of that is built as before.
 
-`ext` is **copied**, not held: a model writes into its own `ext` — the register
-[`constrain!`](@ref) keeps is there — and two models handed the same dictionary
-would write over each other. That is not hypothetical; it is what a rolling
-horizon does, building one model per window from one setup.
+`ext` is **copied**, not held: a model may write into its own, as an extension
+does, and two models handed the same dictionary would write over each other.
+That is not hypothetical; it is what a rolling horizon does, building one model
+per window from one setup.
 
 # Examples
 ```julia
@@ -233,7 +239,9 @@ function instantiate_model(data::NetworkData, ::Type{P}, ::Type{F};
                             Dict(n => Dict{Symbol,Any}() for n in nws),
                             Dict(n => Dict{Symbol,Any}() for n in nws),
                             Dict(n => Dict{Symbol,Any}() for n in nws),
-                            Dict{String,Any}(), nws, copy(ext), false)
+                            Dict{String,Any}(), nws, copy(ext),
+                            Dict{Tuple{Int,Symbol,Any},
+                                 Tuple{JuMP.ConstraintRef,JuMP.ScalarConstraint}}(), false)
     if build
         nm.building = true
         try

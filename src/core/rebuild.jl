@@ -11,6 +11,7 @@
 # v0.12.0 - a variable may belong to one terminal of an edge                   #
 # v0.12.9 - a variable key is not reused for another set of variables          #
 # v0.12.9 - a constraint id is not written twice in the first build            #
+# v0.12.9 - the register of constraints is a field of the model                #
 ################################################################################
 
 # A model built for one window of a rolling horizon is very nearly the model the
@@ -57,7 +58,8 @@ replaces: a builder is the same code in every pass, so what is written once in
 the first is written once in each, and a constraint written again by hand after
 the build is meant to replace the one it names.
 
-The register this keeps is its own, in `nm.ext`, and is not `con`.
+The register this keeps is its own, the `registered` field of the model, and is
+not `con`.
 `con` is what a component chooses to publish about itself and is keyed however
 that component finds useful; this has to be keyed by what makes a constraint
 *the same constraint* between one build and the next, which is a different
@@ -111,9 +113,7 @@ The second half of the pair is what makes an update cheap: it says what the
 solver is already holding, so a constraint that has not moved between one build
 and the next is recognised and skipped.
 """
-registered_constraints(nm::NetworkModel) =
-    get!(() -> Dict{Tuple{Int,Symbol,Any},Tuple{JuMP.ConstraintRef,JuMP.ScalarConstraint}}(),
-         nm.ext, :registered)::Dict{Tuple{Int,Symbol,Any},Tuple{JuMP.ConstraintRef,JuMP.ScalarConstraint}}
+registered_constraints(nm::NetworkModel) = nm.registered
 
 ################################################################################
 # Variables                                                                    #

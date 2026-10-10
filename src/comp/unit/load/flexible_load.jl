@@ -9,6 +9,7 @@
 # v0.3.0 - component hierarchy                                                 #
 # v0.6.0 - the energy balance runs per period                                  #
 # v0.10.1 - exports its own public names                                       #
+# v0.12.9 - the energy rows are registered by constrain! alone                 #
 ################################################################################
 
 export FlexibleLoad, power_factor_ratio
@@ -139,8 +140,6 @@ function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{FlexibleLoad}
     isempty(ids(nm, FlexibleLoad; nw = nw_id_default(nm))) && return nothing
     require_time_dimension(nm, FlexibleLoad)
 
-    energy = Dict{Tuple{Int,Int},Any}()
-
     for n in nw_ids(nm)
         is_first_period_id(nm, n, :time) || continue
         window = period_ids(nm, n, :time)
@@ -151,12 +150,10 @@ function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{FlexibleLoad}
                 sum(time_step(nm, m) * unit(nm, u; nw = m).pd_nominal for m in window) :
                 ld.energy
 
-            energy[(u, n)] = constrain!(nm, :flexible_energy, u, JuMP.@build_constraint(
+            constrain!(nm, :flexible_energy, u, JuMP.@build_constraint(
                 sum(time_step(nm, m) * var(nm, :pdf, u; nw = m) for m in window) == target); nw = n)
         end
     end
-
-    nm.ext[:flexible_load_energy] = energy
 
     return nothing
 end

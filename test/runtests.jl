@@ -21,6 +21,7 @@
 # v0.12.7 - the hot path test is included                                      #
 # v0.12.8 - the validation test is included                                    #
 # v0.12.9 - the registers test is included                                     #
+# v0.12.9 - a helper reads the controls a redispatch holds                     #
 ################################################################################
 
 using Test
@@ -52,6 +53,10 @@ quiet(f) = Logging.with_logger(f, Logging.NullLogger())
 
 "the rating of edge `ed` at its terminal `k`, whether it has one rating or one per terminal"
 rating_at(ed, k::Int) = ed.rate_a isa AbstractVector ? ed.rate_a[k] : ed.rate_a
+
+"the `(family, id, key, nw)` of every control a model holds equal to its base case"
+held_controls(nm) = Set((id..., nw) for ((nw, key, id), _) in registered_constraints(nm)
+                                    if key === :redispatch_control)
 
 @testset "NetworkModelBuilder" begin
     include("dimension.jl")

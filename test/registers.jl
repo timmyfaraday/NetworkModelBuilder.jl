@@ -100,4 +100,22 @@ end
         @test JuMP.constraint_object(r1).set == JuMP.MOI.GreaterThan(1.0)
     end
 
+    @testset "a model keeps its own state in fields, not in ext" begin
+        # nothing the package writes is in the caller's storage, a load flow writes none,
+        # a redispatch the setup it was posed with
+        nm = instantiate_model(mn, LoadFlowProblem, LPFFormulation)
+        @test isempty(nm.ext)
+        @test !isempty(nm.registered)
+
+        rd = instantiate_model(mn, RedispatchProblem, LPFFormulation)
+        @test issubset(keys(rd.ext), [:redispatch])
+        @test !isempty(registered_constraints(rd))
+
+        # the register is a typed field, and no two models share one
+        @test @inferred(registered_constraints(nm)) === nm.registered
+        other = instantiate_model(mn, LoadFlowProblem, LPFFormulation)
+        @test other.registered !== nm.registered
+        @test length(other.registered) == length(nm.registered)
+    end
+
 end

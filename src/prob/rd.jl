@@ -11,6 +11,7 @@
 # v0.12.0 - a measure may belong to one terminal of an edge                    #
 # v0.12.0 - a measure held at the base case builds no rows of its own          #
 # v0.12.6 - a window builds the solution of what it commits                    #
+# v0.12.9 - the control and peak rows are registered by constrain! alone       #
 ################################################################################
 
 ################################################################################
@@ -121,8 +122,6 @@ function constraint_redispatch_control(nm::NetworkModel)
     has_dim(nm, :contingency) || return nothing
     dim_length(nm, :contingency) > 1 || return nothing
 
-    tie = Dict{Tuple{Symbol,Any,Symbol,Int},Any}()
-
     for n in nw_ids(nm)
         is_first_id(nm, n, :contingency) && continue
         base = first_id(nm, n, :contingency)
@@ -138,14 +137,12 @@ function constraint_redispatch_control(nm::NetworkModel)
                     x = _control_variable(nm, key, sub, n)
                     y = _control_variable(nm, key, sub, base)
                     (x === nothing || y === nothing) && continue
-                    tie[(family, sub, key, n)] = constrain!(nm, :redispatch_control,
-                        (family, sub, key), JuMP.@build_constraint(x == y); nw = n)
+                    constrain!(nm, :redispatch_control, (family, sub, key),
+                               JuMP.@build_constraint(x == y); nw = n)
                 end
             end
         end
     end
-
-    nm.ext[:redispatch_control] = tie
 
     return nothing
 end
@@ -211,8 +208,6 @@ function constraint_overload_peak(nm::NetworkModel)
                             "to group; give it one with " *
                             "`set_dimension(data, Dimension(:time => n))`"))
 
-    peak = Dict{Tuple{Int,Int},Any}()
-
     for n in nw_ids(nm)
         is_first_period_id(nm, n, :time) || continue
         window = period_ids(nm, n, :time)
@@ -228,13 +223,11 @@ function constraint_overload_peak(nm::NetworkModel)
                 ol = var(nm, :ol; nw = m)
                 haskey(ol, e) || continue
 
-                peak[(e, m)] = constrain!(nm, :overload_peak, (e, m),
-                                          JuMP.@build_constraint(ol[e] <= olp); nw = n)
+                constrain!(nm, :overload_peak, (e, m),
+                           JuMP.@build_constraint(ol[e] <= olp); nw = n)
             end
         end
     end
-
-    nm.ext[:overload_peak] = peak
 
     return nothing
 end

@@ -2,7 +2,7 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B30**.
+older ones: git has them). Next id: **B31**.
 
 ## Now
 
@@ -10,7 +10,9 @@ older ones: git has them). Next id: **B30**.
 
 ## Next
 
-- (nothing)
+- [ ] B30 · One `Branch` (with `length_km`) instead of `Branch`, `Cable` and `OverheadLine`, and `pi_model.jl` split into
+  `edge.jl`, `branch.jl` and `transformer.jl` by who uses what · Tom · 2026-10-10 · branch `b30-one-branch`
+  - Plan `knowledge/plan/one-branch.md`, D50 and D51; v0.13.0, as two exported types go. `length_km` may be NaN; its default is open.
 
 ## Later
 
@@ -66,7 +68,7 @@ older ones: git has them). Next id: **B30**.
 
 - [x] B24 · The package's own registers are fields of `NetworkModel`, not keys of `nm.ext`; a `var`/`con` key is not
   reused with another index set, nor a constraint id in a build (D49) · Tom · 2026-10-08
-  - v0.12.9 on `b24-typed-registers`, not merged; plan `knowledge/plan/typed-registers.md`. Seven write-only registers deleted, a
+  - v0.12.9, merged into `main` and tagged `v0.12.9` on 2026-10-10; plan `knowledge/plan/typed-registers.md`. Seven write-only registers deleted, a
     reused variable key was accepted four ways out of five, now refused. A held step-3 model is 7.3 MB smaller (not the
     56.5 MB first read), `update_model!` 1.18 s against 1.29 s same day, suite 3322, a 24 h chunk byte-identical to v0.12.7.
 

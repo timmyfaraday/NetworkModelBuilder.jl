@@ -1,6 +1,6 @@
 # The package's registers are fields, and a key is not reused (B24)
 
-Status: done on its branch (v0.12.9, D49), not merged · Author: Tom Van Acker (requested) · Date: 2026-10-10
+Status: done, merged into `main` and tagged `v0.12.9` on 2026-10-10 (D49) · Author: Tom Van Acker (requested) · Date: 2026-10-10
 Decisions: D49 recorded 2026-10-10 (next free after: D50); no open question
 Priority: P2 · Effort: Medium. Branch `b24-typed-registers`, cut from `main` at `bd0d1a4` (v0.12.8);
 becomes v0.12.9. Fifth move of the review `julia-guide-review.md`, item 4.

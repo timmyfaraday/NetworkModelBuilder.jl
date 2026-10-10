@@ -4,7 +4,7 @@ The rules that still constrain NMB. Read the section for the area you are touchi
 changing it.
 
 How to use this file:
-- A new decision gets the next free id (**D47**), goes in the Log at the bottom, and is written by
+- A new decision gets the next free id (**D52**), goes in the Log at the bottom, and is written by
   the `record-decision` skill. `Decided by` is a person's username, never an agent.
 - A decision that changes a rule below edits the rule in place and cites the new id. The old
   wording goes to the archive line of the id it came from.
@@ -73,7 +73,7 @@ How to use this file:
   the defect it is meant to catch.
 - **A constructor refuses input a model cannot use, in service or not** (D48): `Node`, `Generator`,
   `FixedLoad`, `Shunt` and the branch family check ordered limits, finite setpoints and impedances,
-  `r² + x² > 0`, `rate_a >= 0` and `length_km >= 0`, with `all_nw` so that a `NetworkVector` is checked at
+  `r² + x² > 0`, `rate_a >= 0` and a `length_km` that is NaN (unknown) or `>= 0` (D50), with `all_nw` so that a `NetworkVector` is checked at
   every index, and raise an `ArgumentError` naming the component. `base_kv` may be 0, which means
   unknown. The signs of `r` and `x`, and `pg` against its limits, are not checked.
 - **The package's own state is fields, not keys of `nm.ext`, and a key is not reused** (D49):
@@ -82,6 +82,8 @@ How to use this file:
   and `variable_container!` raise an `ArgumentError` where a key is asked for again with another id type,
   container kind or index set, and `constrain!` where one `(nw, key, id)` is written twice in the first build
   of a model. An extension prefixes its keys.
+- **What several types of a family share lives in the family file, and what one type alone uses lives in that
+  type's file** (D51): `edge/edge.jl` and `unit/unit.jl`, not a file of fragments of their own.
 
 ## Concurrency
 
@@ -183,6 +185,9 @@ How to use this file:
 - **A repeated `topology` lookup is answered from the last answer, held in one atomic slot on the
   `Network`: a cache of a derivation, one entry however many network indices, not a table** (D45).
   Two entries if, after B21, `topology` is still above 3 % of the pipeline profile.
+- **A cable and an overhead line are a `Branch` with another `length_km`, not types: `Cable` and `OverheadLine`
+  are removed with no shim, `Branch` carries `length_km`, NaN meaning unknown** (D50). `AbstractBranch` stays as
+  the extension hook. Planned as v0.13.0; spec `knowledge/plan/one-branch.md`.
 
 ## Zorba pipeline (`scripts/`)
 
@@ -552,3 +557,13 @@ Changes: new rule in Code conventions. Tom chose the proposed set over a smaller
 Date: 2026-10-10 · Decided by: Tom Van Acker · Area: Code conventions
 Why: `ext` is the caller's free-form storage, yet the package kept nine registers in it, and seven of them (`:redispatch_control`, `:overload_peak`, `:storage_balance`, `:storage_final`, `:storage_cycles`, `:generator_energy`, `:flexible_load_energy`) are written and never read in `src/`, `docs/` or `scripts/`: the references they hold are all in `registered_constraints`, and `:redispatch_control` alone is 66,431 entries and 7.3 MB of its own in one held step-3 model (the 56.5 MB that `Base.summarysize` gives for it counts the JuMP model its references reach). A typed field is not a speed item, the accessor is 0.3 % of an update. A key asked for again with another index set was accepted four ways out of five (`variables!(:x, 1:3)` then `(:x, 1:5)` returns the first container), the fifth a `MethodError` far from the cause; the `:vsr` incident in `lessons.md` was this.
 Changes: new rule in Code conventions. Tom chose a typed `registered` field and deleting the seven registers (`:redispatch` stays, it is the documented input of `solve_rd`), an error for a variable key reused and one for a constraint id written twice in a build, and v0.12.9 over v0.13.0. The second is checked in the first build of a model only, which costs nothing in an update and is where a structural collision shows.
+
+### D50 — A cable and an overhead line are a `Branch` with another `length_km`, not types
+Date: 2026-10-10 · Decided by: Tom Van Acker · Area: Component model
+Why: `Cable` and `OverheadLine` are `Branch` plus a `length_km` nothing reads, and the same as each other; no method in `src/` dispatches on either, no reader builds them, and `dynamic_rating`, the only method written for them, has no caller. Three registered types cost about 0.2 ms of a 1,171 ms step-3 update, so this is not a speed item.
+Changes: new rule in Component model; the `length_km` clause of the D48 rule edited, NaN is valid and means unknown. Tom chose one `Branch` with `length_km` over a `construction` flag and over merging the files only, a hard removal over one release of shims, `dynamic_rating` kept for every `AbstractBranch`, and v0.13.0 over v0.12.10; the default of `length_km` is open.
+
+### D51 — What several types of a family share lives in the family file
+Date: 2026-10-10 · Decided by: Tom Van Acker · Area: Code conventions
+Why: `pi_model.jl` held the π-section only a branch writes, the rating, angle and linear-flow fragments a branch and a transformer share, and the one rating function only a transformer calls; the unit side keeps `constraint_unit_power!` in `unit/unit.jl` already. Proposed by Tom.
+Changes: new rule in Code conventions. Branch-only code goes to `branch.jl`, shared code to `edge.jl`, transformer-only code to `transformer.jl`, and `pi_model.jl` is deleted.

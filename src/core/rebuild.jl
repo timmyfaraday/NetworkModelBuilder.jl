@@ -9,6 +9,7 @@
 # v0.5.0 - building a model a second time updates it in place                  #
 # v0.11.0 - a variable may be binary                                           #
 # v0.12.0 - a variable may belong to one terminal of an edge                   #
+# v0.12.9 - a variable key is not reused for another set of variables          #
 ################################################################################
 
 # A model built for one window of a rolling horizon is very nearly the model the
@@ -140,6 +141,8 @@ function variable!(nm::NetworkModel, key::Symbol, id; nw::Int, base_name::String
                    start = nothing, lower = nothing, upper = nothing, fix = nothing,
                    binary::Bool = false)
     store = get!(() -> Dict{typeof(id),JuMP.VariableRef}(), var(nm; nw), key)
+    store isa Dict{typeof(id),JuMP.VariableRef} ||
+        throw(_key_taken(key, nw, store, "variables keyed by $(typeof(id))"))
     v     = get(store, id, nothing)
 
     if v === nothing
@@ -169,6 +172,8 @@ function variable_container!(nm::NetworkModel, keys::Symbol...; nw::Int, idtype:
     container = nothing
     for key in keys
         container = get!(() -> Dict{idtype,JuMP.VariableRef}(), var(nm; nw), key)
+        container isa Dict{idtype,JuMP.VariableRef} ||
+            throw(_key_taken(key, nw, container, "variables keyed by $idtype"))
     end
 
     return container
@@ -189,7 +194,12 @@ the magnitude limit of its node, it does so through [`bound!`](@ref).
 function variables!(nm::NetworkModel, key::Symbol, indices; nw::Int,
                     base_name::String = "", start = _ -> 0.0)
     existing = get(var(nm; nw), key, nothing)
-    existing === nothing || return existing
+    if existing !== nothing
+        _holds(existing, indices) ||
+            throw(_key_taken(key, nw, existing, "one variable per entry of an index set " *
+                                                "of $(length(indices)) entries"))
+        return existing
+    end
 
     v = JuMP.@variable(nm.model, [i in indices], base_name = base_name)
     for i in indices
@@ -220,6 +230,30 @@ function bound!(v::JuMP.VariableRef; lower = nothing, upper = nothing, fix = not
     _bound!(v, upper, JuMP.has_upper_bound, JuMP.set_upper_bound, JuMP.delete_upper_bound)
 
     return v
+end
+
+# a key names one set of variables. `var` is keyed by `Symbol`, shared by the
+# package and every extension, and a key asked for again with another index set
+# used to hand back the container already there, or fail far from the cause
+function _key_taken(key, nw, held, asked)
+    return ArgumentError("the variable key $(repr(key)) already names $(_describe(held)) " *
+                         "at network index $nw, and is asked for as $asked. A key names " *
+                         "one set of variables: an extension prefixes its keys with its " *
+                         "own name.")
+end
+
+_describe(held::AbstractDict) = "variables keyed by $(keytype(held))"
+_describe(held::AbstractArray) =
+    "one variable per entry of an index set of $(length(held)) entries"
+_describe(held) = "a $(typeof(held))"
+
+# whether the container held under a key is the one `indices` would give. A
+# sparse container is not compared: nothing in the package builds one
+function _holds(existing, indices)
+    existing isa AbstractDict && return false
+    existing isa AbstractArray || return true
+
+    return ndims(existing) == 1 && only(axes(existing)) == indices
 end
 
 function _bound!(v, value, has, set, delete)

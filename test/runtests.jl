@@ -20,6 +20,7 @@
 # v0.12.0 - the rating of an edge at one of its terminals                      #
 # v0.12.7 - the hot path test is included                                      #
 # v0.12.8 - the validation test is included                                    #
+# v0.12.9 - the registers test is included                                     #
 ################################################################################
 
 using Test
@@ -76,6 +77,7 @@ rating_at(ed, k::Int) = ed.rate_a isa AbstractVector ? ed.rate_a[k] : ed.rate_a
     include("multinetwork.jl")
     include("hot_path.jl")
     include("validation.jl")
+    include("registers.jl")
     include("multiterminal.jl")
     include("solution_tables.jl")
     include("thread_safety.jl")

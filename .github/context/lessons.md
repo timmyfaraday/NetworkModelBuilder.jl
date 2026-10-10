@@ -214,3 +214,8 @@ again get retired.
   CSVs finds that first.** `sizehint!` and assigning entries in B22 left every value alone and reordered
   `0[23]_redispatch_volumes.csv`, which loops `for (u, entry) in sol["unit"]`. Compare sorted frames to
   separate "another order" from "another number", and sort in the report that has no order (B29). (unconfirmed)
+- **`Base.summarysize` of a container of JuMP references counts the whole model each reference points at.** B24 read
+  56.5 MB for `nm.ext[:redispatch_control]` (66,431 references) and 179 MB for the register of all 274,523; the model
+  they reach, `summarysize(nm.model)`, is 49.2 MB, so deleting the first saved 7.3 MB (243.6 to 236.3 MB for the whole
+  `NetworkModel`). Size a holder by `summarysize` of the whole object before and after the change, never by the sum of
+  its parts, and say what the number follows. The decision D49 had quoted the 56.5 MB. (unconfirmed)

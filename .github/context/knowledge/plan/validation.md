@@ -1,6 +1,6 @@
 # Constructors refuse input a model cannot use (B23)
 
-Status: implemented on `b23-validation` (v0.12.8), measured, not merged · Author: Tom Van Acker (requested) · Date: 2026-10-10
+Status: implemented, merged into `main` and tagged `v0.12.8` · Author: Tom Van Acker (requested) · Date: 2026-10-10
 Decisions: D48 recorded 2026-10-10 (next free after: D49); no open question
 Priority: P2 · Effort: Medium. Branch `b23-validation`, cut from `main` at `9e33c53` (v0.12.7);
 becomes v0.12.8. Fourth move of the review `julia-guide-review.md`, item 3.

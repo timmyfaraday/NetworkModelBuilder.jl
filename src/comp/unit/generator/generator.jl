@@ -11,6 +11,7 @@
 # v0.7.0 - an energy limit per period                                          #
 # v0.10.1 - exports its own public names                                       #
 # v0.12.8 - a generator refuses limits and setpoints no model can use          #
+# v0.12.9 - the energy rows are registered by constrain! alone                 #
 ################################################################################
 
 export AbstractGenerator, Generator
@@ -287,8 +288,6 @@ function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
         return nothing
     require_time_dimension(nm, T)
 
-    limit = Dict{Tuple{Int,Int},Any}()
-
     for n in nw_ids(nm)
         is_first_period_id(nm, n, :time) || continue
         window = period_ids(nm, n, :time)
@@ -297,14 +296,12 @@ function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
             g = unit(nm, u; nw = n)::T
             isfinite(g.max_energy_per_period) || continue
 
-            limit[(u, n)] = constrain!(nm, :generator_energy, u, JuMP.@build_constraint(
+            constrain!(nm, :generator_energy, u, JuMP.@build_constraint(
                 sum(time_step(nm, m) * var(nm, :pg, u; nw = m)
                     for m in window if haskey(var(nm, :pg; nw = m), u); init = 0.0) <=
                 g.max_energy_per_period); nw = n)
         end
     end
-
-    isempty(limit) || (nm.ext[:generator_energy] = limit)
 
     return nothing
 end

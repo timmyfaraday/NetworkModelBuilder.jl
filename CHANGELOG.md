@@ -10,6 +10,37 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+## [0.12.9] - 2026-10-10
+
+### Changed
+
+- A variable key names one set of variables. `variable!`, `variable_container!` and `variables!` raise an
+  `ArgumentError` that names the key and the network index where a key is asked for again with an index
+  set or a type of id other than the one it holds. Before, four of the five ways to do that were accepted
+  and handed back the container already there: `variables!(nm, :x, 1:3)` then `(:x, 1:5)` returned the
+  3-element array, `variables!` then `variable!` under one key returned a variable of the array, and
+  `variable_container!` with another `idtype` returned the old container; the fifth, `variable!` with
+  an `Arc` after an `Int`, was a `MethodError` far from the cause. Asked again as before, a key returns
+  what it holds, so an update is unchanged. An extension prefixes its keys with its own name, see
+  `docs/src/manual/extending.md`.
+- `constrain!` raises where a constraint id is written twice in the first build of a model, the one
+  `instantiate_model` makes, instead of overwriting the first row with the second. `NetworkModel` has a
+  `building` field for it. An update, and a `constrain!` by hand after the build, replace in place as
+  before. A collision that first appears in a later pass is not seen.
+- The constraints a model registered are the `registered` field of `NetworkModel`, typed, and no longer
+  the `:registered` key of `nm.ext`. `registered_constraints(nm)` returns it as before. `ext` holds only
+  what is the caller's: the `Redispatch` a redispatch problem is posed with, and what an extension adds.
+
+### Removed
+
+- Seven keys the package wrote into `nm.ext` and nothing read: `:redispatch_control`, `:overload_peak`,
+  `:storage_balance`, `:storage_final`, `:storage_cycles`, `:generator_energy` and `:flexible_load_energy`.
+  Each held references `registered_constraints(nm)` holds under `(nw, key, id)`; for the redispatch
+  controls that is `(nw, :redispatch_control, (family, id, key))`. A held step-3 model of the Zorba
+  pipeline (80 network indices, 274,523 registered rows) is 7.3 MB smaller, 243.6 to 236.3 MB, and
+  `update_model!` of it 1,171 and 1,185 ms against 1,309 and 1,266 ms for 0.12.8 the same day. A 24 h chunk
+  of the pipeline is byte-identical to the same chunk of 0.12.7, objectives equal.
+
 ## [0.12.8] - 2026-10-10
 
 ### Changed

@@ -10,6 +10,7 @@
 # v0.12.0 - the helpers build the one Transformer; a held ratio is folded      #
 # v0.12.0 - both controls on one winding, and on any winding of three          #
 # v0.12.0 - a winding that steps through the positions of a range              #
+# v0.12.9 - the held controls are read through held_controls                   #
 ################################################################################
 
 # What a transformer does, written so that it does not depend on how one is
@@ -311,10 +312,10 @@ end
         data = meshed_network(; dim, out = (2,), star = true)
 
         for (F, keys) in ((LPFFormulation, (:ta,)), (IVRFormulation, (:tr, :ti)))
-            tied = instantiate_model(data, RedispatchProblem, F).ext[:redispatch_control]
+            tied = held_controls(instantiate_model(data, RedispatchProblem, F))
 
-            @test all(haskey(tied, (:edge, Arc(2, 1, 1), k, 2)) for k in keys)
-            @test !any(haskey(tied, (:edge, a, k, 2))
+            @test all((:edge, Arc(2, 1, 1), k, 2) in tied for k in keys)
+            @test !any((:edge, a, k, 2) in tied
                        for a in (Arc(2, 2, 2), Arc(2, 3, 4)), k in (:ta, :tr, :ti, :tm))
         end
 
@@ -499,7 +500,7 @@ end
                 @test count(JuMP.is_binary, JuMP.all_variables(nm.model)) == (held ? 7 : 14)
                 @test all((_NMB.var(nm, :zt, (arc, s); nw = 2) === _NMB.var(nm, :zt, (arc, s); nw = 1))
                           == held for s in 1:7)
-                @test !any(key[3] === :zt for key in keys(nm.ext[:redispatch_control]))
+                @test !any(key[3] === :zt for key in held_controls(nm))
                 @test haskey(_NMB.con(nm; nw = 1)[:tap_step], arc)
                 @test haskey(_NMB.con(nm; nw = 2)[:tap_step], arc) == !held
             end

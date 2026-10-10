@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.12.0 - initial implementation                                             #
+# v0.12.9 - the held controls are read through held_controls                   #
 ################################################################################
 
 # A control that belongs to one terminal of an edge rather than to the edge, such
@@ -113,11 +114,11 @@ end
         data = arc_network(; dim, out = (2,))
 
         nm   = instantiate_model(data, RedispatchProblem, LPFFormulation)
-        tied = nm.ext[:redispatch_control]
+        tied = held_controls(nm)
 
-        @test haskey(tied, (:edge, Arc(2, 1, 1), :shift, 2))
-        @test haskey(tied, (:edge, Arc(2, 2, 2), :shift, 2))
-        @test !haskey(tied, (:edge, Arc(2, 1, 1), :shift, 1))       # the base case is the reference
+        @test (:edge, Arc(2, 1, 1), :shift, 2) in tied
+        @test (:edge, Arc(2, 2, 2), :shift, 2) in tied
+        @test (:edge, Arc(2, 1, 1), :shift, 1) ∉ tied             # the base case is the reference
 
         result = quiet(() -> optimize_model!(nm, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
@@ -130,6 +131,6 @@ end
         free = instantiate_model(data, RedispatchProblem, LPFFormulation;
                                  ext = Dict{Symbol,Any}(:redispatch =>
                                      Redispatch(; control = :corrective)))
-        @test isempty(free.ext[:redispatch_control])
+        @test isempty(held_controls(free))
     end
 end

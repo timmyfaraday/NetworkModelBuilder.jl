@@ -73,7 +73,7 @@ older ones: git has them). Next id: **B30**.
 
 - [x] B25 · Guard rails for the measure step: an allocation test that reproduces B6's defect, a `benchmark/`
   environment on a synthetic N-1 network, GC time and bytes per chunk in `chunk.csv` (D47) · Tom · 2026-10-08
-  - v0.12.7 on `b25-guard-rails`, not merged; tests and tooling only; plan `knowledge/plan/guard-rails.md`. The test
+  - v0.12.7, merged into `main` and tagged `v0.12.7` on 2026-10-10; tests and tooling only; plan `knowledge/plan/guard-rails.md`. The test
     fails on the sources before v0.12.2 (1,248-2,176 B a call) and passes now; `@inferred` passes on both. The
     benchmark agrees with itself within 3 % and shows B21 and B22 against v0.12.4. Week 1, 7 threads against 7
     processes: 224 s against 125 s a chunk, GC 14.4 % against 14.2 %, so the collector is not what threads lose to.

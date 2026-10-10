@@ -172,8 +172,11 @@ again get retired.
   chunk (step 3: 137 s of 3,680 s on 30 threads); the rest is the model build (~4.5 s a step-3 window;
   it was called `update_model!` here, but no window ever reused its model, see B6), `build_solution`
   (~1 s) and the agent's per-window feasibility check (~2.5 s), plus GC (13-20% of wall). The cause
-  (shared GC or allocator, a GC held up by threads inside a long Xpress call) is
-  not proven. Before building parallelism into a long run, time a one-chunk run alone, then at the
+  (shared GC or allocator, a GC held up by threads inside a long Xpress call) is not proven. B25 (v0.12.7,
+  `gc_s` in `chunk.csv`) measured one thing, week 1 after B22: 7 threads in one process 224 s a chunk, 7
+  processes 125 s, GC pauses 14.4 % and 14.2 % of a chunk (step 3: 14.9 % and 16.7 %). The collector is
+  not what threads lose to; the allocator, memory bandwidth and Xpress's own threads inside Julia's are
+  untested. Before building parallelism into a long run, time a one-chunk run alone, then at the
   intended concurrency, as threads and as processes. (unconfirmed)
 - **A longer window buys nothing in the Zorba pipeline and costs in proportion to the hours it
   solves.** Hours do not depend on each other there (storage excluded, nothing ramps), so a window

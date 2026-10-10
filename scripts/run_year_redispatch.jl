@@ -22,11 +22,20 @@
 #   hours a window of step 2 / step 3 sees and how many it commits; a chunk   #
 #   shorter than the horizon caps it, so set NMB_CHUNK_HOURS to at least it.  #
 #                                                                             #
-# More threads in one process stop paying off at a handful of tasks: the      #
-# garbage collector and the allocator are shared. To use the whole machine    #
-# run many one-thread processes, each on its own range of hours with a shared #
+# More threads in one process stop paying off at a handful of tasks: 7        #
+# threads take 224 s a chunk and 7 processes 125 s, and not through the       #
+# garbage collector, which is 14 % of a chunk either way (lessons.md). To     #
+# use the whole machine run many one-thread processes, each on its own        #
+# range of hours with a shared                                                #
 # NMB_RUN_ID and NMB_MERGE=0, then one last run over the full range with      #
 # NMB_RESUME=1, which finds every chunk done and only merges them.            #
+#                                                                             #
+# chunk.csv also holds the seconds of garbage-collection pause and the        #
+# gigabytes allocated, of the chunk and of its steps 2 and 3. They come from  #
+# the process's own counters: exact for a process that runs one chunk at a    #
+# time, as in the many-processes recipe above, and including the other tasks' #
+# where threads share a process. A run begun before these columns existed     #
+# must not be resumed after: the merged files would mix rows of two widths.   #
 ################################################################################
 
 haskey(ENV, "XPRESSDIR") || (ENV["XPRESSDIR"] = raw"C:\xpressmp")
@@ -132,9 +141,11 @@ const ROW_FIELDS = (:first_hour, :last_hour,
                     :step1_status, :step1_s,
                     :step2_status, :step2_solver, :step2_first_status, :step2_first_violation,
                     :step2_violation, :step2_s, :step2_solve_s, :step2_windows, :step2_built,
+                    :step2_gc_s, :step2_alloc_gb,
                     :step3_status, :step3_solver, :step3_first_status, :step3_first_violation,
                     :step3_violation, :step3_s, :step3_solve_s, :step3_windows, :step3_built,
-                    :sound, :seconds, :maxrss_gb, :error)
+                    :step3_gc_s, :step3_alloc_gb,
+                    :sound, :seconds, :maxrss_gb, :gc_s, :alloc_gb, :error)
 
 chunk_dir(hours) = joinpath(OUT_DIR, "chunks",
                             "h$(lpad(first(hours), 5, '0'))-$(lpad(last(hours), 5, '0'))")
@@ -145,6 +156,14 @@ is_sound(run) = run.status == string(MOI.OPTIMAL) && run.worst_violation <= VIOL
 "`summary` of a solve with the hours it covered in front"
 summary_of(hours, result) =
     hcat(DataFrame(first_hour = first(hours), last_hour = last(hours)), solve_summary(result))
+
+"the seconds of garbage-collection pause and the gigabytes allocated by this whole process since `since = Base.gc_num()`"
+function gc_since(since::Base.GC_Num)
+    now = Base.gc_num()
+
+    return (round((now.total_time - since.total_time) / 1e9; digits = 1),
+            round((Base.gc_total_bytes(now) - Base.gc_total_bytes(since)) / 2^30; digits = 1))
+end
 
 ################################################################################
 # One chunk: all three steps for its hours                                   #
@@ -158,8 +177,9 @@ The chunk is redone whole if it is run again, never patched. A step that does no
 come back sound stops the chunk there, since the next step reads its answer.
 """
 function run_chunk(data::NetworkData, hours::Vector{Int})
-    started = time()
-    dir     = chunk_dir(hours)
+    started  = time()
+    gc_chunk = Base.gc_num()
+    dir      = chunk_dir(hours)
     isdir(dir) && rm(dir; recursive = true)
     mkpath(dir)
 
@@ -180,6 +200,7 @@ function run_chunk(data::NetworkData, hours::Vector{Int})
 
         # step 2 — cross-border N-1 redispatch, storage excluded
         t   = time()
+        gc2 = Base.gc_num()
         d2  = with_contingencies(exclude_all_storage!(d1), cb_contingency)
         rd2 = Redispatch(; monitored = cb_monitored, control = :preventive, overload = OVERLOAD_PRICE)
         run2 = solve_checked(d2, rd2; horizon = min(HORIZON_CB, T), step = min(STEP_CB, T),
@@ -198,11 +219,13 @@ function run_chunk(data::NetworkData, hours::Vector{Int})
         row[:step2_solve_s]         = round(result2["solve_time"], digits = 1)
         row[:step2_windows]         = length(result2["horizon"]["window"])
         row[:step2_built]           = result2["horizon"]["built"]
+        row[:step2_gc_s], row[:step2_alloc_gb] = gc_since(gc2)
         is_sound(run2) ||
             error("step 2 finished with status $(run2.status) and violation $(run2.worst_violation)")
 
         # step 3 — internal-BE N-1 redispatch, reference = step 2's dispatch
-        t  = time()
+        t   = time()
+        gc3 = Base.gc_num()
         d3 = freeze_dispatch(d1, result2)
         d3 = restrict_to_belgium!(d3)
         # with every non-BE unit pinned and storage gone the balance can come up short
@@ -235,6 +258,7 @@ function run_chunk(data::NetworkData, hours::Vector{Int})
         row[:step3_solve_s]         = round(result3["solve_time"], digits = 1)
         row[:step3_windows]         = length(result3["horizon"]["window"])
         row[:step3_built]           = result3["horizon"]["built"]
+        row[:step3_gc_s], row[:step3_alloc_gb] = gc_since(gc3)
         is_sound(run3) ||
             error("step 3 finished with status $(run3.status) and violation $(run3.worst_violation)")
 
@@ -245,6 +269,7 @@ function run_chunk(data::NetworkData, hours::Vector{Int})
 
     row[:seconds]   = round(time() - started, digits = 1)
     row[:maxrss_gb] = round(Sys.maxrss() / 2^30, digits = 1)
+    row[:gc_s], row[:alloc_gb] = gc_since(gc_chunk)
     write_chunk_row(dir, row)
     row[:sound] && write(joinpath(dir, "DONE"), "")
 
@@ -293,6 +318,7 @@ todo   = RESUME ? [c for c in chunks if !isfile(joinpath(chunk_dir(c), "DONE"))]
 
 println("[run] ", length(todo), " of ", length(chunks), " chunk(s) of up to $CHUNK_HOURS hour(s) to solve on ",
         "$NTASKS task(s), $XPRESS_THREADS Xpress thread(s) each")
+gc_run  = Base.gc_num()
 elapsed = @elapsed results = parallel_map(h -> run_chunk(data, h), todo; ntasks = NTASKS)
 
 # a chunk whose task died without writing its own row still gets one
@@ -309,7 +335,7 @@ if !MERGE
     not_done = [c for c in todo if !isfile(joinpath(chunk_dir(c), "DONE"))]
     println("[run] ", length(todo) - length(not_done), " of ", length(todo), " chunk(s) sound; ",
             round(elapsed, digits = 1), " s, of which ",
-            round(Base.gc_num().total_time / 1e9, digits = 1), " s of garbage-collection pauses")
+            first(gc_since(gc_run)), " s of garbage-collection pauses")
     isempty(not_done) || error("[run] $(length(not_done)) chunk(s) are not sound, see $(joinpath(OUT_DIR, "chunks"))")
     println("done — chunks written under ", joinpath(OUT_DIR, "chunks"))
     exit(0)
@@ -332,7 +358,7 @@ retried = count(s -> !ismissing(s) && s == "fallback", chunk_table.step2_solver)
           count(s -> !ismissing(s) && s == "fallback", chunk_table.step3_solver)
 println("[run] ", nrow(chunk_table) - nrow(unsound), " of ", nrow(chunk_table), " chunk(s) sound; ",
         retried, " step(s) needed the fallback solver; ", round(elapsed, digits = 1), " s, of which ",
-        round(Base.gc_num().total_time / 1e9, digits = 1), " s of garbage-collection pauses")
+        first(gc_since(gc_run)), " s of garbage-collection pauses")
 isempty(unsound) ||
     error("[run] $(nrow(unsound)) chunk(s) are not sound, see $(joinpath(OUT_DIR, "chunks.csv"))")
 

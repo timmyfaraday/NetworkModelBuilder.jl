@@ -18,7 +18,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-10 by Tom Va
   on 2026-10-09 B21 (v0.12.5), the Julia guide review and B22 (v0.12.6); on 2026-10-10 B25 (v0.12.7), tagged, pushed.
 - `test-zorba-run` is merged into `main` and kept; the next Zorba change can start from `main`.
 - `b5-switch-edge`, `b11-unified-transformer` merged and deleted; `b21-topology-lookup`, `b22-build-solution`,
-  `b25-guard-rails` merged, kept; `b23-validation` holds B23. Next free decision id: **D48**.
+  `b25-guard-rails` merged, kept; `b23-validation` holds B23. Next free decision id: **D49**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -36,14 +36,16 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-10 by Tom Va
 
 ## In progress
 
-- Julia guide review (plan `context/knowledge/plan/julia-guide-review.md`, B21-B28, Q7-Q9): B21 done and
-  merged (v0.12.5, D45), week 1 chunk -10.7 %, results bit-identical.
+- Julia guide review (`knowledge/plan/julia-guide-review.md`, B21-B28, Q7-Q9): B21 done (v0.12.5, D45), chunk -10.7 %.
 - B22 done (v0.12.6, D46, tagged): a roll builds the committed indices, `report` names families and identifiers.
   Week 1 against `main` (`runs/_b22_*`): objectives bit-identical, chunk -12.3 %, peak 5.0 to 2.9 GB. Stop rule at
   its line: `build_solution` 7.8-9.3 % of a step-3 roll, ~6 % of a chunk (Q9); volume file row order (B29).
 - B25 done (v0.12.7, D47, merged and tagged); tests and tooling only, suite 3223: `test/hot_path.jl`,
   `benchmark/window.jl`, six GC columns in `chunk.csv`. Week 1, 7 threads against 7 processes (`runs/_b25_*`): 224 s
   against 125 s a chunk, GC 14.4 % against 14.2 %: the collector is not what threads lose to (`lessons.md`).
+- B23 decided (D48), not started: branch `b23-validation`, plan `knowledge/plan/validation.md`: constructors refuse
+  impossible limits, NaN, `r = x = 0`, negative rating or length, in service or not; 19 of 19 accepted today, the
+  Zorba year breaks none, case14's `base_kv` 0 is allowed. Becomes v0.12.8. Next: implement, tests first.
 - Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
 - B11 merged, tagged `v0.12.0` (`unified-transformer.md`, D28-D36); Zorba flows are not unique without a phase shifter price (D34).
 - B12 done: `scripts/` run on `Transformer`. Week 1 beside a same-day pre-B11 control (`runs/_b12*`, two
@@ -65,7 +67,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-10 by Tom Va
 
 ## Next
 
-1. B23 (plan being drafted, decisions to Tom), then B24, B26, B27 (the review's order). B20 keeps the rest of
+1. B23 (decided, D48, not started: `knowledge/plan/validation.md`), then B24, B26, B27 (the review's order). B20 keeps the rest of
    the per-window cost; B7, B3, B4, B13, B19, B28, B29 remain, see `backlog.md`.
 
 ## Blocked / waiting

@@ -39,10 +39,10 @@ older ones: git has them). Next id: **B30**.
     `_signature` now 0.6 % of the samples) and B22 (done, `build_solution` now 7.8-9.3 % of a step-3 roll).
   - Peak memory per process rose from 6.2 GB to 7.3 GB (mean 5.9 GB), the held model; 73 processes fit in
     1 TB, watch it if the process count grows. B22 took it to 2.9 GB a 24 h chunk in week 1 (was 5.0).
-- [ ] B23 · Validate in the inner constructors what `Node`, `Generator`, `FixedLoad` and the branch family accept
-  today: ordered limits, finite impedance, non-negative rating, no NaN · Tom · 2026-10-08 · proposed
-  - 11 of 11 invalid inputs accepted; `pmin > pmax` gives an `INFEASIBLE` OPF with no pointer. Load the
-    Zorba data and the Matpower cases before deciding a rule. Plan item 3.
+- [ ] B23 · Validate in the inner constructors what `Node`, `Generator`, `FixedLoad`, `Shunt` and the branch family
+  accept today: ordered limits, finite impedance, non-negative rating, no NaN · Tom · 2026-10-08 · branch `b23-validation`
+  - Plan `knowledge/plan/validation.md`, D48. 19 of 19 invalid inputs accepted; the Zorba year and four Matpower
+    cases break none of the rules, except `base_kv > 0` on case14 (baseKV 0, so 0 is allowed).
 - [ ] B24 · Move the package's own registers (nine keys) out of `nm.ext` into typed fields; refuse a `var`/`con`
   key reused with another index set · Tom · 2026-10-08 · proposed
   - The refusal changes the extension contract: a decision. Plan item 4.

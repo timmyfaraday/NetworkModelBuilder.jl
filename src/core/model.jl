@@ -11,6 +11,7 @@
 # v0.9.4 - registering a model is safe from concurrent threads                 #
 # v0.11.0 - a model refuses an island it cannot supply                         #
 # v0.12.6 - a solve passes on which indices and components to keep             #
+# v0.12.9 - a model knows when it is being built for the first time            #
 ################################################################################
 
 ################################################################################
@@ -37,6 +38,9 @@ minimized — and `F` decides *in which variables the physics are written*.
 - `sol`: the solution, populated by [`optimize_model!`](@ref).
 - `nws`: the sorted network indices of `data`.
 - `ext`: free-form storage for extension packages.
+- `building`: whether [`instantiate_model`](@ref) is building the model for the
+  first time, which is when [`constrain!`](@ref) refuses an id it has already
+  been given.
 """
 mutable struct NetworkModel{P<:AbstractProblemType,F<:AbstractFormulationType}
     data ::NetworkData
@@ -47,6 +51,7 @@ mutable struct NetworkModel{P<:AbstractProblemType,F<:AbstractFormulationType}
     sol  ::Dict{String,Any}
     nws  ::Vector{Int}
     ext  ::Dict{Symbol,Any}
+    building::Bool
 end
 
 "the problem type of a network model"
@@ -228,8 +233,15 @@ function instantiate_model(data::NetworkData, ::Type{P}, ::Type{F};
                             Dict(n => Dict{Symbol,Any}() for n in nws),
                             Dict(n => Dict{Symbol,Any}() for n in nws),
                             Dict(n => Dict{Symbol,Any}() for n in nws),
-                            Dict{String,Any}(), nws, copy(ext))
-    build && build_model!(nm)
+                            Dict{String,Any}(), nws, copy(ext), false)
+    if build
+        nm.building = true
+        try
+            build_model!(nm)
+        finally
+            nm.building = false
+        end
+    end
 
     return nm
 end

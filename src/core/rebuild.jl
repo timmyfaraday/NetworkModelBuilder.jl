@@ -10,6 +10,7 @@
 # v0.11.0 - a variable may be binary                                           #
 # v0.12.0 - a variable may belong to one terminal of an edge                   #
 # v0.12.9 - a variable key is not reused for another set of variables          #
+# v0.12.9 - a constraint id is not written twice in the first build            #
 ################################################################################
 
 # A model built for one window of a rolling horizon is very nearly the model the
@@ -50,8 +51,11 @@ change and the next solve starts from the last one instead of from scratch.
 
 `id` is anything hashable, and a component that writes several constraints
 should distinguish them — `(e, :from)` and `(e, :to)` rather than `e` twice.
-Giving two different constraints the same `id` will silently overwrite one with
-the other.
+Giving two different constraints the same `id` in the first build of a model,
+the one [`instantiate_model`](@ref) makes, raises an `ArgumentError`. Later it
+replaces: a builder is the same code in every pass, so what is written once in
+the first is written once in each, and a constraint written again by hand after
+the build is meant to replace the one it names.
 
 The register this keeps is its own, in `nm.ext`, and is not `con`.
 `con` is what a component chooses to publish about itself and is keyed however
@@ -69,6 +73,11 @@ function constrain!(nm::NetworkModel, key::Symbol, id, c::JuMP.ScalarConstraint;
         store[(nw, key, id)] = (ref, c)
         return ref
     end
+
+    nm.building &&
+        throw(ArgumentError("the constraint $(repr(id)) of $(repr(key)) at network index $nw " *
+                            "is written twice in one build. Give each constraint of a " *
+                            "component its own id, as in `(e, :from)` and `(e, :to)`."))
 
     ref, last = entry
     backend   = JuMP.backend(nm.model)

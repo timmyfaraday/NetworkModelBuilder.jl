@@ -2,7 +2,7 @@
 
 Every change to the setup (instructions, skills, hooks, settings), newest at the bottom.
 Format: `- SC<n> · YYYY-MM-DD · approved by <user> · <what changed> · why: <feedback ids or reason>`.
-Next id: **SC7**.
+Next id: **SC8**.
 
 - SC1 · 2026-09-30 · approved by Tom Van Acker · Initial setup, ported from a colleague's
   FlowBasedDomains (fbd) repo and adapted for Julia/GitHub/solo maintainer: `copilot-instructions`,
@@ -32,3 +32,8 @@ Next id: **SC7**.
   line; `AGENT-SETUP.md` and `TRANSFER-SETUP.md` rewritten; empty `.venv` gitignored (D39); no
   `copilot/settings.json` (D38) · why: one maintained engine instead of a vendored copy; the rule 8
   line adds a rule and cuts the vendored scripts and three skill copies, 4 + 3 files.
+- SC7 · 2026-10-10 · approved by Tom Van Acker · `domain-invariants.instructions.md`: the "type earns its
+  place" bullet says a cable and an overhead line are a `Branch` with another `length_km` instead of naming
+  `Cable` and `OverheadLine`; the load-order example is `load/load.jl`, not `branch/`; one bullet added: what
+  several types of a family share lives in the family file, what one type uses in its own file · why: D50, D51
+  (B30); the bullet adds two lines and the edit cuts two type names and an example that stops being true.

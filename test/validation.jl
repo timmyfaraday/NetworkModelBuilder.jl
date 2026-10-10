@@ -54,4 +54,57 @@ end
         @test all(n -> n.base_kv == 0.0, values(nodes(network(data))))
     end
 
+    @testset "a generator" begin
+        @test_throws ArgumentError Generator(; id = 1, node = 1, pmin = 2.0, pmax = 1.0)
+        @test_throws ArgumentError Generator(; id = 1, node = 1, qmin = 1.0, qmax = -1.0)
+        @test_throws ArgumentError Generator(; id = 1, node = 1, pmax = NaN)
+        @test_throws ArgumentError Generator(; id = 1, node = 1, pmin = NaN)
+        @test_throws ArgumentError Generator(; id = 1, node = 1, qmax = NaN)
+        @test_throws ArgumentError Generator(; id = 1, node = 1, pg = NaN)
+        @test_throws ArgumentError Generator(; id = 1, node = 1, qg = Inf)
+        @test_throws ArgumentError Generator(; id = 1, node = 1, vg = NaN)
+        @test_throws ArgumentError Generator(; id = 1, node = 1, cost = [NaN])
+        @test_throws ArgumentError Generator(; id = 1, node = 1, cost = [0.0, Inf])
+        @test_throws ArgumentError Generator(; id = 1, node = 1, max_energy_per_period = -1.0)
+
+        # a profile is refused at the one network index that breaks it
+        dim = Dimension(:time => 3)
+        @test_throws ArgumentError Generator(; id = 1, node = 1, pg = nw_vector(dim, [0.5, NaN, 0.5]))
+        @test_throws ArgumentError Generator(; id = 1, node = 1, pmin = nw_vector(dim, [0.0, 2.0, 0.0]), pmax = 1.0)
+        @test_throws ArgumentError Generator(; id = 1, node = 1,
+                                             cost = nw_vector(dim, [[0.0, 1.0], [0.0, NaN], [0.0, 1.0]]))
+
+        err = refusal(() -> Generator(; id = 7, node = 1, pmin = 2.0, pmax = 1.0))
+        @test err isa ArgumentError
+        @test occursin("generator 7", err.msg) && occursin("pmin", err.msg)
+
+        # an unbounded limit, a pinned one and the default price are not refused
+        @test Generator(; id = 1, node = 1).pmax == Inf
+        @test Generator(; id = 1, node = 1).qmin == -Inf
+        @test Generator(; id = 1, node = 1, pmin = 0.4, pmax = 0.4).pmin == 0.4
+        @test isnan(Generator(; id = 1, node = 1).cost_up)
+    end
+
+    @testset "a load and a shunt" begin
+        @test_throws ArgumentError FixedLoad(; id = 1, node = 1, pd = NaN)
+        @test_throws ArgumentError FixedLoad(; id = 1, node = 1, qd = Inf)
+        @test_throws ArgumentError Shunt(; id = 1, node = 1, gs = NaN)
+        @test_throws ArgumentError Shunt(; id = 1, node = 1, bs = Inf)
+
+        dim = Dimension(:time => 3)
+        @test_throws ArgumentError FixedLoad(; id = 1, node = 1, pd = nw_vector(dim, [0.5, NaN, 0.5]))
+        @test_throws ArgumentError Shunt(; id = 1, node = 1, bs = nw_vector(dim, [0.1, 0.1, Inf]))
+
+        err = refusal(() -> FixedLoad(; id = 5, node = 1, pd = NaN))
+        @test err isa ArgumentError
+        @test occursin("load 5", err.msg)
+        err = refusal(() -> Shunt(; id = 6, node = 1, bs = NaN))
+        @test err isa ArgumentError
+        @test occursin("shunt 6", err.msg)
+
+        # a negative demand is a load that injects, a negative susceptance an inductor: neither is refused
+        @test FixedLoad(; id = 1, node = 1, pd = -0.3).pd == -0.3
+        @test Shunt(; id = 1, node = 1, bs = -0.19).bs == -0.19
+    end
+
 end

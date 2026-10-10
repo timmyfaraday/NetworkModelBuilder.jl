@@ -10,6 +10,7 @@
 # v0.5.0 - the redispatch problem                                              #
 # v0.7.0 - an energy limit per period                                          #
 # v0.10.1 - exports its own public names                                       #
+# v0.12.8 - a generator refuses limits and setpoints no model can use          #
 ################################################################################
 
 export AbstractGenerator, Generator
@@ -63,6 +64,11 @@ given as a [`NetworkVector`](@ref). The energy limit is one number per period
 rather than one per network index, so it is not among them. Note that a network dependent `cost` is a
 `NetworkVector{Vector{Float64}}`: the plain `Vector{Float64}` is the polynomial,
 not a profile.
+
+A generator with `pmin` above `pmax` or `qmin` above `qmax`, a limit that is NaN,
+a setpoint or a cost coefficient that is not finite, or a negative energy limit
+is refused: no model can use it. A limit of `-Inf` or `Inf` is how a bound is left
+out, and `cost_up` and `cost_dn` may be NaN.
 """
 Base.@kwdef struct Generator <: AbstractGenerator
     id                   ::Int
@@ -84,11 +90,27 @@ Base.@kwdef struct Generator <: AbstractGenerator
 
     function Generator(id, name, node, pg, qg, pmin, pmax, qmin, qmax, vg,
                        max_energy_per_period, cost, cost_up, cost_dn, status, ext)
-        max_energy_per_period >= 0 ||
-            throw(ArgumentError("generator $id has a negative energy limit"))
+        _check_generator(id, pg, qg, pmin, pmax, qmin, qmax, vg, max_energy_per_period, cost)
         return new(id, name, node, pg, qg, pmin, pmax, qmin, qmax, vg,
                    max_energy_per_period, cost, cost_up, cost_dn, status, ext)
     end
+end
+
+function _check_generator(id, pg, qg, pmin, pmax, qmin, qmax, vg, max_energy_per_period, cost)
+    max_energy_per_period >= 0 ||
+        throw(ArgumentError("generator $id has a negative energy limit"))
+    all_nw(isfinite, pg) && all_nw(isfinite, qg) && all_nw(isfinite, vg) ||
+        throw(ArgumentError("generator $id has a setpoint that is not finite"))
+    all(x -> all_nw(!isnan, x), (pmin, pmax, qmin, qmax)) ||
+        throw(ArgumentError("generator $id has a limit that is NaN"))
+    all_nw(<=, pmin, pmax) ||
+        throw(ArgumentError("generator $id has pmin above pmax"))
+    all_nw(<=, qmin, qmax) ||
+        throw(ArgumentError("generator $id has qmin above qmax"))
+    all_nw(c -> all(isfinite, c), cost) ||
+        throw(ArgumentError("generator $id has a cost coefficient that is not finite"))
+
+    return nothing
 end
 
 register_unit_type!(Generator)

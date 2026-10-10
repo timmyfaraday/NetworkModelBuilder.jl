@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.3.0 - component hierarchy                                                 #
 # v0.10.1 - exports its own public names                                       #
+# v0.12.8 - a load refuses a demand that is not finite                         #
 ################################################################################
 
 export FixedLoad
@@ -33,6 +34,9 @@ load *flexible* is that the model chooses the number, see
 - `pd`, `qd`: the active and reactive power withdrawn [pu].
 - `status`: whether the load is in service.
 - `ext`: free-form storage.
+
+A demand that is not finite is refused. A negative one is not: it is a load that
+injects, which is what a net position is.
 """
 Base.@kwdef struct FixedLoad <: AbstractLoad
     id    ::Int
@@ -42,6 +46,12 @@ Base.@kwdef struct FixedLoad <: AbstractLoad
     qd    ::NetworkQuantity{Float64}  = 0.0
     status::NetworkQuantity{Bool}     = true
     ext   ::Dict{Symbol,Any}          = Dict{Symbol,Any}()
+
+    function FixedLoad(id, name, node, pd, qd, status, ext)
+        all_nw(isfinite, pd) && all_nw(isfinite, qd) ||
+            throw(ArgumentError("load $id has a demand that is not finite"))
+        return new(id, name, node, pd, qd, status, ext)
+    end
 end
 
 register_unit_type!(FixedLoad)

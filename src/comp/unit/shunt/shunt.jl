@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.3.0 - component hierarchy                                                 #
 # v0.10.1 - exports its own public names                                       #
+# v0.12.8 - a shunt refuses an admittance that is not finite                   #
 ################################################################################
 
 export AbstractShunt, Shunt
@@ -44,7 +45,8 @@ A unit `(u, i)` of constant admittance.
 - `ext`: free-form storage.
 
 `gs`, `bs` and `status` may be given as a [`NetworkVector`](@ref); a switched
-capacitor bank is a `bs` that varies over the network index.
+capacitor bank is a `bs` that varies over the network index. An admittance that is
+not finite is refused; a negative `bs` is an inductor, and is not.
 """
 Base.@kwdef struct Shunt <: AbstractShunt
     id    ::Int
@@ -54,6 +56,12 @@ Base.@kwdef struct Shunt <: AbstractShunt
     bs    ::NetworkQuantity{Float64}  = 0.0
     status::NetworkQuantity{Bool}     = true
     ext   ::Dict{Symbol,Any}          = Dict{Symbol,Any}()
+
+    function Shunt(id, name, node, gs, bs, status, ext)
+        all_nw(isfinite, gs) && all_nw(isfinite, bs) ||
+            throw(ArgumentError("shunt $id has an admittance that is not finite"))
+        return new(id, name, node, gs, bs, status, ext)
+    end
 end
 
 register_unit_type!(Shunt)

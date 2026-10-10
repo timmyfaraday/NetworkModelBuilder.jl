@@ -11,6 +11,7 @@
 # v0.10.1 - exports its own public names                                       #
 # v0.11.0 - an island without a reference node is anchored                     #
 # v0.12.6 - the solution builders are cheaper and hold what is asked           #
+# v0.12.8 - a node refuses limits and setpoints no model can use               #
 ################################################################################
 
 export Node, NodeType, PQ, PV, REF, ISOLATED, reference_nodes
@@ -52,6 +53,10 @@ A node `i ∈ I` of the extended graph, i.e., an electrical busbar.
 - `area`, `zone`: bookkeeping identifiers carried through from the input data.
 - `status`: whether the node is in service.
 - `ext`: free-form storage; `:vr_start` and `:vi_start` override the flat start.
+
+A node with `vmin` below 0 or above `vmax`, a `base_kv` below 0, or a setpoint or
+limit that is NaN, is refused: no model can use it. A `base_kv` of 0 stands for
+unknown, which is what Matpower gives a bus it has no voltage level for.
 """
 Base.@kwdef struct Node <: AbstractNode
     id     ::Int
@@ -66,6 +71,25 @@ Base.@kwdef struct Node <: AbstractNode
     zone   ::Int                       = 1
     status ::NetworkQuantity{Bool}     = true
     ext    ::Dict{Symbol,Any}          = Dict{Symbol,Any}()
+
+    function Node(id, name, type, vm, va, vmin, vmax, base_kv, area, zone, status, ext)
+        _check_node(id, vm, va, vmin, vmax, base_kv)
+        return new(id, name, type, vm, va, vmin, vmax, base_kv, area, zone, status, ext)
+    end
+end
+
+function _check_node(id, vm, va, vmin, vmax, base_kv)
+    all_nw(isfinite, vm) && all_nw(isfinite, va) ||
+        throw(ArgumentError("node $id has a voltage setpoint that is not finite"))
+    all_nw(>=(0), vmin) ||
+        throw(ArgumentError("node $id has a vmin that is negative or NaN"))
+    all_nw(<=, vmin, vmax) ||
+        throw(ArgumentError("node $id has vmin above vmax, or a vmax that is NaN"))
+    isfinite(base_kv) && base_kv >= 0 ||
+        throw(ArgumentError("node $id has a base_kv that is negative or not finite, " *
+                            "0 stands for unknown"))
+
+    return nothing
 end
 
 "sorted identifiers of the in-service reference nodes at network index `nw`"

@@ -69,7 +69,7 @@ older ones: git has them). Next id: **B30**.
 
 - [x] B23 · A constructor refuses input a model cannot use: `Node`, `Generator`, `FixedLoad`, `Shunt` and the branch
   family (D48) · Tom · 2026-10-08
-  - v0.12.8 on `b23-validation`, not merged; plan `knowledge/plan/validation.md`. 19 of 19 invalid inputs built
+  - v0.12.8, merged into `main` and tagged `v0.12.8` on 2026-10-10; plan `knowledge/plan/validation.md`. 19 of 19 invalid inputs built
     before; the Zorba year (8,760 h) loads in 36 s and breaks none of the rules, case14's `base_kv` 0 is allowed.
     Cutting a real step-3 window 7.5 ms (was 7.7; stop rule 16), a 24 h chunk byte-identical to v0.12.7, suite 3295.
 

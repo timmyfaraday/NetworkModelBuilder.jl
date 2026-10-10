@@ -1,24 +1,24 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-10 by Tom Van Acker (B23 done on `b23-validation`, not merged).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-10 by Tom Van Acker (B23 merged, tagged v0.12.8 and pushed; B24 started on `b24-typed-registers`).
 
 ## Where NMB stands
 
-- v0.12.1-v0.12.8 (B6, B8, B21, B22, B25, B23; v0.12.5-v0.12.7 tagged, v0.12.8 on `b23-validation`, the others
-  not): rolling-horizon reuse, cheaper per-window work, guard rails, validation. v0.12.0 (D28-D36, tagged): one
-  `Transformer`. v0.11.0 (D13, D15-D27): the `Switch` edge. v0.10.2 (D11): `solution_tables`,
+- v0.12.1-v0.12.8 (B6, B8, B21, B22, B25, B23; v0.12.5-v0.12.8 tagged, the others not): rolling-horizon reuse,
+  cheaper per-window work, guard rails, validation. v0.12.0 (D28-D36, tagged): one `Transformer`.
+  v0.11.0 (D13, D15-D27): the `Switch` edge. v0.10.2 (D11): `solution_tables`,
   `docs/src/manual/concepts.md`. v0.10.1 (D10): `src/comp/` is walked, not listed, each file exports its names.
 - Gap-closure items #1-9 of `context/knowledge/plan/GAP_CLOSURE_PLAN.md` are closed; #10-11 are open
-  (`backlog.md`). Tags: `v0.6.0`, `v0.9.1`-`v0.9.7`, `v0.12.0`, `v0.12.5`-`v0.12.7`; not v0.10.x, v0.11.0, v0.12.1-4.
+  (`backlog.md`). Tags: `v0.6.0`, `v0.9.1`-`v0.9.7`, `v0.12.0`, `v0.12.5`-`v0.12.8`; not v0.10.x, v0.11.0, v0.12.1-4.
 
 ## Branches
 
 - `main` carries B5 and B11 (`--no-ff`), tagged `v0.12.0`, the setup commits D37-D41 and, merged `--no-ff`
   on 2026-10-07, all of `test-zorba-run`: `scripts/` (the Zorba pipeline), B9, B10, B12, B6, B8 (v0.12.4);
-  on 2026-10-09 B21 (v0.12.5), the Julia guide review and B22 (v0.12.6); on 2026-10-10 B25 (v0.12.7), tagged, pushed.
+  on 2026-10-09 B21 (v0.12.5), the Julia guide review and B22 (v0.12.6); on 2026-10-10 B25 (v0.12.7), B23 (v0.12.8).
 - `test-zorba-run` is merged into `main` and kept; the next Zorba change can start from `main`.
 - `b5-switch-edge`, `b11-unified-transformer` merged and deleted; `b21-topology-lookup`, `b22-build-solution`,
-  `b25-guard-rails` merged, kept; `b23-validation` holds B23 (v0.12.8), not merged. Next free decision id: **D49**.
+  `b25-guard-rails`, `b23-validation` merged, kept; `b24-typed-registers` holds B24. Next free decision id: **D49**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -43,7 +43,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-10 by Tom Va
 - B25 done (v0.12.7, D47, merged and tagged); tests and tooling only, suite 3223: `test/hot_path.jl`,
   `benchmark/window.jl`, six GC columns in `chunk.csv`. Week 1, 7 threads against 7 processes (`runs/_b25_*`): 224 s
   against 125 s a chunk, GC 14.4 % against 14.2 %: the collector is not what threads lose to (`lessons.md`).
-- B23 done on `b23-validation` (v0.12.8, D48), not merged; plan `knowledge/plan/validation.md`: `Node`, `Generator`,
+- B23 done (v0.12.8, D48, merged and tagged); plan `knowledge/plan/validation.md`: `Node`, `Generator`,
   `FixedLoad`, `Shunt` and the branch family refuse impossible limits, NaN, `r = x = 0`, a negative rating or length;
   suite 3295. The Zorba year breaks no rule; window cut 7.5 ms (was 7.7); a 24 h chunk is byte-identical to v0.12.7.
 - Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
@@ -67,7 +67,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-10 by Tom Va
 
 ## Next
 
-1. Tom to merge B23 (tag and push on his word), then B24, B26, B27 (the review's order). B20 keeps the rest of
+1. B24 (plan being drafted, decisions to Tom), then B26, B27 (the review's order). B20 keeps the rest of
    the per-window cost; B7, B3, B4, B13, B19, B28, B29 remain, see `backlog.md`.
 
 ## Blocked / waiting

@@ -12,6 +12,7 @@
 # v0.10.1 - exports its own public names                                       #
 # v0.12.6 - the solution builders are cheaper and hold what is asked           #
 # v0.13.0 - the fragments a branch and a transformer share are here            #
+# v0.13.0 - the linearized rating and angle limit are two constraints          #
 ################################################################################
 
 export register_edge_type!, edge_types
@@ -21,7 +22,7 @@ export constraint_edge, constraint_edge_limits, constraint_edge_coupling
 export solution_edge, solution_edge!
 export susceptance
 export constraint_edge_rating!, constraint_edge_angle_difference!
-export constraint_linear_flow!, constraint_linear_limits!, constraint_linear_ratings!
+export constraint_linear_flow!, constraint_linear_ratings!, constraint_linear_angle_difference!
 export variable_edge_overload!
 
 ################################################################################
@@ -349,29 +350,25 @@ function constraint_linear_flow!(nm::NetworkModel, e::Int, a_fr::Arc, a_to::Arc,
 end
 
 """
-    constraint_linear_limits!(nm, e, a_fr, a_to, rate_a, angmin, angmax; nw)
+    constraint_linear_ratings!(nm, e, arcs, rate_a; nw)
 
-The operating limits of a two-terminal edge in a linearized formulation: the
-rating becomes a bound on the terminal power, and the angle difference limit is
-already linear. The rating is skipped where the problem does not watch the edge
-for congestion, see [`is_monitored`](@ref); the angle limit is not congestion and
-always holds.
+The rating at each terminal of an edge with any number of them in a linearized
+formulation: a bound on the terminal power, since with no reactive power in the
+model apparent power is active power. `rate_a` is one number for every terminal
+or one per terminal, and a terminal whose rating is not finite has no row.
+Skipped where no terminal has a finite rating, and where the problem does not
+watch the edge for congestion, see [`is_monitored`](@ref).
 
 ```math
--s^{\\text{max}}_{e} \\le p_{a} \\le s^{\\text{max}}_{e},
-\\qquad
-\\theta^{\\text{min}}_{e} \\le v^{\\text{a}}_{i} - v^{\\text{a}}_{j} \\le \\theta^{\\text{max}}_{e} .
+-s^{\\text{max}}_{a} \\le p_{a} \\le s^{\\text{max}}_{a} .
 ```
-
-With no reactive power in the model, apparent power is active power, so the
-rating applies to it directly.
 
 Where the problem prices congestion rather than forbidding it, see
 [`overload_price`](@ref), the rating is relaxed by the overload of the edge and
 written as a pair of one-sided rows per terminal,
 
 ```math
-p_{a} - o_{e} \\le s^{\\text{max}}_{e}, \\qquad -p_{a} - o_{e} \\le s^{\\text{max}}_{e},
+p_{a} - o_{e} \\le s^{\\text{max}}_{a}, \\qquad -p_{a} - o_{e} \\le s^{\\text{max}}_{a},
 ```
 
 rather than as one two-sided bound: the bounds of a range constraint are
@@ -380,30 +377,17 @@ the allowance is a variable, and it is exact without a binary because the
 objective pays for `o_e` and so never lifts it further than one of the two rows
 requires.
 """
-function constraint_linear_limits!(nm::NetworkModel, e::Int, a_fr::Arc, a_to::Arc,
-                                   rate_a::Real, angmin::Real, angmax::Real; nw::Int)
-    va = var(nm, :va; nw)
-    p  = var(nm, :p;  nw)
-    i, j = a_fr.node, a_to.node
+function constraint_linear_ratings!(nm::NetworkModel, e::Int, arcs,
+                                    rate_a::Union{Real,AbstractVector}; nw::Int)
+    _any_finite(rate_a) && is_monitored(nm, e) || return nothing
 
-    rating = isfinite(rate_a) && is_monitored(nm, e) ?
-        _linear_rating!(nm, e, (a_fr, a_to), rate_a; nw) : nothing
-    angle = (angmin > -pi / 2 || angmax < pi / 2) ?
-        constrain!(nm, :linear_angle, e,
-                   JuMP.@build_constraint(angmin <= va[i] - va[j] <= angmax); nw) : nothing
-
-    return (rating, angle)
-end
-
-"the rating rows of a monitored edge, hard or priced; a terminal whose rating is not finite has none"
-function _linear_rating!(nm::NetworkModel, e::Int, terminals, rate_a::Union{Real,AbstractVector}; nw::Int)
     p     = var(nm, :p; nw)
     price = overload_price(nm)
 
     price === nothing &&
         return [constrain!(nm, :linear_rating, (e, t),
                            JuMP.@build_constraint(-_rating_at(rate_a, t) <= p[a] <= _rating_at(rate_a, t)); nw)
-                for (t, a) in enumerate(terminals) if isfinite(_rating_at(rate_a, t))]
+                for (t, a) in enumerate(arcs) if isfinite(_rating_at(rate_a, t))]
 
     ol = variable_edge_overload!(nm, e; nw)
 
@@ -411,22 +395,31 @@ function _linear_rating!(nm::NetworkModel, e::Int, terminals, rate_a::Union{Real
                         JuMP.@build_constraint(p[a] - ol <= _rating_at(rate_a, t)); nw),
              constrain!(nm, :linear_overload, (e, t, :neg),
                         JuMP.@build_constraint(-p[a] - ol <= _rating_at(rate_a, t)); nw))
-            for (t, a) in enumerate(terminals) if isfinite(_rating_at(rate_a, t))]
+            for (t, a) in enumerate(arcs) if isfinite(_rating_at(rate_a, t))]
 end
 
 """
-    constraint_linear_ratings!(nm, e, arcs, rate_a; nw)
+    constraint_linear_angle_difference!(nm, a_fr, a_to, angmin, angmax; nw)
 
-The rating at each terminal of an edge with any number of them in a linearized
-formulation, `rate_a` holding one rating per terminal: the counterpart of
-[`constraint_linear_limits!`](@ref) for an edge with no angle difference to limit.
-Skipped where no terminal has a finite rating, and where the problem does not
-watch the edge for congestion, see [`is_monitored`](@ref).
+Bound the voltage angle difference across a two-terminal edge in a linearized
+formulation, where the limit is already linear,
+
+```math
+\\theta^{\\text{min}}_{e} \\le v^{\\text{a}}_{i} - v^{\\text{a}}_{j} \\le \\theta^{\\text{max}}_{e} .
+```
+
+Skipped where the data leaves it unbounded. The angle limit is not congestion, so
+it holds whether or not the problem watches the edge, see [`is_monitored`](@ref).
 """
-function constraint_linear_ratings!(nm::NetworkModel, e::Int, arcs, rate_a::AbstractVector; nw::Int)
-    _any_finite(rate_a) && is_monitored(nm, e) || return nothing
+function constraint_linear_angle_difference!(nm::NetworkModel, a_fr::Arc, a_to::Arc,
+                                             angmin::Real, angmax::Real; nw::Int)
+    angmin > -pi / 2 || angmax < pi / 2 || return nothing
 
-    return _linear_rating!(nm, e, arcs, rate_a; nw)
+    va   = var(nm, :va; nw)
+    i, j = a_fr.node, a_to.node
+
+    return constrain!(nm, :linear_angle, a_fr.edge,
+                      JuMP.@build_constraint(angmin <= va[i] - va[j] <= angmax); nw)
 end
 
 ################################################################################

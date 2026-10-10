@@ -11,6 +11,7 @@
 # v0.12.0 - both controls on one winding, and on any winding of three          #
 # v0.12.0 - a winding that steps through the positions of a range              #
 # v0.12.9 - the held controls are read through held_controls                   #
+# v0.13.0 - a two-winding transformer is rated at each terminal                #
 ################################################################################
 
 # What a transformer does, written so that it does not depend on how one is
@@ -505,6 +506,29 @@ end
                 @test haskey(_NMB.con(nm; nw = 2)[:tap_step], arc) == !held
             end
         end
+    end
+
+    @testset "a two-winding transformer is rated at each terminal, linearized" begin
+        # a load of 0.7 behind a transformer rated 0.5 and 0.8, with a dearer unit at the load
+        network(rate_a) = NetworkData(Network(
+            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0), 2 => Node(; id = 2)),
+            Dict{Int,AbstractEdge}(1 => fixed(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, rate_a)),
+            Dict{Int,AbstractUnit}(
+                1 => Generator(; id = 1, node = 1, pmax = 5.0, cost = [0.0, 10.0]),
+                2 => Generator(; id = 2, node = 2, pmax = 5.0, cost = [0.0, 100.0]),
+                3 => FixedLoad(; id = 3, node = 2, pd = 0.7)));
+            name = "rated", baseMVA = 100.0)
+
+        nm, unequal = solved(network([0.5, 0.8]), OptimalPowerFlowProblem, LPFFormulation)
+        rows        = registered_constraints(nm)
+        @test rows[(1, :linear_rating, (1, 1))][2].set == JuMP.MOI.Interval(-0.5, 0.5)
+        @test rows[(1, :linear_rating, (1, 2))][2].set == JuMP.MOI.Interval(-0.8, 0.8)
+
+        # without losses what leaves one terminal arrives at the other, so the tighter rating is the one that binds
+        _, tight = solved(network(0.5), OptimalPowerFlowProblem, LPFFormulation)
+        _, loose = solved(network(0.8), OptimalPowerFlowProblem, LPFFormulation)
+        @test unequal["objective"] ≈ tight["objective"] rtol = 1e-9
+        @test unequal["objective"] > loose["objective"] + 1e-3
     end
 
     @testset "what it refuses" begin

@@ -10,6 +10,7 @@
 # v0.6.0 - a window carries the periods it cut                                 #
 # v0.11.0 - two integers are two shapes                                        #
 # v0.12.1 - a structure gate asks what the model's own guard asks              #
+# v0.13.0 - the docstring names the linearized ratings, not the limits         #
 ################################################################################
 
 ################################################################################
@@ -255,7 +256,7 @@ conditionally needs a method here, or the answers [`same_structure`](@ref) gives
 about it will be wrong.
 
 The methods in this package correspond one for one to the guards in the model:
-the `isfinite` tests in `constraint_edge_rating!`, `constraint_linear_limits!`,
+the `isfinite` tests in `constraint_edge_rating!`, `constraint_linear_ratings!`,
 `_variable_generator_power`, `_variable_generator_active` and the flexible load,
 the `±π/2` test in `constraint_edge_angle_difference!`, and the `iszero` test of a
 DC link's `loss_prop`, which decides whether the link has a transfer variable.

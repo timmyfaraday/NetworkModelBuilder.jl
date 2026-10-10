@@ -12,6 +12,7 @@
 # v0.12.0 - a winding can be a tap changer and a phase shifter at once         #
 # v0.12.0 - a transformer held at the base case writes no tap rows again       #
 # v0.12.0 - a winding can step through the positions of a range                #
+# v0.13.0 - a two-winding transformer is rated at each terminal                #
 ################################################################################
 
 export AbstractTransformer, Transformer, TapMode, FIXED, CONTINUOUS, STEPPED
@@ -847,8 +848,8 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::
         A  = edge_arcs(nm, e; nw)
 
         limits[e] = length(A) == 2 ?
-            constraint_linear_limits!(nm, e, A[1], A[2], minimum(tf.rate_a),
-                                      tf.angmin, tf.angmax; nw) :
+            (constraint_linear_ratings!(nm, e, A, tf.rate_a; nw),
+             constraint_linear_angle_difference!(nm, A[1], A[2], tf.angmin, tf.angmax; nw)) :
             constraint_linear_ratings!(nm, e, A, tf.rate_a; nw)
 
         _constraint_steps!(nm, tf, e, A; nw)

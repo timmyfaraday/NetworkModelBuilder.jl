@@ -11,6 +11,7 @@
 # v0.12.8 - a branch refuses an impedance or a rating no model can use         #
 # v0.13.0 - one Branch: a cable and an overhead line are its length_km         #
 # v0.13.0 - the pi-section and the series current of a branch are here         #
+# v0.13.0 - a branch is limited by its ratings and its angle limit, apart      #
 ################################################################################
 
 export AbstractBranch, Branch, impedance, shunt_admittance, dynamic_rating
@@ -339,19 +340,20 @@ end
 """
     constraint_edge_limits(nm, T; nw)
 
-The rating and the angle difference limits of every in-service branch, see
-[`constraint_linear_limits!`](@ref).
+The rating at every terminal and the angle difference limit of every in-service
+branch, see [`constraint_linear_ratings!`](@ref) and
+[`constraint_linear_angle_difference!`](@ref).
 """
 function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                                ) where {P<:AbstractDispatchProblem,F<:LPFFormulation,T<:AbstractBranch}
     limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :edge_limits)
 
     for e in ids(nm, T; nw)
-        br         = edge(nm, e; nw)::T
-        a_fr, a_to = edge_arcs(nm, e; nw)
+        br = edge(nm, e; nw)::T
+        A  = edge_arcs(nm, e; nw)
 
-        limits[e] = constraint_linear_limits!(nm, e, a_fr, a_to,
-                                              br.rate_a, br.angmin, br.angmax; nw)
+        limits[e] = (constraint_linear_ratings!(nm, e, A, br.rate_a; nw),
+                     constraint_linear_angle_difference!(nm, A[1], A[2], br.angmin, br.angmax; nw))
     end
 
     return nothing

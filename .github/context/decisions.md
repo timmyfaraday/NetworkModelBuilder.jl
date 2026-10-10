@@ -4,7 +4,7 @@ The rules that still constrain NMB. Read the section for the area you are touchi
 changing it.
 
 How to use this file:
-- A new decision gets the next free id (**D52**), goes in the Log at the bottom, and is written by
+- A new decision gets the next free id (**D54**), goes in the Log at the bottom, and is written by
   the `record-decision` skill. `Decided by` is a person's username, never an agent.
 - A decision that changes a rule below edits the rule in place and cites the new id. The old
   wording goes to the archive line of the id it came from.
@@ -84,6 +84,8 @@ How to use this file:
   of a model. An extension prefixes its keys.
 - **What several types of a family share lives in the family file, and what one type alone uses lives in that
   type's file** (D51): `edge/edge.jl` and `unit/unit.jl`, not a file of fragments of their own.
+- **A rating and an angle limit are separate constraints, and `constraint_linear_ratings!` is the one linear rating, for
+  two terminals as for more** (D52); `constraint_linear_limits!` is removed.
 
 ## Concurrency
 
@@ -186,8 +188,11 @@ How to use this file:
   `Network`: a cache of a derivation, one entry however many network indices, not a table** (D45).
   Two entries if, after B21, `topology` is still above 3 % of the pipeline profile.
 - **A cable and an overhead line are a `Branch` with another `length_km`, not types: `Cable` and `OverheadLine`
-  are removed with no shim, `Branch` carries `length_km`, NaN meaning unknown** (D50). `AbstractBranch` stays as
-  the extension hook. Planned as v0.13.0; spec `knowledge/plan/one-branch.md`.
+  are removed with no shim, `Branch` carries `length_km`, NaN meaning unknown and being the default** (D50). `AbstractBranch`
+  stays as the extension hook. Planned as v0.13.0; spec `knowledge/plan/one-branch.md`.
+- **A `Branch` has two or more terminals: `n` π-sections coupled at one point with the shunts there aggregated, two
+  terminals being the single π as before; its fields are vectors with one entry per terminal, as a transformer's** (D53).
+  Spec `knowledge/plan/one-branch-terminals.md`.
 
 ## Zorba pipeline (`scripts/`)
 
@@ -561,9 +566,19 @@ Changes: new rule in Code conventions. Tom chose a typed `registered` field and 
 ### D50 — A cable and an overhead line are a `Branch` with another `length_km`, not types
 Date: 2026-10-10 · Decided by: Tom Van Acker · Area: Component model
 Why: `Cable` and `OverheadLine` are `Branch` plus a `length_km` nothing reads, and the same as each other; no method in `src/` dispatches on either, no reader builds them, and `dynamic_rating`, the only method written for them, has no caller. Three registered types cost about 0.2 ms of a 1,171 ms step-3 update, so this is not a speed item.
-Changes: new rule in Component model; the `length_km` clause of the D48 rule edited, NaN is valid and means unknown. Tom chose one `Branch` with `length_km` over a `construction` flag and over merging the files only, a hard removal over one release of shims, `dynamic_rating` kept for every `AbstractBranch`, and v0.13.0 over v0.12.10; the default of `length_km` is open.
+Changes: new rule in Component model; the `length_km` clause of the D48 rule edited, NaN is valid and means unknown. Tom chose one `Branch` with `length_km` over a `construction` flag and over merging the files only, a hard removal over one release of shims, `dynamic_rating` kept for every `AbstractBranch`, and v0.13.0 over v0.12.10; `length_km` is NaN by default.
 
 ### D51 — What several types of a family share lives in the family file
 Date: 2026-10-10 · Decided by: Tom Van Acker · Area: Code conventions
 Why: `pi_model.jl` held the π-section only a branch writes, the rating, angle and linear-flow fragments a branch and a transformer share, and the one rating function only a transformer calls; the unit side keeps `constraint_unit_power!` in `unit/unit.jl` already. Proposed by Tom.
 Changes: new rule in Code conventions. Branch-only code goes to `branch.jl`, shared code to `edge.jl`, transformer-only code to `transformer.jl`, and `pi_model.jl` is deleted.
+
+### D52 — A rating and an angle limit are separate constraints
+Date: 2026-10-10 · Decided by: Tom Van Acker · Area: Code conventions
+Why: `constraint_linear_limits!` wrote a rating and the angle limit together for two arcs and one scalar rating, and the transformer chose it for two windings with `minimum(tf.rate_a)` and `constraint_linear_ratings!` for more; in IVR the two were already apart (`constraint_edge_rating!`, `constraint_edge_angle_difference!`). A lossless two-terminal edge has `p_2 = -p_1`, so a rating at each terminal is the same feasible set.
+Changes: new rule in Code conventions. `constraint_linear_limits!` is removed, the angle row becomes `constraint_linear_angle_difference!`, and `constraint_linear_ratings!`, which the branch now calls too, goes to `edge.jl` with the other shared fragments (D51's Why called it the transformer's).
+
+### D53 — A branch has two or more terminals, as `n` π-sections coupled at one point
+Date: 2026-10-10 · Decided by: Tom Van Acker · Area: Component model
+Why: the graph carries edges of any number of terminals and the transformer already has windings, but a branch had exactly two. Tom's model is `n` π-sections, section `k` from terminal `k` to one point, the shunts at the point aggregated: the equations of the transformer's star with neutral ratios, so the two can be checked against each other.
+Changes: new rule in Component model. Tom chose per-terminal vectors like the transformer's (D29) and one item with two stages over two items; the field names are to be confirmed, the plan keeps them.

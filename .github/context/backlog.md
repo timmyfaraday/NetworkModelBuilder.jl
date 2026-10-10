@@ -10,9 +10,9 @@ older ones: git has them). Next id: **B31**.
 
 ## Next
 
-- [ ] B30 · One `Branch` (with `length_km`) instead of `Branch`, `Cable` and `OverheadLine`, and `pi_model.jl` split into
-  `edge.jl`, `branch.jl` and `transformer.jl` by who uses what · Tom · 2026-10-10 · branch `b30-one-branch`
-  - Plan `knowledge/plan/one-branch.md`, D50 and D51; v0.13.0, as two exported types go. `length_km` may be NaN; its default is open.
+- [ ] B30 · One `Branch` (`length_km`, NaN by default) instead of `Branch`, `Cable` and `OverheadLine`; `pi_model.jl` split by who
+  uses what; a rating and an angle limit apart; then a branch of two or more terminals · Tom · 2026-10-10 · branch `b30-one-branch`
+  - Plans `knowledge/plan/one-branch.md` (stage 1) and `one-branch-terminals.md` (stage 2), D50-D53; v0.13.0, as public names go.
 
 ## Later
 

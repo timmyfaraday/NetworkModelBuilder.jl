@@ -129,7 +129,10 @@ the arguments say either way.
 `id` is what tells one variable of `key` from another: the identifier of a
 component, or an [`Arc`](@ref) where the variable belongs to one terminal of an
 edge, as the ratio of one winding of a transformer does. The variables of a `key`
-are all keyed the same way, by the type of the first `id` given.
+are all keyed the same way, by the type of the first `id` given. A key that
+already holds variables keyed by another type, or an array made by
+[`variables!`](@ref), raises an `ArgumentError`: a key names one set of
+variables.
 
 Only the bounds are updated, because only the bounds are data. Which variables
 exist is structure, and a model is updated rather than rebuilt exactly when the
@@ -169,7 +172,8 @@ end
 
 Make sure the container registered under each of `keys` at network index `nw`
 exists, and return the last of them. `idtype` is what its variables are keyed by,
-`Int` for a component and `Arc` for a variable that belongs to a terminal.
+`Int` for a component and `Arc` for a variable that belongs to a terminal. A key
+that already holds variables keyed by another type raises an `ArgumentError`.
 
 [`variable!`](@ref) creates a container as it puts the first variable in it,
 which leaves the container missing where a type has no components at this
@@ -192,7 +196,9 @@ end
     variables!(nm, key, indices; nw, base_name, start)
 
 The container of variables registered under `key` at network index `nw`, one per
-entry of `indices`, created on first sight and returned untouched on second.
+entry of `indices`, created on first sight and returned untouched on second. A
+key that already holds a dictionary of variables, or an array over other
+`indices`, raises an `ArgumentError`: a key names one set of variables.
 
 The counterpart of [`variable!`](@ref) for the containers a whole index set
 shares — the node voltages, the terminal flows, the unit injections. None of

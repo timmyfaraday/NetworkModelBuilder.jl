@@ -9,9 +9,10 @@
 # v0.3.0 - component hierarchy                                                 #
 # v0.10.1 - exports its own public names                                       #
 # v0.12.8 - a branch refuses an impedance or a rating no model can use         #
+# v0.13.0 - one Branch: a cable and an overhead line are its length_km         #
 ################################################################################
 
-export AbstractBranch, Branch, impedance, shunt_admittance
+export AbstractBranch, Branch, impedance, shunt_admittance, dynamic_rating
 
 ################################################################################
 # Branch — data                                                                #
@@ -23,29 +24,26 @@ export AbstractBranch, Branch, impedance, shunt_admittance
 An edge that transports electrical power between its two nodes without
 transforming it: a π-equivalent with no turns ratio.
 
-Every branch type shares the same equations. What separates [`Cable`](@ref) from
-[`OverheadLine`](@ref) is the data each carries, not the physics: in a
-steady-state model both are a series impedance between two shunt admittances.
-The types exist so that a problem can address one kind — a rating that depends
-on wind speed applies to a line and not to a cable — and so that a planning
-problem can cost them differently.
+Every branch type shares the same equations. A cable and an overhead line are not
+types of their own: in a steady-state model both are a series impedance between
+two shunt admittances, so each is a [`Branch`](@ref) with its own data.
 
 A concrete branch carries `id`, `name`, `terminals` (exactly two), `r`, `x`,
-`g_fr`, `b_fr`, `g_to`, `b_to`, `rate_a`, `angmin`, `angmax`, `status` and
-`ext`. Every field but `id`, `name`, `terminals` and `ext` may be a
-[`NetworkVector`](@ref).
+`g_fr`, `b_fr`, `g_to`, `b_to`, `rate_a`, `angmin`, `angmax`, `length_km`,
+`status` and `ext`. Every field but `id`, `name`, `terminals`, `length_km` and
+`ext` may be a [`NetworkVector`](@ref).
 """
 abstract type AbstractBranch <: AbstractEdge end
 
 """
     Branch <: AbstractBranch
 
-A two-terminal edge `(e, i, j)` of unspecified construction, modelled as a
-π-equivalent.
+A two-terminal edge `(e, i, j)` modelled as a π-equivalent.
 
-This is what a Matpower branch without a turns ratio becomes. Where the
-construction is known, prefer [`Cable`](@ref) or [`OverheadLine`](@ref); where
-the edge has a turns ratio it is a [`Transformer`](@ref), not a branch.
+This is what a Matpower branch without a turns ratio becomes, and what a cable or
+an overhead line is: they differ in `length_km` and in a rating that may follow
+the weather, not in the equations. Where the edge has a turns ratio it is a
+[`Transformer`](@ref), not a branch.
 
 # Fields
 - `id`, `name`: the identifier and a human readable label.
@@ -56,13 +54,14 @@ the edge has a turns ratio it is a [`Transformer`](@ref), not a branch.
   `b_fr = b_to = b/2`.
 - `rate_a`: the apparent power rating [pu], `Inf` when unlimited.
 - `angmin`, `angmax`: the limits on the voltage angle difference [rad].
+- `length_km`: the route length [km], `NaN` where it is not known.
 - `status`: whether the branch is in service.
 - `ext`: free-form storage.
 
 A branch is refused when its `r` or `x` is not finite, when both are 0, when a
-shunt admittance is not finite, when `rate_a` is negative or NaN, or when its
-angle limits are out of order. A bus coupler has no impedance to give: it is a
-[`Switch`](@ref).
+shunt admittance is not finite, when `rate_a` is negative or NaN, when its angle
+limits are out of order, or when its `length_km` is negative or infinite. A bus
+coupler has no impedance to give: it is a [`Switch`](@ref).
 """
 Base.@kwdef struct Branch <: AbstractBranch
     id       ::Int
@@ -77,14 +76,16 @@ Base.@kwdef struct Branch <: AbstractBranch
     rate_a   ::NetworkQuantity{Float64} = Inf
     angmin   ::NetworkQuantity{Float64} = -pi / 3
     angmax   ::NetworkQuantity{Float64} =  pi / 3
+    length_km::Float64                  = NaN
     status   ::NetworkQuantity{Bool}    = true
     ext      ::Dict{Symbol,Any}         = Dict{Symbol,Any}()
 
     function Branch(id, name, terminals, r, x, g_fr, b_fr, g_to, b_to,
-                    rate_a, angmin, angmax, status, ext)
+                    rate_a, angmin, angmax, length_km, status, ext)
         _check_branch(id, terminals, r, x, g_fr, b_fr, g_to, b_to, rate_a, angmin, angmax)
+        _check_length(id, length_km)
         return new(id, name, terminals, r, x, g_fr, b_fr, g_to, b_to,
-                   rate_a, angmin, angmax, status, ext)
+                   rate_a, angmin, angmax, length_km, status, ext)
     end
 end
 
@@ -106,10 +107,10 @@ function _check_branch(id, terminals, r, x, g_fr, b_fr, g_to, b_to, rate_a, angm
     return nothing
 end
 
-"refuse a route length that is negative or not finite, for the branches that carry one"
+"refuse a route length that is negative or infinite; NaN says it is not known"
 function _check_length(id, length_km)
-    isfinite(length_km) && length_km >= 0 ||
-        throw(ArgumentError("branch $id has a length that is negative or not finite"))
+    isnan(length_km) || (isfinite(length_km) && length_km >= 0) ||
+        throw(ArgumentError("branch $id has a length that is negative or infinite"))
 
     return nothing
 end
@@ -130,6 +131,16 @@ impedance(br::AbstractBranch) = (br.r, br.x)
 
 "the from and to shunt admittance of a branch resolved at one network index"
 shunt_admittance(br::AbstractBranch) = ((br.g_fr, br.b_fr), (br.g_to, br.b_to))
+
+"""
+    dynamic_rating(br)
+
+The rating of a branch at one network index. Give `rate_a` a
+[`NetworkVector`](@ref) over the `:time` dimension and the thermal limit of the
+branch becomes a profile, a rating that follows the ambient conditions, without
+any change to the constraint that enforces it.
+"""
+dynamic_rating(br::AbstractBranch) = br.rate_a
 
 ################################################################################
 # Branch — variables                                                           #

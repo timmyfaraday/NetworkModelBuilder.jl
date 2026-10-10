@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.12.8 - the constructors refuse input a model cannot use                   #
+# v0.13.0 - the length of a branch may be NaN, and is by default               #
 ################################################################################
 
 # An impossible value used to travel on to the solver, which answered
@@ -121,12 +122,10 @@ end
         @test_throws ArgumentError branch(rate_a = -1.0)
         @test_throws ArgumentError branch(rate_a = NaN)
 
-        # every kind of branch is refused alike, and a length is not negative or unknown to be NaN
-        @test_throws ArgumentError Cable(; id = 1, terminals = [1, 2], r = NaN, x = 0.1)
-        @test_throws ArgumentError OverheadLine(; id = 1, terminals = [1, 2], r = 0.0, x = 0.0)
-        @test_throws ArgumentError Cable(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, length_km = -5.0)
-        @test_throws ArgumentError Cable(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, length_km = Inf)
-        @test_throws ArgumentError OverheadLine(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, length_km = NaN)
+        # a length is NaN where it is not known, and is neither negative nor infinite
+        @test_throws ArgumentError branch(length_km = -5.0)
+        @test_throws ArgumentError branch(length_km = Inf)
+        @test isnan(branch(length_km = NaN).length_km)
 
         # a profile is refused at the one network index that breaks it
         dim = Dimension(:time => 3)
@@ -144,7 +143,9 @@ end
         @test branch(rate_a = 0.0).rate_a == 0.0
         @test branch(r = 0.01, x = 0.0).x == 0.0
         @test branch(r = 0.0, x = -0.05).x == -0.05
-        @test Cable(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1).length_km == 0.0
+        @test isnan(branch().length_km)
+        @test branch(length_km = 0.0).length_km == 0.0
+        @test branch(length_km = 12.5).length_km == 12.5
     end
 
 end

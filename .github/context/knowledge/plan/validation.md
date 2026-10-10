@@ -1,6 +1,6 @@
 # Constructors refuse input a model cannot use (B23)
 
-Status: decided (D48), not started · Author: Tom Van Acker (requested) · Date: 2026-10-10
+Status: implemented on `b23-validation` (v0.12.8), measured, not merged · Author: Tom Van Acker (requested) · Date: 2026-10-10
 Decisions: D48 recorded 2026-10-10 (next free after: D49); no open question
 Priority: P2 · Effort: Medium. Branch `b23-validation`, cut from `main` at `9e33c53` (v0.12.7);
 becomes v0.12.8. Fourth move of the review `julia-guide-review.md`, item 3.
@@ -95,3 +95,16 @@ builds a generator per element) before dropping a rule.
 - The messages of `parse_tables` and the Matpower reader, which will now show these errors from inside a
   constructor with the component id; a reader that names the row is a later change.
 - Types the package does not own: `docs/src/manual/extending.md` could show a `_check_` of its own.
+
+## Result (2026-10-10)
+
+- Commits `f2b4d54` (node), `59a68df` (generator, load, shunt), `1ed12c7` (branch family), `5413359` (0.12.8); suite 3295
+  with 4 threads, docs build clean.
+- `test/validation.jl`, 72 checks: 12 of the node checks, 25 of the generator, load and shunt ones and 20 of the branch
+  ones failed or errored on the sources before; all pass. The seven inputs that must stay valid are tested.
+- The Zorba year loads through the new constructors in 36 s and breaks none of the 23 rules, as before.
+- Cost: `window()` on a real step-3 window 7.5 ms (7.7 before, stop rule 16), step 2 5.8 ms (5.8). `window` rebuilds
+  through the positional constructor, so the checks run there; they are cheap because `_slice` collapses a vector of
+  equal values to a scalar.
+- Pipeline: a 24 h chunk (`runs/_b23_check`) against `runs/_b25_proc/chunks/h00001-00024`: all seven files
+  byte-identical, objectives 317,686,796.800330 and 308,105,792.250268 equal.

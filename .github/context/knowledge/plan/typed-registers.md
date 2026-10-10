@@ -1,6 +1,6 @@
 # The package's registers are fields, and a key is not reused (B24)
 
-Status: decided (D49), not started · Author: Tom Van Acker (requested) · Date: 2026-10-10
+Status: done on its branch (v0.12.9, D49), not merged · Author: Tom Van Acker (requested) · Date: 2026-10-10
 Decisions: D49 recorded 2026-10-10 (next free after: D50); no open question
 Priority: P2 · Effort: Medium. Branch `b24-typed-registers`, cut from `main` at `bd0d1a4` (v0.12.8);
 becomes v0.12.9. Fifth move of the review `julia-guide-review.md`, item 4.
@@ -23,7 +23,8 @@ becomes v0.12.9. Fifth move of the review `julia-guide-review.md`, item 4.
   The other two are used: `:registered` (`rebuild.jl:106`) and `:redispatch`, the documented input of `solve_rd` and
   `instantiate_model(...; ext)` (`redispatch.jl:176`).
 - **What one real step-3 window holds** (80 network indices, `scratch/b24_registers.jl`): `:registered` 274,523 entries,
-  179 MB; `:redispatch_control` 66,431 entries, **56.5 MB**, a duplicate; `:redispatch` the setup.
+  179 MB; `:redispatch_control` 66,431 entries, 7.3 MB of its own, a duplicate (first read as 56.5 MB: `Base.summarysize` of
+  it followed the references into the 49.2 MB JuMP model, see Result); `:redispatch` the setup.
 - **A typed field is not a speed item:** `registered_constraints(nm)` is 14 ns a call, 3.8 ms of a 1,231 ms
   `update_model!` (0.3 %). The cost in `constrain!` is hashing its `Tuple{Int,Symbol,Any}` key, 125 ns a lookup, 34 ms an
   update (2.8 %): B20's remainder, not here.
@@ -77,7 +78,7 @@ every extension, and the functions that make a container check nothing about one
 - The suite and the docs build; every build in them and in a 24 h chunk passes the duplicate check: that is the audit of
   part 4.
 - The cost: `update_model!` of a real step-3 window within 2 % of a same-day control (1,231 ms measured today), the
-  `benchmark/window.jl` stages the same, and `Base.summarysize` of a held model 56 MB lower.
+  `benchmark/window.jl` stages the same, and the whole held model smaller by what the seven registers held of their own.
 - The pipeline: a 24 h chunk against `runs/_b25_proc/chunks/h00001-00024`: all seven files byte-identical.
 
 ## Commit order
@@ -99,3 +100,25 @@ the rule has to allow, and that is Tom's call. If `update_model!` is more than 2
 - A duplicate that first appears in a later pass; an extension that calls `build_model!` itself twice rather than
   `update_model!`.
 - Q7, the export surface: `registered_constraints` stays exported.
+
+## Result
+
+Commits on `b24-typed-registers` (cut at `bd0d1a4`): `6d7f09c` plan and D49, `11e88db` variable keys, `052e7b6` constraint ids,
+`95dec60` the field and the deleted registers, `20b3975` docs, docstrings, 0.12.9.
+
+- **Tests:** `test/registers.jl`, 27 checks. Red against the sources before each part (the variable-key part 3 failures and 2
+  errors, the constraint-id part 1 and 2, the field part 2 and 4), green after; suite 3295 to 3322 with 4 threads, docs
+  build clean.
+- **Audit (stop rule not fired):** no builder in the suite, and none in two real 24 h pipeline chunks, writes an id twice
+  in a first build or reuses a variable key.
+- **Pipeline:** both 24 h chunks (`runs/_b24_check`, `_b24_check2`) byte-identical to `runs/_b25_proc/chunks/h00001-00024`,
+  all seven files, objectives 317686796.800330 and 308105792.250268 equal.
+- **Cost**, held step-3 model (80 indices, 274,523 rows), `scratch/b24_cost.jl` beside a same-day control worktree of v0.12.8,
+  two pairs: `update_model!` 1,171 and 1,185 ms against 1,309 and 1,266 (min of 7), so not slower; `instantiate_model` 2,868
+  and 2,435 against 2,757 and 2,497 (noise). `benchmark/window.jl` case14: update 25.9 against 26.4 ms, 303,921 against 306,925
+  allocations; instantiate 55.7 against 55.8 ms.
+- **The size claim was wrong.** `Base.summarysize(nm)` 243.6 MB before, 236.3 after: **7.3 MB** (3.0 %), not 56 MB. The 56.5 MB of
+  `:redispatch_control` was `summarysize` following each reference into `nm.model` (49.2 MB); the 179 MB of `:registered`
+  the same. D49 stands on ownership and on the checks, not on memory. Measure a held structure by the whole holder before and after.
+- **Not compared:** `variables!` does not compare a sparse container with `indices` (nothing in the package builds one).
+  The source of part 3 was edited before the test was red; red was shown by stashing `src/` and running the new cases.

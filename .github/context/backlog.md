@@ -39,10 +39,6 @@ older ones: git has them). Next id: **B30**.
     `_signature` now 0.6 % of the samples) and B22 (done, `build_solution` now 7.8-9.3 % of a step-3 roll).
   - Peak memory per process rose from 6.2 GB to 7.3 GB (mean 5.9 GB), the held model; 73 processes fit in
     1 TB, watch it if the process count grows. B22 took it to 2.9 GB a 24 h chunk in week 1 (was 5.0).
-- [ ] B24 · Move the package's own registers (nine keys) out of `nm.ext` into typed fields; refuse a `var`/`con`
-  key reused with another index set · Tom · 2026-10-08 · branch `b24-typed-registers`
-  - Plan `knowledge/plan/typed-registers.md`, D49. Seven of the nine are written and never read (56.5 MB a held
-    step-3 model); the accessor of `registered` is 0.3 % of an update; a reused variable key is accepted four ways out of five.
 - [ ] B26 · The pipeline's settings in a TOML file copied into `runs/<id>/`, `main(config)`, no absolute paths in
   the script, no `NMB_*` variables · Tom · 2026-10-08 · proposed
   - 12 variables and two absolute paths today. Plan item 6.
@@ -67,6 +63,12 @@ older ones: git has them). Next id: **B30**.
     chunks of `_year_b10` had a first violation of 0.
 
 ## Done
+
+- [x] B24 · The package's own registers are fields of `NetworkModel`, not keys of `nm.ext`; a `var`/`con` key is not
+  reused with another index set, nor a constraint id in a build (D49) · Tom · 2026-10-08
+  - v0.12.9 on `b24-typed-registers`, not merged; plan `knowledge/plan/typed-registers.md`. Seven write-only registers deleted, a
+    reused variable key was accepted four ways out of five, now refused. A held step-3 model is 7.3 MB smaller (not the
+    56.5 MB first read), `update_model!` 1.18 s against 1.29 s same day, suite 3322, a 24 h chunk byte-identical to v0.12.7.
 
 - [x] B23 · A constructor refuses input a model cannot use: `Node`, `Generator`, `FixedLoad`, `Shunt` and the branch
   family (D48) · Tom · 2026-10-08

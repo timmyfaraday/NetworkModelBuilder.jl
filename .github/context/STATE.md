@@ -1,6 +1,6 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-10 by Tom Van Acker (B23 merged, tagged v0.12.8 and pushed; B24 started on `b24-typed-registers`).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-10 by Tom Van Acker (B24 done on `b24-typed-registers`, v0.12.9, not merged).
 
 ## Where NMB stands
 
@@ -43,9 +43,9 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-10 by Tom Va
   threads against 7 processes: 224 s against 125 s a chunk, GC 14.4 % against 14.2 % (`lessons.md`).
 - B23 done (v0.12.8, D48, tagged): constructors refuse impossible limits, NaN, `r = x = 0`, a negative rating or length
   (`validation.md`); suite 3295, the Zorba year breaks no rule, a 24 h chunk is byte-identical to v0.12.7.
-- B24 decided (D49), not started: branch `b24-typed-registers`, plan `knowledge/plan/typed-registers.md`: `registered` a
-  field, seven write-only registers of `nm.ext` deleted (56.5 MB a held step-3 model), an error for a variable key
-  reused and a constraint id written twice in a first build. Becomes v0.12.9. Next: implement, tests first.
+- B24 done on its branch (v0.12.9, D49, not merged; `typed-registers.md`): `registered` a field of `NetworkModel`, seven
+  write-only registers of `nm.ext` deleted, an error for a variable key reused and a constraint id written twice in a first
+  build; held step-3 model 7.3 MB smaller (not the 56.5 MB first read, `lessons.md`), suite 3322, 24 h chunk byte-identical.
 - Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
 - B11 merged, tagged `v0.12.0` (`unified-transformer.md`, D28-D36); Zorba flows are not unique without a phase shifter price (D34).
 - B12 done: `scripts/` run on `Transformer`. Week 1 beside a same-day pre-B11 control (`runs/_b12*`, two
@@ -67,8 +67,8 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-10 by Tom Va
 
 ## Next
 
-1. B24 (decided, D49, not started: `knowledge/plan/typed-registers.md`), then B26, B27 (the review's order). B20 keeps the rest of
-   the per-window cost; B7, B3, B4, B13, B19, B28, B29 remain, see `backlog.md`.
+1. Merge B24 when Tom says so (`b24-typed-registers` into `main`, tag `v0.12.9`, push), then B26, B27 (the review's order). B20
+   keeps the rest of the per-window cost; B7, B3, B4, B13, B19, B28, B29 remain, see `backlog.md`.
 
 ## Blocked / waiting
 

@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.3.0 - component hierarchy                                                 #
 # v0.10.1 - exports its own public names                                       #
+# v0.12.8 - a cable refuses a length that is negative or not finite            #
 ################################################################################
 
 export Cable
@@ -32,6 +33,9 @@ does distinguish them has somewhere to live.
 # Fields
 As [`Branch`](@ref), plus:
 - `length_km`: the route length [km], `0.0` where it is unknown.
+
+A cable is refused for what a [`Branch`](@ref) is, and for a length that is
+negative or not finite.
 """
 Base.@kwdef struct Cable <: AbstractBranch
     id       ::Int
@@ -52,7 +56,8 @@ Base.@kwdef struct Cable <: AbstractBranch
 
     function Cable(id, name, terminals, r, x, g_fr, b_fr, g_to, b_to,
                    rate_a, angmin, angmax, length_km, status, ext)
-        _check_branch(id, terminals, angmin, angmax)
+        _check_branch(id, terminals, r, x, g_fr, b_fr, g_to, b_to, rate_a, angmin, angmax)
+        _check_length(id, length_km)
         return new(id, name, terminals, r, x, g_fr, b_fr, g_to, b_to,
                    rate_a, angmin, angmax, length_km, status, ext)
     end

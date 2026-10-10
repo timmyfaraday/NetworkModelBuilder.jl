@@ -107,4 +107,44 @@ end
         @test Shunt(; id = 1, node = 1, bs = -0.19).bs == -0.19
     end
 
+    @testset "a branch" begin
+        branch(; kwargs...) = Branch(; id = 3, terminals = [1, 2], r = 0.01, x = 0.1, kwargs...)
+
+        @test_throws ArgumentError branch(r = NaN)
+        @test_throws ArgumentError branch(r = Inf)
+        @test_throws ArgumentError branch(x = NaN)
+        @test_throws ArgumentError branch(r = 0.0, x = 0.0)
+        @test_throws ArgumentError branch(g_fr = NaN)
+        @test_throws ArgumentError branch(b_fr = NaN)
+        @test_throws ArgumentError branch(g_to = Inf)
+        @test_throws ArgumentError branch(b_to = NaN)
+        @test_throws ArgumentError branch(rate_a = -1.0)
+        @test_throws ArgumentError branch(rate_a = NaN)
+
+        # every kind of branch is refused alike, and a length is not negative or unknown to be NaN
+        @test_throws ArgumentError Cable(; id = 1, terminals = [1, 2], r = NaN, x = 0.1)
+        @test_throws ArgumentError OverheadLine(; id = 1, terminals = [1, 2], r = 0.0, x = 0.0)
+        @test_throws ArgumentError Cable(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, length_km = -5.0)
+        @test_throws ArgumentError Cable(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, length_km = Inf)
+        @test_throws ArgumentError OverheadLine(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, length_km = NaN)
+
+        # a profile is refused at the one network index that breaks it
+        dim = Dimension(:time => 3)
+        @test_throws ArgumentError branch(r = nw_vector(dim, [0.01, NaN, 0.01]))
+        @test_throws ArgumentError branch(rate_a = nw_vector(dim, [1.0, 1.0, -1.0]))
+        @test_throws ArgumentError branch(r = nw_vector(dim, [0.01, 0.0, 0.01]), x = 0.0)
+
+        # and it says which branch, and what to do about a coupler
+        err = refusal(() -> branch(r = 0.0, x = 0.0))
+        @test err isa ArgumentError
+        @test occursin("branch 3", err.msg) && occursin("Switch", err.msg)
+
+        # what is not refused: no rating, a rating of zero, a pure resistor, a series capacitor, a length not given
+        @test branch(rate_a = Inf).rate_a == Inf
+        @test branch(rate_a = 0.0).rate_a == 0.0
+        @test branch(r = 0.01, x = 0.0).x == 0.0
+        @test branch(r = 0.0, x = -0.05).x == -0.05
+        @test Cable(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1).length_km == 0.0
+    end
+
 end

@@ -13,6 +13,7 @@
 # v0.12.0 - a transformer held at the base case writes no tap rows again       #
 # v0.12.0 - a winding can step through the positions of a range                #
 # v0.13.0 - a two-winding transformer is rated at each terminal                #
+# v0.13.0 - its per-winding data is normalised in edge.jl                      #
 ################################################################################
 
 export AbstractTransformer, Transformer, TapMode, FIXED, CONTINUOUS, STEPPED
@@ -155,19 +156,22 @@ Base.@kwdef struct Transformer <: AbstractTransformer
         n >= 2 ||
             throw(ArgumentError("transformer $id has $n terminals, a transformer has at least two"))
 
-        r      = _per_winding(r,      n, 0.0,      id, :r)
-        x      = _per_winding(x,      n, 0.0,      id, :x)
-        g_sh   = _per_winding(g_sh,   n, 0.0,      id, :g_sh)
-        b_sh   = _per_winding(b_sh,   n, 0.0,      id, :b_sh)
-        tm     = _per_winding(tm,     n, 1.0,      id, :tm)
-        ta     = _per_winding(ta,     n, 0.0,      id, :ta)
-        tm_min = _per_winding(tm_min, n, 0.9,      id, :tm_min)
-        tm_max = _per_winding(tm_max, n, 1.1,      id, :tm_max)
-        ta_min = _per_winding(ta_min, n, -pi / 12, id, :ta_min)
-        ta_max = _per_winding(ta_max, n,  pi / 12, id, :ta_max)
-        tm_step = _per_winding(tm_step, n, 0.0125,   id, :tm_step)
-        ta_step = _per_winding(ta_step, n, pi / 180, id, :ta_step)
-        rate_a = _per_winding(rate_a, n, Inf,      id, :rate_a; every = true)
+        per(x, neutral, field; every = false) =
+            _per_terminal(x, n, neutral, "transformer", "winding", id, field; every)
+
+        r      = per(r,      0.0,      :r)
+        x      = per(x,      0.0,      :x)
+        g_sh   = per(g_sh,   0.0,      :g_sh)
+        b_sh   = per(b_sh,   0.0,      :b_sh)
+        tm     = per(tm,     1.0,      :tm)
+        ta     = per(ta,     0.0,      :ta)
+        tm_min = per(tm_min, 0.9,      :tm_min)
+        tm_max = per(tm_max, 1.1,      :tm_max)
+        ta_min = per(ta_min, -pi / 12, :ta_min)
+        ta_max = per(ta_max,  pi / 12, :ta_max)
+        tm_step = per(tm_step, 0.0125,   :tm_step)
+        ta_step = per(ta_step, pi / 180, :ta_step)
+        rate_a = per(rate_a, Inf,      :rate_a; every = true)
         oltc   = _tap_modes(oltc, n, id, :oltc)
         pst    = _tap_modes(pst,  n, id, :pst)
 
@@ -178,33 +182,6 @@ Base.@kwdef struct Transformer <: AbstractTransformer
                    tm_min, tm_max, ta_min, ta_max, tm_step, ta_step, rate_a, angmin, angmax,
                    status, ext)
     end
-end
-
-"""
-    _per_winding(x, n, neutral, id, field; every = false)
-
-`x` as one entry per winding of a transformer with `n` of them. A vector is taken
-as it is; a scalar stands for the first winding of a two-winding transformer, the
-second being `neutral`, or for every winding where `every` is set, which is what a
-rating is. A transformer with more windings gives a vector, or the neutral scalar.
-"""
-function _per_winding(x, n::Int, neutral, id, field::Symbol; every::Bool = false)
-    x isa NetworkVector &&
-        return NetworkVector([_per_winding(v, n, neutral, id, field; every) for v in x.data])
-
-    if x isa AbstractVector
-        length(x) == n ||
-            throw(ArgumentError("transformer $id has $n terminals but `$field` has $(length(x)) entries"))
-        return Float64.(x)
-    end
-
-    every && return fill(Float64(x), n)
-    n == 2 && return [Float64(x), Float64(neutral)]
-    x == neutral && return fill(Float64(neutral), n)
-
-    throw(ArgumentError("transformer $id has $n terminals, so `$field` takes one entry per " *
-                        "terminal; a scalar stands for the first winding of a two-winding " *
-                        "transformer only"))
 end
 
 "a `Bool` or a `TapMode` as a `TapMode`"

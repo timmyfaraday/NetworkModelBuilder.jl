@@ -13,6 +13,7 @@
 # v0.12.6 - the solution builders are cheaper and hold what is asked           #
 # v0.13.0 - the fragments a branch and a transformer share are here            #
 # v0.13.0 - the linearized rating and angle limit are two constraints          #
+# v0.13.0 - the per-terminal data of an edge is normalised here                #
 ################################################################################
 
 export register_edge_type!, edge_types
@@ -52,6 +53,43 @@ end
 
 "the registered concrete edge types"
 edge_types() = copy(_EDGE_TYPES)
+
+################################################################################
+# Edge — per-terminal data                                                     #
+################################################################################
+
+"""
+    _per_terminal(x, n, neutral, owner, part, id, field; every = false)
+
+`x` as one entry per terminal of an edge with `n` of them. `owner` and `part` only
+name the edge type and what an entry belongs to in a message, `"transformer"` and
+`"winding"` or `"branch"` and `"terminal"`.
+
+A vector is taken as it is. A scalar stands for the first entry of an edge with two
+terminals, the second being `neutral`, or for every entry where `every` is set,
+which is what a rating is. An edge with more terminals gives a vector, or the
+neutral scalar.
+"""
+function _per_terminal(x, n::Int, neutral, owner::String, part::String, id, field::Symbol;
+                       every::Bool = false)
+    x isa NetworkVector &&
+        return NetworkVector([_per_terminal(v, n, neutral, owner, part, id, field; every)
+                              for v in x.data])
+
+    if x isa AbstractVector
+        length(x) == n ||
+            throw(ArgumentError("$owner $id has $n terminals but `$field` has $(length(x)) entries"))
+        return Float64.(x)
+    end
+
+    every && return fill(Float64(x), n)
+    n == 2 && return [Float64(x), Float64(neutral)]
+    x == neutral && return fill(Float64(neutral), n)
+
+    throw(ArgumentError("$owner $id has $n terminals, so `$field` takes one entry per " *
+                        "terminal; a scalar stands for the first $part of a two-$part " *
+                        "$owner only"))
+end
 
 ################################################################################
 # Edge — variables                                                             #

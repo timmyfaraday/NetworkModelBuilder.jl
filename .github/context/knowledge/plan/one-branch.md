@@ -1,7 +1,7 @@
 # One `Branch`, and the fragments in the file that owns them (B30)
 
 Status: decided (D50-D53), not started · Author: Tom Van Acker (requested) · Date: 2026-10-10
-Decisions: D50-D53 recorded 2026-10-10 (next free after: D54); one point to confirm, in `one-branch-terminals.md`
+Decisions: D50-D53 recorded 2026-10-10 (next free after: D54); no open point
 Priority: P3 · Effort: Large, in two stages. Branch `b30-one-branch`, cut from `main` at `b577b4a` (v0.12.9);
 becomes v0.13.0. Stage 1 is this file (parts 1 to 3), stage 2, more than two terminals, is `one-branch-terminals.md`.
 

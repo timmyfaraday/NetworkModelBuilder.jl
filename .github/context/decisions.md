@@ -191,7 +191,8 @@ How to use this file:
   are removed with no shim, `Branch` carries `length_km`, NaN meaning unknown and being the default** (D50). `AbstractBranch`
   stays as the extension hook. Planned as v0.13.0; spec `knowledge/plan/one-branch.md`.
 - **A `Branch` has two or more terminals: `n` π-sections coupled at one point with the shunts there aggregated, two
-  terminals being the single π as before; its fields are vectors with one entry per terminal, as a transformer's** (D53).
+  terminals being the single π as before; its fields are vectors with one entry per terminal, as a transformer's, and the
+  shunt of a section, `g_sh` and `b_sh`, is split equally between its two ends** (D53).
   Spec `knowledge/plan/one-branch-terminals.md`.
 
 ## Zorba pipeline (`scripts/`)
@@ -581,4 +582,4 @@ Changes: new rule in Code conventions. `constraint_linear_limits!` is removed, t
 ### D53 — A branch has two or more terminals, as `n` π-sections coupled at one point
 Date: 2026-10-10 · Decided by: Tom Van Acker · Area: Component model
 Why: the graph carries edges of any number of terminals and the transformer already has windings, but a branch had exactly two. Tom's model is `n` π-sections, section `k` from terminal `k` to one point, the shunts at the point aggregated: the equations of the transformer's star with neutral ratios, so the two can be checked against each other.
-Changes: new rule in Component model. Tom chose per-terminal vectors like the transformer's (D29) and one item with two stages over two items; the field names are to be confirmed, the plan keeps them.
+Changes: new rule in Component model. Tom chose per-terminal vectors like the transformer's (D29) and one item with two stages over two items; the shunt fields are `g_sh` and `b_sh`, the total of a section split equally between its two ends, and `g_fr`, `b_fr`, `g_to`, `b_to` are removed with no shim, so an asymmetric shunt is no longer expressible (nothing in the repository uses one).

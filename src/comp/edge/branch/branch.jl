@@ -10,9 +10,11 @@
 # v0.10.1 - exports its own public names                                       #
 # v0.12.8 - a branch refuses an impedance or a rating no model can use         #
 # v0.13.0 - one Branch: a cable and an overhead line are its length_km         #
+# v0.13.0 - the pi-section and the series current of a branch are here         #
 ################################################################################
 
 export AbstractBranch, Branch, impedance, shunt_admittance, dynamic_rating
+export constraint_pi_section!, variable_edge_series_current
 
 ################################################################################
 # Branch — data                                                                #
@@ -147,6 +149,27 @@ dynamic_rating(br::AbstractBranch) = br.rate_a
 ################################################################################
 
 """
+    variable_edge_series_current(nm, T; nw)
+
+The series current of every in-service edge of type `T`, added to the `:csr` and
+`:csi` containers shared by every edge type that has one.
+
+The container is a `Dict` rather than a JuMP array because several edge types
+contribute to it: the dispatcher visits one concrete type at a time, and each
+adds its own edges to the same two containers.
+"""
+function variable_edge_series_current(nm::NetworkModel, ::Type{T}; nw::Int) where {T<:AbstractEdge}
+    variable_container!(nm, :csr, :csi; nw)
+
+    for e in ids(nm, T; nw)
+        variable!(nm, :csr, e; nw, base_name = "$(nw)_csr[$e]", start = 0.0)
+        variable!(nm, :csi, e; nw, base_name = "$(nw)_csi[$e]", start = 0.0)
+    end
+
+    return nothing
+end
+
+"""
     variable_edge(nm, T; nw)
 
 The series current of every in-service branch, `csr` and `csi`. Together with
@@ -159,6 +182,56 @@ variable_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
 ################################################################################
 # Branch — constraints                                                         #
 ################################################################################
+
+# A branch is a π-equivalent: a series impedance `z = r + jx` between two shunt
+# admittances `y = g + jb`. `csr, csi` is the series current, defined positive
+# from the from side to the to side.
+
+"""
+    constraint_pi_section!(nm, ctr, cti, vtr, vti, a_to, e, z, y_fr, y_to; nw)
+
+Add the equations of a π-equivalent whose from side sees the current
+`ctr + j·cti` at the voltage `vtr + j·vti`, and whose to side is the arc `a_to`.
+
+`ctr`, `cti`, `vtr` and `vti` may be variables or expressions, which is what lets
+a transformer hand in the quantities behind its ideal ratio.
+
+```math
+\\begin{aligned}
+c^{\\text{t}} &= y^{\\text{sh}}_{\\text{fr}} v^{\\text{t}} + c^{\\text{s}}, \\\\
+c_{a^{\\text{t}}} &= -c^{\\text{s}} + y^{\\text{sh}}_{\\text{to}} v_{j}, \\\\
+v^{\\text{t}} - v_{j} &= z \\, c^{\\text{s}}.
+\\end{aligned}
+```
+"""
+function constraint_pi_section!(nm::NetworkModel, ctr, cti, vtr, vti, a_to::Arc, e::Int,
+                                z::Tuple{<:Real,<:Real},
+                                y_fr::Tuple{<:Real,<:Real},
+                                y_to::Tuple{<:Real,<:Real}; nw::Int)
+    r, x         = z
+    g_fr, b_fr   = y_fr
+    g_to, b_to   = y_to
+    j            = a_to.node
+
+    vr, vi   = var(nm, :vr;  nw), var(nm, :vi;  nw)
+    cr, ci   = var(nm, :cr;  nw), var(nm, :ci;  nw)
+    csr, csi = var(nm, :csr; nw), var(nm, :csi; nw)
+
+    return (
+        constrain!(nm, :pi_section, (e, :cr_fr),
+                   JuMP.@build_constraint(ctr == g_fr * vtr - b_fr * vti + csr[e]); nw),
+        constrain!(nm, :pi_section, (e, :ci_fr),
+                   JuMP.@build_constraint(cti == g_fr * vti + b_fr * vtr + csi[e]); nw),
+        constrain!(nm, :pi_section, (e, :cr_to),
+                   JuMP.@build_constraint(cr[a_to] == -csr[e] + g_to * vr[j] - b_to * vi[j]); nw),
+        constrain!(nm, :pi_section, (e, :ci_to),
+                   JuMP.@build_constraint(ci[a_to] == -csi[e] + g_to * vi[j] + b_to * vr[j]); nw),
+        constrain!(nm, :pi_section, (e, :vr),
+                   JuMP.@build_constraint(vtr - vr[j] == r * csr[e] - x * csi[e]); nw),
+        constrain!(nm, :pi_section, (e, :vi),
+                   JuMP.@build_constraint(vti - vi[j] == r * csi[e] + x * csr[e]); nw),
+    )
+end
 
 """
     constraint_edge(nm, T; nw)

@@ -40,8 +40,9 @@ older ones: git has them). Next id: **B30**.
   - Peak memory per process rose from 6.2 GB to 7.3 GB (mean 5.9 GB), the held model; 73 processes fit in
     1 TB, watch it if the process count grows. B22 took it to 2.9 GB a 24 h chunk in week 1 (was 5.0).
 - [ ] B24 · Move the package's own registers (nine keys) out of `nm.ext` into typed fields; refuse a `var`/`con`
-  key reused with another index set · Tom · 2026-10-08 · proposed
-  - The refusal changes the extension contract: a decision. Plan item 4.
+  key reused with another index set · Tom · 2026-10-08 · branch `b24-typed-registers`
+  - Plan `knowledge/plan/typed-registers.md`, D49. Seven of the nine are written and never read (56.5 MB a held
+    step-3 model); the accessor of `registered` is 0.3 % of an update; a reused variable key is accepted four ways out of five.
 - [ ] B26 · The pipeline's settings in a TOML file copied into `runs/<id>/`, `main(config)`, no absolute paths in
   the script, no `NMB_*` variables · Tom · 2026-10-08 · proposed
   - 12 variables and two absolute paths today. Plan item 6.

@@ -76,6 +76,12 @@ How to use this file:
   `r² + x² > 0`, `rate_a >= 0` and `length_km >= 0`, with `all_nw` so that a `NetworkVector` is checked at
   every index, and raise an `ArgumentError` naming the component. `base_kv` may be 0, which means
   unknown. The signs of `r` and `x`, and `pg` against its limits, are not checked.
+- **The package's own state is fields, not keys of `nm.ext`, and a key is not reused** (D49):
+  `registered` is a field of `NetworkModel`; the registers that only repeated what
+  `registered_constraints` holds are gone; `ext` holds what the caller put there. `variable!`, `variables!`
+  and `variable_container!` raise an `ArgumentError` where a key is asked for again with another id type,
+  container kind or index set, and `constrain!` where one `(nw, key, id)` is written twice in the first build
+  of a model. An extension prefixes its keys.
 
 ## Concurrency
 
@@ -541,3 +547,8 @@ Changes: new rule in Code conventions. Tom chose the allocation checks only, Ben
 Date: 2026-10-10 · Decided by: Tom Van Acker · Area: Code conventions
 Why: 19 of 19 invalid inputs built without complaint (`Generator(pmin = 2, pmax = 1)`, `Node(vmin = 1.1, vmax = 0.9)`, `Branch(r = 0, x = 0)`, NaN in a setpoint, a negative rating or length), and one reached the solver as an `INFEASIBLE` with nothing pointing at it. The rules were run over the four bundled Matpower cases and the Zorba year (8,760 hours, 234 nodes, 93 generators, 234 loads, 399 branches): only `base_kv > 0` failed, on case14, whose buses carry 0, so `base_kv` may be 0 for unknown.
 Changes: new rule in Code conventions. Tom chose the proposed set over a smaller one (ordered limits and NaN only) and a larger one (the signs of `r` and `x`, `pg` inside its limits, which would refuse series capacitors and a market dispatch the redispatch is there to fix), validation of components out of service too, and v0.12.8 over v0.13.0.
+
+### D49 — The package's own state is fields, not keys of `nm.ext`, and a key is not reused
+Date: 2026-10-10 · Decided by: Tom Van Acker · Area: Code conventions
+Why: `ext` is the caller's free-form storage, yet the package kept nine registers in it, and seven of them (`:redispatch_control`, `:overload_peak`, `:storage_balance`, `:storage_final`, `:storage_cycles`, `:generator_energy`, `:flexible_load_energy`) are written and never read in `src/`, `docs/` or `scripts/`: the references they hold are all in `registered_constraints`, and `:redispatch_control` alone is 66,431 entries and 56.5 MB in one held step-3 model. A typed field is not a speed item, the accessor is 0.3 % of an update. A key asked for again with another index set was accepted four ways out of five (`variables!(:x, 1:3)` then `(:x, 1:5)` returns the first container), the fifth a `MethodError` far from the cause; the `:vsr` incident in `lessons.md` was this.
+Changes: new rule in Code conventions. Tom chose a typed `registered` field and deleting the seven registers (`:redispatch` stays, it is the documented input of `solve_rd`), an error for a variable key reused and one for a constraint id written twice in a build, and v0.12.9 over v0.13.0. The second is checked in the first build of a model only, which costs nothing in an update and is where a structural collision shows.

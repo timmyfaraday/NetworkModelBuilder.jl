@@ -18,7 +18,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-10 by Tom Va
   on 2026-10-09 B21 (v0.12.5), the Julia guide review and B22 (v0.12.6); on 2026-10-10 B25 (v0.12.7), B23 (v0.12.8).
 - `test-zorba-run` is merged into `main` and kept; the next Zorba change can start from `main`.
 - `b5-switch-edge`, `b11-unified-transformer` merged and deleted; `b21-topology-lookup`, `b22-build-solution`,
-  `b25-guard-rails`, `b23-validation` merged, kept; `b24-typed-registers` holds B24. Next free decision id: **D49**.
+  `b25-guard-rails`, `b23-validation` merged, kept; `b24-typed-registers` holds B24. Next free decision id: **D50**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -37,15 +37,15 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-10 by Tom Va
 ## In progress
 
 - Julia guide review (`knowledge/plan/julia-guide-review.md`, B21-B28, Q7-Q9): B21 done (v0.12.5, D45), chunk -10.7 %.
-- B22 done (v0.12.6, D46, tagged): a roll builds the committed indices, `report` names families and identifiers.
-  Week 1 against `main` (`runs/_b22_*`): objectives bit-identical, chunk -12.3 %, peak 5.0 to 2.9 GB. Stop rule at
-  its line: `build_solution` 7.8-9.3 % of a step-3 roll, ~6 % of a chunk (Q9); volume file row order (B29).
-- B25 done (v0.12.7, D47, merged and tagged); tests and tooling only, suite 3223: `test/hot_path.jl`,
-  `benchmark/window.jl`, six GC columns in `chunk.csv`. Week 1, 7 threads against 7 processes (`runs/_b25_*`): 224 s
-  against 125 s a chunk, GC 14.4 % against 14.2 %: the collector is not what threads lose to (`lessons.md`).
-- B23 done (v0.12.8, D48, merged and tagged); plan `knowledge/plan/validation.md`: `Node`, `Generator`,
-  `FixedLoad`, `Shunt` and the branch family refuse impossible limits, NaN, `r = x = 0`, a negative rating or length;
-  suite 3295. The Zorba year breaks no rule; window cut 7.5 ms (was 7.7); a 24 h chunk is byte-identical to v0.12.7.
+- B22 done (v0.12.6, D46, tagged): a roll builds the committed indices, `report` names families and identifiers; week 1
+  chunk -12.3 %, peak 5.0 to 2.9 GB. Stop rule at its line (Q9: `build_solution` ~6 % of a chunk); volume row order (B29).
+- B25 done (v0.12.7, D47, tagged): `test/hot_path.jl`, `benchmark/window.jl`, six GC columns in `chunk.csv`; week 1, 7
+  threads against 7 processes: 224 s against 125 s a chunk, GC 14.4 % against 14.2 % (`lessons.md`).
+- B23 done (v0.12.8, D48, tagged): constructors refuse impossible limits, NaN, `r = x = 0`, a negative rating or length
+  (`validation.md`); suite 3295, the Zorba year breaks no rule, a 24 h chunk is byte-identical to v0.12.7.
+- B24 decided (D49), not started: branch `b24-typed-registers`, plan `knowledge/plan/typed-registers.md`: `registered` a
+  field, seven write-only registers of `nm.ext` deleted (56.5 MB a held step-3 model), an error for a variable key
+  reused and a constraint id written twice in a first build. Becomes v0.12.9. Next: implement, tests first.
 - Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
 - B11 merged, tagged `v0.12.0` (`unified-transformer.md`, D28-D36); Zorba flows are not unique without a phase shifter price (D34).
 - B12 done: `scripts/` run on `Transformer`. Week 1 beside a same-day pre-B11 control (`runs/_b12*`, two
@@ -67,7 +67,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-10 by Tom Va
 
 ## Next
 
-1. B24 (plan being drafted, decisions to Tom), then B26, B27 (the review's order). B20 keeps the rest of
+1. B24 (decided, D49, not started: `knowledge/plan/typed-registers.md`), then B26, B27 (the review's order). B20 keeps the rest of
    the per-window cost; B7, B3, B4, B13, B19, B28, B29 remain, see `backlog.md`.
 
 ## Blocked / waiting

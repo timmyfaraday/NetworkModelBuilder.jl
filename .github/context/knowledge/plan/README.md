@@ -27,3 +27,4 @@ Verification per item — the shape `GAP_CLOSURE_PLAN.md` already uses).
 | `build-solution.md` | implemented, merged and tagged `v0.12.6`; week 1 -12.3 % a chunk, peak 5.0 to 2.9 GB | D46 |
 | `guard-rails.md` | implemented, merged and tagged `v0.12.7`; threads 1.79x slower than processes, GC 14 % in both | D47 |
 | `validation.md` | implemented, merged and tagged `v0.12.8`; Zorba year breaks no rule, chunk byte-identical | D48 |
+| `typed-registers.md` | decided (D49), not started; B24 on `b24-typed-registers`, v0.12.9 | D49 |

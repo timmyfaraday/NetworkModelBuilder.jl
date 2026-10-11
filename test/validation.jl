@@ -182,6 +182,10 @@ end
         # a profile is refused at the one network index that breaks it
         dim = Dimension(:time => 3)
         @test_throws ArgumentError three(r = nw_vector(dim, [[0.01, 0.02, 0.03], [0.01, NaN, 0.03], [0.01, 0.02, 0.03]]))
+
+        # and profiles that do not cover the same network indices are refused
+        @test_throws ArgumentError branch(r = nw_vector(dim, [0.01, 0.01, 0.01]),
+                                          x = nw_vector(Dimension(:time => 2), [0.1, 0.1]))
     end
 
 end

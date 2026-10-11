@@ -15,6 +15,7 @@
 # v0.13.0 - the linearized rating and angle limit are two constraints          #
 # v0.13.0 - the per-terminal data of an edge is normalised here                #
 # v0.13.0 - an edge type says whether a table may give a scalar for it         #
+# v0.13.0 - a Float64 vector is kept, so a window rebuilds a branch cheaply    #
 ################################################################################
 
 export register_edge_type!, edge_types
@@ -80,7 +81,7 @@ function _per_terminal(x, n::Int, neutral, owner::String, part::String, id, fiel
     if x isa AbstractVector
         length(x) == n ||
             throw(ArgumentError("$owner $id has $n terminals but `$field` has $(length(x)) entries"))
-        return Float64.(x)
+        return x isa Vector{Float64} ? x : Float64.(x)
     end
 
     every && return fill(Float64(x), n)

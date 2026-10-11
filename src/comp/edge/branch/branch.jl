@@ -13,6 +13,7 @@
 # v0.13.0 - the pi-section and the series current of a branch are here         #
 # v0.13.0 - a branch is limited by its ratings and its angle limit, apart      #
 # v0.13.0 - a branch has one entry per terminal, and two or more terminals     #
+# v0.13.0 - checking plain data allocates nothing                              #
 ################################################################################
 
 export AbstractBranch, Branch, impedance, shunt_admittance, dynamic_rating
@@ -119,23 +120,36 @@ end
 
 _per_terminal_data(::Type{Branch}) = true
 
-function _check_branch(id, n, r, x, g_sh, b_sh, rate_a, angmin, angmax)
+function _check_branch(id, n, r::Vector{Float64}, x::Vector{Float64}, g_sh::Vector{Float64},
+                       b_sh::Vector{Float64}, rate_a::Vector{Float64}, angmin::Real,
+                       angmax::Real)
     # two terminals are one section, and a second one is what a third terminal is for
-    n > 2 || all(v -> all_nw(w -> iszero(w[2]), v), (r, x, g_sh, b_sh)) ||
+    n > 2 || (iszero(r[2]) && iszero(x[2]) && iszero(g_sh[2]) && iszero(b_sh[2])) ||
         throw(ArgumentError("branch $id has two terminals, which are one section: the second " *
                             "entry of `r`, `x`, `g_sh` and `b_sh` is 0, and a branch whose " *
                             "second section carries something has three terminals"))
-    all(v -> all_nw(w -> all(isfinite, w), v), (r, x)) ||
+    all(isfinite, r) && all(isfinite, x) ||
         throw(ArgumentError("branch $id has an impedance that is not finite"))
-    all_nw((r, x) -> all(k -> r[k]^2 + x[k]^2 > 0, 1:(n == 2 ? 1 : n)), r, x) ||
+    all(k -> r[k]^2 + x[k]^2 > 0, 1:(n == 2 ? 1 : n)) ||
         throw(ArgumentError("branch $id has a section with no impedance, r and x are both 0: " *
                             "a bus coupler is a Switch"))
-    all(v -> all_nw(w -> all(isfinite, w), v), (g_sh, b_sh)) ||
+    all(isfinite, g_sh) && all(isfinite, b_sh) ||
         throw(ArgumentError("branch $id has a shunt admittance that is not finite"))
-    all_nw(w -> all(>=(0), w), rate_a) ||
+    all(>=(0), rate_a) ||
         throw(ArgumentError("branch $id has a rating that is negative or NaN"))
-    all_nw(<=, angmin, angmax) ||
+    angmin <= angmax ||
         throw(ArgumentError("branch $id has angmin above angmax"))
+
+    return nothing
+end
+
+"the checks of a branch some of whose data varies, made at every network index"
+function _check_branch(id, n, data...)
+    all_nw((a...) -> true, data...)
+
+    for k in 1:maximum(length(d.data) for d in data if d isa NetworkVector)
+        _check_branch(id, n, map(d -> d isa NetworkVector ? d.data[k] : d, data)...)
+    end
 
     return nothing
 end

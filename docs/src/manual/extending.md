@@ -78,9 +78,9 @@ see [`update_model!`](@ref).
 A new component type has nothing to do differently: write the equations as they
 read, hand them over with a key that says which constraint they are, and give
 each one an `id` that distinguishes it from the others the same component
-writes. A variable is not named by the component: [`variable!`](@ref) and
-[`variables!`](@ref) name it from its key and its `id`, and leave it unnamed when
-the solve asked for `set_string_name = false`.
+writes. A component names neither a variable nor a constraint: [`variable!`](@ref),
+[`variables!`](@ref) and [`constrain!`](@ref) name it from its key and its `id` when
+the solve asked for `debug_mode = true`, and leave it unnamed otherwise.
 
 A key is not a private name. `var` and `con` are shared by the package and by
 every extension, so an extension **prefixes its keys with its own name**, as

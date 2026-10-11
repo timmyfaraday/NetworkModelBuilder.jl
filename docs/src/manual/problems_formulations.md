@@ -72,15 +72,16 @@ and what that costs.
 Asking for a combination that has no builder reports what is available rather
 than building a wrong model.
 
-## Variable names
+## Debug mode
 
-Every variable is built with a name made of the network index, its key and its
-id, which is what a solver log or an LP file shows. A name costs a string per
-variable and a call into the solver to store it: on a large model that is a good
-part of the time [`instantiate_model`](@ref) takes. Every solve takes
-`set_string_name = false` to build without them; the default is `true`. A
-`jump_model` that is handed in keeps its own setting when names are asked for,
-and is switched to unnamed when they are not.
+In `debug_mode` every variable and every constraint is built with a name made of
+the network index, its key and its id, which is what a solver log or an LP file
+shows. A name costs a string per row and a call into the solver to store it: on a
+real step-3 window of a rolling redispatch, 249,118 variables and 274,523
+constraints, that is 29 % of the time [`instantiate_model`](@ref) takes and 44 % of
+what it allocates. The default is `debug_mode = false`, which builds none, and every
+solve takes it. A `jump_model` that is handed in is set to match: unnamed unless
+`debug_mode` is `true`.
 
 ## The pipeline
 

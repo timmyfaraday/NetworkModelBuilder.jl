@@ -1,6 +1,6 @@
 # One nomenclature for constraints, functions and duals (B32)
 
-Status: decided (D63-D70), stages 0 and 1 done, the map confirmed by Tom; the map is confirmed by Tom at stage 1 · Author: Tom Van Acker (requested) · Date: 2026-10-11
+Status: decided (D63-D70), stages 0 to 2 done, the map confirmed by Tom; the map is confirmed by Tom at stage 1 · Author: Tom Van Acker (requested) · Date: 2026-10-11
 Decisions: D63-D70 recorded 2026-10-11 (next free after: D71)
 Priority: P2 · Effort: Large, in six stages. Branch `b32-constraint-names`, cut from `main` at v0.14.0; becomes v0.15.0 (a hard removal that renames exports and extension points is a minor bump, as D59 made v0.14.0).
 Follows `naming.md` (D55-D62). The names themselves are drafted in stage 1 into `../nomenclature.md`; this file is how to get there.
@@ -84,24 +84,24 @@ by two different hands, and a function and a dual took their name from the key t
    vti` and the other old letters to their key names (D57); the stale docstrings and docs snippets.
 5. **Docs and memory.** The code-name column of each type's tables (D60) and `docs/src/manual/nomenclature.md`, whose "What is not
    covered" shrinks to `variable_*`, `solution_*`, `objective_*`; `docs/src/manual/extending.md` (an extension prefixes its keys with its
-   own name); the section "Variable names" of `docs/src/manual/problems_formulations.md`, which becomes "Debug mode", and the
-   `instantiate_model` and `variable!` docstrings; `README.md`; `CHANGELOG.md` with the migration table; `Project.toml` 0.15.0; the live sections of `decisions.md` that name a
+   own name); `README.md`; `CHANGELOG.md` with the migration table; `Project.toml` 0.15.0; the live sections of `decisions.md` that name a
    renamed key, function or dual are edited in place (the Log stays); `STATE.md`, the backlog. With Tom's OK (setup files): one line in
    `julia.instructions.md`.
 
-## Stage 0 result (2026-10-11, `scratch/b32_names.jl`; `b30_names.jl` predates B31, `baseMVA` and `per_energy` fail)
+## Results (2026-10-11)
 
-The real step-3 window, 249,118 variables and 274,523 rows (all of the model's, each through `constrain!`), min of 3, four rounds rotated, rows named by
-a patched `constrain!`. **Off** 1,706 ms, 764 MB; **variable names only** (v0.14.0) 1,948 ms, 1,003 MB; **both** (`debug_mode = true`) 2,420 ms,
-1,352 MB. The default off against v0.14.0: -12 % time, -24 % memory; debug mode against off: +42 % time, +77 % memory (bytes are deterministic, times
-the best of four). The 274,523 row names are distinct, 41 characters at most (`22_redispatch_control[unit,1080,p_gen_up]`). Nothing stops stage 1.
+**Stage 0** (`scratch/b32_names.jl`; `b30_names.jl` predates B31): the real step-3 window, 249,118 variables and 274,523 rows (each through `constrain!`), min of 3,
+four rounds rotated. Off 1,706 ms, 764 MB; variable names only (v0.14.0) 1,948 ms, 1,003 MB; both 2,420 ms, 1,352 MB. The default off against v0.14.0: -12 % time,
+-24 % memory; debug mode against off: +42 % time, +77 % memory. The row names are distinct, 41 characters at most.
 
-## Stage 1 result (2026-10-11)
+**Stage 1:** the map is in `../nomenclature.md` and as data in `test/nomenclature.jl`; of the 99 checks of "constraint nomenclature" 89 pass and 10 are red on v0.14.0:
+46 of 46 register keys, 28 of 28 `con` keys, 14 id words, 22 `constraint_*` functions and 2 exports, 4 `lambda*` duals, and 680 old names written (504 in `src`, 92 in
+`test`, 81 in `docs/src`, 1 in `scripts`, 2 in `README.md`).
 
-The map is in `../nomenclature.md` (139 lines) and as data in `test/nomenclature.jl`: 46 register keys to 43, 28 `con` keys, 22 functions, 4 duals, 8 old letters.
-The testset "constraint nomenclature" has 99 checks: the 89 on the vocabulary and the maps pass, the 10 on the package are red on v0.14.0: 46 of 46 register keys,
-28 of 28 `con` keys, 14 id words, 22 `constraint_*` functions and 2 exports, 4 `lambda*` duals, and 680 old names written (504 in `src` in 23 files, 92 in `test`,
-81 in `docs/src`, 1 in `scripts`, 2 in `README.md`; 312 functions, 226 keys, 82 letters, 49 duals, 11 containers). The 77 checks of B31 pass.
+**Stage 2** (`scratch/b32_stage2_names.jl`): `debug_mode = false` 1,707 ms, 764 MB, as stage 0's off; `true` 2,401 ms, 1,372 MB, all 274,523 row names distinct. Suite:
+3,655 passed, only the 10 red checks of stage 1 fail. An MPS file carries the names as written; the LP writer turns `1_node_balance[1]` into `_1_node_balance_1_`; an
+IVR model cannot be written to either format (nonlinear rows), named or not. Found, not changed: a `variables!` container names its elements `1_p_term[Arc(1, 1, 1)]`,
+where `variable!` flattens an `Arc` to `[1,1]`.
 
 ## Decisions
 

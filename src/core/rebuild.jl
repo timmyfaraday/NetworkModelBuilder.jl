@@ -13,6 +13,7 @@
 # v0.12.9 - a constraint id is not written twice in the first build            #
 # v0.12.9 - the register of constraints is a field of the model                #
 # v0.14.0 - a variable is named from its key and id, and may be unnamed        #
+# v0.15.0 - a constraint is named from its key and id in debug_mode            #
 ################################################################################
 
 # A model built for one window of a rolling horizon is very nearly the model the
@@ -66,13 +67,18 @@ that component finds useful; this has to be keyed by what makes a constraint
 *the same constraint* between one build and the next, which is a different
 question with a different answer. Keeping them apart also means nothing that
 already reads `con` sees any of this.
+
+In `debug_mode` the constraint is named from its network index, key and id,
+`1_<key>[<id>]` with the id flattened, see [`instantiate_model`](@ref); by default it
+is not named.
 """
 function constrain!(nm::NetworkModel, key::Symbol, id, c::JuMP.ScalarConstraint; nw::Int)
     store = registered_constraints(nm)
     entry = get(store, (nw, key, id), nothing)
 
     if entry === nothing
-        ref = JuMP.add_constraint(nm.model, c)
+        ref = nm.debug_mode ? JuMP.add_constraint(nm.model, c, _constraint_name(nw, key, id)) :
+                              JuMP.add_constraint(nm.model, c)
         store[(nw, key, id)] = (ref, c)
         return ref
     end
@@ -127,9 +133,9 @@ The variable registered under `(key, id)` at network index `nw`, created on
 first sight and returned as it is on second — with its bounds brought to what
 the arguments say either way.
 
-It is named from its key and its id, `1_pg[3]`, `2_tr[4,1]` for terminal 1 of edge 4,
-and `1_zt[4,1,2]` for position 2 of it, unless the model was built with
-`set_string_name = false`, see [`instantiate_model`](@ref).
+In `debug_mode` it is named from its key and its id, `1_p_gen[3]`, `2_t_real[4,1]` for
+terminal 1 of edge 4, and `1_z_step[4,1,2]` for position 2 of it, see
+[`instantiate_model`](@ref).
 
 `id` is what tells one variable of `key` from another: the identifier of a
 component, or an [`Arc`](@ref) where the variable belongs to one terminal of an
@@ -163,7 +169,7 @@ function variable!(nm::NetworkModel, key::Symbol, id; nw::Int,
     v     = get(store, id, nothing)
 
     if v === nothing
-        v = JuMP.@variable(nm.model, base_name = nm.string_names ? _variable_name(nw, key, id) : "")
+        v = JuMP.@variable(nm.model, base_name = nm.debug_mode ? _variable_name(nw, key, id) : "")
         binary && JuMP.set_binary(v)
         start === nothing || JuMP.set_start_value(v, start)
         store[id] = v
@@ -175,13 +181,26 @@ end
 """
     _variable_name(nw, key, id)
 
-The name of the variable `key` of `id` at network index `nw`: `1_pg[3]` for a
-component, `2_tr[4,1]` for terminal 1 of edge 4 and `1_zt[4,1,2]` for position 2 of it.
+The name of the variable `key` of `id` at network index `nw`: `1_p_gen[3]` for a
+component, `2_t_real[4,1]` for terminal 1 of edge 4 and `1_z_step[4,1,2]` for position 2 of it.
 """
 _variable_name(nw::Int, key::Symbol, id) = "$(nw)_$(key)[$id]"
 _variable_name(nw::Int, key::Symbol, a::Arc) = "$(nw)_$(key)[$(a.edge),$(a.terminal)]"
 _variable_name(nw::Int, key::Symbol, (a, s)::Tuple{Arc,Int}) =
     "$(nw)_$(key)[$(a.edge),$(a.terminal),$s]"
+
+"""
+    _constraint_name(nw, key, id)
+
+The name of the constraint `key` of `id` at network index `nw`, the id flattened:
+`1_<key>[3]` for a component, `1_<key>[3,real]` for a part of it, `1_<key>[4,1,max]` for
+a bound of terminal 1 of edge 4 and `1_<key>[1,2,3,max]` for one of a loop of edges 1, 2 and 3.
+"""
+_constraint_name(nw::Int, key::Symbol, id) = string(nw, "_", key, "[", join(_id_parts(id), ","), "]")
+
+_id_parts(id) = (id,)
+_id_parts(a::Arc) = (a.edge, a.terminal)
+_id_parts(t::Tuple) = Iterators.flatten(_id_parts(x) for x in t)
 
 """
     variable_container!(nm, keys...; nw, idtype = Int)
@@ -215,7 +234,7 @@ The container of variables registered under `key` at network index `nw`, one per
 entry of `indices`, created on first sight and returned untouched on second. A
 key that already holds a dictionary of variables, or an array over other
 `indices`, raises an `ArgumentError`: a key names one set of variables. Its
-variables are named `1_vr[3]`, as those of [`variable!`](@ref) are.
+variables are named `1_v_real[3]` in `debug_mode`, as those of [`variable!`](@ref) are.
 
 The counterpart of [`variable!`](@ref) for the containers a whole index set
 shares — the node voltages, the terminal flows, the unit injections. None of
@@ -233,7 +252,7 @@ function variables!(nm::NetworkModel, key::Symbol, indices; nw::Int, start = _ -
     end
 
     v = JuMP.@variable(nm.model, [i in indices],
-                       base_name = nm.string_names ? "$(nw)_$(key)" : "")
+                       base_name = nm.debug_mode ? "$(nw)_$(key)" : "")
     for i in indices
         JuMP.set_start_value(v[i], start(i))
     end

@@ -1,7 +1,7 @@
 # A branch with more than two terminals (B30, stage 2)
 
-Status: implemented on `b30-one-branch` (D53), not merged · Author: Tom Van Acker (requested) · Date: 2026-10-11
-Decisions: D53 recorded 2026-10-10 (next free after: D54); no open point
+Status: implemented, merged into `main` and tagged `v0.13.0` on 2026-10-11 (D53, D54) · Author: Tom Van Acker (requested) · Date: 2026-10-11
+Decisions: D53 recorded 2026-10-10, D54 (a number in a table cell) 2026-10-11 (next free after: D55); no open point
 Priority: P3 · Effort: Large. Second stage of B30, on `b30-one-branch` after parts 1 to 3 of `one-branch.md`; v0.13.0.
 
 ## Handoff instructions
@@ -111,6 +111,11 @@ field each time a `Branch` is built. If a `NetworkVector` holding vectors cannot
 - **Nothing moved for two terminals:** a 24 h chunk byte-identical to `runs/_b25_proc/chunks/h00001-00024`, three times, objectives
   317686796.800330 and 308105792.250268 equal; suite 3340 with 4 threads; `update_model!` of the real step-3 window 1,145 against
   1,155 ms; `benchmark/window.jl` update 25.95 against 26.08 ms, allocations 296,297 against 303,921.
+- **A lossy transformer** (Tom's request, for the rating row of D52): a load of 0.7 behind a two-winding transformer with
+  `r = 0.05`, `x = 0.1`, rated `[0.5, 0.8]`, `[0.8, 0.5]`, 0.5, 0.8 and unlimited, in both formulations, on v0.12.9 and on the
+  branch (`scratch/b30_lossy.jl`): the ten objectives equal to 9 digits. In the current based model each terminal has its own
+  limit (26.033 against 25.108 for the two orders, the sending end making the load dearer); in the linearized one the tighter
+  rating binds wherever it is (24.999999 both). Now in `test/transformer.jl`; rating both terminals at `minimum(rate_a)` fails it.
 - **Left for the reader:** `scripts/NMinusOneScreen.jl` (untracked) reads a branch's `r`, `x` and `rate_a` as numbers and breaks.
 
 ## What this deliberately does not decide

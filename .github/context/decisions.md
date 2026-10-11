@@ -4,7 +4,7 @@ The rules that still constrain NMB. Read the section for the area you are touchi
 changing it.
 
 How to use this file:
-- A new decision gets the next free id (**D54**), goes in the Log at the bottom, and is written by
+- A new decision gets the next free id (**D55**), goes in the Log at the bottom, and is written by
   the `record-decision` skill. `Decided by` is a person's username, never an agent.
 - A decision that changes a rule below edits the rule in place and cites the new id. The old
   wording goes to the archive line of the id it came from.
@@ -164,6 +164,9 @@ How to use this file:
   `knowledge/plan/unified-transformer.md`.
 - **A transformer's data are vectors with one entry per winding, for two windings as for more; a
   scalar is accepted for two windings** (D29).
+- **A table may give a number for a field with an entry per terminal of a `Branch` or a
+  `Transformer`, as their constructors accept one; a field such as a generator's `cost` takes a list
+  and nothing else** (D54).
 - **A transformer is a T-model for every number of windings: a ratio and a series impedance per
   winding, meeting at a star point that carries the magnetising branch and is an edge variable, not a
   node; a π-equivalent is `y_m = 0` and `z_2 = 0`** (D30).
@@ -583,3 +586,8 @@ Changes: new rule in Code conventions. `constraint_linear_limits!` is removed, t
 Date: 2026-10-10 · Decided by: Tom Van Acker · Area: Component model
 Why: the graph carries edges of any number of terminals and the transformer already has windings, but a branch had exactly two. Tom's model is `n` π-sections, section `k` from terminal `k` to one point, the shunts at the point aggregated: the equations of the transformer's star with neutral ratios, so the two can be checked against each other.
 Changes: new rule in Component model. Tom chose per-terminal vectors like the transformer's (D29) and one item with two stages over two items; the shunt fields are `g_sh` and `b_sh`, the total of a section split equally between its two ends, and `g_fr`, `b_fr`, `g_to`, `b_to` are removed with no shim, so an asymmetric shunt is no longer expressible (nothing in the repository uses one).
+
+### D54 — A table may give a number for a field with an entry per terminal
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Component model
+Why: `r`, `x`, `g_sh`, `b_sh` and `rate_a` of a `Branch` became vectors (D53), and the table reader asked for a list wherever a field is a vector, so every table of two-terminal branches failed (8 testsets of `test/tables.jl`). The constructors take a number for two terminals (D29, D53), and a flat table holds Matpower-like rows.
+Changes: new rule in Component model. Tom confirmed the reader's change: a type opts in through `_per_terminal_data`, which `Branch` and `Transformer` do, so a `Transformer` row may now give a number too; `cost` of a generator stays a list.

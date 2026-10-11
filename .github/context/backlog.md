@@ -6,10 +6,7 @@ older ones: git has them). Next id: **B31**.
 
 ## Now
 
-- [ ] B30 · One `Branch` (`length_km`, NaN by default) instead of `Branch`, `Cable` and `OverheadLine`; `pi_model.jl` split by who
-  uses what; a rating and an angle limit apart; then a branch of two or more terminals · Tom · 2026-10-10 · branch `b30-one-branch`
-  - Implemented 2026-10-11, v0.13.0, not merged: plans `knowledge/plan/one-branch.md` and `one-branch-terminals.md` (Result), D50-D53;
-    suite 3340, a 24 h chunk byte-identical, window cut 7.7-7.8 ms against 7.7-8.0. Awaiting Tom: merge, tag `v0.13.0`, push.
+- (nothing)
 
 ## Next
 
@@ -64,6 +61,12 @@ older ones: git has them). Next id: **B31**.
     chunks of `_year_b10` had a first violation of 0.
 
 ## Done
+
+- [x] B30 · One `Branch` (`length_km`, NaN by default) instead of `Branch`, `Cable` and `OverheadLine`; `pi_model.jl` split by who
+  uses what; a rating and an angle limit apart; then a branch of two or more terminals (D50-D54) · Tom · 2026-10-10
+  - v0.13.0, merged into `main` and tagged `v0.13.0` on 2026-10-11; plans `knowledge/plan/one-branch.md` and `one-branch-terminals.md`.
+    Suite 3351, a 24 h chunk byte-identical to v0.12.7, window cut 7.7-7.8 ms against a control's 7.7-8.0, a lossy transformer
+    gives v0.12.9's objectives to 9 digits. Left: `scripts/NMinusOneScreen.jl` (untracked) reads a branch's `r`, `x`, `rate_a` as numbers.
 
 - [x] B24 · The package's own registers are fields of `NetworkModel`, not keys of `nm.ext`; a `var`/`con` key is not
   reused with another index set, nor a constraint id in a build (D49) · Tom · 2026-10-08

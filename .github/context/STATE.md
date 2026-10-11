@@ -1,24 +1,25 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Van Acker (B30 implemented on `b30-one-branch`, v0.13.0, not merged).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Van Acker (B30 merged, tagged v0.13.0 and pushed; D54).
 
 ## Where NMB stands
 
-- v0.12.1-v0.12.9 (B6, B8, B21, B22, B25, B23, B24; v0.12.5-v0.12.9 tagged, the others not): rolling-horizon reuse,
-  cheaper per-window work, guard rails, validation, typed registers. v0.12.0 (D28-D36, tagged): one `Transformer`.
+- v0.12.1-v0.13.0 (B6, B8, B21, B22, B25, B23, B24, B30; v0.12.5-v0.13.0 tagged, the others not): rolling-horizon reuse,
+  cheaper per-window work, guard rails, validation, typed registers, one `Branch` of two or more terminals. v0.12.0 (D28-D36, tagged): one `Transformer`.
   v0.11.0 (D13, D15-D27): the `Switch` edge. v0.10.2 (D11): `solution_tables`,
   `docs/src/manual/concepts.md`. v0.10.1 (D10): `src/comp/` is walked, not listed, each file exports its names.
 - Gap-closure items #1-9 of `context/knowledge/plan/GAP_CLOSURE_PLAN.md` are closed; #10-11 are open
-  (`backlog.md`). Tags: `v0.6.0`, `v0.9.1`-`v0.9.7`, `v0.12.0`, `v0.12.5`-`v0.12.9`; not v0.10.x, v0.11.0, v0.12.1-4.
+  (`backlog.md`). Tags: `v0.6.0`, `v0.9.1`-`v0.9.7`, `v0.12.0`, `v0.12.5`-`v0.12.9`, `v0.13.0`; not v0.10.x, v0.11.0, v0.12.1-4.
 
 ## Branches
 
 - `main` carries B5 and B11 (`--no-ff`), tagged `v0.12.0`, the setup commits D37-D41 and, merged `--no-ff`
   on 2026-10-07, all of `test-zorba-run`: `scripts/` (the Zorba pipeline), B9, B10, B12, B6, B8 (v0.12.4);
-  on 2026-10-09 B21 (v0.12.5), the Julia guide review and B22 (v0.12.6); on 2026-10-10 B25 (v0.12.7), B23 (v0.12.8), B24 (v0.12.9).
+  on 2026-10-09 B21 (v0.12.5), the Julia guide review and B22 (v0.12.6); on 2026-10-10 B25 (v0.12.7), B23 (v0.12.8), B24 (v0.12.9);
+  on 2026-10-11 B30 (v0.13.0).
 - `test-zorba-run` is merged into `main` and kept; the next Zorba change can start from `main`.
 - `b5-switch-edge`, `b11-unified-transformer` merged and deleted; `b21-topology-lookup`, `b22-build-solution`,
-  `b25-guard-rails`, `b23-validation`, `b24-typed-registers` merged, kept; `b30-one-branch` holds B30 (not merged). Next free decision id: **D54**.
+  `b25-guard-rails`, `b23-validation`, `b24-typed-registers`, `b30-one-branch` merged, kept. Next free decision id: **D55**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -45,8 +46,8 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Va
   (`validation.md`); suite 3295, the Zorba year breaks no rule, a 24 h chunk is byte-identical to v0.12.7.
 - B24 done (v0.12.9, D49, tagged): `registered` a field of `NetworkModel`, seven write-only `nm.ext` registers deleted, a
   reused variable key and a twice-written constraint id raise; a held model 7.3 MB smaller (not 56.5, `lessons.md`).
-- B30 implemented (D50-D53), on `b30-one-branch`, awaiting Tom's merge and tag: one `Branch` (`length_km`, NaN default), `pi_model.jl`
-  split, rating and angle apart, n π-sections at a point; suite 3340, 24 h chunk byte-identical, cost = control (`one-branch-terminals.md`).
+- B30 done (v0.13.0, D50-D54, tagged): one `Branch` (`length_km` NaN by default), `pi_model.jl` split, rating and angle apart, n π-sections
+  at a point; suite 3351, 24 h chunk byte-identical, cost = control, a lossy transformer unchanged from v0.12.9 (`one-branch-terminals.md`).
 - Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
 - B11 merged, tagged `v0.12.0` (`unified-transformer.md`, D28-D36); Zorba flows are not unique without a phase shifter price (D34).
 - B12 done: `scripts/` run on `Transformer`; week 1 beside a same-day pre-B11 control (`runs/_b12*`): 14 of 14 chunks
@@ -67,8 +68,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Va
 
 ## Next
 
-1. Merge and tag B30 (v0.13.0) when Tom says so, then B26, B27 (the review's order). B20 keeps the rest of
-   the per-window cost; B7, B3, B4, B13, B19, B28, B29 remain, see `backlog.md`.
+1. B26, B27 (the review's order); then B20, B7, B3, B4, B13, B19, B28, B29, see `backlog.md`.
 
 ## Blocked / waiting
 

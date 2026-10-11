@@ -1,6 +1,6 @@
 # One nomenclature for variables and parameters (B31)
 
-Status: decided (D55-D61), the map awaits Tom's review of its `?` spellings · Author: Tom Van Acker (requested) · Date: 2026-10-11
+Status: decided (D55-D61), the map confirmed by Tom 2026-10-11; stage 1 done, red · Author: Tom Van Acker (requested) · Date: 2026-10-11
 Decisions: D55-D61 recorded 2026-10-11 (next free after: D62)
 Priority: P2 · Effort: Large, in six stages. Branch `b31-nomenclature`, cut from `main` at `c493901` (v0.13.0); becomes v0.14.0.
 The names themselves are in `../nomenclature.md`; this file is how to get there.
@@ -51,10 +51,16 @@ for the quantity and a locally chosen suffix for the owner, the part or the dire
 
 ## Fix
 
-1. **Red.** `test/nomenclature.jl` holds the vocabulary of `nomenclature.md` as constants and checks, for every registered component
-   type, that each field name is a word or parses under D55, that each variable key of a model built over every type does, and that
-   each solution key does; a second testset reads `src/`, `test/`, `docs/src/`, `scripts/` and `benchmark/` for the old names of the
-   map and finds none (comments and the historical `CHANGELOG.md` sections excepted). Both fail on `main`: write down how many.
+1. **Red** (done, `test/nomenclature.jl`, in `runtests.jl`). It holds the vocabulary of `nomenclature.md` as constants and the map
+   as data, and checks that the vocabulary is closed and its lists disjoint, that every name there is today is a word, follows
+   the grammar or is in the map, that each field name of every own component type, each variable key the sources create or read
+   as a literal, and each key the `solution_*` builders write follows the grammar, and, in the last testset, that no old name is
+   still written in `src/`, `ext/`, `test/`, `scripts/`, `benchmark/`, `docs/src/` and `README.md` as `.old`, `:old`, `"old"` or
+   in backticks in the docs (comments, `CHANGELOG.md`, `test/powermodels.jl` and the test itself excepted). **Red on `main`**
+   (2026-10-11): 77 `(type, field)` pairs break the grammar, 42 of 42 variable keys, 37 of 47 solution keys (the other ten are words and the
+   duals), and 1,639 old names are written, 687 in 23 files of `src`, 559 in 23 of `test`, 346 in 26 of `docs/src`, 41 in 4 of
+   `scripts`, 3 in `benchmark`, 3 in `README.md`; 101 of the 104 old names occur. The 64 other checks pass. Where the sources
+   spell a name that is a Matpower, PowerModels or Zorba name on purpose, an exception is added at stage 4 with its reason.
 2. **`set_string_name` (D61).** `variable!` and `variables!` build the name from `(nw, key, id)` themselves, `"$(nw)_$(key)[$id]"`,
    and the 45 `base_name` strings go. `NetworkModel` gets a typed field `string_names::Bool`; `instantiate_model` takes
    `set_string_name::Bool = true` and the `solve_*` functions, `solve_rolling_horizon` and `solve_zorba` pass it on. False calls

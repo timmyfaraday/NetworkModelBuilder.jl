@@ -87,8 +87,8 @@ How to use this file:
 - **A rating and an angle limit are separate constraints, and `constraint_linear_ratings!` is the one linear rating, for
   two terminals as for more** (D52); `constraint_linear_limits!` is removed.
 - **A quantity is named `symbol_primary_secondary[_unit]`** (D55): lowercase snake_case, singular, a descriptor of at most
-  4 letters from the closed lists of `knowledge/nomenclature.md`, empty slots dropped, the classes disjoint so a position is
-  recoverable; what is not a quantity is a plain word. The symbols are `v i p q s r x g b e t c l z k η`: current is `i` and cost
+  4 letters from the closed lists of `knowledge/nomenclature.md`, empty slots dropped, the lists disjoint and used in a fixed
+  order (what, part, qualifier, unit), a key with at least one descriptor; what is not a quantity is a plain word. The symbols are `v i p q s r x g b e t c l z k η`: current is `i` and cost
   is `c`, in the docs mathematics too, and `η` is the one non-ASCII symbol (D56). Planned as v0.14.0, spec `knowledge/plan/naming.md`.
 - **A variable key names the owner, a field does not, and a local equals its key** (D57): `:p_gen` and `Generator.p_max`; a role
   only one owner has takes the owner's place (`:p_chg`). Inside the package `rate_a` is `s_max`, `angmin` and `angmax` are `v_angl_min`

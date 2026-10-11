@@ -30,7 +30,7 @@ Owner: **Tom Van Acker**.
 ## Log
 
 Format: `- F<n> · YYYY-MM-DD · <user> · <what happened> · cost: <turns/result> · status: open`
-Next id: **F8**.
+Next id: **F9**.
 
 - F1 · 2026-09-30 · Tom Van Acker · `probe-environment` found the SessionStart/PreToolUse/Stop
   hooks have never fired: no `.git/agent-session/` dir, no `.git/agent-hooks.log`, and this
@@ -65,3 +65,4 @@ Next id: **F8**.
   echoed prompt (`lder.jl> ^C`) five times in one session, the command having run; a second call
   returned the output · cost: 5 extra calls; cause not found, seen while a background terminal
   existed · status: open
+- F8 · 2026-10-11 · Tom Van Acker · Four `replace_string_in_file` calls on `test/nomenclature.jl` went out in one block, though `lessons.md` says edits to one file go one at a time; three landed garbled lines inside two testsets and the file did not parse · cost: 2 failed runs and 3 repair calls. The lesson sits in a 220-line file the agent is not sent to before an edit · status: open (second time, so a candidate for a line in `copilot-instructions.md`, to be proposed)

@@ -22,6 +22,7 @@
 # v0.12.8 - the validation test is included                                    #
 # v0.12.9 - the registers test is included                                     #
 # v0.12.9 - a helper reads the controls a redispatch holds                     #
+# v0.14.0 - the names follow one grammar, checked in nomenclature.jl           #
 ################################################################################
 
 using Test
@@ -86,5 +87,6 @@ held_controls(nm) = Set((id..., nw) for ((nw, key, id), _) in registered_constra
     include("multiterminal.jl")
     include("solution_tables.jl")
     include("thread_safety.jl")
+    include("nomenclature.jl")
     include("docs.jl")
 end

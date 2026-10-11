@@ -6,14 +6,13 @@ older ones: git has them). Next id: **B32**.
 
 ## Now
 
-- (nothing)
-
-## Next
-
 - [ ] B31 · One nomenclature for variables and parameters (`symbol_primary_secondary`), applied to fields, variable keys and solution keys;
   `set_string_name` on every solve; per-type parameter and variable tables in the docs · Tom · 2026-10-11 · branch `b31-nomenclature`
-  - Spec `knowledge/plan/naming.md`, names in `knowledge/nomenclature.md`, D55-D61; v0.14.0, a hard removal. The map has seven groups
-    of `?` spellings for Tom to confirm before stage 3. Constraints and their names are the next item.
+  - Spec `knowledge/plan/naming.md`, names in `knowledge/nomenclature.md`, D55-D61; v0.14.0, a hard removal; the map confirmed.
+    Stage 1 done: `test/nomenclature.jl` is red on purpose (1,639 old names written). Next: stage 2, `set_string_name`.
+    Constraints and their names are the next item.
+
+## Next
 
 ## Later
 

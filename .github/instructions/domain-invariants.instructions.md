@@ -23,13 +23,15 @@ These hold today and are relied on across the package. Changing one needs a deci
   constraints use its arithmetic (`similar_id`, `prev_ids`, `next_ids`), not hand-rolled index math.
 - **`Topology` is derived from the statuses that vary, never tabulated** — a contingency is nothing
   more than a `status` that varies per index.
-- **A type earns its place by changing the model, not by carrying a label.** `Cable` and
-  `OverheadLine` are electrically identical to `Branch`; don't add a type that changes no variable
-  or constraint relative to its parent.
+- **A type earns its place by changing the model, not by carrying a label.** A cable and an
+  overhead line are a `Branch` with another `length_km`, not types; don't add a type that changes
+  no variable or constraint relative to its parent.
 - **One file per component** holds its struct, its variables and its constraints together — no
   `src/form/` directory; a formulation is methods spread over component files, not a place.
-- **Within `src/comp/`, the file named like its own directory loads first** — `branch/branch.jl`
-  before `cable.jl`/`overhead_line.jl` — because
+- **What several types of a family share lives in the family file** (`edge/edge.jl`,
+  `unit/unit.jl`); what one type alone uses lives in that type's own file.
+- **Within `src/comp/`, the file named like its own directory loads first** — `load/load.jl`
+  before `fixed_load.jl`/`flexible_load.jl` — because
   `NetworkModelBuilder.jl` includes `src/comp/` by walking the directory tree, not by naming each
   file. A sibling needing a different order needs its own explicit `include`.
 - **Registration is the only way a type participates**: `register_edge_type!` /

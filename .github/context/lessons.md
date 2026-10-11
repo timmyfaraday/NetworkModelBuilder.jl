@@ -7,6 +7,16 @@ again get retired.
 
 ## Verification
 
+- **A field that becomes a vector changes what a table may give, and the table reader says no first.**
+  `Branch.r` and four more fields became per-terminal vectors (B30); `_coerce` in `src/io/tables.jl` turns a
+  vector-typed field into "needs a list", so 8 testsets of `test/tables.jl` and the tabular input of every
+  two-terminal branch failed with "the `r` of a `Branch` is a list". A type opts into scalar cells with
+  `_per_terminal_data(::Type)`; the `cost` of a generator stays a list. When a field type changes, run
+  `tables.jl` and grep `src/io/` before the suite. (unconfirmed)
+- **When the code is written before its test, a mutation shows the test bites.** The three-terminal `Branch`
+  tests of B30 passed the first time they ran, which proves nothing; halving the shunt at the point
+  (`sum(br.g_sh) / 4`) made the load-flow checks fail, then the file was restored from a copy. (unconfirmed)
+
 - **Prove a regression test would actually have caught the bug, not just that it passes now.**
   For the registry-locking fix (gap #4): reverted just the lock, reproduced the exact
   `ConcurrencyViolationError` under 56 threads, restored the fix, confirmed clean. For the doc-CI
@@ -131,6 +141,13 @@ again get retired.
 
 ## Performance
 
+- **A constructor is on the hot path of a window: `nw_component` calls it for every component that carries
+  network data, at every window.** The per-terminal fields of B30 made rebuilding a `Branch` 11 times dearer,
+  62 ns and 144 B to 681 ns and 576 B, and the step-3 window cut crossed its stop rule (8.3 against 8.0 ms
+  in `scratch/b23_cost.jl`, control 7.6-7.9). The cost was a `Float64.(x)` copy per field and `all_nw`
+  closures in the checks, which allocate even for plain data; keeping a `Float64` vector and giving the
+  plain case its own check method brought it to 47 ns and 32 B, the cut to 7.7-7.8. Time a constructor
+  through `nw_component` (`scratch/b30_rebuild.jl`), not a first build. (unconfirmed)
 - **Time a change against a control run made the same day, not against an older run.** Week 1 with
   the couplers as switches took 376 s a chunk against 358 s three days earlier (+5 %, every chunk
   slower, all of it outside the solver). The floor loader, unchanged, re-run beside it took 377 s;

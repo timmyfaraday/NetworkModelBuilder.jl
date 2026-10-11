@@ -4,7 +4,7 @@ The rules that still constrain NMB. Read the section for the area you are touchi
 changing it.
 
 How to use this file:
-- A new decision gets the next free id (**D47**), goes in the Log at the bottom, and is written by
+- A new decision gets the next free id (**D55**), goes in the Log at the bottom, and is written by
   the `record-decision` skill. `Decided by` is a person's username, never an agent.
 - A decision that changes a rule below edits the rule in place and cites the new id. The old
   wording goes to the archive line of the id it came from.
@@ -73,7 +73,7 @@ How to use this file:
   the defect it is meant to catch.
 - **A constructor refuses input a model cannot use, in service or not** (D48): `Node`, `Generator`,
   `FixedLoad`, `Shunt` and the branch family check ordered limits, finite setpoints and impedances,
-  `r² + x² > 0`, `rate_a >= 0` and `length_km >= 0`, with `all_nw` so that a `NetworkVector` is checked at
+  `r² + x² > 0`, `rate_a >= 0` and a `length_km` that is NaN (unknown) or `>= 0` (D50), with `all_nw` so that a `NetworkVector` is checked at
   every index, and raise an `ArgumentError` naming the component. `base_kv` may be 0, which means
   unknown. The signs of `r` and `x`, and `pg` against its limits, are not checked.
 - **The package's own state is fields, not keys of `nm.ext`, and a key is not reused** (D49):
@@ -82,6 +82,10 @@ How to use this file:
   and `variable_container!` raise an `ArgumentError` where a key is asked for again with another id type,
   container kind or index set, and `constrain!` where one `(nw, key, id)` is written twice in the first build
   of a model. An extension prefixes its keys.
+- **What several types of a family share lives in the family file, and what one type alone uses lives in that
+  type's file** (D51): `edge/edge.jl` and `unit/unit.jl`, not a file of fragments of their own.
+- **A rating and an angle limit are separate constraints, and `constraint_linear_ratings!` is the one linear rating, for
+  two terminals as for more** (D52); `constraint_linear_limits!` is removed.
 
 ## Concurrency
 
@@ -160,6 +164,9 @@ How to use this file:
   `knowledge/plan/unified-transformer.md`.
 - **A transformer's data are vectors with one entry per winding, for two windings as for more; a
   scalar is accepted for two windings** (D29).
+- **A table may give a number for a field with an entry per terminal of a `Branch` or a
+  `Transformer`, as their constructors accept one; a field such as a generator's `cost` takes a list
+  and nothing else** (D54).
 - **A transformer is a T-model for every number of windings: a ratio and a series impedance per
   winding, meeting at a star point that carries the magnetising branch and is an edge variable, not a
   node; a π-equivalent is `y_m = 0` and `z_2 = 0`** (D30).
@@ -183,6 +190,13 @@ How to use this file:
 - **A repeated `topology` lookup is answered from the last answer, held in one atomic slot on the
   `Network`: a cache of a derivation, one entry however many network indices, not a table** (D45).
   Two entries if, after B21, `topology` is still above 3 % of the pipeline profile.
+- **A cable and an overhead line are a `Branch` with another `length_km`, not types: `Cable` and `OverheadLine`
+  are removed with no shim, `Branch` carries `length_km`, NaN meaning unknown and being the default** (D50). `AbstractBranch`
+  stays as the extension hook. Planned as v0.13.0; spec `knowledge/plan/one-branch.md`.
+- **A `Branch` has two or more terminals: `n` π-sections coupled at one point with the shunts there aggregated, two
+  terminals being the single π as before; its fields are vectors with one entry per terminal, as a transformer's, and the
+  shunt of a section, `g_sh` and `b_sh`, is split equally between its two ends** (D53).
+  Spec `knowledge/plan/one-branch-terminals.md`.
 
 ## Zorba pipeline (`scripts/`)
 
@@ -552,3 +566,28 @@ Changes: new rule in Code conventions. Tom chose the proposed set over a smaller
 Date: 2026-10-10 · Decided by: Tom Van Acker · Area: Code conventions
 Why: `ext` is the caller's free-form storage, yet the package kept nine registers in it, and seven of them (`:redispatch_control`, `:overload_peak`, `:storage_balance`, `:storage_final`, `:storage_cycles`, `:generator_energy`, `:flexible_load_energy`) are written and never read in `src/`, `docs/` or `scripts/`: the references they hold are all in `registered_constraints`, and `:redispatch_control` alone is 66,431 entries and 7.3 MB of its own in one held step-3 model (the 56.5 MB that `Base.summarysize` gives for it counts the JuMP model its references reach). A typed field is not a speed item, the accessor is 0.3 % of an update. A key asked for again with another index set was accepted four ways out of five (`variables!(:x, 1:3)` then `(:x, 1:5)` returns the first container), the fifth a `MethodError` far from the cause; the `:vsr` incident in `lessons.md` was this.
 Changes: new rule in Code conventions. Tom chose a typed `registered` field and deleting the seven registers (`:redispatch` stays, it is the documented input of `solve_rd`), an error for a variable key reused and one for a constraint id written twice in a build, and v0.12.9 over v0.13.0. The second is checked in the first build of a model only, which costs nothing in an update and is where a structural collision shows.
+
+### D50 — A cable and an overhead line are a `Branch` with another `length_km`, not types
+Date: 2026-10-10 · Decided by: Tom Van Acker · Area: Component model
+Why: `Cable` and `OverheadLine` are `Branch` plus a `length_km` nothing reads, and the same as each other; no method in `src/` dispatches on either, no reader builds them, and `dynamic_rating`, the only method written for them, has no caller. Three registered types cost about 0.2 ms of a 1,171 ms step-3 update, so this is not a speed item.
+Changes: new rule in Component model; the `length_km` clause of the D48 rule edited, NaN is valid and means unknown. Tom chose one `Branch` with `length_km` over a `construction` flag and over merging the files only, a hard removal over one release of shims, `dynamic_rating` kept for every `AbstractBranch`, and v0.13.0 over v0.12.10; `length_km` is NaN by default.
+
+### D51 — What several types of a family share lives in the family file
+Date: 2026-10-10 · Decided by: Tom Van Acker · Area: Code conventions
+Why: `pi_model.jl` held the π-section only a branch writes, the rating, angle and linear-flow fragments a branch and a transformer share, and the one rating function only a transformer calls; the unit side keeps `constraint_unit_power!` in `unit/unit.jl` already. Proposed by Tom.
+Changes: new rule in Code conventions. Branch-only code goes to `branch.jl`, shared code to `edge.jl`, transformer-only code to `transformer.jl`, and `pi_model.jl` is deleted.
+
+### D52 — A rating and an angle limit are separate constraints
+Date: 2026-10-10 · Decided by: Tom Van Acker · Area: Code conventions
+Why: `constraint_linear_limits!` wrote a rating and the angle limit together for two arcs and one scalar rating, and the transformer chose it for two windings with `minimum(tf.rate_a)` and `constraint_linear_ratings!` for more; in IVR the two were already apart (`constraint_edge_rating!`, `constraint_edge_angle_difference!`). A lossless two-terminal edge has `p_2 = -p_1`, so a rating at each terminal is the same feasible set.
+Changes: new rule in Code conventions. `constraint_linear_limits!` is removed, the angle row becomes `constraint_linear_angle_difference!`, and `constraint_linear_ratings!`, which the branch now calls too, goes to `edge.jl` with the other shared fragments (D51's Why called it the transformer's).
+
+### D53 — A branch has two or more terminals, as `n` π-sections coupled at one point
+Date: 2026-10-10 · Decided by: Tom Van Acker · Area: Component model
+Why: the graph carries edges of any number of terminals and the transformer already has windings, but a branch had exactly two. Tom's model is `n` π-sections, section `k` from terminal `k` to one point, the shunts at the point aggregated: the equations of the transformer's star with neutral ratios, so the two can be checked against each other.
+Changes: new rule in Component model. Tom chose per-terminal vectors like the transformer's (D29) and one item with two stages over two items; the shunt fields are `g_sh` and `b_sh`, the total of a section split equally between its two ends, and `g_fr`, `b_fr`, `g_to`, `b_to` are removed with no shim, so an asymmetric shunt is no longer expressible (nothing in the repository uses one).
+
+### D54 — A table may give a number for a field with an entry per terminal
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Component model
+Why: `r`, `x`, `g_sh`, `b_sh` and `rate_a` of a `Branch` became vectors (D53), and the table reader asked for a list wherever a field is a vector, so every table of two-terminal branches failed (8 testsets of `test/tables.jl`). The constructors take a number for two terminals (D29, D53), and a flat table holds Matpower-like rows.
+Changes: new rule in Component model. Tom confirmed the reader's change: a type opts in through `_per_terminal_data`, which `Branch` and `Transformer` do, so a `Transformer` row may now give a number too; `cost` of a generator stays a list.

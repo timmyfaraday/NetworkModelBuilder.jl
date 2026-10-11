@@ -72,7 +72,7 @@ ratio of one, no shift, no impedance, no shunt.
 | symbol | field | description | unit | default |
 |:-------|:------|:------------|:-----|:--------|
 | ``z_{e,k}`` | `r`, `x` | series resistance and reactance, referred to the star point | pu | |
-| ``y^{\text{sh}}_{e,k}`` | `g_sh`, `b_sh` | shunt admittance behind the ratio | pu | `0` |
+| ``y^{\text{sh}}_{e,k}`` | `g_sh`, `b_sh` | shunt admittance behind the ratio, the whole of it at that terminal side; on a [Branch](@ref) the shunt of a section is half at each end | pu | `0` |
 | ``y^{\text{m}}_{e}`` | `g_m`, `b_m` | magnetising admittance at the star point | pu | `0` |
 | ``tm_{e,k}`` | `tm` | ratio magnitude, or its setpoint | pu | `1` |
 | ``ta_{e,k}`` | `ta` | ratio angle, or its setpoint | rad | `0` |

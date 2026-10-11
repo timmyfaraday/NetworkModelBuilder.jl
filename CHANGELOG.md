@@ -10,6 +10,72 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-11
+
+### Added
+
+- A `Branch` has two or more terminals, as `n` π-sections from its terminals to one common point where the
+  shunts are aggregated; two terminals are the single π as before. `r`, `x`, `g_sh`, `b_sh` and `rate_a`
+  are vectors with an entry per terminal, as those of a `Transformer` are. In the `IVRFormulation` the
+  point is a pair of variables of the edge, `vpr` and `vpi`, and the current of a section is an expression
+  of the terminal current; in the `LPFFormulation` it is an angle, `vap`, with `p = -b (va - vap)` for each
+  section and the flows summing to zero. A branch with more than two terminals has no angle limit, as a
+  transformer with more windings has none. `test/multiterminal.jl` checks a three-terminal `Branch` against
+  a `Transformer` of ratio one, written independently, and against the point written out as a node with a
+  two-terminal `Branch` to each terminal: a load flow, an optimal power flow with the rating of one terminal
+  binding, in both formulations, and a redispatch with that rating priced.
+- `length_km` of a `Branch` is `NaN` when not known, which is its default. A negative or infinite length is
+  refused.
+- `constraint_linear_angle_difference!`, the angle limit of the linearized formulation, as
+  `constraint_edge_angle_difference!` is that of the current based one.
+- A table may give a number for a field with an entry per terminal of a `Branch` or a `Transformer`, as the
+  constructors take one; the `cost` of a generator is still a list.
+
+### Changed
+
+- **Breaking.** The shunt of a `Branch` is `g_sh` and `b_sh`, the whole shunt of a section, half at each end.
+  `g_fr`, `b_fr`, `g_to` and `b_to` are gone, so a shunt that differs between the two ends is no longer
+  expressible; nothing in the repository gave one. `parse_matpower` gives `b_sh = b`, which puts `b/2` at
+  each end as before. On a `Transformer` the same names are still the shunt at the terminal of a winding.
+- **Breaking.** `r`, `x`, `g_sh`, `b_sh` and `rate_a` of a `Branch` read as vectors, so `br.r` is
+  `[r, 0.0]` for two terminals, and `impedance(br)` and `shunt_admittance(br)` return one entry per
+  terminal. A scalar given to the constructor stands for the first entry of two terminals, the second being
+  0, and a scalar `rate_a` is the rating of every terminal. A branch with two terminals whose second entry
+  is not 0 is refused.
+- A rating and an angle limit are two constraints in the linearized formulation. `constraint_linear_ratings!`
+  is the one linear rating, for a number or one per terminal, and a branch and a two-winding transformer write
+  the angle limit with `constraint_linear_angle_difference!`. A two-winding transformer rated 0.5 and 0.8 gets
+  the rows `(-0.5, 0.5)` and `(-0.8, 0.8)` where it had the tighter of the two on both; the feasible set is the
+  same without losses.
+- `variable_edge_series_current` takes the ids of the edges it is for, or a type as before.
+- A branch is rebuilt by a window in 47 ns and 32 B, against 62 ns and 144 B, and a transformer in 222 ns
+  against 521: a `Float64` vector given for a field with an entry per terminal is kept, not copied.
+
+### Removed
+
+- **Breaking.** `Cable`, `OverheadLine` and their files. A cable and an overhead line are a `Branch` with
+  another `length_km`; they were the same equations, so no model changes. No shim.
+- `constraint_linear_limits!`, for `constraint_linear_ratings!` and `constraint_linear_angle_difference!`.
+- `pi_model.jl`: what a branch and a transformer share is in `edge.jl`, what only a branch uses in `branch.jl`.
+
+### Migrating
+
+| before | now |
+|:-------|:----|
+| `Cable(; length_km = l, ...)`, `OverheadLine(; length_km = l, ...)` | `Branch(; length_km = l, ...)` |
+| `Branch(; b_fr = b/2, b_to = b/2)` | `Branch(; b_sh = b)` |
+| `Branch(; g_fr, b_fr, g_to, b_to)` with `fr` and `to` equal | `Branch(; g_sh = 2 * g_fr, b_sh = 2 * b_fr)` |
+| `br.r`, `br.x`, `br.rate_a` as numbers | `br.r[1]`, `br.x[1]`, `br.rate_a[1]` |
+| `constraint_linear_limits!(nm, e, A, rate_a, angmin, angmax; nw)` | `constraint_linear_ratings!(nm, e, A, rate_a; nw)` and `constraint_linear_angle_difference!(nm, a_fr, a_to, angmin, angmax; nw)` |
+
+### Verified
+
+- The full suite passes with four threads, 3,340 checks. A 24 h chunk of the Zorba pipeline is byte-identical
+  to the same chunk of 0.12.7, objectives 317686796.800330 and 308105792.250268 equal.
+- Cost beside a same-day control of 0.12.9: cutting a step-3 window takes 7.7 and 7.8 ms against 7.7 and
+  8.0, `update_model!` of the real step-3 window 1,145 ms against 1,155, and `benchmark/window.jl`'s update
+  25.95 ms against 26.08.
+
 ## [0.12.9] - 2026-10-10
 
 ### Changed

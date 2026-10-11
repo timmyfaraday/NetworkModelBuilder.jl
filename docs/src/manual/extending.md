@@ -16,9 +16,9 @@ register_unit_type!(WindGenerator)
 ```
 
 Because the dispatchers walk the registries, no problem definition changes. If
-the new type shares an implementation with its siblings — as [`Cable`](@ref)
-does with [`Branch`](@ref) — it inherits the methods written on the abstract
-parent and needs none of its own.
+the new type shares an implementation with its siblings — as every concrete
+[`AbstractBranch`](@ref) would with [`Branch`](@ref) — it inherits the methods
+written on the abstract parent and needs none of its own.
 
 ```@docs
 register_edge_type!

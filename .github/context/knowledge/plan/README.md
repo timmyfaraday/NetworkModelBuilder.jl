@@ -27,4 +27,6 @@ Verification per item — the shape `GAP_CLOSURE_PLAN.md` already uses).
 | `build-solution.md` | implemented, merged and tagged `v0.12.6`; week 1 -12.3 % a chunk, peak 5.0 to 2.9 GB | D46 |
 | `guard-rails.md` | implemented, merged and tagged `v0.12.7`; threads 1.79x slower than processes, GC 14 % in both | D47 |
 | `validation.md` | implemented, merged and tagged `v0.12.8`; Zorba year breaks no rule, chunk byte-identical | D48 |
-| `typed-registers.md` | done on its branch (v0.12.9), not merged; B24 on `b24-typed-registers` | D49 |
+| `typed-registers.md` | implemented, merged and tagged `v0.12.9`; seven registers gone, a held model 7.3 MB smaller | D49 |
+| `one-branch.md` | decided, not started; B30 stage 1 on `b30-one-branch`, v0.13.0: one `Branch`, `pi_model.jl` split, rating and angle apart | D50-D52 |
+| `one-branch-terminals.md` | decided, not started; B30 stage 2: a branch of two or more terminals, n π-sections at a point | D53 |

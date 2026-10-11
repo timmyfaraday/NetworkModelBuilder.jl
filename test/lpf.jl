@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.4.0 - the linearized formulation                                          #
 # v0.12.0 - one Transformer; its controls are flags, not types                 #
+# v0.13.0 - one Branch, so no branch type is compared                          #
 ################################################################################
 
 # The reference values below are those of PowerModels.jl v0.21 in its
@@ -148,16 +149,6 @@ degrees(result, nw = 1) =
 end
 
 @testset "linearized formulation — the components" begin
-
-    @testset "every branch type behaves the same" begin
-        reference = quiet(() -> solve_opf(case("case14"), LPFFormulation, OPTIMIZER))
-
-        for T in (Cable, OverheadLine)
-            result = quiet(() -> solve_opf(as_branch_type(T), LPFFormulation, OPTIMIZER))
-            @test result["objective"] ≈ reference["objective"] rtol = 1e-8
-            @test degrees(result) ≈ degrees(reference) atol = 1e-8
-        end
-    end
 
     @testset "a tap changer is inert, a phase shifter is a control" begin
         plain = quiet(() -> solve_opf(as_transformer(), LPFFormulation, OPTIMIZER))

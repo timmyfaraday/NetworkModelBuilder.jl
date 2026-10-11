@@ -9,6 +9,7 @@
 # v0.1.0 - initial implementation                                              #
 # v0.2.0 - network dependent data stored per component                         #
 # v0.12.0 - a transformer has an entry per winding                             #
+# v0.13.0 - the impedance and the shunt of a branch are per terminal           #
 ################################################################################
 
 @testset "network" begin
@@ -79,8 +80,8 @@
         @test is_active(br)
         @test terminals(br) == [7, 9]
         @test nterminals(br) == 2
-        @test impedance(br) == (0.1, 1.0)
-        @test shunt_admittance(br) == ((0.0, 0.0), (0.0, 0.0))
+        @test impedance(br) == ([0.1, 0.0], [1.0, 0.0])
+        @test shunt_admittance(br) == ([0.0, 0.0], [0.0, 0.0])
 
         g = Generator(; id = 4, node = 7, pg = 1.0)
         @test node(g) == 7

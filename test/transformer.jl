@@ -11,6 +11,8 @@
 # v0.12.0 - both controls on one winding, and on any winding of three          #
 # v0.12.0 - a winding that steps through the positions of a range              #
 # v0.12.9 - the held controls are read through held_controls                   #
+# v0.13.0 - a two-winding transformer is rated at each terminal                #
+# v0.13.0 - a lossy transformer is rated at each terminal                      #
 ################################################################################
 
 # What a transformer does, written so that it does not depend on how one is
@@ -505,6 +507,66 @@ end
                 @test haskey(_NMB.con(nm; nw = 2)[:tap_step], arc) == !held
             end
         end
+    end
+
+    @testset "a two-winding transformer is rated at each terminal, linearized" begin
+        # a load of 0.7 behind a transformer rated 0.5 and 0.8, with a dearer unit at the load
+        network(rate_a) = NetworkData(Network(
+            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0), 2 => Node(; id = 2)),
+            Dict{Int,AbstractEdge}(1 => fixed(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, rate_a)),
+            Dict{Int,AbstractUnit}(
+                1 => Generator(; id = 1, node = 1, pmax = 5.0, cost = [0.0, 10.0]),
+                2 => Generator(; id = 2, node = 2, pmax = 5.0, cost = [0.0, 100.0]),
+                3 => FixedLoad(; id = 3, node = 2, pd = 0.7)));
+            name = "rated", baseMVA = 100.0)
+
+        nm, unequal = solved(network([0.5, 0.8]), OptimalPowerFlowProblem, LPFFormulation)
+        rows        = registered_constraints(nm)
+        @test rows[(1, :linear_rating, (1, 1))][2].set == JuMP.MOI.Interval(-0.5, 0.5)
+        @test rows[(1, :linear_rating, (1, 2))][2].set == JuMP.MOI.Interval(-0.8, 0.8)
+
+        # without losses what leaves one terminal arrives at the other, so the tighter rating is the one that binds
+        _, tight = solved(network(0.5), OptimalPowerFlowProblem, LPFFormulation)
+        _, loose = solved(network(0.8), OptimalPowerFlowProblem, LPFFormulation)
+        @test unequal["objective"] ≈ tight["objective"] rtol = 1e-9
+        @test unequal["objective"] > loose["objective"] + 1e-3
+    end
+
+    @testset "a lossy two-winding transformer is rated at each terminal in both formulations" begin
+        # the same load behind a transformer with a resistance, so that what leaves one terminal is not what arrives at the other
+        network(rate_a) = NetworkData(Network(
+            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0), 2 => Node(; id = 2)),
+            Dict{Int,AbstractEdge}(1 => fixed(; id = 1, terminals = [1, 2], r = 0.05, x = 0.1, rate_a)),
+            Dict{Int,AbstractUnit}(
+                1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0, cost = [0.0, 10.0]),
+                2 => Generator(; id = 2, node = 2, pmax = 5.0, qmin = -5.0, qmax = 5.0, cost = [0.0, 100.0]),
+                3 => FixedLoad(; id = 3, node = 2, pd = 0.7)));
+            name = "lossy", baseMVA = 100.0)
+
+        apparent(result, k) = (t = nw_solution(result)["edge"]["1"]["terminal"]["$k"];
+                               hypot(t["p"], get(t, "q", 0.0)))
+        opf(rate_a, F) = quiet(() -> solve_opf(network(rate_a), F, OPTIMIZER))
+
+        # the current based model has losses, so each terminal has its own limit
+        sending, receiving = opf([0.5, 0.8], IVRFormulation), opf([0.8, 0.5], IVRFormulation)
+        @test apparent(sending, 1) ≈ 0.5 atol = 1e-6
+        @test apparent(sending, 2) < 0.5 - 1e-3
+        @test apparent(receiving, 2) ≈ 0.5 atol = 1e-6
+        @test apparent(receiving, 1) > 0.5 + 1e-3
+
+        # a rating at the end that sends is what the losses make dearer: the load gets less of the cheap unit
+        @test sending["objective"] > receiving["objective"] + 0.1
+        @test sending["objective"] ≈ opf(0.5, IVRFormulation)["objective"] atol = 1e-6
+
+        # the values v0.12.9 gave for the same networks, which this has to keep giving
+        @test sending["objective"]   ≈ 26.033056982 atol = 1e-6
+        @test receiving["objective"] ≈ 25.108008178 atol = 1e-6
+
+        # the linearized model has none, whatever the resistance, so the tighter rating binds wherever it is
+        a, b = opf([0.5, 0.8], LPFFormulation), opf([0.8, 0.5], LPFFormulation)
+        @test a["objective"] ≈ b["objective"] rtol = 1e-9
+        @test a["objective"] ≈ 24.999999100 atol = 1e-6
+        @test apparent(a, 1) ≈ apparent(a, 2) atol = 1e-6
     end
 
     @testset "what it refuses" begin

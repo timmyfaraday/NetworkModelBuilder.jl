@@ -2,15 +2,13 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B30**.
+older ones: git has them). Next id: **B31**.
 
 ## Now
 
 - (nothing)
 
 ## Next
-
-- (nothing)
 
 ## Later
 
@@ -64,9 +62,15 @@ older ones: git has them). Next id: **B30**.
 
 ## Done
 
+- [x] B30 · One `Branch` (`length_km`, NaN by default) instead of `Branch`, `Cable` and `OverheadLine`; `pi_model.jl` split by who
+  uses what; a rating and an angle limit apart; then a branch of two or more terminals (D50-D54) · Tom · 2026-10-10
+  - v0.13.0, merged into `main` and tagged `v0.13.0` on 2026-10-11; plans `knowledge/plan/one-branch.md` and `one-branch-terminals.md`.
+    Suite 3351, a 24 h chunk byte-identical to v0.12.7, window cut 7.7-7.8 ms against a control's 7.7-8.0, a lossy transformer
+    gives v0.12.9's objectives to 9 digits. Left: `scripts/NMinusOneScreen.jl` (untracked) reads a branch's `r`, `x`, `rate_a` as numbers.
+
 - [x] B24 · The package's own registers are fields of `NetworkModel`, not keys of `nm.ext`; a `var`/`con` key is not
   reused with another index set, nor a constraint id in a build (D49) · Tom · 2026-10-08
-  - v0.12.9 on `b24-typed-registers`, not merged; plan `knowledge/plan/typed-registers.md`. Seven write-only registers deleted, a
+  - v0.12.9, merged into `main` and tagged `v0.12.9` on 2026-10-10; plan `knowledge/plan/typed-registers.md`. Seven write-only registers deleted, a
     reused variable key was accepted four ways out of five, now refused. A held step-3 model is 7.3 MB smaller (not the
     56.5 MB first read), `update_model!` 1.18 s against 1.29 s same day, suite 3322, a 24 h chunk byte-identical to v0.12.7.
 

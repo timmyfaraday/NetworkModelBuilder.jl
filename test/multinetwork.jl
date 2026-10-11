@@ -10,6 +10,7 @@
 # v0.2.0 - network dependent data stored per component                         #
 # v0.12.5 - a topology lookup has one type and answers repeats                 #
 # v0.12.6 - a solution holds the indices and components asked for              #
+# v0.13.0 - a branch holds one entry per terminal of a field                   #
 ################################################################################
 
 "a copy of load `ld` whose demand follows `profile` over dimension `:time`"
@@ -22,7 +23,7 @@ profiled(ld::FixedLoad, dim, profile) =
 "a copy of branch `br` that is out of service at the network indices in `out`"
 outaged(br::Branch, dim, out) =
     Branch(; id = br.id, name = br.name, terminals = br.terminals, r = br.r, x = br.x,
-           b_fr = br.b_fr, b_to = br.b_to, g_fr = br.g_fr, g_to = br.g_to,
+           g_sh = br.g_sh, b_sh = br.b_sh,
            rate_a = br.rate_a, angmin = br.angmin, angmax = br.angmax,
            status = nw_vector(dim, (n, c) -> n ∉ out), ext = br.ext)
 
@@ -72,7 +73,7 @@ const PROFILE = [0.9, 1.0, 1.1]
 
         br = edges(net)[1]::Branch
         @test !has_nw_data(br)                   # no branch datum was touched
-        @test br.r isa Float64
+        @test br.r isa Vector{Float64}
 
         gen = units(net)[1]::Generator
         @test !has_nw_data(gen)

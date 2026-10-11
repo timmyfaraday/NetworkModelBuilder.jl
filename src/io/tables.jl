@@ -9,6 +9,7 @@
 # v0.6.0 - initial implementation                                              #
 # v0.9.2 - a column-length mismatch is a clear error, not a BoundsError        #
 # v0.9.3 - an all-empty table set warns instead of silently building nothing   #
+# v0.13.0 - a scalar cell is read for a field with an entry per terminal       #
 ################################################################################
 
 ################################################################################
@@ -278,11 +279,11 @@ function _enum(::Type{T}, value::AbstractString, field::Symbol, owner) where {T<
 end
 
 function _collect(::Type{T}, value, field::Symbol, owner) where {T<:AbstractVector}
-    value isa AbstractVector ||
-        throw(ArgumentError("the `$field` of a `$(nameof(owner))` is a list, but the " *
-                            "table gives $(repr(value))"))
+    value isa AbstractVector && return collect(eltype(T), value)
+    value isa Real && _per_terminal_data(owner) && return value
 
-    return collect(eltype(T), value)
+    throw(ArgumentError("the `$field` of a `$(nameof(owner))` is a list, but the " *
+                        "table gives $(repr(value))"))
 end
 
 ################################################################################

@@ -8,25 +8,9 @@
 # Changelog:                                                                   #
 # v0.3.0 - component hierarchy                                                 #
 # v0.12.0 - one Transformer; its controls are flags, not types                 #
+# v0.13.0 - one Branch, so no branch type is compared with another             #
+# v0.13.0 - a branch holds one entry per terminal of a field                   #
 ################################################################################
-
-"case14 with every plain branch rebuilt as `T`, which must change nothing"
-function as_branch_type(::Type{T}) where {T<:AbstractBranch}
-    data = quiet(() -> parse_file(case("case14")))
-    net  = network(data)
-    E    = Dict{Int,AbstractEdge}(net.edge)
-
-    for e in ids(net, Branch)
-        br   = edge(net, e)::Branch
-        E[e] = T(; id = br.id, name = br.name, terminals = br.terminals,
-                 r = br.r, x = br.x, b_fr = br.b_fr, b_to = br.b_to,
-                 rate_a = br.rate_a, angmin = br.angmin, angmax = br.angmax,
-                 status = br.status)
-    end
-
-    return NetworkData(Network(net.node, E, net.unit);
-                       name = "case14 as $T", baseMVA = baseMVA(data))
-end
 
 "case5 with edge 5, which has a turns ratio, rebuilt as a transformer carrying `extra`"
 function as_transformer(; extra...)
@@ -47,8 +31,6 @@ end
 
     @testset "the type tree" begin
         @test Branch <: AbstractBranch <: AbstractEdge <: AbstractComponent
-        @test Cable <: AbstractBranch
-        @test OverheadLine <: AbstractBranch
         @test Transformer <: AbstractTransformer <: AbstractEdge
 
         @test Generator <: AbstractGenerator <: AbstractUnit
@@ -61,27 +43,19 @@ end
         @test :tm ∉ fieldnames(Branch)
         @test :tm ∈ fieldnames(Transformer)
 
-        for T in (Branch, Cable, OverheadLine, Transformer)
+        for T in (Branch, DCLink, Switch, Transformer)
             @test T in edge_types()
         end
+
+        # a cable and an overhead line are a Branch with another length, not types
+        @test !isdefined(_NMB, :Cable) && !isdefined(_NMB, :OverheadLine)
+        @test !any(T -> nameof(T) in (:Cable, :OverheadLine), edge_types())
+
+        # a rating that follows the weather is a profile in the `rate_a` of any branch
+        br = Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, rate_a = 1.5)
+        @test dynamic_rating(br) == [1.5, 1.5]
         for T in (Generator, FixedLoad, FlexibleLoad, Storage, Shunt)
             @test T in unit_types()
-        end
-    end
-
-    @testset "every branch type is the same π-equivalent" begin
-        reference = quiet(() -> solve_lf(case("case14"), IVRFormulation, OPTIMIZER))
-
-        for T in (Cable, OverheadLine)
-            result = quiet(() -> solve_lf(as_branch_type(T), IVRFormulation, OPTIMIZER))
-
-            @test result["termination_status"] == JuMP.LOCALLY_SOLVED
-            for i in keys(nw_solution(reference)["node"])
-                @test nw_solution(result)["node"][i]["vm"] ≈
-                      nw_solution(reference)["node"][i]["vm"] atol = 1e-8
-                @test nw_solution(result)["node"][i]["va"] ≈
-                      nw_solution(reference)["node"][i]["va"] atol = 1e-8
-            end
         end
     end
 

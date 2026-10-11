@@ -68,6 +68,14 @@ given**, and the component takes its default. This is what lets one flat table
 hold several component types: a `Branch` row leaves the columns belonging to a
 `DCLink` empty, which is also exactly what stacking two frames produces.
 
+A field with an entry per terminal — `r`, `x`, `g_sh`, `b_sh` and `rate_a` of a
+[`Branch`](@ref), the same and more of a [`Transformer`](@ref) — takes a list in a
+cell, or a plain number where the component says a number will do: for two
+terminals a number is the first entry, and a rating is the rating of every
+terminal. A table of two-terminal branches therefore reads as it always has, and a
+branch with three terminals gives a list. A list is the only thing a field such as
+the `cost` of a generator takes.
+
 ### Profiles
 
 Everything that varies over the network index goes in one long table:

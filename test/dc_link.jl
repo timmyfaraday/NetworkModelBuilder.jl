@@ -9,6 +9,7 @@
 # v0.6.0 - initial implementation                                              #
 # v0.12.1 - a loss that depends on the transfer is another shape               #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 # Two nodes with no alternating current path between them, joined only by a dc
@@ -25,21 +26,21 @@ function island_network(; cheap::Int = 1, flip::Bool = false, rate::Float64 = In
                           loss_fixed::Float64 = 0.0, loss_prop::Float64 = 0.0,
                           reverse::Bool = true, pdc::Float64 = 0.0, cost::Float64 = 0.0,
                           load::Int = 0, dim::Dimension = Dimension())
-    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
-                               2 => Node(; id = 2, type = REF, vm = 1.0))
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0),
+                               2 => Node(; id = 2, type = REF, v_magn_set = 1.0))
     E = Dict{Int,AbstractEdge}(
-        1 => DCLink(; id = 1, terminals = flip ? [2, 1] : [1, 2], rate_a = rate,
-                      loss_fixed, loss_prop, reverse, pdc, cost))
+        1 => DCLink(; id = 1, terminals = flip ? [2, 1] : [1, 2], s_max = rate,
+                      p_loss_fix = loss_fixed, p_loss_prop = loss_prop, reverse, p_set = pdc, c = cost))
     c1, c2 = cheap == 1 ? (10.0, 100.0) : (100.0, 10.0)
     U = Dict{Int,AbstractUnit}(
-        1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       cost = [0.0, c1]),
-        2 => Generator(; id = 2, node = 2, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       cost = [0.0, c2]),
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       c = [0.0, c1]),
+        2 => Generator(; id = 2, node = 2, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       c = [0.0, c2]),
         3 => FixedLoad(; id = 3, node = load == 0 ? (cheap == 1 ? 2 : 1) : load,
-                       pd = 1.0, qd = 0.0))
+                       p_set = 1.0, q_set = 0.0))
 
-    return NetworkData(Network(I, E, U; dim); name = "islands", baseMVA = 100.0)
+    return NetworkData(Network(I, E, U; dim); name = "islands", s_base_mva = 100.0)
 end
 
 "the dc link entry of a solution at network index `n`"
@@ -51,12 +52,12 @@ link(result, n = 1) = nw_solution(result, n)["edge"]["1"]
         @test DCLink <: AbstractDCLink <: AbstractEdge
         @test DCLink in edge_types()
 
-        dl = DCLink(; id = 1, terminals = [1, 2], rate_a = 2.0)
+        dl = DCLink(; id = 1, terminals = [1, 2], s_max = 2.0)
         @test terminals(dl) == [1, 2]
         @test nterminals(dl) == 2
-        @test structure_gates(dl) == (:rate_a, :loss_prop)
+        @test structure_gates(dl) == (:s_max, :p_loss_prop)
         @test transfer_limits(dl) == (-2.0, 2.0)
-        @test transfer_limits(DCLink(; id = 1, terminals = [1, 2], rate_a = 2.0,
+        @test transfer_limits(DCLink(; id = 1, terminals = [1, 2], s_max = 2.0,
                                        reverse = false)) == (0.0, 2.0)
     end
 
@@ -64,16 +65,16 @@ link(result, n = 1) = nw_solution(result, n)["edge"]["1"]
         ok(; kw...) = DCLink(; id = 1, terminals = [1, 2], kw...)
 
         @test_throws ArgumentError DCLink(; id = 1, terminals = [1, 2, 3])
-        @test_throws ArgumentError ok(; rate_a = -1.0)
-        @test_throws ArgumentError ok(; loss_fixed = -0.1)
-        @test_throws ArgumentError ok(; loss_prop = -0.1)
-        @test_throws ArgumentError ok(; loss_prop = 1.0)      # a link that eats everything
-        @test_throws ArgumentError ok(; cost = -1.0)
-        @test_throws ArgumentError ok(; rate_a = 1.0, pdc = 2.0)
-        @test_throws ArgumentError ok(; reverse = false, pdc = -1.0)
+        @test_throws ArgumentError ok(; s_max = -1.0)
+        @test_throws ArgumentError ok(; p_loss_fix = -0.1)
+        @test_throws ArgumentError ok(; p_loss_prop = -0.1)
+        @test_throws ArgumentError ok(; p_loss_prop = 1.0)      # a link that eats everything
+        @test_throws ArgumentError ok(; c = -1.0)
+        @test_throws ArgumentError ok(; s_max = 1.0, p_set = 2.0)
+        @test_throws ArgumentError ok(; reverse = false, p_set = -1.0)
 
-        @test ok(; loss_prop = 0.99) isa DCLink
-        @test ok(; rate_a = 1.0, pdc = -1.0) isa DCLink        # at the rating, backwards
+        @test ok(; p_loss_prop = 0.99) isa DCLink
+        @test ok(; s_max = 1.0, p_set = -1.0) isa DCLink        # at the rating, backwards
     end
 
     @testset "a lossless link delivers what it takes" begin
@@ -214,15 +215,15 @@ link(result, n = 1) = nw_solution(result, n)["edge"]["1"]
     end
 
     @testset "a loss that depends on the transfer is another shape" begin
-        # the transfer variable exists only where loss_prop is not zero, so 0.0 and
+        # the transfer variable exists only where p_loss_prop is not zero, so 0.0 and
         # 0.02 are two shapes and 0.02 and 0.03 are one
         dim = Dimension(:time => 4)
         function lossy(loss)
             net = network(island_network(; dim))
             net.edge[1] = DCLink(; id = 1, terminals = [1, 2], reverse = true,
-                                 loss_prop = nw_vector(dim, loss))
+                                 p_loss_prop = nw_vector(dim, loss))
             return NetworkData(Network(net.node, net.edge, net.unit; dim); name = "islands",
-                               baseMVA = 100.0)
+                               s_base_mva = 100.0)
         end
 
         data = lossy([0.0, 0.02, 0.03, 0.0])
@@ -267,20 +268,20 @@ function linked_network(; rate::Float64 = 1.0, cost::Float64 = 0.0, pdc::Float64
                           out = ())
     status = isempty(out) ? true : nw_vector(dim, (n, c) -> n ∉ out)
 
-    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0),
                                2 => Node(; id = 2))
     E = Dict{Int,AbstractEdge}(
-        1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, rate_a = 0.5,
+        1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, s_max = 0.5,
                       status = status),
-        2 => DCLink(; id = 2, terminals = [1, 2], rate_a = rate, cost, pdc, loss_prop))
+        2 => DCLink(; id = 2, terminals = [1, 2], s_max = rate, c = cost, p_set = pdc, p_loss_prop = loss_prop))
     U = Dict{Int,AbstractUnit}(
-        1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       pg = 1.0, cost = [0.0, 10.0]),
-        2 => Generator(; id = 2, node = 2, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       pg = 0.0, cost = [0.0, 100.0]),
-        3 => FixedLoad(; id = 3, node = 2, pd = 1.0, qd = 0.0))
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       p_set = 1.0, c = [0.0, 10.0]),
+        2 => Generator(; id = 2, node = 2, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       p_set = 0.0, c = [0.0, 100.0]),
+        3 => FixedLoad(; id = 3, node = 2, p_set = 1.0, q_set = 0.0))
 
-    return NetworkData(Network(I, E, U; dim); name = "linked", baseMVA = 100.0)
+    return NetworkData(Network(I, E, U; dim); name = "linked", s_base_mva = 100.0)
 end
 
 @testset "dc link as a redispatch measure" begin

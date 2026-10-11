@@ -65,12 +65,12 @@ function synthetic(data, flows)
             push!(rated, e)
             k      = findfirst(==(e), out)
             status = k === nothing ? c.status : nw_vector(dim, (n, coord) -> coord.contingency != k + 1)
-            net.edge[e] = Branch(; fields(c)..., rate_a = max(SHARE * abs(flows[e]), FLOOR), status)
+            net.edge[e] = Branch(; fields(c)..., s_max = max(SHARE * abs(flows[e]), FLOOR), status)
         end
         for (u, c) in net.unit
             c isa FixedLoad || continue
-            net.unit[u] = FixedLoad(; fields(c)..., pd = nw_vector(dim, :time, c.pd .* profile),
-                                    qd = nw_vector(dim, :time, c.qd .* profile))
+            net.unit[u] = FixedLoad(; fields(c)..., p_set = nw_vector(dim, :time, c.p_set .* profile),
+                                    q_set = nw_vector(dim, :time, c.q_set .* profile))
         end
     end)
 
@@ -80,7 +80,7 @@ end
 data       = Logging.with_logger(() -> parse_file(CASE), Logging.NullLogger())
 mn, rated, out = synthetic(data, base_flows(data))
 ext        = Dict{Symbol,Any}(:redispatch => Redispatch(; monitored = rated, control = :preventive,
-                                                         overload = OverloadPrice(; per_energy = 1.0e3)))
+                                                         overload = OverloadPrice(; c_ener = 1.0e3)))
 newmodel   = () -> (m = JuMP.direct_model(HiGHS.Optimizer()); JuMP.set_silent(m); m)
 generators = ids(network(mn), Generator)
 lean       = (; node = false, edge = rated, unit = generators)

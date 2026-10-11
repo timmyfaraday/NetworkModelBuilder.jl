@@ -27,12 +27,12 @@ data = parse_tables(
             terminals = [[1, 2]],
             r         = [0.0],
             x         = [0.1],
-            rate_a    = [0.5]),
+            s_max     = [0.5]),
     unit = (id        = [1, 2],
             component = ["Generator", "FixedLoad"],
             node      = [1, 2],
-            pmax      = [5.0, missing],
-            pd        = [missing, 1.0]))
+            p_max     = [5.0, missing],
+            p_set     = [missing, 1.0]))
 ```
 
 ## The tables
@@ -168,8 +168,8 @@ pl.DataFrame({
     "id":        [1, 2],
     "component": ["Generator", "FixedLoad"],
     "node":      [1, 2],
-    "pmax":      [5.0, None],
-    "pd":        [None, 1.0],
+    "p_max":      [5.0, None],
+    "p_set":        [None, 1.0],
 }).write_ipc("belgium/unit.arrow")
 ```
 

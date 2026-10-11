@@ -10,6 +10,7 @@
 # v0.12.0 - the star point keys differ from the ones a Transformer registers   #
 # v0.13.0 - a three-terminal Branch against a Transformer and the split point  #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 # An edge with more than two terminals is the reason the extended graph carries
@@ -77,15 +78,15 @@ const STAR_X = [0.100, 0.200, 0.300]
 "a three-terminal network: one reference node feeding two loads through a star edge"
 function star_network()
     I = Dict{Int,AbstractNode}(
-        1 => Node(; id = 1, type = REF, vm = 1.02, va = 0.0),
+        1 => Node(; id = 1, type = REF, v_magn_set = 1.02, v_angl_set = 0.0),
         2 => Node(; id = 2, type = PQ),
         3 => Node(; id = 3, type = PQ))
     E = Dict{Int,AbstractEdge}(
         1 => StarEdge(; id = 1, terminals = [1, 2, 3], r = STAR_R, x = STAR_X))
     U = Dict{Int,AbstractUnit}(
         1 => Generator(; id = 1, node = 1),
-        2 => FixedLoad(; id = 2, node = 2, pd = 0.40, qd = 0.15),
-        3 => FixedLoad(; id = 3, node = 3, pd = 0.25, qd = 0.10))
+        2 => FixedLoad(; id = 2, node = 2, p_set = 0.40, q_set = 0.15),
+        3 => FixedLoad(; id = 3, node = 3, p_set = 0.25, q_set = 0.10))
 
     return NetworkData(Network(I, E, U); name = "star")
 end
@@ -93,7 +94,7 @@ end
 "the same network with the star point written out as a fourth node and three branches"
 function split_network()
     I = Dict{Int,AbstractNode}(
-        1 => Node(; id = 1, type = REF, vm = 1.02, va = 0.0),
+        1 => Node(; id = 1, type = REF, v_magn_set = 1.02, v_angl_set = 0.0),
         2 => Node(; id = 2, type = PQ),
         3 => Node(; id = 3, type = PQ),
         4 => Node(; id = 4, type = PQ))
@@ -101,8 +102,8 @@ function split_network()
         k => Branch(; id = k, terminals = [k, 4], r = STAR_R[k], x = STAR_X[k]) for k in 1:3)
     U = Dict{Int,AbstractUnit}(
         1 => Generator(; id = 1, node = 1),
-        2 => FixedLoad(; id = 2, node = 2, pd = 0.40, qd = 0.15),
-        3 => FixedLoad(; id = 3, node = 3, pd = 0.25, qd = 0.10))
+        2 => FixedLoad(; id = 2, node = 2, p_set = 0.40, q_set = 0.15),
+        3 => FixedLoad(; id = 3, node = 3, p_set = 0.25, q_set = 0.10))
 
     return NetworkData(Network(I, E, U); name = "split")
 end
@@ -157,9 +158,9 @@ end
 
 "the series impedance and the total shunt of each section of the edge"
 const SECTION = (r    = [0.010, 0.020, 0.030],
-                 x    = [0.100, 0.200, 0.300],
-                 g_sh = [0.001, 0.000, 0.002],
-                 b_sh = [0.020, 0.040, 0.030])
+                 x      = [0.100, 0.200, 0.300],
+                 g_shnt = [0.001, 0.000, 0.002],
+                 b_shnt = [0.020, 0.040, 0.030])
 
 "a `Branch` with three terminals, `kw` giving what else it has"
 section_branch(; kw...) = Branch(; id = 1, terminals = [1, 2, 3], SECTION..., kw...)
@@ -170,31 +171,31 @@ terminal, which is where a winding has its own, and the other halves meet at the
 point as the magnetising branch.
 """
 section_tee(; kw...) = Transformer(; id = 1, terminals = [1, 2, 3], r = SECTION.r,
-                                   x = SECTION.x, g_sh = SECTION.g_sh ./ 2,
-                                   b_sh = SECTION.b_sh ./ 2, g_m = sum(SECTION.g_sh) / 2,
-                                   b_m = sum(SECTION.b_sh) / 2, kw...)
+                                   x = SECTION.x, g_shnt = SECTION.g_shnt ./ 2,
+                                   b_shnt = SECTION.b_shnt ./ 2, g_mgnt = sum(SECTION.g_shnt) / 2,
+                                   b_mgnt = sum(SECTION.b_shnt) / 2, kw...)
 
 "the point written out as a node, with a two-terminal branch to each terminal"
 section_split(; kw...) = Dict{Int,AbstractEdge}(
     k => Branch(; id = k, terminals = [k, 4], r = SECTION.r[k], x = SECTION.x[k],
-                g_sh = SECTION.g_sh[k], b_sh = SECTION.b_sh[k], kw...) for k in 1:3)
+                g_shnt = SECTION.g_shnt[k], b_shnt = SECTION.b_shnt[k], kw...) for k in 1:3)
 
 """
 One reference node feeding two loads through the edge `E`, a dearer unit at the first
 load for what the edge cannot carry. `dear` leaves that unit out, for a load flow.
 """
 function section_network(E::Dict{Int,<:AbstractEdge}; dear::Bool = true, market = 0.65)
-    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.02, va = 0.0),
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.02, v_angl_set = 0.0),
                                2 => Node(; id = 2), 3 => Node(; id = 3))
     haskey(E, 3) && (I[4] = Node(; id = 4))
 
     U = Dict{Int,AbstractUnit}(
-        1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       pg = market, cost = [0.0, 10.0]),
-        3 => FixedLoad(; id = 3, node = 2, pd = 0.40, qd = 0.15),
-        4 => FixedLoad(; id = 4, node = 3, pd = 0.25, qd = 0.10))
-    dear && (U[2] = Generator(; id = 2, node = 2, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                              pg = 0.0, cost = [0.0, 100.0]))
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       p_set = market, c = [0.0, 10.0]),
+        3 => FixedLoad(; id = 3, node = 2, p_set = 0.40, q_set = 0.15),
+        4 => FixedLoad(; id = 4, node = 3, p_set = 0.25, q_set = 0.10))
+    dear && (U[2] = Generator(; id = 2, node = 2, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                              p_set = 0.0, c = [0.0, 100.0]))
 
     return NetworkData(Network(I, E, U); name = "sections")
 end
@@ -241,9 +242,9 @@ apparent(result, k) = hypot(nw_solution(result)["edge"]["1"]["terminal"]["$k"]["
                                      IVRFormulation, OPTIMIZER))
 
         rate = [0.5, Inf, Inf]
-        tee    = quiet(() -> solve_opf(section_network(section_tee(; rate_a = rate)),
+        tee    = quiet(() -> solve_opf(section_network(section_tee(; s_max = rate)),
                                        IVRFormulation, OPTIMIZER))
-        branch = quiet(() -> solve_opf(section_network(section_branch(; rate_a = rate)),
+        branch = quiet(() -> solve_opf(section_network(section_branch(; s_max = rate)),
                                        IVRFormulation, OPTIMIZER))
 
         for result in (free, tee, branch)
@@ -267,9 +268,9 @@ apparent(result, k) = hypot(nw_solution(result)["edge"]["1"]["terminal"]["$k"]["
                                      LPFFormulation, OPTIMIZER))
 
         rate   = [0.5, Inf, Inf]
-        tee    = quiet(() -> solve_opf(section_network(section_tee(; rate_a = rate)),
+        tee    = quiet(() -> solve_opf(section_network(section_tee(; s_max = rate)),
                                        LPFFormulation, OPTIMIZER))
-        branch = quiet(() -> solve_opf(section_network(section_branch(; rate_a = rate)),
+        branch = quiet(() -> solve_opf(section_network(section_branch(; s_max = rate)),
                                        LPFFormulation, OPTIMIZER))
         split  = quiet(() -> solve_opf(section_network(section_split()),
                                        LPFFormulation, OPTIMIZER))
@@ -297,7 +298,7 @@ apparent(result, k) = hypot(nw_solution(result)["edge"]["1"]["terminal"]["$k"]["
     # 0.15 over the rating is relieved at 100 + 10 per pu, so a price above 110 buys
     # the relief and one below it buys the overload instead
     @testset "a rating on one terminal can be priced instead of enforced" begin
-        data = section_network(section_branch(; rate_a = [0.5, Inf, Inf]))
+        data = section_network(section_branch(; s_max = [0.5, Inf, Inf]))
 
         dear = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
                                     redispatch = Redispatch(; overload = 500.0)))

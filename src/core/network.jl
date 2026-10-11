@@ -11,6 +11,7 @@
 # v0.11.0 - what an edge connects, and the islands of a network                #
 # v0.12.3 - a topology is picked from stored statuses, not looked up per call  #
 # v0.12.5 - a topology lookup remembers the answer it gave last                #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 ################################################################################
@@ -384,20 +385,20 @@ The network index of the problem lives on the network, see
 over a new one.
 """
 struct NetworkData
-    name   ::String
-    baseMVA::Float64
-    net    ::Network
-    ext    ::Dict{Symbol,Any}
+    name      ::String
+    s_base_mva::Float64
+    net       ::Network
+    ext       ::Dict{Symbol,Any}
 end
 
 """
-    NetworkData(network; name, baseMVA, ext)
+    NetworkData(network; name, s_base_mva, ext)
 
 Wrap a [`Network`](@ref) as a data set.
 """
-NetworkData(net::Network; name::String = "unnamed", baseMVA::Float64 = 100.0,
+NetworkData(net::Network; name::String = "unnamed", s_base_mva::Float64 = 100.0,
             ext::Dict{Symbol,Any} = Dict{Symbol,Any}()) =
-    NetworkData(name, baseMVA, net, ext)
+    NetworkData(name, s_base_mva, net, ext)
 
 """
     set_dimension(data, dim; apply! = nothing)
@@ -421,8 +422,8 @@ julia> data = set_dimension(data, dim; apply! = function (net, dim)
            for (u, ld) in net.unit
                ld isa Load || continue
                net.unit[u] = Load(; id = ld.id, name = ld.name, node = ld.node,
-                                  pd = nw_vector(dim, :time, ld.pd .* profile),
-                                  qd = nw_vector(dim, :time, ld.qd .* profile))
+                                  p_set = nw_vector(dim, :time, ld.p_set .* profile),
+                                  q_set = nw_vector(dim, :time, ld.q_set .* profile))
            end
        end);
 ```
@@ -440,7 +441,7 @@ function set_dimension(data::NetworkData, dim::Dimension; apply! = nothing)
         net = Network(net.node, net.edge, net.unit; dim, ext = net.ext)
     end
 
-    return NetworkData(net; name = data.name, baseMVA = data.baseMVA,
+    return NetworkData(net; name = data.name, s_base_mva = data.s_base_mva,
                        ext = deepcopy(data.ext))
 end
 
@@ -478,7 +479,7 @@ function replicate(data::NetworkData, dim::Dimension; apply! = nothing)
     U = Dict{Int,AbstractUnit}(u => _fold(copies, nws, 3, u) for u in keys(data.net.unit))
 
     return NetworkData(Network(I, E, U; dim, ext = deepcopy(data.net.ext));
-                       name = data.name, baseMVA = data.baseMVA, ext = deepcopy(data.ext))
+                       name = data.name, s_base_mva = data.s_base_mva, ext = deepcopy(data.ext))
 end
 
 "fold one component across the per-index copies, keeping constants as plain values"
@@ -508,7 +509,7 @@ dimension(data::NetworkData) = data.net.dim
 dimension(net::Network) = net.dim
 
 "the system power base, in MVA"
-baseMVA(data::NetworkData) = data.baseMVA
+s_base_mva(data::NetworkData) = data.s_base_mva
 
 for f in (:dim_names, :has_dim, :dim_length, :dim_position, :coordinates, :dim_prop,
           :dim_meta, :nw_ids, :similar_ids, :similar_id, :first_id, :last_id,

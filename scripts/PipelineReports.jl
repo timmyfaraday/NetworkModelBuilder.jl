@@ -55,7 +55,7 @@ is_solved(result::Dict{String,Any}, n::Int) =
 """
     congestion_report(data, result)
 
-One row per (edge, hour) where the solved terminal flow exceeds `rate_a` (the
+One row per (edge, hour) where the solved terminal flow exceeds `s_max` (the
 tighter winding's, for a transformer); `LoadFlowProblem` does not enforce it.
 
 Empty, with the same columns, when `result` carries no solved values (e.g. an
@@ -69,7 +69,7 @@ function congestion_report(data::NetworkData, result::Dict{String,Any})
     net   = network(data)
     hours = hour_ids(data)
     for e in ids(net, AbstractEdge)
-        rate = minimum(edges(net)[e].rate_a)
+        rate = minimum(edges(net)[e].s_max)
         isfinite(rate) || continue
         for n in nw_ids(data)
             is_solved(result, n) || continue

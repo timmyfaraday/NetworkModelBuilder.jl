@@ -10,6 +10,7 @@
 # v0.12.9 - the held controls are read through held_controls                   #
 # v0.14.0 - a variable is named by the model, not by its caller                #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 # A control that belongs to one terminal of an edge rather than to the edge, such
@@ -75,20 +76,20 @@ Edge 3 is out of service at the network indices in `out`.
 function arc_network(; dim::Dimension = Dimension(), out = ())
     status = isempty(out) ? true : nw_vector(dim, (n, c) -> n ∉ out)
 
-    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0),
                                2 => Node(; id = 2), 3 => Node(; id = 3))
     E = Dict{Int,AbstractEdge}(
-        1 => Branch(; id = 1, terminals = [1, 3], r = 0.0, x = 0.1, rate_a = 0.5),
+        1 => Branch(; id = 1, terminals = [1, 3], r = 0.0, x = 0.1, s_max = 0.5),
         2 => ArcShifter(; id = 2, terminals = [1, 2], x = 0.1),
         3 => Branch(; id = 3, terminals = [2, 3], r = 0.0, x = 0.1, status = status))
     U = Dict{Int,AbstractUnit}(
-        1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       pg = 1.0, cost = [0.0, 10.0]),
-        2 => Generator(; id = 2, node = 3, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       pg = 0.0, cost = [0.0, 100.0]),
-        3 => FixedLoad(; id = 3, node = 3, pd = 1.0, qd = 0.0))
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       p_set = 1.0, c = [0.0, 10.0]),
+        2 => Generator(; id = 2, node = 3, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       p_set = 0.0, c = [0.0, 100.0]),
+        3 => FixedLoad(; id = 3, node = 3, p_set = 1.0, q_set = 0.0))
 
-    return NetworkData(Network(I, E, U; dim); name = "arcs", baseMVA = 100.0)
+    return NetworkData(Network(I, E, U; dim); name = "arcs", s_base_mva = 100.0)
 end
 
 @testset "controls that belong to a terminal" begin

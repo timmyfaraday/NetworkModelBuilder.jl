@@ -291,9 +291,9 @@ problem chooses.
 ```@example switch
 using NetworkModelBuilder, HiGHS, JuMP
 
-branch(id, i, j; rate) = Branch(; id, terminals = [i, j], r = 0.0, x = 0.1, rate_a = rate)
+branch(id, i, j; rate) = Branch(; id, terminals = [i, j], r = 0.0, x = 0.1, s_max = rate)
 switch(id, i, j; rate, lock, position = 1) =
-    Switch(; id, terminals = [i, j], rate_a = rate, lock = lock, position = position)
+    Switch(; id, terminals = [i, j], s_max = rate, lock = lock, position = position)
 
 function ring(lock, positions = (1, 1, 1))
     I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF),
@@ -305,9 +305,9 @@ function ring(lock, positions = (1, 1, 1))
         4 => switch(4, 1, 2; rate = 0.8, lock, position = positions[2]),
         5 => switch(5, 2, 3; rate = 5.0, lock, position = positions[3]))
     U = Dict{Int,AbstractUnit}(
-        1 => Generator(; id = 1, node = 1, pmax = 5.0, cost = [0.0, 1.0]),
-        2 => Generator(; id = 2, node = 3, pmax = 5.0, cost = [0.0, 10.0]),
-        3 => FixedLoad(; id = 3, node = 2, pd = 1.8))
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, c = [0.0, 1.0]),
+        2 => Generator(; id = 2, node = 3, p_max = 5.0, c = [0.0, 10.0]),
+        3 => FixedLoad(; id = 3, node = 2, p_set = 1.8))
 
     return NetworkData(Network(I, E, U))
 end

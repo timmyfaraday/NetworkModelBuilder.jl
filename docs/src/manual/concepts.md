@@ -31,13 +31,12 @@ data = parse_tables(
             terminals = [[1, 2]],
             r         = [0.0],
             x         = [0.1],
-            rate_a    = [0.5]),
+            s_max     = [0.5]),
     unit = (id        = [1, 2, 3],
             component = ["Generator", "Generator", "FixedLoad"],
             node      = [1, 2, 2],
-            pg        = [1.0, 0.0, missing],
-            cost      = [[0.0, 10.0], [0.0, 100.0], missing],
-            pd        = [missing, missing, 1.0]))
+            p_set     = [1.0, 0.0, 1.0],
+            c         = [[0.0, 10.0], [0.0, 100.0], missing]))
 
 optimizer = optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 0)
 nothing # hide

@@ -260,23 +260,23 @@ function corridor(; kw...)
     I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF),
                                2 => Node(; id = 2), 3 => Node(; id = 3))
     E = Dict{Int,AbstractEdge}(
-        1 => Branch(; id = 1, terminals = [1, 3], r = 0.0, x = 0.1, rate_a = 0.5),
+        1 => Branch(; id = 1, terminals = [1, 3], r = 0.0, x = 0.1, s_max = 0.5),
         2 => Transformer(; id = 2, terminals = [1, 2], r = 0.0, x = 0.1, kw...),
         3 => Branch(; id = 3, terminals = [2, 3], r = 0.0, x = 0.1))
     U = Dict{Int,AbstractUnit}(
-        1 => Generator(; id = 1, node = 1, pmax = 5.0, cost = [0.0, 10.0]),
-        2 => Generator(; id = 2, node = 3, pmax = 5.0, cost = [0.0, 100.0]),
-        3 => FixedLoad(; id = 3, node = 3, pd = 1.0))
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, c = [0.0, 10.0]),
+        2 => Generator(; id = 2, node = 3, p_max = 5.0, c = [0.0, 100.0]),
+        3 => FixedLoad(; id = 3, node = 3, p_set = 1.0))
 
-    return NetworkData(Network(I, E, U); baseMVA = 100.0)
+    return NetworkData(Network(I, E, U); s_base_mva = 100.0)
 end
 
 optimizer = optimizer_with_attributes(HiGHS.Optimizer, "output_flag" => false)
 
 held    = solve_opf(corridor(), LPFFormulation, optimizer)
-free    = solve_opf(corridor(; pst = CONTINUOUS, ta_min = -0.3, ta_max = 0.3),
+free    = solve_opf(corridor(; pst = CONTINUOUS, t_angl_min = -0.3, t_angl_max = 0.3),
                     LPFFormulation, optimizer)
-stepped = solve_opf(corridor(; pst = STEPPED, ta_min = -0.3, ta_max = 0.3, ta_step = 0.1),
+stepped = solve_opf(corridor(; pst = STEPPED, t_angl_min = -0.3, t_angl_max = 0.3, t_angl_step = 0.1),
                     LPFFormulation, optimizer)
 
 corridor_flow(result) = nw_solution(result)["edge"]["1"]["terminal"]["1"]["p_term"]

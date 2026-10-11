@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.10.0 - initial implementation                                             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 # `security_tables` is tested against a `result` built by hand, not solved: the
@@ -26,9 +27,9 @@ function security_network()
     E = Dict{Int,AbstractEdge}(
         5 => Branch(; id = 5, name = "line-A", terminals = [10, 20], r = 0.0, x = 0.1),
         6 => Branch(; id = 6, name = "line-B", terminals = [10, 30], r = 0.0, x = 0.1))
-    U = Dict{Int,AbstractUnit}(1 => FixedLoad(; id = 1, node = 20, pd = 0.0, qd = 0.0))
+    U = Dict{Int,AbstractUnit}(1 => FixedLoad(; id = 1, node = 20, p_set = 0.0, q_set = 0.0))
 
-    return NetworkData(Network(I, E, U; dim); name = "security", baseMVA = 100.0)
+    return NetworkData(Network(I, E, U; dim); name = "security", s_base_mva = 100.0)
 end
 
 "an edge solution entry, the same nested `Dict{String,Any}` shape `build_solution` writes"

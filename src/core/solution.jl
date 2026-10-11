@@ -10,6 +10,7 @@
 # v0.10.2 - a tidy solution_tables view, alongside nw_solution                 #
 # v0.12.6 - a solution holds the indices and components asked for              #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 ################################################################################
@@ -31,7 +32,7 @@ result["solution"]["nw"]["1"]["node"]["4"]["v_magn"]
 ```
 
 Use [`nw_solution`](@ref) to reach one network index without spelling out the
-path. All quantities are in per unit on `result["baseMVA"]`, all angles in
+path. All quantities are in per unit on `result["s_base_mva"]`, all angles in
 radians.
 
 `nws` says which network indices the entry holds, all of them by default. Building
@@ -67,7 +68,7 @@ function build_solution(nm::NetworkModel{P,F}; nws::AbstractVector{Int} = nm.nws
 
     result = Dict{String,Any}(
         "name"               => nm.data.name,
-        "baseMVA"            => nm.data.baseMVA,
+        "s_base_mva"         => nm.data.s_base_mva,
         "problem_type"       => P,
         "formulation_type"   => F,
         "termination_status" => JuMP.termination_status(nm.model),
@@ -153,9 +154,9 @@ rather than kept `missing` throughout.
 
 | table  | one row per                    | columns                                                  |
 |:-------|:--------------------------------|:-----------------------------------------------------------|
-| `node` | network index, node              | `id`, `name`, `type` (`PQ`/`PV`/`REF`/`ISOLATED`), `vm`, `va`, ... |
-| `edge` | network index, edge, terminal     | `id`, `name`, `type`, `terminal`, `node`, `p`, `q`, ...      |
-| `unit` | network index, unit               | `id`, `name`, `type`, `node`, `p`, `q`, ...                  |
+| `node` | network index, node              | `id`, `name`, `type` (`PQ`/`PV`/`REF`/`ISOLATED`), `v_magn`, `v_angl`, ... |
+| `edge` | network index, edge, terminal     | `id`, `name`, `type`, `terminal`, `node`, `p_term`, `q_term`, ...      |
+| `unit` | network index, unit               | `id`, `name`, `type`, `node`, `p_unit`, `q_unit`, ...                  |
 
 This is an addition alongside [`nw_solution`](@ref), not a replacement — the
 nested dictionary stays exactly as it is, the direct read of `result`.

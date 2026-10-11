@@ -9,6 +9,7 @@
 # v0.1.0 - initial implementation                                              #
 # v0.12.4 - solve_time test allows a solve faster than the clock               #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 # The reference values below are the AC power flow solution of PowerModels.jl
@@ -67,7 +68,7 @@ const CASE5_LF_VA = Dict(1 => 3.585141, 2 => 0.031853, 3 => 0.482437,
             nd = node(net, i)
             nd.type == PQ && continue
             # the reference and the PV nodes hold their voltage magnitude setpoint
-            @test sol["node"]["$i"]["v_magn"] ≈ nd.vm atol = 1e-8
+            @test sol["node"]["$i"]["v_magn"] ≈ nd.v_magn_set atol = 1e-8
         end
         @test rad2deg(sol["node"]["1"]["v_angl"]) ≈ 0.0 atol = 1e-8
 
@@ -75,13 +76,13 @@ const CASE5_LF_VA = Dict(1 => 3.585141, 2 => 0.031853, 3 => 0.482437,
             g = unit(net, u)
             node(net, g.node).type == REF && continue
             # every generator away from the reference holds its active setpoint
-            @test sol["unit"]["$u"]["p_gen"] ≈ g.pg atol = 1e-8
+            @test sol["unit"]["$u"]["p_gen"] ≈ g.p_set atol = 1e-8
         end
 
         for u in ids(net, FixedLoad)
             ld = unit(net, u)
-            @test sol["unit"]["$u"]["p_unit"] ≈ -ld.pd atol = 1e-8
-            @test sol["unit"]["$u"]["q_unit"] ≈ -ld.qd atol = 1e-8
+            @test sol["unit"]["$u"]["p_unit"] ≈ -ld.p_set atol = 1e-8
+            @test sol["unit"]["$u"]["q_unit"] ≈ -ld.q_set atol = 1e-8
         end
     end
 
@@ -122,7 +123,7 @@ const CASE5_LF_VA = Dict(1 => 3.585141, 2 => 0.031853, 3 => 0.482437,
 
         @test result["problem_type"] === LoadFlowProblem
         @test result["formulation_type"] === IVRFormulation
-        @test result["baseMVA"] == 100.0
+        @test result["s_base_mva"] == 100.0
         @test result["solve_time"] >= 0.0
         @test_throws KeyError nw_solution(result, 2)
 

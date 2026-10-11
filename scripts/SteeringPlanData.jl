@@ -88,7 +88,7 @@ end
 ################################################################################
 
 """
-    _load_lines!(E, e, dir, baseMVA, max_coupler_reactance)
+    _load_lines!(E, e, dir, s_base_mva, max_coupler_reactance)
 
 One edge per row of `lines.csv`, appended to `E` from edge identifier `e`, and
 the last identifier used: a locked, closed [`Switch`](@ref) where the reactance
@@ -98,51 +98,51 @@ a branch.
 
 `lines.csv` carries no resistance and its `capacity` is `Inf` wherever the data
 leaves a line unconstrained; `CSV.jl` parses that token as `Inf` itself, so no
-special casing is needed beyond `coalesce` for a blank cell. `angmin`/`angmax`
+special casing is needed beyond `coalesce` for a blank cell. `v_angl_min`/`v_angl_max`
 are set to the widest angle this package treats as "no limit" — see the
 `Branch` docstring and `src/io/matpower.jl`'s own fallback — because the
 struct's narrower default (`±π/3`) would otherwise impose a stability limit
 this data never asked for.
 """
-function _load_lines!(E::Dict{Int,AbstractEdge}, e::Int, dir::AbstractString, baseMVA::Float64,
+function _load_lines!(E::Dict{Int,AbstractEdge}, e::Int, dir::AbstractString, s_base_mva::Float64,
                       max_coupler_reactance::Float64)
     df = DataFrame(CSV.File(joinpath(dir, "lines.csv")))
     for row in eachrow(df)
         e += 1
-        rate_a = coalesce(row.capacity, Inf) / baseMVA
+        rate_a = coalesce(row.capacity, Inf) / s_base_mva
         ext    = Dict{Symbol,Any}(:source_id => row.id)
         E[e]   = row.reactance < max_coupler_reactance ?
-                 Switch(; id = e, name = row.name, terminals = [row.from, row.to], rate_a, ext) :
+                 Switch(; id = e, name = row.name, terminals = [row.from, row.to], s_max = rate_a, ext) :
                  Branch(; id = e, name = row.name, terminals = [row.from, row.to],
-                        r = 0.0, x = row.reactance, rate_a,
-                        angmin = -pi / 2, angmax = pi / 2, ext)
+                        r = 0.0, x = row.reactance, s_max = rate_a,
+                        v_angl_min = -pi / 2, v_angl_max = pi / 2, ext)
     end
 
     return e
 end
 
 """
-    _load_psts!(E, e, dir, baseMVA)
+    _load_psts!(E, e, dir, s_base_mva)
 
 One [`Transformer`](@ref) per row of `pst.csv`, appended to `E` from edge
 identifier `e`, with a phase shift on its first winding and nothing else: no
 ratio, no shunt, and the whole reactance on that winding.
 
 `pst.csv`'s `angle_min`/`angle_max` are the *control* range of the ratio angle,
-mapped onto `ta_min`/`ta_max`; they are not the edge's own stability range,
-which is not in this data at all, so `angmin`/`angmax` get the same wide-open
+mapped onto `t_angl_min`/`t_angl_max`; they are not the edge's own stability range,
+which is not in this data at all, so `v_angl_min`/`v_angl_max` get the same wide-open
 `±π/2` a `Branch` does, for the same reason. The data carries no market angle
-setpoint, so `ta = 0.0` — an assumption, noted here rather than left silent.
+setpoint, so `t_angl = 0.0` — an assumption, noted here rather than left silent.
 """
-function _load_psts!(E::Dict{Int,AbstractEdge}, e::Int, dir::AbstractString, baseMVA::Float64)
+function _load_psts!(E::Dict{Int,AbstractEdge}, e::Int, dir::AbstractString, s_base_mva::Float64)
     df = DataFrame(CSV.File(joinpath(dir, "pst.csv")))
     for row in eachrow(df)
         e += 1
         E[e] = Transformer(; id = e, name = row.name, terminals = [row.from, row.to],
                            r = 0.0, x = row.reactance,
-                           rate_a = row.capacity_max / baseMVA,
-                           pst = true, ta = 0.0, ta_min = row.angle_min, ta_max = row.angle_max,
-                           angmin = -pi / 2, angmax = pi / 2,
+                           s_max = row.capacity_max / s_base_mva,
+                           pst = true, t_angl = 0.0, t_angl_min = row.angle_min, t_angl_max = row.angle_max,
+                           v_angl_min = -pi / 2, v_angl_max = pi / 2,
                            ext = Dict{Symbol,Any}(:source_id => row.id))
     end
 
@@ -154,15 +154,15 @@ end
 ################################################################################
 
 """
-    _load_thermal_generators!(U, u, dir, thermal_df, net_position, neighbour_pg, dim, hours, baseMVA)
+    _load_thermal_generators!(U, u, dir, thermal_df, net_position, neighbour_pg, dim, hours, s_base_mva)
 
 One [`Generator`](@ref) per row of `thermal_generators.csv`, appended to `U`
 from unit identifier `u`.
 
 Ids 1-23 are Belgian and carry an hourly market dispatch in
-`thermal_generator_market_dispatch.csv`: `pg` is that schedule, and `pmax`/`pmin`
+`thermal_generator_market_dispatch.csv`: `p_set` is that schedule, and `p_max`/`p_min`
 follow it up and down by `rd_capacity_up`/`rd_capacity_down`. Ids 24-93 are
-neighbours with no market dispatch at all, so their `pg` is *estimated* by
+neighbours with no market dispatch at all, so their `p_set` is *estimated* by
 [`_apportion_neighbour_generation!`](@ref) instead, which also records what it
 assigned in `neighbour_pg` — see that function and [`_load_fixed_loads!`](@ref)
 for why.
@@ -170,7 +170,7 @@ for why.
 function _load_thermal_generators!(U::Dict{Int,AbstractUnit}, u::Int, dir::AbstractString,
                                    thermal_df::DataFrame, net_position::Dict{Int,Vector{Float64}},
                                    neighbour_pg::Dict{Int,Vector{Float64}},
-                                   dim::Dimension, hours::UnitRange{Int}, baseMVA::Float64)
+                                   dim::Dimension, hours::UnitRange{Int}, s_base_mva::Float64)
     market = _read_hourly(joinpath(dir, "thermal_generator_market_dispatch.csv"),
                          :generator, :time_id, :market_dispatch_mw, hours)
 
@@ -180,21 +180,21 @@ function _load_thermal_generators!(U::Dict{Int,AbstractUnit}, u::Int, dir::Abstr
         pmin_mw = pg_mw .- row.rd_capacity_down
         u += 1
         U[u] = Generator(; id = u, name = row.name, node = row.node,
-                         pg   = nw_vector(dim, :time, pg_mw   ./ baseMVA),
-                         pmax = nw_vector(dim, :time, pmax_mw ./ baseMVA),
-                         pmin = nw_vector(dim, :time, pmin_mw ./ baseMVA),
-                         cost_up = row.rd_cost_up * baseMVA, cost_dn = row.rd_cost_down * baseMVA,
+                         p_set = nw_vector(dim, :time, pg_mw   ./ s_base_mva),
+                         p_max = nw_vector(dim, :time, pmax_mw ./ s_base_mva),
+                         p_min = nw_vector(dim, :time, pmin_mw ./ s_base_mva),
+                         c_up = row.rd_cost_up * s_base_mva, c_dn = row.rd_cost_down * s_base_mva,
                          ext = Dict{Symbol,Any}(:source_id => row.id))
     end
 
     return _apportion_neighbour_generation!(U, u, filter(:id => >(23), thermal_df),
-                                            net_position, neighbour_pg, dim, hours, baseMVA)
+                                            net_position, neighbour_pg, dim, hours, s_base_mva)
 end
 
 """
-    _apportion_neighbour_generation!(U, u, neighbour, net_position, neighbour_pg, dim, hours, baseMVA)
+    _apportion_neighbour_generation!(U, u, neighbour, net_position, neighbour_pg, dim, hours, s_base_mva)
 
-An *estimated* `pg` for every neighbour thermal generator, since none of them
+An *estimated* `p_set` for every neighbour thermal generator, since none of them
 carry a market dispatch: at each neighbour node `n`, the raw net position is
 clipped to what the node's generators could produce,
 
@@ -209,20 +209,20 @@ p^{\\text{g}}(g,t) = \\mathrm{clamp}\\!\\Big(P_{\\text{node}}(n,t) \\cdot
     \\frac{\\text{capacity}(g)}{\\sum_{g'} \\text{capacity}(g')},\\, 0,\\, \\text{capacity}(g)\\Big).
 ```
 
-`pmax`/`pmin` then follow this `pg` up and down by `rd_capacity_up`/`_down`
+`p_max`/`p_min` then follow this `p_set` up and down by `rd_capacity_up`/`_down`
 exactly as they do for a Belgian generator. A node whose generators carry no
 capacity at all gets `pg = 0` throughout rather than a division by zero.
 
 `P_{\\text{node}}(n,t)` is recorded into `neighbour_pg[n]`: it was *carved out
 of* `net_position[n]`, not observed independently of it, so
 [`_load_fixed_loads!`](@ref) has to subtract it back out — leaving it in would
-count the same megawatt once as this generator's `pg` and a second time as the
+count the same megawatt once as this generator's `p_set` and a second time as the
 node's fixed load.
 """
 function _apportion_neighbour_generation!(U::Dict{Int,AbstractUnit}, u::Int, neighbour::DataFrame,
                                           net_position::Dict{Int,Vector{Float64}},
                                           neighbour_pg::Dict{Int,Vector{Float64}}, dim::Dimension,
-                                          hours::UnitRange{Int}, baseMVA::Float64)
+                                          hours::UnitRange{Int}, s_base_mva::Float64)
     for grp in groupby(neighbour, :node)
         total_cap = sum(grp.capacity)
         p_node    = total_cap > 0 ? clamp.(net_position[grp.node[1]], 0.0, total_cap) :
@@ -236,10 +236,10 @@ function _apportion_neighbour_generation!(U::Dict{Int,AbstractUnit}, u::Int, nei
             pmin_mw = pg_mw .- row.rd_capacity_down
             u += 1
             U[u] = Generator(; id = u, name = row.name, node = row.node,
-                             pg   = nw_vector(dim, :time, pg_mw   ./ baseMVA),
-                             pmax = nw_vector(dim, :time, pmax_mw ./ baseMVA),
-                             pmin = nw_vector(dim, :time, pmin_mw ./ baseMVA),
-                             cost_up = row.rd_cost_up * baseMVA, cost_dn = row.rd_cost_down * baseMVA,
+                             p_set = nw_vector(dim, :time, pg_mw   ./ s_base_mva),
+                             p_max = nw_vector(dim, :time, pmax_mw ./ s_base_mva),
+                             p_min = nw_vector(dim, :time, pmin_mw ./ s_base_mva),
+                             c_up = row.rd_cost_up * s_base_mva, c_dn = row.rd_cost_down * s_base_mva,
                              ext = Dict{Symbol,Any}(:source_id => row.id))
         end
     end
@@ -252,21 +252,21 @@ end
 ################################################################################
 
 """
-    _load_storage!(U, u, dir, dim, hours, baseMVA)
+    _load_storage!(U, u, dir, dim, hours, s_base_mva)
 
 One [`Storage`](@ref) per row of `storage.csv`, appended to `U` from unit
 identifier `u`.
 
-`ps` is the hourly market schedule of `storage_market_dispatch.csv`;
-`cost_up`/`cost_dn` are hourly too, from the two `storage_redispatch_cost_*`
-tables. `charge_rating` and `discharge_rating` both take `capacity` — the data
+`p_set` is the hourly market schedule of `storage_market_dispatch.csv`;
+`c_up`/`c_dn` are hourly too, from the two `storage_redispatch_cost_*`
+tables. `p_chg_max` and `p_dch_max` both take `capacity` — the data
 carries `rd_capacity_min`/`rd_capacity_max` as well, but every row has them
-equal to `capacity`, so there is nothing more specific to read. `energy_initial`
-is set to half of `energy_capacity`: the data has no column for it, and this is
+equal to `capacity`, so there is nothing more specific to read. `e_init`
+is set to half of `e_max`: the data has no column for it, and this is
 an assumption, not a measurement.
 """
 function _load_storage!(U::Dict{Int,AbstractUnit}, u::Int, dir::AbstractString, dim::Dimension,
-                        hours::UnitRange{Int}, baseMVA::Float64)
+                        hours::UnitRange{Int}, s_base_mva::Float64)
     df   = DataFrame(CSV.File(joinpath(dir, "storage.csv")))
     ps   = _read_hourly(joinpath(dir, "storage_market_dispatch.csv"),
                         :storage, :time_id, :market_dispatch_mw, hours)
@@ -276,17 +276,17 @@ function _load_storage!(U::Dict{Int,AbstractUnit}, u::Int, dir::AbstractString, 
                         :storage, :time_id, :rd_cost_down, hours)
 
     for row in eachrow(df)
-        cap  = row.capacity / baseMVA
-        ecap = row.energy_capacity / baseMVA
+        cap  = row.capacity / s_base_mva
+        ecap = row.energy_capacity / s_base_mva
         u += 1
         U[u] = Storage(; id = u, name = row.name, node = row.node,
-                       ps = nw_vector(dim, :time, ps[row.id] ./ baseMVA),
-                       charge_rating = cap, discharge_rating = cap,
-                       charge_efficiency = row.efficiency_charge,
-                       discharge_efficiency = row.efficiency_discharge,
-                       energy_capacity = ecap, energy_initial = 0.5 * ecap,
-                       cost_up = nw_vector(dim, :time, cup[row.id] .* baseMVA),
-                       cost_dn = nw_vector(dim, :time, cdn[row.id] .* baseMVA),
+                       p_set = nw_vector(dim, :time, ps[row.id] ./ s_base_mva),
+                       p_chg_max = cap, p_dch_max = cap,
+                       η_chg = row.efficiency_charge,
+                       η_dch = row.efficiency_discharge,
+                       e_max = ecap, e_init = 0.5 * ecap,
+                       c_up = nw_vector(dim, :time, cup[row.id] .* s_base_mva),
+                       c_dn = nw_vector(dim, :time, cdn[row.id] .* s_base_mva),
                        ext = Dict{Symbol,Any}(:source_id => row.id))
     end
 
@@ -298,7 +298,7 @@ end
 ################################################################################
 
 """
-    _load_fixed_loads!(U, u, node_ids, net_position, neighbour_pg, dim, baseMVA)
+    _load_fixed_loads!(U, u, node_ids, net_position, neighbour_pg, dim, s_base_mva)
 
 One [`FixedLoad`](@ref) per node, carrying its net position net of whatever
 [`_apportion_neighbour_generation!`](@ref) already assigned to an explicit
@@ -309,18 +309,18 @@ For a Belgian node `neighbour_pg` has no entry and this is exactly `pd =
 explicitly modelled elsewhere — the thermal generators and storage units above
 — is already excluded from it (by the data), so the two are additive on the
 node balance without further adjustment. A neighbour node is different: it has
-no independent generation data, so its explicit generator's `pg` is *derived
+no independent generation data, so its explicit generator's `p_set` is *derived
 from* `net_position` rather than excluded from it, and leaving the full net
-position here as well would inject that generator's `pg` a second time.
+position here as well would inject that generator's `p_set` a second time.
 """
 function _load_fixed_loads!(U::Dict{Int,AbstractUnit}, u::Int, node_ids::Vector{Int},
                             net_position::Dict{Int,Vector{Float64}},
-                            neighbour_pg::Dict{Int,Vector{Float64}}, dim::Dimension, baseMVA::Float64)
+                            neighbour_pg::Dict{Int,Vector{Float64}}, dim::Dimension, s_base_mva::Float64)
     for i in node_ids
         u += 1
         residual = haskey(neighbour_pg, i) ? net_position[i] .- neighbour_pg[i] : net_position[i]
         U[u] = FixedLoad(; id = u, name = "net position $i", node = i,
-                         pd = nw_vector(dim, :time, (-residual) ./ baseMVA),
+                         p_set = nw_vector(dim, :time, (-residual) ./ s_base_mva),
                          ext = Dict{Symbol,Any}(:source_id => i))
     end
 
@@ -332,12 +332,12 @@ end
 ################################################################################
 
 """
-    load_network(dir; hours = 1:8760, baseMVA = 100.0, max_coupler_reactance = 1e-6) -> NetworkData
+    load_network(dir; hours = 1:8760, s_base_mva = 100.0, max_coupler_reactance = 1e-6) -> NetworkData
 
 Build a [`NetworkData`](@ref) from the LongTermSteeringPlan CSV export in
 `dir`, over the hour range `hours`.
 
-Every quantity is converted to per unit on `baseMVA`, following the convention
+Every quantity is converted to per unit on `s_base_mva`, following the convention
 `src/io/matpower.jl` uses: a power in MW is divided by it, a price per MW is
 multiplied by it. Reactances and angles in the source data are already per unit
 and radians respectively and are carried through unchanged.
@@ -355,7 +355,7 @@ The hour identifiers of `hours` are kept in `data.ext[:hour_ids]`, see
 which hours of the year it holds.
 """
 function load_network(dir::AbstractString; hours::UnitRange{Int} = 1:8760,
-                      baseMVA::Float64 = 100.0, max_coupler_reactance::Float64 = 1e-6)
+                      s_base_mva::Float64 = 100.0, max_coupler_reactance::Float64 = 1e-6)
     thermal_df = DataFrame(CSV.File(joinpath(dir, "thermal_generators.csv")))
 
     I        = _load_nodes(dir, thermal_df)
@@ -366,15 +366,15 @@ function load_network(dir::AbstractString; hours::UnitRange{Int} = 1:8760,
     neighbour_pg = Dict{Int,Vector{Float64}}()
 
     E = Dict{Int,AbstractEdge}()
-    e = _load_lines!(E, 0, dir, baseMVA, max_coupler_reactance)
-    _load_psts!(E, e, dir, baseMVA)
+    e = _load_lines!(E, 0, dir, s_base_mva, max_coupler_reactance)
+    _load_psts!(E, e, dir, s_base_mva)
 
     U = Dict{Int,AbstractUnit}()
-    u = _load_thermal_generators!(U, 0, dir, thermal_df, net_position, neighbour_pg, dim, hours, baseMVA)
-    u = _load_storage!(U, u, dir, dim, hours, baseMVA)
-    _load_fixed_loads!(U, u, node_ids, net_position, neighbour_pg, dim, baseMVA)
+    u = _load_thermal_generators!(U, 0, dir, thermal_df, net_position, neighbour_pg, dim, hours, s_base_mva)
+    u = _load_storage!(U, u, dir, dim, hours, s_base_mva)
+    _load_fixed_loads!(U, u, node_ids, net_position, neighbour_pg, dim, s_base_mva)
 
-    return NetworkData(Network(I, E, U; dim); name = "steering_plan", baseMVA,
+    return NetworkData(Network(I, E, U; dim); name = "steering_plan", s_base_mva,
                        ext = Dict{Symbol,Any}(:hour_ids => collect(hours)))
 end
 
@@ -425,7 +425,7 @@ function select_hours(data::NetworkData, hours::AbstractVector{Int})
     ext = deepcopy(cut.ext)
     ext[:hour_ids] = collect(Int, hours)
 
-    return NetworkData(network(cut); name = cut.name, baseMVA = baseMVA(cut), ext)
+    return NetworkData(network(cut); name = cut.name, s_base_mva = s_base_mva(cut), ext)
 end
 
 ################################################################################
@@ -474,8 +474,8 @@ _fields(c::T) where {T} = NamedTuple{fieldnames(T)}(map(f -> getfield(c, f), fie
 """
     freeze_dispatch(data, result; positions = 1:dim_length(data, :time)) -> NetworkData
 
-`data` with every [`Generator`](@ref)'s `pg`, every [`Storage`](@ref)'s `ps` and
-the `ta` of every phase-shifting winding of a [`Transformer`](@ref) replaced by
+`data` with every [`Generator`](@ref)'s `p_set`, every [`Storage`](@ref)'s `p_set` and
+the `t_angl` of every phase-shifting winding of a [`Transformer`](@ref) replaced by
 their solved values in `result`.
 
 `positions[i]` is the position along `:time` in `data` of the `i`-th hour
@@ -494,17 +494,17 @@ assumption holds for any `result` this pipeline produces.
 
 A [`Storage`](@ref) unit that was out of service throughout `result` (e.g.
 [`exclude_all_storage!`](@ref) applied before it was solved) keeps its own
-pre-freeze `ps` instead — **not** `0`: `ids`/`topology` drop an out-of-service
+pre-freeze `p_set` instead — **not** `0`: `ids`/`topology` drop an out-of-service
 component from its network index entirely, so `result`'s solution carries no
 `"unit"` entry at all for it, but that is silence about what the *model* did
 with it, not evidence the unit itself injected nothing. `data`'s own fixed
-loads (`FixedLoad.pd`, untouched here) were built from net positions that
+loads (`FixedLoad.p_set`, untouched here) were built from net positions that
 already price in whatever this unit's original schedule was (see
-[`load_network`](@ref)); zeroing `ps` here without adjusting `pd` to match
+[`load_network`](@ref)); zeroing the storage's `p_set` here without adjusting the load's `p_set` to match
 would silently erase that MW from the balance instead of leaving it for a
 later [`exclude_all_storage!`](@ref) to fold in correctly. This was exactly the
 bug behind step 3's hour-1 INFEASIBLE: with storage excluded from step 2,
-`result` had no solution for any storage unit, `ps` collapsed to `0`
+`result` had no solution for any storage unit, `p_set` collapsed to `0`
 system-wide, and every node's fixed load stayed calibrated against the
 original non-zero dispatch — a raw imbalance equal to the network's *entire*
 excluded storage fleet at that hour, restated as apparently having nowhere
@@ -517,30 +517,30 @@ function freeze_dispatch(data::NetworkData, result::Dict{String,Any};
     return set_dimension(data, dim; apply! = function (net, _)
         for (u, c) in net.unit
             if c isa Generator
-                pg = nw_values(dim, c.pg)
+                pg = nw_values(dim, c.p_set)
                 for (i, t) in enumerate(positions)
                     pg[t] = nw_solution(result, i)["unit"]["$u"]["p_gen"]
                 end
-                net.unit[u] = Generator(; _fields(c)..., pg = nw_vector(dim, :time, pg))
+                net.unit[u] = Generator(; _fields(c)..., p_set = nw_vector(dim, :time, pg))
             elseif c isa Storage
-                ps = nw_values(dim, c.ps)
+                ps = nw_values(dim, c.p_set)
                 for (i, t) in enumerate(positions)
                     sol = nw_solution(result, i)["unit"]
                     haskey(sol, "$u") && (ps[t] = sol["$u"]["p_dch"] - sol["$u"]["p_chg"])
                 end
-                net.unit[u] = Storage(; _fields(c)..., ps = nw_vector(dim, :time, ps))
+                net.unit[u] = Storage(; _fields(c)..., p_set = nw_vector(dim, :time, ps))
             end
         end
         for (e, c) in net.edge
             c isa Transformer && any(!=(FIXED), c.pst) || continue
-            ta = [copy(w) for w in nw_values(dim, c.ta)]
+            ta = [copy(w) for w in nw_values(dim, c.t_angl)]
             for (i, t) in enumerate(positions)
                 terminal = nw_solution(result, i)["edge"]["$e"]["terminal"]
                 for k in findall(!=(FIXED), c.pst)
                     ta[t][k] = terminal["$k"]["tap"]["t_angl"]
                 end
             end
-            net.edge[e] = Transformer(; _fields(c)..., ta = nw_vector(dim, :time, ta))
+            net.edge[e] = Transformer(; _fields(c)..., t_angl = nw_vector(dim, :time, ta))
         end
     end)
 end
@@ -553,14 +553,14 @@ end
     exclude_all_storage!(data) -> NetworkData
 
 `data` with every [`Storage`](@ref) unit taken out of service (`status =
-false`) and its frozen `ps` folded into its node's [`FixedLoad`](@ref) (`pd -=
-ps`), so the node's net injection is unchanged — unconditionally, every
+false`) and its frozen `p_set` folded into its node's [`FixedLoad`](@ref) (the load's
+`p_set` is reduced by the storage's), so the node's net injection is unchanged — unconditionally, every
 storage unit, BE and neighbour alike, with no country or size exception.
 
 This pipeline used to carve out a handful of large-scale ITM batteries as a
 genuine redispatch resource. That exemption was removed once a week-scale run
 diagnosed storage state-of-charge depletion under the rolling horizon (98% of
-units down to <1% SoC by hour ~105, given the `energy_initial = 50%`
+units down to <1% SoC by hour ~105, given the `e_init = 50%`
 assumption with no re-anchoring — see the retired `run_three_step_redispatch.jl` in git history): storage
 cannot be trusted as a redispatch resource anywhere in this pipeline, so it is
 excluded everywhere it appears, step 2 included. Capping its ratings at
@@ -584,7 +584,7 @@ function exclude_all_storage!(data::NetworkData)
 
     for (u, c) in U
         c isa Storage || continue
-        ps = nw_values(dim, c.ps)
+        ps = nw_values(dim, c.p_set)
         frozen_ps[c.node] = get(frozen_ps, c.node, zeros(length(ps))) .+ ps
         U[u] = Storage(; _fields(c)..., status = false)
     end
@@ -592,13 +592,13 @@ function exclude_all_storage!(data::NetworkData)
     for (u, c) in U
         c isa FixedLoad || continue
         haskey(frozen_ps, c.node) || continue
-        pd = nw_values(dim, c.pd) .- frozen_ps[c.node]
-        U[u] = FixedLoad(; _fields(c)..., pd = nw_vector(dim, pd))
+        pd = nw_values(dim, c.p_set) .- frozen_ps[c.node]
+        U[u] = FixedLoad(; _fields(c)..., p_set = nw_vector(dim, pd))
     end
 
     net = Network(I, E, U; dim, ext = deepcopy(net.ext))
 
-    return NetworkData(net; name = data.name, baseMVA = baseMVA(data), ext = deepcopy(data.ext))
+    return NetworkData(net; name = data.name, s_base_mva = s_base_mva(data), ext = deepcopy(data.ext))
 end
 
 """
@@ -606,9 +606,9 @@ end
 
 `data` prepared for a redispatch confined to Belgium:
 
-- a non-BE [`Generator`](@ref) is pinned at its current `pg` (`pmin = pmax = pg`);
+- a non-BE [`Generator`](@ref) is pinned at its current `p_set` (`p_min = p_max = pg`);
 - a non-BE [`Transformer`](@ref) that can move a winding is pinned at its current
-  `ta` and `tm` (`ta_min = ta_max = ta`, `tm_min = tm_max = tm`);
+  `t_angl` and `t_magn` (`t_angl_min = t_angl_max = t_angl`, `t_magn_min = t_magn_max = t_magn`);
 - every [`Storage`](@ref) unit, Belgian included, not just outside it, is
   excluded via [`exclude_all_storage!`](@ref) — with no exemption; unlike
   `Generator`/`Transformer` above, storage is dropped as a *redispatch
@@ -627,19 +627,19 @@ function restrict_to_belgium!(data::NetworkData)
 
     for (u, c) in U
         c isa Generator && country(data, c.node) != "BE" || continue
-        U[u] = Generator(; _fields(c)..., pmin = c.pg, pmax = c.pg)
+        U[u] = Generator(; _fields(c)..., p_min = c.p_set, p_max = c.p_set)
     end
 
     for (e, c) in E
         c isa Transformer && (any(!=(FIXED), c.oltc) || any(!=(FIXED), c.pst)) || continue
         i, j = terminals(c)
         country(data, i) == "BE" && country(data, j) == "BE" && continue
-        E[e] = Transformer(; _fields(c)..., ta_min = c.ta, ta_max = c.ta,
-                           tm_min = c.tm, tm_max = c.tm)
+        E[e] = Transformer(; _fields(c)..., t_angl_min = c.t_angl, t_angl_max = c.t_angl,
+                           t_magn_min = c.t_magn, t_magn_max = c.t_magn)
     end
 
     net  = Network(I, E, U; dim, ext = deepcopy(net.ext))
-    data = NetworkData(net; name = data.name, baseMVA = baseMVA(data), ext = deepcopy(data.ext))
+    data = NetworkData(net; name = data.name, s_base_mva = s_base_mva(data), ext = deepcopy(data.ext))
 
     return exclude_all_storage!(data)
 end
@@ -664,13 +664,13 @@ Every node already carries exactly one [`FixedLoad`](@ref) (see
 a `FixedLoad`" are the same set here; this adds one wherever `country(data, ·)
 == "BE"`.
 
-`pmax` is that node's own `pd` at each hour, clamped at 0 — a net-exporting
-node (`pd < 0`) has no demand there to shed. `pmin = pg = 0`, so `pgdn`'s own
-upper bound (`pg - pmin = 0`) pins the downward volume at zero regardless of
+`p_max` is that node's own `p_set` at each hour, clamped at 0 — a net-exporting
+node (`p_set < 0`) has no demand there to shed. `p_min = p_set = 0`, so `p_gen_dn`'s own
+upper bound (`p_set - p_min = 0`) pins the downward volume at zero regardless of
 price: this is one-directional shedding, not curtailment, because the
 infeasibility it targets is a shortfall, not a surplus (see the step 3 section of the retired
 `run_three_step_redispatch.jl` in git history for how that was checked).
-`cost_dn = 0` reflects that the downward direction is inert, not priced.
+`c_dn = 0` reflects that the downward direction is inert, not priced.
 
 The new ids continue after the highest one already in use, and are recorded in
 `data.ext[:load_shedding_ids]` (see [`load_shedding_ids`](@ref)) so the caller
@@ -678,7 +678,7 @@ can mark them `:corrective` in a [`Redispatch`](@ref)'s `exception` without
 having to know the scheme.
 
 Call this after [`freeze_dispatch`](@ref)/[`restrict_to_belgium!`](@ref) and
-before [`with_contingencies`](@ref): the new generators' `pmax` is built as a
+before [`with_contingencies`](@ref): the new generators' `p_max` is built as a
 `:time`-only [`NetworkVector`](@ref), and `with_contingencies` is what spreads
 every component's `:time` profile over the added `:contingency` dimension —
 exactly as it already does for every pre-existing unit.
@@ -694,11 +694,11 @@ function add_load_shedding!(data::NetworkData; price::Float64)
     for (_, c) in units(net)
         c isa FixedLoad && country(data, c.node) == "BE" || continue
 
-        pmax = nw_vector(dim, max.(nw_values(dim, c.pd), 0.0))
+        pmax = nw_vector(dim, max.(nw_values(dim, c.p_set), 0.0))
         next_id += 1
         U[next_id] = Generator(; id = next_id, name = "load shedding node $(c.node)",
-                               node = c.node, pg = 0.0, pmin = 0.0, pmax = pmax,
-                               cost_up = price, cost_dn = 0.0,
+                               node = c.node, p_set = 0.0, p_min = 0.0, p_max = pmax,
+                               c_up = price, c_dn = 0.0,
                                ext = Dict{Symbol,Any}(:load_shedding => true))
         push!(shed_ids, next_id)
     end
@@ -707,7 +707,7 @@ function add_load_shedding!(data::NetworkData; price::Float64)
     ext = deepcopy(data.ext)
     ext[:load_shedding_ids] = sort!(shed_ids)
 
-    return NetworkData(net; name = data.name, baseMVA = baseMVA(data), ext)
+    return NetworkData(net; name = data.name, s_base_mva = s_base_mva(data), ext)
 end
 
 "the identifiers of the synthetic load-shedding generators [`add_load_shedding!`](@ref) added to `data`, or `Int[]` if it has not been called"
@@ -731,29 +731,29 @@ A generator with a negative lower bound already withdraws as well as injects —
 see the note on [`AbstractStorage`](@ref) in `docs/src/components/storage.md`,
 which is what a [`Storage`](@ref) is deliberately *not* just this — so this
 needs no new component type, only the mirror image of the load-shedding
-bounds: `pg = 0` and `pmax = 0` pin the *upward* volume `pgup` at zero (`pmax -
+bounds: `pg = 0` and `p_max = 0` pin the *upward* volume `pgup` at zero (`p_max -
 pg = 0`), the same way load shedding pins `pgdn` at zero, so this is
-one-directional spillage, not generation. `pmin` is negative, so `pgdn` — the
-withdrawal volume — is what moves, and is what `cost_dn = price` prices;
-`cost_up = 0` reflects that the upward direction is inert, exactly mirroring
-load shedding's `cost_dn = 0`.
+one-directional spillage, not generation. `p_min` is negative, so `pgdn` — the
+withdrawal volume — is what moves, and is what `c_dn = price` prices;
+`c_up = 0` reflects that the upward direction is inert, exactly mirroring
+load shedding's `c_dn = 0`.
 
-`pmin` is that node's own `pd` at each hour, clamped at 0 from above: `pd < 0`
+`p_min` is that node's own `p_set` at each hour, clamped at 0 from above: `p_set < 0`
 is exactly how [`_load_fixed_loads!`](@ref) already records a node whose
-market-cleared generation exceeds its consumption (a net exporter), so `-pd`
-is the surplus already implied by the data, and a net-importing node (`pd >
+market-cleared generation exceeds its consumption (a net exporter), so `-p_set`
+is the surplus already implied by the data, and a net-importing node (`p_set >
 0`) has no surplus there to spill.
 
 The new ids continue after the highest one already in use — including any
 [`add_load_shedding!`](@ref) generators already added, since that function
-never touches `pd` and neither does this one, so the two may be called in
+never touches `p_set` and neither does this one, so the two may be called in
 either order — and are recorded in `data.ext[:spillage_ids]` (see
 [`spillage_ids`](@ref)) so the caller can mark them `:corrective` in a
 [`Redispatch`](@ref)'s `exception`, the same reasoning as for load shedding.
 
 Call this after [`freeze_dispatch`](@ref)/[`restrict_to_belgium!`](@ref) and
 before [`with_contingencies`](@ref), for the same reason as
-[`add_load_shedding!`](@ref): the new generators' `pmin` is a `:time`-only
+[`add_load_shedding!`](@ref): the new generators' `p_min` is a `:time`-only
 [`NetworkVector`](@ref) that `with_contingencies` still needs to spread over
 the added `:contingency` dimension.
 """
@@ -768,11 +768,11 @@ function add_spillage!(data::NetworkData; price::Float64)
     for (_, c) in units(net)
         c isa FixedLoad && country(data, c.node) == "BE" || continue
 
-        pmin = nw_vector(dim, min.(nw_values(dim, c.pd), 0.0))
+        pmin = nw_vector(dim, min.(nw_values(dim, c.p_set), 0.0))
         next_id += 1
         U[next_id] = Generator(; id = next_id, name = "spillage node $(c.node)",
-                               node = c.node, pg = 0.0, pmin = pmin, pmax = 0.0,
-                               cost_up = 0.0, cost_dn = price,
+                               node = c.node, p_set = 0.0, p_min = pmin, p_max = 0.0,
+                               c_up = 0.0, c_dn = price,
                                ext = Dict{Symbol,Any}(:spillage => true))
         push!(spill_ids, next_id)
     end
@@ -781,7 +781,7 @@ function add_spillage!(data::NetworkData; price::Float64)
     ext = deepcopy(data.ext)
     ext[:spillage_ids] = sort!(spill_ids)
 
-    return NetworkData(net; name = data.name, baseMVA = baseMVA(data), ext)
+    return NetworkData(net; name = data.name, s_base_mva = s_base_mva(data), ext)
 end
 
 "the identifiers of the synthetic spillage generators [`add_spillage!`](@ref) added to `data`, or `Int[]` if it has not been called"

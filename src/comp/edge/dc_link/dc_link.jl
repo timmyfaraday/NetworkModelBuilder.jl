@@ -11,6 +11,7 @@
 # v0.12.0 - names the transformer, not the phase shifter                       #
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 export AbstractDCLink, DCLink, transfer_loss, transfer_limits
@@ -42,8 +43,8 @@ Two consequences follow, and both are the reason such a link is built:
   vanish at all, so they are modelled here even though the rest of the
   linearized model is lossless.
 
-A concrete DC link carries `id`, `name`, `terminals` (exactly two), `rate_a`,
-`loss_fixed`, `loss_prop`, `reverse`, `pdc`, `cost`, `status` and `ext`.
+A concrete DC link carries `id`, `name`, `terminals` (exactly two), `s_max`,
+`p_loss_fix`, `p_loss_prop`, `reverse`, `p_set`, `c`, `status` and `ext`.
 """
 abstract type AbstractDCLink <: AbstractEdge end
 
@@ -57,21 +58,21 @@ back, at a flow the problem chooses.
 - `id`, `name`: the identifier and a human readable label.
 - `terminals`: `[i, j]`, the from and to node. The flow is positive from `i` to
   `j`.
-- `rate_a`: the transfer rating [pu], `Inf` when unlimited. Unlike the rating of
+- `s_max`: the transfer rating [pu], `Inf` when unlimited. Unlike the rating of
   a branch this is an equipment limit rather than a congestion limit — a
   converter cannot transfer more than it is built for — so it is enforced
   whatever the problem watches, and it is not something an
   [`OverloadPrice`](@ref) can relax.
-- `loss_fixed`, `loss_prop`: the loss the link takes as `loss_fixed +
-  loss_prop · t`, with `t` the power **sent** into it [pu], from whichever end
-  is sending. `loss_fixed` is the no-load loss of the stations, which an
-  energized link takes whether it carries anything or not; `loss_prop` is the
+- `p_loss_fix`, `p_loss_prop`: the loss the link takes as `p_loss_fix +
+  p_loss_prop · t`, with `t` the power **sent** into it [pu], from whichever end
+  is sending. `p_loss_fix` is the no-load loss of the stations, which an
+  energized link takes whether it carries anything or not; `p_loss_prop` is the
   part proportional to the transfer, and must be below one.
 - `reverse`: whether the link may carry power from `j` to `i` as well.
-- `pdc`: the market schedule, i.e., the transfer the link is set to before the
+- `p_set`: the market schedule, i.e., the transfer the link is set to before the
   problem is asked [pu]. A load flow holds it here; a redispatch prices the
   moves away from it.
-- `cost`: the price of moving one per unit away from `pdc`, in either direction
+- `c`: the price of moving one per unit away from `p_set`, in either direction
   [currency/pu/h]. Zero — the default — makes the link a **non-costly** measure,
   free to move, like a winding of a [`Transformer`](@ref) that can move.
 - `status`: whether the link is in service.
@@ -84,10 +85,10 @@ and so does not vary over the network index; take a link out of service through
 
 # Examples
 ```julia
-julia> DCLink(; id = 1, terminals = [2, 7], rate_a = 10.0)
+julia> DCLink(; id = 1, terminals = [2, 7], s_max = 10.0)
 
-julia> DCLink(; id = 1, terminals = [2, 7], rate_a = 10.0,
-                loss_fixed = 0.01, loss_prop = 0.02, reverse = false)
+julia> DCLink(; id = 1, terminals = [2, 7], s_max = 10.0,
+                p_loss_fix = 0.01, p_loss_prop = 0.02, reverse = false)
 ```
 
 !!! note "One link, not two stations"
@@ -99,37 +100,37 @@ julia> DCLink(; id = 1, terminals = [2, 7], rate_a = 10.0,
     model — see the manual for what is given up.
 """
 Base.@kwdef struct DCLink <: AbstractDCLink
-    id        ::Int
-    name      ::String                   = ""
-    terminals ::Vector{Int}
-    rate_a    ::NetworkQuantity{Float64} = Inf
-    loss_fixed::NetworkQuantity{Float64} = 0.0
-    loss_prop ::NetworkQuantity{Float64} = 0.0
-    reverse   ::Bool                     = true
-    pdc       ::NetworkQuantity{Float64} = 0.0
-    cost      ::NetworkQuantity{Float64} = 0.0
-    status    ::NetworkQuantity{Bool}    = true
-    ext       ::Dict{Symbol,Any}         = Dict{Symbol,Any}()
+    id         ::Int
+    name       ::String                   = ""
+    terminals  ::Vector{Int}
+    s_max      ::NetworkQuantity{Float64} = Inf
+    p_loss_fix ::NetworkQuantity{Float64} = 0.0
+    p_loss_prop::NetworkQuantity{Float64} = 0.0
+    reverse    ::Bool                     = true
+    p_set      ::NetworkQuantity{Float64} = 0.0
+    c          ::NetworkQuantity{Float64} = 0.0
+    status     ::NetworkQuantity{Bool}    = true
+    ext        ::Dict{Symbol,Any}         = Dict{Symbol,Any}()
 
-    function DCLink(id, name, terminals, rate_a, loss_fixed, loss_prop, reverse,
-                    pdc, cost, status, ext)
+    function DCLink(id, name, terminals, s_max, p_loss_fix, p_loss_prop, reverse,
+                    p_set, c, status, ext)
         length(terminals) == 2 ||
             throw(ArgumentError("dc link $id has $(length(terminals)) terminals, a dc link has exactly two"))
-        all_nw(>=(0), rate_a) ||
+        all_nw(>=(0), s_max) ||
             throw(ArgumentError("dc link $id has a negative rating"))
-        all_nw(>=(0), loss_fixed) ||
+        all_nw(>=(0), p_loss_fix) ||
             throw(ArgumentError("dc link $id has a negative fixed loss"))
-        all_nw(x -> 0 <= x < 1, loss_prop) ||
+        all_nw(x -> 0 <= x < 1, p_loss_prop) ||
             throw(ArgumentError("dc link $id has a proportional loss outside [0, 1)"))
-        all_nw(>=(0), cost) ||
+        all_nw(>=(0), c) ||
             throw(ArgumentError("dc link $id has a negative cost, which pays the problem to move it"))
-        all_nw((p, r) -> abs(p) <= r, pdc, rate_a) ||
+        all_nw((p, r) -> abs(p) <= r, p_set, s_max) ||
             throw(ArgumentError("dc link $id has a market schedule beyond its rating"))
-        reverse || all_nw(>=(0), pdc) ||
+        reverse || all_nw(>=(0), p_set) ||
             throw(ArgumentError("dc link $id carries one way but has a market schedule against it"))
 
-        return new(id, name, terminals, rate_a, loss_fixed, loss_prop, reverse,
-                   pdc, cost, status, ext)
+        return new(id, name, terminals, s_max, p_loss_fix, p_loss_prop, reverse,
+                   p_set, c, status, ext)
     end
 end
 
@@ -143,10 +144,10 @@ writes the transfer variable its proportional loss is charged on only where
 there is such a loss. Both therefore decide the shape of its model rather than a
 number in it, see [`structure_gates`](@ref).
 """
-structure_gates(::AbstractDCLink) = (:rate_a, :loss_prop)
+structure_gates(::AbstractDCLink) = (:s_max, :p_loss_prop)
 
 "the loss a dc link takes when `t` is sent into it, resolved at one network index"
-transfer_loss(dl::AbstractDCLink, t) = dl.loss_fixed + dl.loss_prop * t
+transfer_loss(dl::AbstractDCLink, t) = dl.p_loss_fix + dl.p_loss_prop * t
 
 """
     transfer_limits(dl)
@@ -159,10 +160,10 @@ Not quite the rating, which caps what each end *sends*, see
 end put out, so this is a range the flow certainly lies in rather than the
 tightest one. That is all the redispatch volumes need it for.
 """
-transfer_limits(dl::AbstractDCLink) = (dl.reverse ? -dl.rate_a : 0.0, dl.rate_a)
+transfer_limits(dl::AbstractDCLink) = (dl.reverse ? -dl.s_max : 0.0, dl.s_max)
 
 "whether the loss of a dc link depends on what it transfers"
-_has_transfer_loss(dl::AbstractDCLink) = !iszero(dl.loss_prop)
+_has_transfer_loss(dl::AbstractDCLink) = !iszero(dl.p_loss_prop)
 
 ################################################################################
 # DC link — variables                                                          #
@@ -174,7 +175,7 @@ _has_transfer_loss(dl::AbstractDCLink) = !iszero(dl.loss_prop)
 The transfer of every in-service DC link whose loss depends on it.
 
 The flow of a link is the terminal power it already has as an edge, so no
-variable is needed to hold it. What is needed, and only where `loss_prop` is
+variable is needed to hold it. What is needed, and only where `p_loss_prop` is
 non-zero, is the **transfer** `t`: the magnitude of that flow, which the loss is
 charged on. It is bounded below by the flow in each direction, so it is at least
 the magnitude, and the loss equality then pushes it down onto it — see
@@ -218,8 +219,8 @@ function _variable_dc_link!(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:Abst
         dl = edge(nm, e; nw)::T
         _has_transfer_loss(dl) || continue
 
-        variable!(nm, :p_dcl_thru, e; nw, start = abs(dl.pdc),
-                  lower = 0.0, upper = dl.rate_a)
+        variable!(nm, :p_dcl_thru, e; nw, start = abs(dl.p_set),
+                  lower = 0.0, upper = dl.s_max)
     end
 
     return nothing
@@ -248,9 +249,9 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default
         down, up   = transfer_limits(dl)
 
         variable!(nm, :p_dcl_up, e; nw, start = 0.0,
-                  lower = 0.0, upper = isfinite(up) ? max(up - dl.pdc, 0.0) : nothing)
+                  lower = 0.0, upper = isfinite(up) ? max(up - dl.p_set, 0.0) : nothing)
         variable!(nm, :p_dcl_dn, e; nw, start = 0.0,
-                  lower = 0.0, upper = isfinite(down) ? max(dl.pdc - down, 0.0) : nothing)
+                  lower = 0.0, upper = isfinite(down) ? max(dl.p_set - down, 0.0) : nothing)
     end
 
     return nothing
@@ -310,7 +311,7 @@ variable is not something a linear program can be told; together they are the
 convex hull of the two directions, and the loss equality is what closes it. A
 larger `t_e` is a larger loss, a larger loss needs more generation, and
 generation is what the objective pays for, so the relaxation is tight wherever
-dissipating power costs something. Where `loss_prop` is zero there is no `t_e`
+dissipating power costs something. Where `p_loss_prop` is zero there is no `t_e`
 and no relaxation to be tight, and a power flow, which has no objective at all,
 takes neither — see [`variable_edge`](@ref).
 
@@ -340,7 +341,7 @@ The physics of every in-service DC link, and its flow held at the market
 schedule it carries.
 
 A power flow chooses nothing: a DC link is a setpoint there, the way a generator
-is held at its `pg`, and the transfer is `pdc` whatever the rest of the network
+is held at its `p_set`, and the transfer is `p_set` whatever the rest of the network
 does. Both the flow and the loss are therefore read off the data, with no
 transfer variable and no relaxation between them.
 """
@@ -355,11 +356,11 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
         dl         = edge(nm, e; nw)::T
         a_fr, a_to = edge_arcs(nm, e; nw)
 
-        # the transfer is `pdc` and the loss follows from it, both data
+        # the transfer is `p_set` and the loss follows from it, both data
         link[e] = (constrain!(nm, :dc_link, (e, :setpoint),
-                              JuMP.@build_constraint(p_term[a_fr] == dl.pdc); nw),
+                              JuMP.@build_constraint(p_term[a_fr] == dl.p_set); nw),
                    constrain!(nm, :dc_link, (e, :loss), JuMP.@build_constraint(
-                       p_term[a_fr] + p_term[a_to] == transfer_loss(dl, abs(dl.pdc))); nw))
+                       p_term[a_fr] + p_term[a_to] == transfer_loss(dl, abs(dl.p_set))); nw))
     end
 
     return nothing
@@ -376,7 +377,7 @@ function _constraint_dc_link!(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:Ab
 
         if !_has_transfer_loss(dl)
             link[e] = (constrain!(nm, :dc_link, (e, :loss), JuMP.@build_constraint(
-                           p_term[a_fr] + p_term[a_to] == dl.loss_fixed); nw),)
+                           p_term[a_fr] + p_term[a_to] == dl.p_loss_fix); nw),)
             continue
         end
 
@@ -431,7 +432,7 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_i
     for e in ids(nm, T; nw)
         dl         = edge(nm, e; nw)::T
         a_fr, a_to = edge_arcs(nm, e; nw)
-        caps       = (a_fr => dl.rate_a, a_to => dl.reverse ? dl.rate_a : 0.0)
+        caps       = (a_fr => dl.s_max, a_to => dl.reverse ? dl.s_max : 0.0)
 
         limits[e] = Tuple(constrain!(nm, :dc_link_limits, (e, a.terminal),
                                      JuMP.@build_constraint(p_term[a] <= cap); nw)
@@ -471,7 +472,7 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
         a_fr, _ = edge_arcs(nm, e; nw)
 
         split[e] = constrain!(nm, :dc_link_redispatch, e, JuMP.@build_constraint(
-                       p_term[a_fr] == dl.pdc + p_dcl_up[e] - p_dcl_dn[e]); nw)
+                       p_term[a_fr] == dl.p_set + p_dcl_up[e] - p_dcl_dn[e]); nw)
     end
 
     return nothing
@@ -488,7 +489,7 @@ What moving DC link `e` away from its market schedule costs at network index
 `nw`, `c_{e} (p^{\\uparrow}_{e} + p^{\\downarrow}_{e})`.
 
 One price for both directions: a link is symmetric equipment, and moving it
-either way is the same intervention. A link whose `cost` is zero has no cost
+either way is the same intervention. A link whose `c` is zero has no cost
 here and is a **non-costly** measure, taken before anything that is priced —
 which is usually the right model of a link the operator already controls.
 """
@@ -496,7 +497,7 @@ function redispatch_cost(nm::NetworkModel, ::Type{T}, e::Int; nw::Int) where {T<
     dl = edge(nm, e; nw)::T
 
     return JuMP.@expression(nm.model,
-        dl.cost * (var(nm, :p_dcl_up, e; nw) + var(nm, :p_dcl_dn, e; nw)))
+        dl.c * (var(nm, :p_dcl_up, e; nw) + var(nm, :p_dcl_dn, e; nw)))
 end
 
 "a preventive dc link holds one transfer across every contingency"
@@ -520,7 +521,7 @@ function solution_edge!(entry::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T
     entry["p_loss"] = p_fr + p_to
 
     if haskey(var(nm; nw), :p_dcl_up) && haskey(var(nm, :p_dcl_up; nw), e)
-        entry["p_dcl_mkt"] = edge(nm, e; nw).pdc
+        entry["p_dcl_mkt"] = edge(nm, e; nw).p_set
         entry["p_dcl_up"]      = JuMP.value(var(nm, :p_dcl_up, e; nw))
         entry["p_dcl_dn"]      = JuMP.value(var(nm, :p_dcl_dn, e; nw))
     end

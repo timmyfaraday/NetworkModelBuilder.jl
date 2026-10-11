@@ -109,5 +109,5 @@ status
 component_id
 network
 dimension
-baseMVA
+s_base_mva
 ```

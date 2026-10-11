@@ -10,6 +10,7 @@
 # v0.2.0 - network dependent data stored per component                         #
 # v0.12.0 - a transformer has an entry per winding                             #
 # v0.13.0 - the impedance and the shunt of a branch are per terminal           #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 @testset "network" begin
@@ -46,8 +47,8 @@
         tf = edge(net, 8)::Transformer      # branch 8 of case14 has a turns ratio
         E  = Dict{Int,AbstractEdge}(net.edge)
         E[8] = Transformer(; id = tf.id, name = tf.name, terminals = tf.terminals,
-                           r = tf.r, x = tf.x, g_sh = tf.g_sh, b_sh = tf.b_sh,
-                           tm = tf.tm, ta = tf.ta, status = false)
+                           r = tf.r, x = tf.x, g_shnt = tf.g_shnt, b_shnt = tf.b_shnt,
+                           t_magn = tf.t_magn, t_angl = tf.t_angl, status = false)
         out = Network(net.node, E, net.unit)
 
         @test !is_active(edge(out, 8))
@@ -66,11 +67,11 @@
         @test_throws ArgumentError Network(I, E, U)
 
         E = Dict{Int,AbstractEdge}()
-        U = Dict{Int,AbstractUnit}(1 => FixedLoad(; id = 1, node = 9, pd = 0.1))
+        U = Dict{Int,AbstractUnit}(1 => FixedLoad(; id = 1, node = 9, p_set = 0.1))
         @test_throws ArgumentError Network(I, E, U)
 
         @test_throws ArgumentError Branch(; id = 1, terminals = [1, 2, 3], r = 0.1, x = 1.0)
-        @test_throws ArgumentError Transformer(; id = 1, terminals = [1, 2], r = 0.1, x = 1.0, tm = 0.0)
+        @test_throws ArgumentError Transformer(; id = 1, terminals = [1, 2], r = 0.1, x = 1.0, t_magn = 0.0)
     end
 
     @testset "component interface" begin
@@ -83,7 +84,7 @@
         @test impedance(br) == ([0.1, 0.0], [1.0, 0.0])
         @test shunt_admittance(br) == ([0.0, 0.0], [0.0, 0.0])
 
-        g = Generator(; id = 4, node = 7, pg = 1.0)
+        g = Generator(; id = 4, node = 7, p_set = 1.0)
         @test node(g) == 7
         @test component_id(g) == 4
     end

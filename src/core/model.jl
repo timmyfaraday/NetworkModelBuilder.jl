@@ -15,6 +15,7 @@
 # v0.12.9 - the constraints a model registered are a field, not a key of ext   #
 # v0.14.0 - set_string_name leaves the variables of a model unnamed            #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 ################################################################################
@@ -111,7 +112,7 @@ nw_ids(nm::NetworkModel; kwargs...) = isempty(kwargs) ? nm.nws : nw_ids(nm.data;
 nw_id_default(nm::NetworkModel) = first(nm.nws)
 
 "the system power base, in MVA"
-baseMVA(nm::NetworkModel) = nm.data.baseMVA
+s_base_mva(nm::NetworkModel) = nm.data.s_base_mva
 
 for f in (:dim_names, :has_dim, :dim_position, :coordinates, :dim_prop, :dim_meta,
           :similar_ids, :similar_id, :first_id, :last_id, :is_first_id, :is_last_id,

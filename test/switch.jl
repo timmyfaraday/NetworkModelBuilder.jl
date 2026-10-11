@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.11.0 - the switch test                                                    #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 # What a switch is, before any model is built from one: the data it takes and
@@ -22,13 +23,13 @@
         @test sw isa AbstractEdge
         @test sw.lock === LOCKED
         @test sw.position == 1
-        @test isinf(sw.rate_a)
-        @test sw.angmin == -Float64(pi) && sw.angmax == Float64(pi)
+        @test isinf(sw.s_max)
+        @test sw.v_angl_min == -Float64(pi) && sw.v_angl_max == Float64(pi)
         @test is_active(sw)
         @test Switch in edge_types()
 
-        free = Switch(; id = 2, terminals = [3, 4], lock = FREE, position = 0, rate_a = 2.0)
-        @test free.lock === FREE && free.position == 0 && free.rate_a == 2.0
+        free = Switch(; id = 2, terminals = [3, 4], lock = FREE, position = 0, s_max = 2.0)
+        @test free.lock === FREE && free.position == 0 && free.s_max == 2.0
     end
 
     @testset "it says what it refuses" begin
@@ -38,9 +39,9 @@
         @test_throws ArgumentError Switch(; id = 1, terminals = [1, 2, 3])
         @test_throws ArgumentError Switch(; id = 1, terminals = two, position = 2)
         @test_throws ArgumentError Switch(; id = 1, terminals = two, position = -1)
-        @test_throws ArgumentError Switch(; id = 1, terminals = two, rate_a = -1.0)
-        @test_throws ArgumentError Switch(; id = 1, terminals = two, angmin = 0.1)
-        @test_throws ArgumentError Switch(; id = 1, terminals = two, angmax = -0.1)
+        @test_throws ArgumentError Switch(; id = 1, terminals = two, s_max = -1.0)
+        @test_throws ArgumentError Switch(; id = 1, terminals = two, v_angl_min = 0.1)
+        @test_throws ArgumentError Switch(; id = 1, terminals = two, v_angl_max = -0.1)
 
         err = try Switch(; id = 7, terminals = [1, 2, 3]) catch e e end
         @test occursin("switch 7", err.msg) && occursin("exactly two", err.msg)
@@ -55,7 +56,7 @@
 
     @testset "it is an edge like any other, so an outage takes it out" begin
         dim = Dimension(:time => 3)
-        I   = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0), 2 => Node(; id = 2))
+        I   = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0), 2 => Node(; id = 2))
         E   = Dict{Int,AbstractEdge}(
             1 => Switch(; id = 1, terminals = [1, 2], status = nw_vector(dim, [true, false, true])))
         net = Network(I, E, Dict{Int,AbstractUnit}(); dim)
@@ -70,13 +71,13 @@
 
     @testset "a position that changes is a change of shape, a rating that stops binding too" begin
         dim = Dimension(:time => 4)
-        I   = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0), 2 => Node(; id = 2))
+        I   = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0), 2 => Node(; id = 2))
         E   = Dict{Int,AbstractEdge}(
             1 => Switch(; id = 1, terminals = [1, 2], position = nw_vector(dim, [1, 0, 1, 1]),
-                        rate_a = nw_vector(dim, [1.0, 1.0, 1.0, Inf])))
+                        s_max = nw_vector(dim, [1.0, 1.0, 1.0, Inf])))
         data = NetworkData(Network(I, E, Dict{Int,AbstractUnit}(); dim))
 
-        @test structure_gates(edges(network(data))[1]) == (:rate_a, :position)
+        @test structure_gates(edges(network(data))[1]) == (:s_max, :position)
         @test isempty(switchable(network(data)))            # nothing went out of service
         @test same_structure(data, 1, 3)
         @test !same_structure(data, 1, 2)                   # open against closed
@@ -86,15 +87,15 @@
     @testset "a table reads it, lock and all" begin
         base = (node = (id = [1, 2], type = ["REF", "PQ"]),
                 unit = (id = [1, 2], component = ["Generator", "FixedLoad"], node = [1, 2],
-                        pmax = [5.0, missing], pd = [missing, 1.0]))
+                        p_max = [5.0, missing], p_set = [missing, 1.0]))
         edge = (id = [1, 2], component = ["Switch", "Switch"], terminals = [[1, 2], [1, 2]],
-                lock = ["FREE", missing], position = [0, missing], rate_a = [2.0, missing])
+                lock = ["FREE", missing], position = [0, missing], s_max = [2.0, missing])
 
         data = parse_tables(; base..., edge)
         sw   = edges(network(data))
 
         @test sw[1] isa Switch
-        @test sw[1].lock === FREE && sw[1].position == 0 && sw[1].rate_a == 2.0
+        @test sw[1].lock === FREE && sw[1].position == 0 && sw[1].s_max == 2.0
         @test sw[2].lock === LOCKED && sw[2].position == 1          # blank is the default
         @test haskey(component_types(), "Switch")
 
@@ -130,8 +131,8 @@ end
 
     br(id, i, j; kw...)   = Branch(; id, terminals = [i, j], r = 0.0, x = 0.1, kw...)
     sw(id, i, j; kw...)   = Switch(; id, terminals = [i, j], kw...)
-    gen(id, i; kw...)     = Generator(; id, node = i, pmax = 5.0, kw...)
-    load(id, i; pd = 1.0) = FixedLoad(; id, node = i, pd)
+    gen(id, i; kw...)     = Generator(; id, node = i, p_max = 5.0, kw...)
+    load(id, i; pd = 1.0) = FixedLoad(; id, node = i, p_set = pd)
 
     "a network of `n` nodes, the first of which is the reference"
     function toy(edges, units; n = 3)
@@ -163,7 +164,7 @@ end
         e14  = only(e for (e, c) in edges(net) if sort(terminals(c)) == [13, 14])
         keep = filter(!=(e14), collect(keys(net.edge)))
         make(E, I = net.node, U = net.unit) =
-            NetworkData(Network(I, Dict{Int,AbstractEdge}(E), U); baseMVA = baseMVA(data))
+            NetworkData(Network(I, Dict{Int,AbstractEdge}(E), U); s_base_mva = s_base_mva(data))
 
         closed  = make(merge(net.edge, Dict(e14 => sw(e14, 13, 14))))
         opened  = make(merge(net.edge, Dict(e14 => sw(e14, 13, 14; position = 0))))
@@ -259,8 +260,8 @@ end
 
     @testset "the rating of a closed switch holds in a dispatch problem, not in a power flow" begin
         cheap, dear = [0.0, 1.0], [0.0, 100.0]
-        units = [gen(1, 1; cost = cheap), gen(2, 2; cost = dear, pg = 1.0), load(3, 2; pd = 2.0)]
-        net(rate; position = 1) = toy([sw(1, 1, 2; rate_a = rate, position)], units; n = 2)
+        units = [gen(1, 1; c = cheap), gen(2, 2; c = dear, p_set = 1.0), load(3, 2; pd = 2.0)]
+        net(rate; position = 1) = toy([sw(1, 1, 2; s_max = rate, position)], units; n = 2)
 
         for F in (LPFFormulation, IVRFormulation)
             free  = quiet(() -> solve_opf(net(Inf), F, OPTIMIZER))
@@ -285,8 +286,8 @@ end
         I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF), 2 => Node(; id = 2))
         E = Dict{Int,AbstractEdge}(
             1 => sw(1, 1, 2; position = nw_vector(dim, [1, 1, 1, 0, 0, 0])))
-        U = Dict{Int,AbstractUnit}(1 => gen(1, 1; cost = [0.0, 10.0]),
-                                   2 => gen(2, 2; cost = [0.0, 50.0]),
+        U = Dict{Int,AbstractUnit}(1 => gen(1, 1; c = [0.0, 10.0]),
+                                   2 => gen(2, 2; c = [0.0, 50.0]),
                                    3 => load(3, 2))
         data = NetworkData(Network(I, E, U; dim))
 
@@ -315,7 +316,7 @@ end
     end
 
     @testset "a power flow holds a free switch where the data has it" begin
-        data = toy([br(1, 1, 2), sw(2, 2, 3; lock = FREE, rate_a = 5.0), br(3, 1, 3)],
+        data = toy([br(1, 1, 2), sw(2, 2, 3; lock = FREE, s_max = 5.0), br(3, 1, 3)],
                    [gen(1, 1), load(2, 3)])
 
         for F in (LPFFormulation, IVRFormulation)
@@ -336,8 +337,8 @@ end
 
     br(id, i, j; kw...)   = Branch(; id, terminals = [i, j], r = 0.0, x = 0.1, kw...)
     sw(id, i, j; kw...)   = Switch(; id, terminals = [i, j], kw...)
-    gen(id, i; kw...)     = Generator(; id, node = i, pmax = 5.0, kw...)
-    load(id, i; pd = 1.0) = FixedLoad(; id, node = i, pd)
+    gen(id, i; kw...)     = Generator(; id, node = i, p_max = 5.0, kw...)
+    load(id, i; pd = 1.0) = FixedLoad(; id, node = i, p_set = pd)
 
     "the active power into the first terminal of edge `e`"
     flow(result, e) = nw_solution(result)["edge"]["$e"]["terminal"]["1"]["p_term"]
@@ -353,13 +354,13 @@ end
     function loop(locks, positions; dim = nothing, pd = 1.8)
         I = Dict{Int,AbstractNode}(i => Node(; id = i, type = i == 1 ? REF : PQ) for i in 1:3)
         E = Dict{Int,AbstractEdge}(
-            1 => br(1, 1, 2; rate_a = 1.0),
-            2 => br(2, 3, 2; rate_a = 1.5),
-            3 => sw(3, 1, 3; lock = locks[1], position = positions[1], rate_a = 0.6),
-            4 => sw(4, 1, 2; lock = locks[2], position = positions[2], rate_a = 0.8),
-            5 => sw(5, 2, 3; lock = locks[3], position = positions[3], rate_a = 5.0))
-        U = Dict{Int,AbstractUnit}(1 => gen(1, 1; cost = [0.0, 1.0]),
-                                   2 => gen(2, 3; cost = [0.0, 10.0]),
+            1 => br(1, 1, 2; s_max = 1.0),
+            2 => br(2, 3, 2; s_max = 1.5),
+            3 => sw(3, 1, 3; lock = locks[1], position = positions[1], s_max = 0.6),
+            4 => sw(4, 1, 2; lock = locks[2], position = positions[2], s_max = 0.8),
+            5 => sw(5, 2, 3; lock = locks[3], position = positions[3], s_max = 5.0))
+        U = Dict{Int,AbstractUnit}(1 => gen(1, 1; c = [0.0, 1.0]),
+                                   2 => gen(2, 3; c = [0.0, 10.0]),
                                    3 => load(3, 2; pd))
 
         return NetworkData(dim === nothing ? Network(I, E, U) : Network(I, E, U; dim))
@@ -433,14 +434,14 @@ end
 
     @testset "a free switch needs a rating, and in current a positive lower voltage limit" begin
         data(; vmin = 0.9, rate = Inf) = NetworkData(Network(
-            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vmin), 2 => Node(; id = 2, vmin)),
-            Dict{Int,AbstractEdge}(1 => br(1, 1, 2), 2 => sw(2, 1, 2; lock = FREE, rate_a = rate)),
+            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_min = vmin), 2 => Node(; id = 2, v_magn_min = vmin)),
+            Dict{Int,AbstractEdge}(1 => br(1, 1, 2), 2 => sw(2, 1, 2; lock = FREE, s_max = rate)),
             Dict{Int,AbstractUnit}(1 => gen(1, 1), 2 => load(2, 2))))
 
         for F in (LPFFormulation, IVRFormulation)
             err = try instantiate_model(data(), OptimalPowerFlowProblem, F) catch e e end
             @test err isa ArgumentError
-            @test occursin("switch 2", err.msg) && occursin("rate_a", err.msg)
+            @test occursin("switch 2", err.msg) && occursin("s_max", err.msg)
 
             # a power flow opens nothing, so it asks for none
             @test instantiate_model(data(), LoadFlowProblem, F) isa NetworkModel
@@ -452,7 +453,7 @@ end
         catch e
             e
         end
-        @test err isa ArgumentError && occursin("vmin", err.msg)
+        @test err isa ArgumentError && occursin("v_magn_min", err.msg)
         @test instantiate_model(data(; rate = 2.0, vmin = 0.0), OptimalPowerFlowProblem,
                                 LPFFormulation) isa NetworkModel
     end
@@ -550,8 +551,8 @@ end
         # a closed switch rated 0.6 beside a free one: a load of 1.0 needs both, and they share it
         parallel(; rate = 0.6) = NetworkData(Network(
             Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF), 2 => Node(; id = 2)),
-            Dict{Int,AbstractEdge}(1 => sw(1, 1, 2; rate_a = rate),
-                                   2 => sw(2, 1, 2; lock = FREE, rate_a = 5.0)),
+            Dict{Int,AbstractEdge}(1 => sw(1, 1, 2; s_max = rate),
+                                   2 => sw(2, 1, 2; lock = FREE, s_max = 5.0)),
             Dict{Int,AbstractUnit}(1 => gen(1, 1), 2 => load(2, 2))))
 
         r = quiet(() -> solve_opf(parallel(), LPFFormulation, exact))
@@ -581,7 +582,7 @@ end
             e
         end
         @test err isa ArgumentError
-        @test occursin("switch 1", err.msg) && occursin("rate_a", err.msg)
+        @test occursin("switch 1", err.msg) && occursin("s_max", err.msg)
 
         # a power flow closes nothing, so it asks for nothing
         @test instantiate_model(parallel(; rate = Inf), LoadFlowProblem, LPFFormulation) isa NetworkModel
@@ -590,7 +591,7 @@ end
     @testset "every loop that a free switch can close is found once, and not too many" begin
         everywhere(n; kw...) = NetworkData(Network(
             Dict{Int,AbstractNode}(i => Node(; id = i, type = i == 1 ? REF : PQ) for i in 1:n),
-            Dict{Int,AbstractEdge}(k => sw(k, i, j; lock = FREE, rate_a = 1.0, kw...)
+            Dict{Int,AbstractEdge}(k => sw(k, i, j; lock = FREE, s_max = 1.0, kw...)
                                    for (k, (i, j)) in enumerate((i, j) for i in 1:n for j in i+1:n)),
             Dict{Int,AbstractUnit}(1 => gen(1, 1), 2 => load(2, n))))
         loops(data) = _NMB._free_switch_cycles(
@@ -605,16 +606,16 @@ end
         # parallel switches are loops of two, and three of them are three
         triple = NetworkData(Network(
             Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF), 2 => Node(; id = 2)),
-            Dict{Int,AbstractEdge}(k => sw(k, 1, 2; lock = FREE, rate_a = 1.0) for k in 1:3),
+            Dict{Int,AbstractEdge}(k => sw(k, 1, 2; lock = FREE, s_max = 1.0) for k in 1:3),
             Dict{Int,AbstractUnit}(1 => gen(1, 1), 2 => load(2, 2))))
         @test length(loops(triple)) == 3
 
         # one that goes round the other way has the signs to show it
         data = NetworkData(Network(
             Dict{Int,AbstractNode}(i => Node(; id = i, type = i == 1 ? REF : PQ) for i in 1:3),
-            Dict{Int,AbstractEdge}(1 => sw(1, 1, 2; lock = FREE, rate_a = 1.0),
-                                   2 => sw(2, 3, 2; lock = FREE, rate_a = 1.0),
-                                   3 => sw(3, 1, 3; lock = FREE, rate_a = 1.0)),
+            Dict{Int,AbstractEdge}(1 => sw(1, 1, 2; lock = FREE, s_max = 1.0),
+                                   2 => sw(2, 3, 2; lock = FREE, s_max = 1.0),
+                                   3 => sw(3, 1, 3; lock = FREE, s_max = 1.0)),
             Dict{Int,AbstractUnit}(1 => gen(1, 1), 2 => load(2, 3))))
         cycle = only(loops(data))
         @test sort([e for (e, _) in cycle]) == [1, 2, 3]
@@ -639,11 +640,11 @@ end
             Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF), 2 => Node(; id = 2)),
             Dict{Int,AbstractEdge}(
                 1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1,
-                            angmin = -0.05, angmax = 0.05),
-                2 => sw(2, 1, 2; lock = FREE, rate_a = state(5.0, 0.2))),
+                            v_angl_min = -0.05, v_angl_max = 0.05),
+                2 => sw(2, 1, 2; lock = FREE, s_max = state(5.0, 0.2))),
             Dict{Int,AbstractUnit}(
-                1 => gen(1, 1; pg = state(1.0, 0.4), cost = [0.0, 10.0]),
-                2 => gen(2, 2; pg = 0.0, cost = [0.0, 100.0]),
+                1 => gen(1, 1; p_set = state(1.0, 0.4), c = [0.0, 10.0]),
+                2 => gen(2, 2; p_set = 0.0, c = [0.0, 100.0]),
                 3 => load(3, 2; pd = state(1.0, 0.4))); dim))
 
         @test _NMB.redispatch_controls(instantiate_model(data, RedispatchProblem, LPFFormulation;

@@ -24,6 +24,7 @@
 # v0.12.9 - a helper reads the controls a redispatch holds                     #
 # v0.14.0 - the names follow one grammar, checked in nomenclature.jl           #
 # v0.14.0 - the string names test is included                                  #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 using Test
@@ -54,7 +55,7 @@ case(name::String) = joinpath(@__DIR__, "data", "matpower", "$name.m")
 quiet(f) = Logging.with_logger(f, Logging.NullLogger())
 
 "the rating of edge `ed` at its terminal `k`, whether it has one rating or one per terminal"
-rating_at(ed, k::Int) = ed.rate_a isa AbstractVector ? ed.rate_a[k] : ed.rate_a
+rating_at(ed, k::Int) = ed.s_max isa AbstractVector ? ed.s_max[k] : ed.s_max
 
 "the `(family, id, key, nw)` of every control a model holds equal to its base case"
 held_controls(nm) = Set((id..., nw) for ((nw, key, id), _) in registered_constraints(nm)

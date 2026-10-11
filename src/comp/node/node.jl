@@ -14,6 +14,7 @@
 # v0.12.8 - a node refuses limits and setpoints no model can use               #
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 export Node, NodeType, PQ, PV, REF, ISOLATED, reference_nodes
@@ -46,49 +47,49 @@ A node `i ∈ I` of the extended graph, i.e., an electrical busbar.
 - `id`: the identifier of the node.
 - `name`: a human readable label.
 - `type`: the [`NodeType`](@ref).
-- `vm`, `va`: the voltage magnitude [pu] and angle [rad] setpoint, used by `REF`
+- `v_magn_set`, `v_angl_set`: the voltage magnitude [pu] and angle [rad] setpoint, used by `REF`
   and `PV` nodes and as a solution report reference elsewhere.
-- every field but `id`, `name`, `base_kv`, `area`, `zone` and `ext` may be given
+- every field but `id`, `name`, `v_base_kv`, `area`, `zone` and `ext` may be given
   as a [`NetworkVector`](@ref) to make it vary over the network index.
-- `vmin`, `vmax`: the voltage magnitude limits [pu].
-- `base_kv`: the voltage base [kV].
+- `v_magn_min`, `v_magn_max`: the voltage magnitude limits [pu].
+- `v_base_kv`: the voltage base [kV].
 - `area`, `zone`: bookkeeping identifiers carried through from the input data.
 - `status`: whether the node is in service.
 - `ext`: free-form storage; `:vr_start` and `:vi_start` override the flat start.
 
-A node with `vmin` below 0 or above `vmax`, a `base_kv` below 0, or a setpoint or
-limit that is NaN, is refused: no model can use it. A `base_kv` of 0 stands for
+A node with `v_magn_min` below 0 or above `v_magn_max`, a `v_base_kv` below 0, or a setpoint or
+limit that is NaN, is refused: no model can use it. A `v_base_kv` of 0 stands for
 unknown, which is what Matpower gives a bus it has no voltage level for.
 """
 Base.@kwdef struct Node <: AbstractNode
-    id     ::Int
-    name   ::String                    = ""
-    type   ::NetworkQuantity{NodeType} = PQ
-    vm     ::NetworkQuantity{Float64}  = 1.0
-    va     ::NetworkQuantity{Float64}  = 0.0
-    vmin   ::NetworkQuantity{Float64}  = 0.9
-    vmax   ::NetworkQuantity{Float64}  = 1.1
-    base_kv::Float64                   = 1.0
-    area   ::Int                       = 1
-    zone   ::Int                       = 1
-    status ::NetworkQuantity{Bool}     = true
-    ext    ::Dict{Symbol,Any}          = Dict{Symbol,Any}()
+    id        ::Int
+    name      ::String                    = ""
+    type      ::NetworkQuantity{NodeType} = PQ
+    v_magn_set::NetworkQuantity{Float64}  = 1.0
+    v_angl_set::NetworkQuantity{Float64}  = 0.0
+    v_magn_min::NetworkQuantity{Float64}  = 0.9
+    v_magn_max::NetworkQuantity{Float64}  = 1.1
+    v_base_kv ::Float64                   = 1.0
+    area      ::Int                       = 1
+    zone      ::Int                       = 1
+    status    ::NetworkQuantity{Bool}     = true
+    ext       ::Dict{Symbol,Any}          = Dict{Symbol,Any}()
 
-    function Node(id, name, type, vm, va, vmin, vmax, base_kv, area, zone, status, ext)
-        _check_node(id, vm, va, vmin, vmax, base_kv)
-        return new(id, name, type, vm, va, vmin, vmax, base_kv, area, zone, status, ext)
+    function Node(id, name, type, v_magn_set, v_angl_set, v_magn_min, v_magn_max, v_base_kv, area, zone, status, ext)
+        _check_node(id, v_magn_set, v_angl_set, v_magn_min, v_magn_max, v_base_kv)
+        return new(id, name, type, v_magn_set, v_angl_set, v_magn_min, v_magn_max, v_base_kv, area, zone, status, ext)
     end
 end
 
-function _check_node(id, vm, va, vmin, vmax, base_kv)
-    all_nw(isfinite, vm) && all_nw(isfinite, va) ||
+function _check_node(id, v_magn_set, v_angl_set, v_magn_min, v_magn_max, v_base_kv)
+    all_nw(isfinite, v_magn_set) && all_nw(isfinite, v_angl_set) ||
         throw(ArgumentError("node $id has a voltage setpoint that is not finite"))
-    all_nw(>=(0), vmin) ||
-        throw(ArgumentError("node $id has a vmin that is negative or NaN"))
-    all_nw(<=, vmin, vmax) ||
-        throw(ArgumentError("node $id has vmin above vmax, or a vmax that is NaN"))
-    isfinite(base_kv) && base_kv >= 0 ||
-        throw(ArgumentError("node $id has a base_kv that is negative or not finite, " *
+    all_nw(>=(0), v_magn_min) ||
+        throw(ArgumentError("node $id has a v_magn_min that is negative or NaN"))
+    all_nw(<=, v_magn_min, v_magn_max) ||
+        throw(ArgumentError("node $id has v_magn_min above v_magn_max, or a v_magn_max that is NaN"))
+    isfinite(v_base_kv) && v_base_kv >= 0 ||
+        throw(ArgumentError("node $id has a v_base_kv that is negative or not finite, " *
                             "0 stands for unknown"))
 
     return nothing
@@ -133,9 +134,9 @@ function _variable_node_voltage_rectangular(nm::NetworkModel, nw::Int, bounded::
                     start = i -> get(node(nm, i; nw).ext, :vi_start, 0.0))
 
     for i in I
-        vmax = bounded ? node(nm, i; nw).vmax : nothing
-        bound!(vr[i]; lower = bounded ? -vmax : nothing, upper = vmax)
-        bound!(vi[i]; lower = bounded ? -vmax : nothing, upper = vmax)
+        v_magn_max = bounded ? node(nm, i; nw).v_magn_max : nothing
+        bound!(vr[i]; lower = bounded ? -v_magn_max : nothing, upper = v_magn_max)
+        bound!(vi[i]; lower = bounded ? -v_magn_max : nothing, upper = v_magn_max)
     end
 
     return nothing
@@ -206,9 +207,9 @@ function constraint_node_voltage_reference(nm::NetworkModel{P,F}; nw::Int = nw_i
         nd = node(nm, i; nw)
         reference[i] = (
             constrain!(nm, :node_reference, (i, :real),
-                       JuMP.@build_constraint(v_real[i] == nd.vm * cos(nd.va)); nw),
+                       JuMP.@build_constraint(v_real[i] == nd.v_magn_set * cos(nd.v_angl_set)); nw),
             constrain!(nm, :node_reference, (i, :imag),
-                       JuMP.@build_constraint(v_imag[i] == nd.vm * sin(nd.va)); nw))
+                       JuMP.@build_constraint(v_imag[i] == nd.v_magn_set * sin(nd.v_angl_set)); nw))
     end
 
     constraint_node_voltage_anchor(nm; nw)
@@ -222,12 +223,12 @@ function constraint_node_voltage_reference(nm::NetworkModel{P,F}; nw::Int = nw_i
 
     reference = get!(() -> Dict{Int,Any}(), con(nm; nw), :node_voltage_reference)
     for i in reference_nodes(nm; nw)
-        va = node(nm, i; nw).va
+        v_angl_set = node(nm, i; nw).v_angl_set
         reference[i] = (
             constrain!(nm, :node_reference, (i, :angle),
-                       JuMP.@build_constraint(sin(va) * v_real[i] - cos(va) * v_imag[i] == 0.0); nw),
+                       JuMP.@build_constraint(sin(v_angl_set) * v_real[i] - cos(v_angl_set) * v_imag[i] == 0.0); nw),
             constrain!(nm, :node_reference, (i, :side),
-                       JuMP.@build_constraint(cos(va) * v_real[i] + sin(va) * v_imag[i] >= 0.0); nw))
+                       JuMP.@build_constraint(cos(v_angl_set) * v_real[i] + sin(v_angl_set) * v_imag[i] >= 0.0); nw))
     end
 
     constraint_node_voltage_anchor(nm; nw)
@@ -251,7 +252,7 @@ function constraint_node_voltage_setpoint(nm::NetworkModel{P,F}; nw::Int = nw_id
         nd = node(nm, i; nw)
         nd.type == PV || continue
         setpoint[i] = constrain!(nm, :node_setpoint, i,
-                       JuMP.@build_constraint(v_real[i]^2 + v_imag[i]^2 == nd.vm^2); nw)
+                       JuMP.@build_constraint(v_real[i]^2 + v_imag[i]^2 == nd.v_magn_set^2); nw)
     end
 
     return nothing
@@ -260,7 +261,7 @@ end
 """
     constraint_node_voltage_limits(nm; nw)
 
-Bound the voltage magnitude of every node between `vmin` and `vmax`.
+Bound the voltage magnitude of every node between `v_magn_min` and `v_magn_max`.
 """
 function constraint_node_voltage_limits(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
                                        ) where {P<:AbstractDispatchProblem,F<:IVRFormulation}
@@ -271,9 +272,9 @@ function constraint_node_voltage_limits(nm::NetworkModel{P,F}; nw::Int = nw_id_d
         nd = node(nm, i; nw)
         limits[i] = (
             constrain!(nm, :node_limits, (i, :min),
-                       JuMP.@build_constraint(v_real[i]^2 + v_imag[i]^2 >= nd.vmin^2); nw),
+                       JuMP.@build_constraint(v_real[i]^2 + v_imag[i]^2 >= nd.v_magn_min^2); nw),
             constrain!(nm, :node_limits, (i, :max),
-                       JuMP.@build_constraint(v_real[i]^2 + v_imag[i]^2 <= nd.vmax^2); nw))
+                       JuMP.@build_constraint(v_real[i]^2 + v_imag[i]^2 <= nd.v_magn_max^2); nw))
     end
 
     return nothing
@@ -347,7 +348,7 @@ function constraint_node_voltage_reference(nm::NetworkModel{P,F}; nw::Int = nw_i
     reference = get!(() -> Dict{Int,Any}(), con(nm; nw), :node_voltage_reference)
     for i in reference_nodes(nm; nw)
         reference[i] = constrain!(nm, :node_reference, i,
-            JuMP.@build_constraint(v_angl[i] == node(nm, i; nw).va); nw)
+            JuMP.@build_constraint(v_angl[i] == node(nm, i; nw).v_angl_set); nw)
     end
 
     constraint_node_voltage_anchor(nm; nw)

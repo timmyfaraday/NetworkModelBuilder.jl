@@ -14,6 +14,7 @@
 # v0.13.0 - a two-winding transformer is rated at each terminal                #
 # v0.13.0 - a lossy transformer is rated at each terminal                      #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 # What a transformer does, written so that it does not depend on how one is
@@ -31,11 +32,11 @@
 "a transformer whose ratio is data"
 fixed(; kw...) = Transformer(; kw...)
 
-"a transformer whose angle is a decision between `ta_min` and `ta_max`"
-pst(; ta_min, ta_max, kw...) = Transformer(; pst = true, ta_min, ta_max, kw...)
+"a transformer whose angle is a decision between `t_angl_min` and `t_angl_max`"
+pst(; t_angl_min, t_angl_max, kw...) = Transformer(; pst = true, t_angl_min, t_angl_max, kw...)
 
-"a transformer whose magnitude is a decision between `tm_min` and `tm_max`"
-oltc(; tm_min, tm_max, kw...) = Transformer(; oltc = true, tm_min, tm_max, kw...)
+"a transformer whose magnitude is a decision between `t_magn_min` and `t_magn_max`"
+oltc(; t_magn_min, t_magn_max, kw...) = Transformer(; oltc = true, t_magn_min, t_magn_max, kw...)
 
 "a transformer whose magnitude and angle are both decisions"
 both(; kw...) = Transformer(; oltc = true, pst = true, kw...)
@@ -73,24 +74,24 @@ function case5_with(make; extra...)
     E    = Dict{Int,AbstractEdge}(net.edge)
 
     E[5] = make(; id = tf.id, name = tf.name, terminals = tf.terminals, r = tf.r, x = tf.x,
-                g_sh = tf.g_sh, b_sh = tf.b_sh, tm = tf.tm, ta = tf.ta, rate_a = tf.rate_a,
-                angmin = tf.angmin, angmax = tf.angmax, status = tf.status, extra...)
+                g_shnt = tf.g_shnt, b_shnt = tf.b_shnt, t_magn = tf.t_magn, t_angl = tf.t_angl, s_max = tf.s_max,
+                v_angl_min = tf.v_angl_min, v_angl_max = tf.v_angl_max, status = tf.status, extra...)
 
-    return NetworkData(Network(net.node, E, net.unit); name = "case5", baseMVA = baseMVA(data))
+    return NetworkData(Network(net.node, E, net.unit); name = "case5", s_base_mva = s_base_mva(data))
 end
 
-"one reference node feeding two loads through a transformer with three windings, the loads' voltage capped at `vmax`"
-function winding_network(; vmax = 1.1, kw...)
-    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.02),
-                               2 => Node(; id = 2, vmax), 3 => Node(; id = 3, vmax))
+"one reference node feeding two loads through a transformer with three windings, the loads' voltage capped at `v_magn_max`"
+function winding_network(; v_magn_max = 1.1, kw...)
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.02),
+                               2 => Node(; id = 2, v_magn_max), 3 => Node(; id = 3, v_magn_max))
     E = Dict{Int,AbstractEdge}(
         1 => star(; id = 1, terminals = [1, 2, 3], r = [0.010, 0.020, 0.030],
                   x = [0.100, 0.200, 0.300], kw...))
     U = Dict{Int,AbstractUnit}(
-        1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       cost = [0.0, 10.0]),
-        2 => FixedLoad(; id = 2, node = 2, pd = 0.40, qd = 0.15),
-        3 => FixedLoad(; id = 3, node = 3, pd = 0.25, qd = 0.10))
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       c = [0.0, 10.0]),
+        2 => FixedLoad(; id = 2, node = 2, p_set = 0.40, q_set = 0.15),
+        3 => FixedLoad(; id = 3, node = 3, p_set = 0.25, q_set = 0.10))
 
     return NetworkData(Network(I, E, U); name = "windings")
 end
@@ -100,20 +101,20 @@ A tight corridor `1–3` in parallel with a path `1–2–3` that carries a tran
 whose angle can move, which is what relieves the corridor.
 """
 function shifter_network()
-    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0),
                                2 => Node(; id = 2), 3 => Node(; id = 3))
     E = Dict{Int,AbstractEdge}(
-        1 => Branch(; id = 1, terminals = [1, 3], r = 0.0, x = 0.1, rate_a = 0.5),
-        2 => pst(; id = 2, terminals = [1, 2], r = 0.0, x = 0.1, ta_min = -0.3, ta_max = 0.3),
+        1 => Branch(; id = 1, terminals = [1, 3], r = 0.0, x = 0.1, s_max = 0.5),
+        2 => pst(; id = 2, terminals = [1, 2], r = 0.0, x = 0.1, t_angl_min = -0.3, t_angl_max = 0.3),
         3 => Branch(; id = 3, terminals = [2, 3], r = 0.0, x = 0.1))
     U = Dict{Int,AbstractUnit}(
-        1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       pg = 1.0, cost = [0.0, 10.0]),
-        2 => Generator(; id = 2, node = 3, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       pg = 0.0, cost = [0.0, 100.0]),
-        3 => FixedLoad(; id = 3, node = 3, pd = 1.0, qd = 0.0))
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       p_set = 1.0, c = [0.0, 10.0]),
+        2 => Generator(; id = 2, node = 3, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       p_set = 0.0, c = [0.0, 100.0]),
+        3 => FixedLoad(; id = 3, node = 3, p_set = 1.0, q_set = 0.0))
 
-    return NetworkData(Network(I, E, U); name = "shifter", baseMVA = 100.0)
+    return NetworkData(Network(I, E, U); name = "shifter", s_base_mva = 100.0)
 end
 
 "the optimal power flow of case5 with branch 5 as `make`, against what it gave"
@@ -132,7 +133,7 @@ end
 
 """
 The load flow and the optimal power flow of the three-winding network against
-what they gave. `vm` and `q` are only there where the formulation has them.
+what they gave. `v_magn` and `q_unit` are only there where the formulation has them.
 """
 function check_windings(F, extra; va, p, objective, lf_size, opf_size, vm = nothing, q = nothing)
     data = winding_network(; extra...)
@@ -161,8 +162,8 @@ end
 @testset "transformers" begin
 
     @testset "case5, optimal power flow: what a control buys" begin
-        pst_range  = (ta_min = -0.2, ta_max = 0.2)
-        oltc_range = (tm_min = 0.9, tm_max = 1.1)
+        pst_range  = (t_angl_min = -0.2, t_angl_max = 0.2)
+        oltc_range = (t_magn_min = 0.9, t_magn_max = 1.1)
 
         @testset "fixed, current-based" begin
             check_case5(fixed, IVRFormulation; objective = 18269.10277920319,
@@ -191,7 +192,7 @@ end
     end
 
     @testset "case5, both controls on one winding" begin
-        range = (tm_min = 0.9, tm_max = 1.1, ta_min = -0.2, ta_max = 0.2)
+        range = (t_magn_min = 0.9, t_magn_max = 1.1, t_angl_min = -0.2, t_angl_max = 0.2)
 
         # together they do better than either alone, 15361.6 and 18175.8
         @testset "current-based: a ring of ratios" begin
@@ -204,7 +205,7 @@ end
         end
         @testset "held at what it chose, the winding gives the same optimum" begin
             check_case5(fixed, IVRFormulation;
-                        extra = (tm = [1.0219854701926994, 1.0], ta = [-0.138662043125777, 0.0]),
+                        extra = (t_magn = [1.0219854701926994, 1.0], t_angl = [-0.138662043125777, 0.0]),
                         objective = 15344.22651230504,
                         tm = 1.0219854701926994, ta = -0.138662043125777, sz = (78, 108))
         end
@@ -213,8 +214,8 @@ end
     @testset "three windings, load flow and optimal power flow" begin
         # the second network gives every winding a ratio and a rating, and the
         # star point a magnetising branch
-        ratios = (tm = [1.0, 0.95, 1.05], ta = [0.0, 0.02, -0.01], g_m = 0.002, b_m = -0.01,
-                  rate_a = [3.0, 1.0, 1.0])
+        ratios = (t_magn = [1.0, 0.95, 1.05], t_angl = [0.0, 0.02, -0.01], g_mgnt = 0.002, b_mgnt = -0.01,
+                  s_max = [3.0, 1.0, 1.0])
 
         @testset "plain, current-based" begin
             check_windings(IVRFormulation, (;); va = (-0.1468713374927703, -0.14130337788297284),
@@ -241,9 +242,9 @@ end
     @testset "controls on the windings of a transformer with three" begin
         # the loads' voltage is capped, so what a ratio buys is a source that can
         # stay high; it takes both windings to do it, as both loads are at the cap
-        opf(; kw...) = solved(winding_network(; vmax = 1.02, kw...),
+        opf(; kw...) = solved(winding_network(; v_magn_max = 1.02, kw...),
                               OptimalPowerFlowProblem, IVRFormulation)
-        angle = (ta_min = [0.0, -0.2, -0.2], ta_max = [0.0, 0.2, 0.2])
+        angle = (t_angl_min = [0.0, -0.2, -0.2], t_angl_max = [0.0, 0.2, 0.2])
 
         _, plain = opf()
         @test plain["objective"] ≈ 6.602714947516425 rtol = 1e-7
@@ -262,7 +263,7 @@ end
             @test one["objective"] ≈ plain["objective"] rtol = 1e-9
 
             # held at the ratios it chose, the transformer gives the same optimum
-            _, held = opf(; tm = [t["t_magn"] for t in taps])
+            _, held = opf(; t_magn = [t["t_magn"] for t in taps])
             @test held["objective"] ≈ result["objective"] rtol = 1e-7
         end
 
@@ -282,7 +283,7 @@ end
             @test all(0.9 - 1e-6 <= t["t_magn"] <= 1.1 + 1e-6 for t in taps)
             @test all(-0.2 - 1e-6 <= t["t_angl"] <= 0.2 + 1e-6 for t in taps)
 
-            _, held = opf(; tm = [t["t_magn"] for t in taps], ta = [t["t_angl"] for t in taps])
+            _, held = opf(; t_magn = [t["t_magn"] for t in taps], t_angl = [t["t_angl"] for t in taps])
             @test held["objective"] ≈ result["objective"] rtol = 1e-7
         end
     end
@@ -373,9 +374,9 @@ end
 
         # the meshed network with its shifter at each of `positions`, or stepping
         positions = -0.3:0.1:0.3
-        stepping  = (pst = STEPPED, ta_step = 0.1)
+        stepping  = (pst = STEPPED, t_angl_step = 0.1)
         held_at(a; star = false, kw...) =
-            meshed_network(; kw..., star, tap = (pst = FIXED, ta = star ? [a, 0.0, 0.0] : [a, 0.0]))
+            meshed_network(; kw..., star, tap = (pst = FIXED, t_angl = star ? [a, 0.0, 0.0] : [a, 0.0]))
 
         @testset "linearized: the optimum is the best of every position" begin
             runs = [quiet(() -> solve_opf(held_at(a), LPFFormulation, exact))["objective"]
@@ -417,13 +418,13 @@ end
         end
 
         @testset "a power flow holds the setpoint, and a magnitude is inert when linearized" begin
-            range = (pst = STEPPED, ta_min = deg2rad(-9), ta_max = deg2rad(11), ta_step = deg2rad(5))
+            range = (pst = STEPPED, t_angl_min = deg2rad(-9), t_angl_max = deg2rad(11), t_angl_step = deg2rad(5))
             lf    = instantiate_model(case5_with(stepper; range...), LoadFlowProblem, LPFFormulation)
             @test !any(JuMP.is_binary, JuMP.all_variables(lf.model))
 
             # a stepped magnitude has nothing to act on in the linearized formulation
-            nm, result = solved(case5_with(stepper; oltc = STEPPED, tm_min = 0.9, tm_max = 1.1,
-                                           tm_step = 0.05), OptimalPowerFlowProblem, LPFFormulation)
+            nm, result = solved(case5_with(stepper; oltc = STEPPED, t_magn_min = 0.9, t_magn_max = 1.1,
+                                           t_magn_step = 0.05), OptimalPowerFlowProblem, LPFFormulation)
             @test !any(JuMP.is_binary, JuMP.all_variables(nm.model))
             @test result["objective"] ≈ 18230.87327365834 rtol = 1e-7
             @test size_of(nm) == (32, 49)
@@ -431,18 +432,18 @@ end
 
         @testset "current-based, $name: the optimum is the best of every position" for
                 (name, extra, ms, as, sz) in (
-                    ("magnitude", (oltc = STEPPED, tm_min = 0.9, tm_max = 1.1, tm_step = 0.05),
+                    ("magnitude", (oltc = STEPPED, t_magn_min = 0.9, t_magn_max = 1.1, t_magn_step = 0.05),
                      0.9:0.05:1.1, [deg2rad(1.0)], (85, 111)),
-                    ("angle", (pst = STEPPED, ta_min = deg2rad(-9), ta_max = deg2rad(11),
-                               ta_step = deg2rad(5)),
+                    ("angle", (pst = STEPPED, t_angl_min = deg2rad(-9), t_angl_max = deg2rad(11),
+                               t_angl_step = deg2rad(5)),
                      [1.05], deg2rad.(-9:5:11), (85, 111)),
-                    ("magnitude and angle", (oltc = STEPPED, pst = STEPPED, tm_min = 0.95,
-                                             tm_max = 1.05, tm_step = 0.05, ta_min = deg2rad(-9),
-                                             ta_max = deg2rad(1), ta_step = deg2rad(5)),
+                    ("magnitude and angle", (oltc = STEPPED, pst = STEPPED, t_magn_min = 0.95,
+                                             t_magn_max = 1.05, t_magn_step = 0.05, t_angl_min = deg2rad(-9),
+                                             t_angl_max = deg2rad(1), t_angl_step = deg2rad(5)),
                      0.95:0.05:1.05, deg2rad.(-9:5:1), (89, 111)))
 
             # in turn for each angle, the order in which the winding numbers its positions
-            runs = [solved(case5_with(fixed; tm = [m, 1.0], ta = [a, 0.0]),
+            runs = [solved(case5_with(fixed; t_magn = [m, 1.0], t_angl = [a, 0.0]),
                            OptimalPowerFlowProblem, IVRFormulation)[2]["objective"]
                     for m in ms for a in as]
             best = argmin(runs)
@@ -461,7 +462,7 @@ end
         end
 
         @testset "a winding of three steps as one of two" begin
-            tap  = (pst = [STEPPED, FIXED, FIXED], ta_step = [0.1, 0.1, 0.1])
+            tap  = (pst = [STEPPED, FIXED, FIXED], t_angl_step = [0.1, 0.1, 0.1])
             two  = quiet(() -> solve_opf(meshed_network(; tap = stepping), LPFFormulation, exact))
             nm   = instantiate_model(meshed_network(; star = true, tap), OptimalPowerFlowProblem,
                                      LPFFormulation)
@@ -476,7 +477,7 @@ end
         @testset "preventive: one position over the contingencies" begin
             dim = Dimension(:contingency => 2)
             for star in (false, true)
-                t    = star ? (pst = [STEPPED, FIXED, FIXED], ta_step = [0.1, 0.1, 0.1]) : stepping
+                t    = star ? (pst = [STEPPED, FIXED, FIXED], t_angl_step = [0.1, 0.1, 0.1]) : stepping
                 data = meshed_network(; dim, out = (2,), star, tap = t)
 
                 # one angle for both states, so the best of the enumerated fixed ones
@@ -513,13 +514,13 @@ end
     @testset "a two-winding transformer is rated at each terminal, linearized" begin
         # a load of 0.7 behind a transformer rated 0.5 and 0.8, with a dearer unit at the load
         network(rate_a) = NetworkData(Network(
-            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0), 2 => Node(; id = 2)),
-            Dict{Int,AbstractEdge}(1 => fixed(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, rate_a)),
+            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0), 2 => Node(; id = 2)),
+            Dict{Int,AbstractEdge}(1 => fixed(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, s_max = rate_a)),
             Dict{Int,AbstractUnit}(
-                1 => Generator(; id = 1, node = 1, pmax = 5.0, cost = [0.0, 10.0]),
-                2 => Generator(; id = 2, node = 2, pmax = 5.0, cost = [0.0, 100.0]),
-                3 => FixedLoad(; id = 3, node = 2, pd = 0.7)));
-            name = "rated", baseMVA = 100.0)
+                1 => Generator(; id = 1, node = 1, p_max = 5.0, c = [0.0, 10.0]),
+                2 => Generator(; id = 2, node = 2, p_max = 5.0, c = [0.0, 100.0]),
+                3 => FixedLoad(; id = 3, node = 2, p_set = 0.7)));
+            name = "rated", s_base_mva = 100.0)
 
         nm, unequal = solved(network([0.5, 0.8]), OptimalPowerFlowProblem, LPFFormulation)
         rows        = registered_constraints(nm)
@@ -536,13 +537,13 @@ end
     @testset "a lossy two-winding transformer is rated at each terminal in both formulations" begin
         # the same load behind a transformer with a resistance, so that what leaves one terminal is not what arrives at the other
         network(rate_a) = NetworkData(Network(
-            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0), 2 => Node(; id = 2)),
-            Dict{Int,AbstractEdge}(1 => fixed(; id = 1, terminals = [1, 2], r = 0.05, x = 0.1, rate_a)),
+            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0), 2 => Node(; id = 2)),
+            Dict{Int,AbstractEdge}(1 => fixed(; id = 1, terminals = [1, 2], r = 0.05, x = 0.1, s_max = rate_a)),
             Dict{Int,AbstractUnit}(
-                1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0, cost = [0.0, 10.0]),
-                2 => Generator(; id = 2, node = 2, pmax = 5.0, qmin = -5.0, qmax = 5.0, cost = [0.0, 100.0]),
-                3 => FixedLoad(; id = 3, node = 2, pd = 0.7)));
-            name = "lossy", baseMVA = 100.0)
+                1 => Generator(; id = 1, node = 1, p_max = 5.0, q_min = -5.0, q_max = 5.0, c = [0.0, 10.0]),
+                2 => Generator(; id = 2, node = 2, p_max = 5.0, q_min = -5.0, q_max = 5.0, c = [0.0, 100.0]),
+                3 => FixedLoad(; id = 3, node = 2, p_set = 0.7)));
+            name = "lossy", s_base_mva = 100.0)
 
         apparent(result, k) = (t = nw_solution(result)["edge"]["1"]["terminal"]["$k"];
                                hypot(t["p_term"], get(t, "q_term", 0.0)))
@@ -574,15 +575,15 @@ end
         two = (id = 1, terminals = [1, 2], r = 0.0, x = 0.1)
 
         @test_throws ArgumentError Transformer(; id = 1, terminals = [1], r = 0.0, x = 0.1)
-        @test_throws ArgumentError Transformer(; two..., tm = 0.0)
-        @test_throws ArgumentError Transformer(; two..., oltc = true, tm_min = 1.1, tm_max = 0.9)
-        @test_throws ArgumentError Transformer(; two..., pst = true, ta_min = 0.2, ta_max = -0.2)
-        @test_throws ArgumentError Transformer(; two..., pst = true, ta_min = -2.0, ta_max = 2.0)
-        @test_throws ArgumentError Transformer(; two..., angmin = 1.0, angmax = -1.0)
+        @test_throws ArgumentError Transformer(; two..., t_magn = 0.0)
+        @test_throws ArgumentError Transformer(; two..., oltc = true, t_magn_min = 1.1, t_magn_max = 0.9)
+        @test_throws ArgumentError Transformer(; two..., pst = true, t_angl_min = 0.2, t_angl_max = -0.2)
+        @test_throws ArgumentError Transformer(; two..., pst = true, t_angl_min = -2.0, t_angl_max = 2.0)
+        @test_throws ArgumentError Transformer(; two..., v_angl_min = 1.0, v_angl_max = -1.0)
 
         # a vector has to say something about every winding, and a scalar only
         # stands for the first winding of two
-        @test_throws ArgumentError Transformer(; two..., tm = [1.0, 1.0, 1.0])
+        @test_throws ArgumentError Transformer(; two..., t_magn = [1.0, 1.0, 1.0])
         @test_throws ArgumentError Transformer(; id = 1, terminals = [1, 2, 3],
                                                  r = [0.01, 0.02, 0.03], x = 0.1)
 
@@ -594,12 +595,12 @@ end
         # a range that is the same at every network index
         @test Transformer(; two..., oltc = STEPPED).oltc == [STEPPED, FIXED]
         @test Transformer(; two..., pst = STEPPED).pst == [STEPPED, FIXED]
-        @test_throws ArgumentError Transformer(; two..., oltc = STEPPED, tm = 1.004)
-        @test_throws ArgumentError Transformer(; two..., pst = STEPPED, ta = 0.003)
-        @test_throws ArgumentError Transformer(; two..., oltc = STEPPED, tm_max = 1.11)
-        @test_throws ArgumentError Transformer(; two..., pst = STEPPED, ta_step = 0.0)
+        @test_throws ArgumentError Transformer(; two..., oltc = STEPPED, t_magn = 1.004)
+        @test_throws ArgumentError Transformer(; two..., pst = STEPPED, t_angl = 0.003)
+        @test_throws ArgumentError Transformer(; two..., oltc = STEPPED, t_magn_max = 1.11)
+        @test_throws ArgumentError Transformer(; two..., pst = STEPPED, t_angl_step = 0.0)
         @test_throws ArgumentError Transformer(; two..., oltc = STEPPED,
-            tm_max = nw_vector(Dimension(:time => 2), [1.1, 1.0]))
+            t_magn_max = nw_vector(Dimension(:time => 2), [1.1, 1.0]))
 
         # a winding with no impedance has no angle of its own in the linearized
         # formulation, where the star point is one

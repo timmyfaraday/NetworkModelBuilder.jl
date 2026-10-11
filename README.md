@@ -58,7 +58,7 @@ nothing more than a `status` that varies.
 
 Within the three families a type earns its place by changing the *model*, not by
 carrying a label. A cable and an overhead line are electrically identical to
-each other, so they are a `Branch` with another `length_km`, not types, and a
+each other, so they are a `Branch` with another `l_km`, not types, and a
 `Branch` has two or more terminals, as π-sections that meet at one point. A
 `Transformer` has a ratio per winding that is
 a constant in a power flow and, in a dispatch problem, a decision between limits or

@@ -10,6 +10,7 @@
 # v0.12.0 - one Transformer; its controls are flags, not types                 #
 # v0.13.0 - one Branch, so no branch type is compared                          #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 # The reference values below are those of PowerModels.jl v0.21 in its
@@ -115,8 +116,8 @@ degrees(result, nw = 1) =
 
         # so generation equals demand exactly, with the shunt conductance included
         generated = sum(sol["unit"]["$u"]["p_gen"] for u in ids(net, Generator))
-        withdrawn = sum(unit(net, u).pd for u in ids(net, FixedLoad)) +
-                    sum(unit(net, u).gs for u in ids(net, Shunt))
+        withdrawn = sum(unit(net, u).p_set for u in ids(net, FixedLoad)) +
+                    sum(unit(net, u).g for u in ids(net, Shunt))
         @test generated ≈ withdrawn atol = 1e-7
 
         # and the node balance holds at every node
@@ -144,7 +145,7 @@ degrees(result, nw = 1) =
         end
         for u in ids(net, Generator)
             g = unit(net, u)
-            @test g.pmin - 1e-6 <= sol["unit"]["$u"]["p_gen"] <= g.pmax + 1e-6
+            @test g.p_min - 1e-6 <= sol["unit"]["$u"]["p_gen"] <= g.p_max + 1e-6
         end
     end
 end
@@ -156,13 +157,13 @@ end
 
         # the ratio magnitude has nothing to act on once every magnitude is one,
         # so a tap changer gives exactly the transformer it was built from
-        tap = quiet(() -> solve_opf(as_transformer(; oltc = true, tm_min = 0.8, tm_max = 1.2),
+        tap = quiet(() -> solve_opf(as_transformer(; oltc = true, t_magn_min = 0.8, t_magn_max = 1.2),
                                     LPFFormulation, OPTIMIZER))
         @test tap["objective"] ≈ plain["objective"] rtol = 1e-9
         @test degrees(tap) ≈ degrees(plain) atol = 1e-9
 
         # the ratio angle does survive, so a phase shifter enlarges the feasible set
-        data = as_transformer(; pst = true, ta_min = -0.2, ta_max = 0.2)
+        data = as_transformer(; pst = true, t_angl_min = -0.2, t_angl_max = 0.2)
         nm   = instantiate_model(data, OptimalPowerFlowProblem, LPFFormulation)
         pst  = quiet(() -> optimize_model!(nm, OPTIMIZER))
 
@@ -182,8 +183,8 @@ end
     @testset "a shunt keeps its conductance and loses its susceptance" begin
         I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF), 2 => Node(; id = 2))
         E = Dict{Int,AbstractEdge}(1 => Branch(; id = 1, terminals = [1, 2], r = 0.01, x = 0.1))
-        U = Dict{Int,AbstractUnit}(1 => Generator(; id = 1, node = 1, pmax = 5.0),
-                                   2 => Shunt(; id = 2, node = 2, gs = 0.03, bs = 0.40))
+        U = Dict{Int,AbstractUnit}(1 => Generator(; id = 1, node = 1, p_max = 5.0),
+                                   2 => Shunt(; id = 2, node = 2, g = 0.03, b = 0.40))
         data = NetworkData(Network(I, E, U); name = "shunt")
 
         result = quiet(() -> solve_lf(data, LPFFormulation, OPTIMIZER))
@@ -195,9 +196,9 @@ end
 
     @testset "a transformer with three windings hides its star point here too" begin
         r, x = [0.010, 0.020, 0.030], [0.100, 0.200, 0.300]
-        units() = Dict{Int,AbstractUnit}(1 => Generator(; id = 1, node = 1, pmax = 5.0),
-                                         2 => FixedLoad(; id = 2, node = 2, pd = 0.40),
-                                         3 => FixedLoad(; id = 3, node = 3, pd = 0.25))
+        units() = Dict{Int,AbstractUnit}(1 => Generator(; id = 1, node = 1, p_max = 5.0),
+                                         2 => FixedLoad(; id = 2, node = 2, p_set = 0.40),
+                                         3 => FixedLoad(; id = 3, node = 3, p_set = 0.25))
 
         star = NetworkData(Network(
             Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF),
@@ -234,11 +235,11 @@ end
         for e in ids(net, Transformer)
             tf   = edge(net, e)::Transformer
             E[e] = Transformer(; id = tf.id, name = tf.name, terminals = tf.terminals,
-                               r = tf.r, x = tf.x, g_sh = tf.g_sh, b_sh = tf.b_sh,
-                               tm = tf.tm, ta = 0.0, rate_a = tf.rate_a,
-                               angmin = tf.angmin, angmax = tf.angmax, status = tf.status)
+                               r = tf.r, x = tf.x, g_shnt = tf.g_shnt, b_shnt = tf.b_shnt,
+                               t_magn = tf.t_magn, t_angl = 0.0, s_max = tf.s_max,
+                               v_angl_min = tf.v_angl_min, v_angl_max = tf.v_angl_max, status = tf.status)
         end
-        flat = NetworkData(Network(net.node, E, net.unit); name = "flat", baseMVA = 100.0)
+        flat = NetworkData(Network(net.node, E, net.unit); name = "flat", s_base_mva = 100.0)
 
         sol = nw_solution(quiet(() -> solve_opf(flat, LPFFormulation, OPTIMIZER)))
         @test sol["edge"]["5"]["terminal"]["1"]["p_term"] ≈
@@ -246,9 +247,9 @@ end
     end
 
     @testset "the time coupled units work here too" begin
-        battery = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
-                          charge_rating = 0.2, discharge_rating = 0.2,
-                          charge_efficiency = 0.95, discharge_efficiency = 0.95)
+        battery = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
+                          p_chg_max = 0.2, p_dch_max = 0.2,
+                          η_chg = 0.95, η_dch = 0.95)
         data = price_network(PRICES; extra = Dict{Int,AbstractUnit}(3 => battery))
 
         result = quiet(() -> solve_model(data, OptimalPowerFlowProblem,
@@ -257,8 +258,8 @@ end
         @test nw_solution(result, 1)["unit"]["3"]["p_chg"] > 0.01   # charges when cheap
         @test nw_solution(result, 2)["unit"]["3"]["p_dch"] > 0.01   # discharges when dear
 
-        flat = FlexibleLoad(; id = 3, node = 2, pd_nominal = 0.10, qd_nominal = 0.02,
-                            pd_min = 0.0, pd_max = 0.15)
+        flat = FlexibleLoad(; id = 3, node = 2, p_nom = 0.10, q_nom = 0.02,
+                            p_min = 0.0, p_max = 0.15)
         shifted = quiet(() -> solve_model(price_network(PRICES;
                                               extra = Dict{Int,AbstractUnit}(3 => flat)),
                                           OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))

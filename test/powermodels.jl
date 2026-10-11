@@ -10,6 +10,7 @@
 # v0.11.0 - the switch problems of PowerModels.jl                              #
 # v0.12.0 - case5, whose transformers shift the phase                          #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 # lf.jl, lpf.jl and opf.jl check against PowerModels.jl v0.21 values frozen at
@@ -95,10 +96,10 @@
                 E    = Dict{Int,AbstractEdge}(net.edge)
                 for k in 1:3
                     E[2 + k] = Switch(; id = 2 + k, terminals = collect(ends[k]), lock,
-                                      position = state[k], rate_a = ratings[k])
+                                      position = state[k], s_max = ratings[k])
                 end
 
-                return NetworkData(Network(net.node, E, net.unit); baseMVA = baseMVA(data))
+                return NetworkData(Network(net.node, E, net.unit); s_base_mva = s_base_mva(data))
             end
 
             @testset "fixed switches, in power" begin

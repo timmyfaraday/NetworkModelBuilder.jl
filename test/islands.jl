@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.11.0 - the islands test                                                   #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 # Which nodes can exchange power, what a model does about an island that cannot
@@ -18,8 +19,8 @@
 
     br(id, i, j; kw...)   = Branch(; id, terminals = [i, j], r = 0.01, x = 0.1, kw...)
     sw(id, i, j; kw...)   = Switch(; id, terminals = [i, j], kw...)
-    gen(id, i; kw...)     = Generator(; id, node = i, pmax = 5.0, kw...)
-    load(id, i; pd = 1.0) = FixedLoad(; id, node = i, pd)
+    gen(id, i; kw...)     = Generator(; id, node = i, p_max = 5.0, kw...)
+    load(id, i; pd = 1.0) = FixedLoad(; id, node = i, p_set = pd)
 
     "a network of `n` nodes whose reference node is `reference`, none when it is 0"
     function toy(; n = 4, edges, units = AbstractUnit[], reference = 1, dim = nothing)
@@ -134,7 +135,7 @@
             E[e] = out_of_service(E[e])
         end
         island = NetworkData(Network(net.node, E, net.unit); name = "case14, node 14 cut off",
-                             baseMVA = baseMVA(data))
+                             s_base_mva = s_base_mva(data))
 
         @test length(cut) == 2
         @test islands(island) == [collect(1:13), [14]]
@@ -178,7 +179,7 @@
 
         # and a load flow anchors the same way
         lf = toy(edges = [br(1, 1, 2), br(2, 3, 4)],
-                 units = [gen(1, 1), load(2, 2), gen(3, 3; pg = 1.0), load(4, 4)])
+                 units = [gen(1, 1), load(2, 2), gen(3, 3; p_set = 1.0), load(4, 4)])
         pf = quiet(() -> solve_lf(lf, LPFFormulation, OPTIMIZER))
         @test pf["termination_status"] == JuMP.LOCALLY_SOLVED
         @test nw_solution(pf)["node"]["3"]["v_angl"] ≈ 0 atol = 1e-6
@@ -186,7 +187,7 @@
 
     @testset "a model that may open a switch may not leave a section on its own" begin
         # 1 -- 2 == 3, a branch and then a free switch, with the load behind the switch
-        data = toy(n = 3, edges = [br(1, 1, 2), sw(2, 2, 3; lock = FREE, rate_a = 5.0)],
+        data = toy(n = 3, edges = [br(1, 1, 2), sw(2, 2, 3; lock = FREE, s_max = 5.0)],
                    units = [gen(1, 1), load(2, 3)])
 
         msg = message(() -> check_islands(data))
@@ -200,7 +201,7 @@
 
         # a second path round it, and it may open
         around = toy(n = 3, units = [gen(1, 1), load(2, 3)],
-                     edges = [br(1, 1, 2), sw(2, 2, 3; lock = FREE, rate_a = 5.0), br(3, 1, 3)])
+                     edges = [br(1, 1, 2), sw(2, 2, 3; lock = FREE, s_max = 5.0), br(3, 1, 3)])
         @test check_islands(around) === nothing
 
         # a locked switch is data, not a decision
@@ -210,7 +211,7 @@
 
         # a free switch that is out of service is not there to open
         gone = toy(n = 3, units = [gen(1, 1), load(2, 3)],
-                   edges = [br(1, 1, 2), sw(2, 2, 3; lock = FREE, rate_a = 5.0, status = false)])
+                   edges = [br(1, 1, 2), sw(2, 2, 3; lock = FREE, s_max = 5.0, status = false)])
         @test occursin("no reference node and no source", message(() -> check_islands(gone)))
     end
 
@@ -228,8 +229,8 @@
     end
 
     @testset "a power flow holds a free switch where the data has it" begin
-        data = toy(n = 3, edges = [br(1, 1, 2), sw(2, 2, 3; lock = FREE, position = 0, rate_a = 5.0)],
-                   units = [gen(1, 1), gen(2, 3; pg = 1.0), load(3, 3)])
+        data = toy(n = 3, edges = [br(1, 1, 2), sw(2, 2, 3; lock = FREE, position = 0, s_max = 5.0)],
+                   units = [gen(1, 1), gen(2, 3; p_set = 1.0), load(3, 3)])
 
         @test islands(data) == [[1, 2, 3]]                        # a dispatch problem may close it
         @test islands(data; decide = false) == [[1, 2], [3]]      # a power flow may not

@@ -10,6 +10,7 @@
 # v0.12.0 - a phase shifter is a winding that can move                         #
 # v0.13.0 - a branch holds one entry per terminal of a field                   #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 # The network below is the one Zorba's own `BaseTestCase.get_ref_minimal_study`
@@ -85,9 +86,9 @@ end
         @test ps.pst == [CONTINUOUS, FIXED]
         @test ps.oltc == [FIXED, FIXED]
         @test ps.x ≈ [1.0, 0.0]
-        @test ps.rate_a ≈ [8.0, 8.0] ./ 100.0   # MW against a 100 MVA base
-        @test ps.ta_min[1] ≈ -deg2rad(30)
-        @test ps.ta_max[1] ≈  deg2rad(30)
+        @test ps.s_max ≈ [8.0, 8.0] ./ 100.0   # MW against a 100 MVA base
+        @test ps.t_angl_min[1] ≈ -deg2rad(30)
+        @test ps.t_angl_max[1] ≈  deg2rad(30)
 
         # a phase shifter is a non-costly measure, and the price Zorba put on it is
         # no longer taken
@@ -96,13 +97,13 @@ end
 
         # Zorba writes no angle difference limits, and ±π/2 is how this package
         # says there are none
-        @test edge(net, 2; nw = 1).angmin == -pi / 2
-        @test edge(net, 2; nw = 1).angmax ==  pi / 2
+        @test edge(net, 2; nw = 1).v_angl_min == -pi / 2
+        @test edge(net, 2; nw = 1).v_angl_max ==  pi / 2
 
         # a node exports `value_mw`, and a load withdraws, so the sign turns over
         @test unit(net, 1; nw = 1) isa FixedLoad
-        @test nw_value(dimension(data), unit(net, 1; nw = 1).pd, 1) ≈ -30.0 / 100.0
-        @test nw_value(dimension(data), unit(net, 3; nw = 1).pd, 1) ≈  30.0 / 100.0
+        @test nw_value(dimension(data), unit(net, 1; nw = 1).p_set, 1) ≈ -30.0 / 100.0
+        @test nw_value(dimension(data), unit(net, 3; nw = 1).p_set, 1) ≈  30.0 / 100.0
 
         # two hours and the base case, which is a state of the world like any other
         @test dim_length(data, :time) == 2
@@ -149,7 +150,7 @@ end
         # caller gave it rather than under the name of the branch beside it
         @test tables.grid_flows.Name[4] == "a - c"
         @test edge(net, 4; nw = 1) isa DCLink
-        @test edge(net, 4; nw = 1).cost == 10.0 * 100.0
+        @test edge(net, 4; nw = 1).c == 10.0 * 100.0
     end
 
     @testset "an outage is a change of topology" begin
@@ -197,12 +198,12 @@ end
 
         # which is what the gross-up buys: three states, so an average of the
         # congestion priced at three times over is the sum of it priced at one
-        @test zorba_study(data).redispatch.overload.per_energy ≈ 1e3 * 100.0 * 3
+        @test zorba_study(data).redispatch.overload.c_ener ≈ 1e3 * 100.0 * 3
 
         # a caller who gives probabilities is asking the other question
         expected = parse_zorba(; grid = ref_grid(), net_position = ref_net_position(),
                                  outage, contingency_weight = [0.98, 0.01, 0.01])
-        @test zorba_study(expected).redispatch.overload.per_energy ≈ 1e3 * 100.0
+        @test zorba_study(expected).redispatch.overload.c_ener ≈ 1e3 * 100.0
         @test dim_prop(dimension(expected), :contingency, 1, :weight) == 0.98
     end
 
@@ -216,9 +217,9 @@ end
         @test length(ens) == 3 && length(spill) == 3
 
         # bounded, and free: Zorba charges nothing for missing the balance
-        @test unit(net, first(ens); nw = 1).pmax ≈ 50.0 / 100.0
-        @test unit(net, first(ens); nw = 1).cost == 0.0
-        @test unit(net, first(spill); nw = 1).cost == 0.0
+        @test unit(net, first(ens); nw = 1).p_max ≈ 50.0 / 100.0
+        @test unit(net, first(ens); nw = 1).c == 0.0
+        @test unit(net, first(spill); nw = 1).c == 0.0
 
         # and it is used, since 50 MW of free relaxation is cheaper than the
         # congestion the study would otherwise pay for
@@ -247,7 +248,7 @@ end
         grid = merge(ref_grid(), (capacity = [8.0, missing, 11.0],))
         data = parse_zorba(; grid, net_position = ref_net_position())
 
-        @test edge(network(data), 2; nw = 1).rate_a == [Inf, Inf]
+        @test edge(network(data), 2; nw = 1).s_max == [Inf, Inf]
 
         # an edge with no rating has no overload to report, and reports zero
         # rather than dropping the row

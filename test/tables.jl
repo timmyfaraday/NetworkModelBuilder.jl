@@ -11,6 +11,7 @@
 # v0.9.3 - an all-empty table set warns instead of silently building nothing   #
 # v0.13.0 - a branch holds one entry per terminal of a field                   #
 # v0.13.0 - a cell may be a scalar or a list for such a field                  #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 # The radial network of `test/rd.jl` written as tables: the market ran generator
@@ -19,26 +20,25 @@
 # is what makes this a test of the reader rather than of its own fixture.
 
 const TBL_NODE = (id        = [1, 2],
-                  type      = ["REF", "PQ"],
-                  vm        = [1.0, 1.0])
+                  type       = ["REF", "PQ"],
+                  v_magn_set = [1.0, 1.0])
 
 const TBL_EDGE = (id        = [1],
                   component = ["Branch"],
                   terminals = [[1, 2]],
                   r         = [0.0],
                   x         = [0.1],
-                  rate_a    = [0.5])
+                  s_max     = [0.5])
 
 const TBL_UNIT = (id        = [1, 2, 3],
                   component = ["Generator", "Generator", "FixedLoad"],
                   node      = [1, 2, 2],
-                  pmax      = [5.0, 5.0, missing],
-                  qmin      = [-5.0, -5.0, missing],
-                  qmax      = [5.0, 5.0, missing],
-                  pg        = [1.0, 0.0, missing],
-                  cost      = [[0.0, 10.0], [0.0, 100.0], missing],
-                  pd        = [missing, missing, 1.0],
-                  qd        = [missing, missing, 0.0])
+                  p_max     = [5.0, 5.0, missing],
+                  q_min     = [-5.0, -5.0, missing],
+                  q_max     = [5.0, 5.0, missing],
+                  p_set     = [1.0, 0.0, 1.0],
+                  c         = [[0.0, 10.0], [0.0, 100.0], missing],
+                  q_set     = [missing, missing, 0.0])
 
 "the three tables of the radial network, as a keyword collection"
 radial_tables() = (node = TBL_NODE, edge = TBL_EDGE, unit = TBL_UNIT)
@@ -58,37 +58,37 @@ radial_tables() = (node = TBL_NODE, edge = TBL_EDGE, unit = TBL_UNIT)
         @test nodes(net)[2].type === PQ
         @test edges(net)[1] isa Branch
         @test edges(net)[1].terminals == [1, 2]
-        @test edges(net)[1].rate_a == [0.5, 0.5]
+        @test edges(net)[1].s_max == [0.5, 0.5]
         @test units(net)[1] isa Generator
-        @test units(net)[1].cost == [0.0, 10.0]
+        @test units(net)[1].c == [0.0, 10.0]
         @test units(net)[3] isa FixedLoad
-        @test units(net)[3].pd == 1.0
+        @test units(net)[3].p_set == 1.0
     end
 
     @testset "a field with an entry per terminal takes a scalar or a list" begin
-        node = (id = [1, 2, 3], type = ["REF", "PQ", "PQ"], vm = [1.0, 1.0, 1.0])
+        node = (id = [1, 2, 3], type = ["REF", "PQ", "PQ"], v_magn_set = [1.0, 1.0, 1.0])
         edge = (id        = [1, 2, 3],
                 component = ["Branch", "Branch", "Transformer"],
                 terminals = [[1, 2], [1, 2, 3], [2, 3]],
                 r         = [0.0, [0.0, 0.0, 0.0], 0.0],
                 x         = [0.1, [0.1, 0.2, 0.3], 0.1],
-                rate_a    = [0.5, 0.5, [0.5, 0.8]])
+                s_max     = [0.5, 0.5, [0.5, 0.8]])
         net  = network(parse_tables(; node, edge, unit = TBL_UNIT))
 
         @test edges(net)[1].x == [0.1, 0.0]
-        @test edges(net)[1].rate_a == [0.5, 0.5]
+        @test edges(net)[1].s_max == [0.5, 0.5]
         @test edges(net)[2].x == [0.1, 0.2, 0.3]
-        @test edges(net)[2].rate_a == [0.5, 0.5, 0.5]
+        @test edges(net)[2].s_max == [0.5, 0.5, 0.5]
         @test edges(net)[3] isa Transformer
-        @test edges(net)[3].rate_a == [0.5, 0.8]
+        @test edges(net)[3].s_max == [0.5, 0.8]
 
         # a scalar does not stand for three terminals, whoever reads it
         three = merge(edge, (id = [1], component = ["Branch"], terminals = [[1, 2, 3]],
-                             r = [0.0], x = [0.1], rate_a = [0.5]))
+                             r = [0.0], x = [0.1], s_max = [0.5]))
         @test_throws ArgumentError parse_tables(; node, edge = three, unit = TBL_UNIT)
 
         # and a generator's cost is still a list
-        poly = merge(TBL_UNIT, (cost = [0.0, 10.0, missing],))
+        poly = merge(TBL_UNIT, (c = [0.0, 10.0, missing],))
         @test_throws ArgumentError parse_tables(; node, edge, unit = poly)
     end
 
@@ -106,10 +106,10 @@ radial_tables() = (node = TBL_NODE, edge = TBL_EDGE, unit = TBL_UNIT)
         # what stacking two frames in a dataframe library produces
         net = network(parse_tables(; radial_tables()...))
 
-        @test units(net)[3].pd == 1.0
+        @test units(net)[3].p_set == 1.0
         @test units(net)[3].status == true            # never given, so the default
         @test units(net)[1].name == ""
-        @test nodes(net)[1].vmin == 0.9
+        @test nodes(net)[1].v_magn_min == 0.9
 
         # an empty string is blank too, which is what a text column writes
         blank = parse_tables(node = (id = [1], type = ["REF"], name = [""]),
@@ -137,13 +137,13 @@ radial_tables() = (node = TBL_NODE, edge = TBL_EDGE, unit = TBL_UNIT)
         data = parse_tables(
             node = (id = [1, 2], type = ["REF", "REF"]),
             edge = (id = [1], component = ["DCLink"], terminals = [[1, 2]],
-                    rate_a = [2.0], loss_prop = [0.05], reverse = [false]),
+                    s_max = [2.0], p_loss_prop = [0.05], reverse = [false]),
             unit = (id = [1, 2], component = ["Generator", "FixedLoad"],
-                    node = [1, 2], pmax = [5.0, missing], pd = [missing, 1.0]))
+                    node = [1, 2], p_max = [5.0, missing], p_set = [missing, 1.0]))
 
         dl = edges(network(data))[1]
         @test dl isa DCLink
-        @test dl.loss_prop == 0.05
+        @test dl.p_loss_prop == 0.05
         @test dl.reverse == false
     end
 
@@ -212,17 +212,17 @@ radial_tables() = (node = TBL_NODE, edge = TBL_EDGE, unit = TBL_UNIT)
         data = parse_tables(; radial_tables()...,
             dimension = (name = fill("time", 3), coordinate = [1, 2, 3]),
             profile   = (family = fill("unit", 3), id = fill(3, 3),
-                         field = fill("pd", 3), nw = [1, 2, 3],
+                         field = fill("p_set", 3), nw = [1, 2, 3],
                          value = [1.0, 2.0, 3.0]))
 
         dim = dimension(data)
         @test dim_length(dim) == 3
         ld = units(network(data))[3]
-        @test ld.pd isa NetworkVector
-        @test [nw_value(dim, ld.pd, n) for n in 1:3] == [1.0, 2.0, 3.0]
+        @test ld.p_set isa NetworkVector
+        @test [nw_value(dim, ld.p_set, n) for n in 1:3] == [1.0, 2.0, 3.0]
 
         # and it wins over the constant the component's own table gave
-        @test ld.pd isa NetworkVector
+        @test ld.p_set isa NetworkVector
     end
 
     @testset "an outage is a status that varies" begin
@@ -248,7 +248,7 @@ radial_tables() = (node = TBL_NODE, edge = TBL_EDGE, unit = TBL_UNIT)
         # short, which is far more likely a filter that dropped rows
         err = try
             parse_tables(; base..., dimension = dimtbl,
-                profile = (family = ["unit", "unit"], id = [3, 3], field = ["pd", "pd"],
+                profile = (family = ["unit", "unit"], id = [3, 3], field = ["p_set", "p_set"],
                            nw = [1, 2], value = [1.0, 2.0]))
         catch e; e end
         @test err isa ArgumentError
@@ -256,18 +256,18 @@ radial_tables() = (node = TBL_NODE, edge = TBL_EDGE, unit = TBL_UNIT)
 
         # given twice at one index
         @test_throws ArgumentError parse_tables(; base..., dimension = dimtbl,
-            profile = (family = fill("unit", 3), id = fill(3, 3), field = fill("pd", 3),
+            profile = (family = fill("unit", 3), id = fill(3, 3), field = fill("p_set", 3),
                        nw = [1, 1, 2], value = [1.0, 2.0, 3.0]))
 
         # at an index the problem does not have
         @test_throws ArgumentError parse_tables(; base..., dimension = dimtbl,
-            profile = (family = fill("unit", 3), id = fill(3, 3), field = fill("pd", 3),
+            profile = (family = fill("unit", 3), id = fill(3, 3), field = fill("p_set", 3),
                        nw = [1, 2, 9], value = [1.0, 2.0, 3.0]))
 
         # for a component no table declared, which would otherwise vanish
         err = try
             parse_tables(; base..., dimension = dimtbl,
-                profile = (family = fill("unit", 3), id = fill(77, 3), field = fill("pd", 3),
+                profile = (family = fill("unit", 3), id = fill(77, 3), field = fill("p_set", 3),
                            nw = [1, 2, 3], value = [1.0, 2.0, 3.0]))
         catch e; e end
         @test err isa ArgumentError
@@ -280,7 +280,7 @@ radial_tables() = (node = TBL_NODE, edge = TBL_EDGE, unit = TBL_UNIT)
 
         # columns that disagree on how many rows they have
         @test_throws ArgumentError parse_tables(; base..., dimension = dimtbl,
-            profile = (family = ["unit", "unit"], id = [3, 3], field = ["pd", "pd"],
+            profile = (family = ["unit", "unit"], id = [3, 3], field = ["p_set", "p_set"],
                        nw = [1, 2, 3], value = [1.0, 2.0, 3.0]))
     end
 
@@ -349,11 +349,11 @@ radial_tables() = (node = TBL_NODE, edge = TBL_EDGE, unit = TBL_UNIT)
         @test dim_length(dimension(data), :time) == 2
     end
 
-    @testset "name and baseMVA are the caller's to give" begin
-        data = parse_tables(; radial_tables()..., name = "radial", baseMVA = 250.0)
+    @testset "name and s_base_mva are the caller's to give" begin
+        data = parse_tables(; radial_tables()..., name = "radial", s_base_mva = 250.0)
 
         @test data.name == "radial"
-        @test data.baseMVA == 250.0
+        @test data.s_base_mva == 250.0
     end
 end
 
@@ -379,7 +379,7 @@ end
             @test data isa NetworkData
             @test sort(collect(keys(units(network(data))))) == [1, 2, 3]
             @test edges(network(data))[1].terminals == [1, 2]
-            @test units(network(data))[1].cost == [0.0, 10.0]
+            @test units(network(data))[1].c == [0.0, 10.0]
 
             # and it solves to the same hand-computed answer as the tables did
             result = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER))
@@ -403,13 +403,13 @@ end
             write_tables(dir; radial_tables()...,
                 dimension = (name = fill("time", 3), coordinate = [1, 2, 3]),
                 profile   = (family = fill("unit", 3), id = fill(3, 3),
-                             field = fill("pd", 3), nw = [1, 2, 3],
+                             field = fill("p_set", 3), nw = [1, 2, 3],
                              value = [1.0, 2.0, 3.0]))
 
             data = parse_arrow(dir)
             dim  = dimension(data)
             @test dim_length(dim) == 3
-            @test [nw_value(dim, units(network(data))[3].pd, n) for n in 1:3] == [1.0, 2.0, 3.0]
+            @test [nw_value(dim, units(network(data))[3].p_set, n) for n in 1:3] == [1.0, 2.0, 3.0]
         end
     end
 
@@ -429,8 +429,8 @@ end
         mktempdir() do dir
             write_tables(dir; radial_tables()...)
 
-            data = parse_arrow(dir; baseMVA = 250.0, dim = Dimension(:time => 4))
-            @test data.baseMVA == 250.0
+            data = parse_arrow(dir; s_base_mva = 250.0, dim = Dimension(:time => 4))
+            @test data.s_base_mva == 250.0
             @test dim_length(dimension(data), :time) == 4
         end
     end

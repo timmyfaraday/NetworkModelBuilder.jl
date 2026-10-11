@@ -10,6 +10,7 @@
 # v0.12.0 - a transformer has an entry per winding                             #
 # v0.13.0 - a branch holds one entry per terminal of a field                   #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 # The reference objectives below are those of PowerModels.jl v0.21, computed in
@@ -37,13 +38,13 @@
 
         for i in ids(net, Node)
             nd = node(net, i)
-            @test nd.vmin - 1e-6 <= sol["node"]["$i"]["v_magn"] <= nd.vmax + 1e-6
+            @test nd.v_magn_min - 1e-6 <= sol["node"]["$i"]["v_magn"] <= nd.v_magn_max + 1e-6
         end
 
         for u in ids(net, Generator)
             g = unit(net, u)
-            @test g.pmin - 1e-6 <= sol["unit"]["$u"]["p_gen"] <= g.pmax + 1e-6
-            @test g.qmin - 1e-6 <= sol["unit"]["$u"]["q_gen"] <= g.qmax + 1e-6
+            @test g.p_min - 1e-6 <= sol["unit"]["$u"]["p_gen"] <= g.p_max + 1e-6
+            @test g.q_min - 1e-6 <= sol["unit"]["$u"]["q_gen"] <= g.q_max + 1e-6
         end
 
         for e in ids(net, AbstractEdge)
@@ -78,19 +79,19 @@
         for e in ids(net, Branch)
             br = edge(net, e)::Branch
             E[e] = Branch(; id = br.id, name = br.name, terminals = br.terminals,
-                          r = br.r, x = br.x, b_sh = br.b_sh,
-                          rate_a = Inf, angmin = br.angmin, angmax = br.angmax,
+                          r = br.r, x = br.x, b_shnt = br.b_shnt,
+                          s_max  = Inf, v_angl_min = br.v_angl_min, v_angl_max = br.v_angl_max,
                           status = br.status)
         end
         for e in ids(net, Transformer)
             tf = edge(net, e)::Transformer
             E[e] = Transformer(; id = tf.id, name = tf.name, terminals = tf.terminals,
-                               r = tf.r, x = tf.x, g_sh = tf.g_sh, b_sh = tf.b_sh,
-                               tm = tf.tm, ta = tf.ta, rate_a = Inf,
-                               angmin = tf.angmin, angmax = tf.angmax, status = tf.status)
+                               r = tf.r, x = tf.x, g_shnt = tf.g_shnt, b_shnt = tf.b_shnt,
+                               t_magn = tf.t_magn, t_angl = tf.t_angl, s_max = Inf,
+                               v_angl_min = tf.v_angl_min, v_angl_max = tf.v_angl_max, status = tf.status)
         end
         relaxed = NetworkData(Network(net.node, E, net.unit);
-                              name = "case5 unlimited", baseMVA = baseMVA(data))
+                              name = "case5 unlimited", s_base_mva = s_base_mva(data))
 
         limited = quiet(() -> solve_opf(data, IVRFormulation, OPTIMIZER))
         opened  = quiet(() -> solve_opf(relaxed, IVRFormulation, OPTIMIZER))

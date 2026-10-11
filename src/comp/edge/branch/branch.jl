@@ -9,13 +9,14 @@
 # v0.3.0 - component hierarchy                                                 #
 # v0.10.1 - exports its own public names                                       #
 # v0.12.8 - a branch refuses an impedance or a rating no model can use         #
-# v0.13.0 - one Branch: a cable and an overhead line are its length_km         #
+# v0.13.0 - one Branch: a cable and an overhead line are its l_km         #
 # v0.13.0 - the pi-section and the series current of a branch are here         #
 # v0.13.0 - a branch is limited by its ratings and its angle limit, apart      #
 # v0.13.0 - a branch has one entry per terminal, and two or more terminals     #
 # v0.13.0 - checking plain data allocates nothing                              #
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 export AbstractBranch, Branch, impedance, shunt_admittance, dynamic_rating
@@ -37,8 +38,8 @@ types of their own: in a steady-state model both are a series impedance between
 two shunt admittances, so each is a [`Branch`](@ref) with its own data.
 
 A concrete branch carries `id`, `name`, `terminals` (two or more), `r`, `x`,
-`g_sh`, `b_sh`, `rate_a`, `angmin`, `angmax`, `length_km`, `status` and `ext`.
-Every field but `id`, `name`, `terminals`, `length_km` and `ext` may be a
+`g_shnt`, `b_shnt`, `s_max`, `v_angl_min`, `v_angl_max`, `l_km`, `status` and `ext`.
+Every field but `id`, `name`, `terminals`, `l_km` and `ext` may be a
 [`NetworkVector`](@ref).
 """
 abstract type AbstractBranch <: AbstractEdge end
@@ -55,7 +56,7 @@ point is not a node: it has no identifier and appears in neither `ids(net, Node)
 nor the node part of a solution, it is a pair of variables belonging to the edge.
 
 This is what a Matpower branch without a turns ratio becomes, and what a cable or
-an overhead line is: they differ in `length_km` and in a rating that may follow
+an overhead line is: they differ in `l_km` and in a rating that may follow
 the weather, not in the equations. Where the edge has a turns ratio it is a
 [`Transformer`](@ref), not a branch.
 
@@ -65,82 +66,82 @@ Every field with an entry per terminal is indexed by terminal position, and entr
 - `id`, `name`: the identifier and a human readable label.
 - `terminals`: the nodes the sections start at, two or more.
 - `r`, `x`: the series resistance and reactance of each section [pu].
-- `g_sh`, `b_sh`: the shunt admittance of each section [pu], half of it at each
-  end of the section. A line with total charging susceptance `b` has `b_sh = b`.
+- `g_shnt`, `b_shnt`: the shunt admittance of each section [pu], half of it at each
+  end of the section. A line with total charging susceptance `b` has `b_shnt = b`.
   On a [`Transformer`](@ref) the same names are the shunt at the terminal side of
   a winding.
-- `rate_a`: the apparent power rating at each terminal [pu], `Inf` when unlimited.
-- `angmin`, `angmax`: the limits on the voltage angle difference between the two
+- `s_max`: the apparent power rating at each terminal [pu], `Inf` when unlimited.
+- `v_angl_min`, `v_angl_max`: the limits on the voltage angle difference between the two
   terminals of a branch with two [rad]. A branch with more has none.
-- `length_km`: the route length [km], `NaN` where it is not known.
+- `l_km`: the route length [km], `NaN` where it is not known.
 - `status`: whether the branch is in service.
 - `ext`: free-form storage.
 
 Two terminals are one section: a scalar stands for the first entry of `r`, `x`,
-`g_sh` and `b_sh`, whose second entry is 0 and has to be, and a scalar `rate_a`
-for every terminal. With more terminals each of them is a vector, but `rate_a`,
+`g_shnt` and `b_shnt`, whose second entry is 0 and has to be, and a scalar `s_max`
+for every terminal. With more terminals each of them is a vector, but `s_max`,
 which may still be one number.
 
-A branch is refused when an entry of `r`, `x`, `g_sh` or `b_sh` is not finite,
-when a section has no impedance, `r` and `x` both 0, when `rate_a` is negative or
-NaN, when its angle limits are out of order, or when its `length_km` is negative
+A branch is refused when an entry of `r`, `x`, `g_shnt` or `b_shnt` is not finite,
+when a section has no impedance, `r` and `x` both 0, when `s_max` is negative or
+NaN, when its angle limits are out of order, or when its `l_km` is negative
 or infinite. A bus coupler has no impedance to give: it is a [`Switch`](@ref).
 """
 Base.@kwdef struct Branch <: AbstractBranch
-    id       ::Int
-    name     ::String                             = ""
-    terminals::Vector{Int}
-    r        ::NetworkQuantity{Vector{Float64}}
-    x        ::NetworkQuantity{Vector{Float64}}
-    g_sh     ::NetworkQuantity{Vector{Float64}}   = 0.0
-    b_sh     ::NetworkQuantity{Vector{Float64}}   = 0.0
-    rate_a   ::NetworkQuantity{Vector{Float64}}   = Inf
-    angmin   ::NetworkQuantity{Float64}           = -pi / 3
-    angmax   ::NetworkQuantity{Float64}           =  pi / 3
-    length_km::Float64                            = NaN
-    status   ::NetworkQuantity{Bool}              = true
-    ext      ::Dict{Symbol,Any}                   = Dict{Symbol,Any}()
+    id        ::Int
+    name      ::String                           = ""
+    terminals ::Vector{Int}
+    r         ::NetworkQuantity{Vector{Float64}}
+    x         ::NetworkQuantity{Vector{Float64}}
+    g_shnt    ::NetworkQuantity{Vector{Float64}} = 0.0
+    b_shnt    ::NetworkQuantity{Vector{Float64}} = 0.0
+    s_max     ::NetworkQuantity{Vector{Float64}} = Inf
+    v_angl_min::NetworkQuantity{Float64}         = -pi / 3
+    v_angl_max::NetworkQuantity{Float64}         =  pi / 3
+    l_km      ::Float64                          = NaN
+    status    ::NetworkQuantity{Bool}            = true
+    ext       ::Dict{Symbol,Any}                 = Dict{Symbol,Any}()
 
-    function Branch(id, name, terminals, r, x, g_sh, b_sh, rate_a, angmin, angmax,
-                    length_km, status, ext)
+    function Branch(id, name, terminals, r, x, g_shnt, b_shnt, s_max, v_angl_min, v_angl_max,
+                    l_km, status, ext)
         n = length(terminals)
         n >= 2 ||
             throw(ArgumentError("branch $id has $n terminals, a branch has at least two"))
 
         r      = _per_terminal(r,      n, 0.0, "branch", "terminal", id, :r)
         x      = _per_terminal(x,      n, 0.0, "branch", "terminal", id, :x)
-        g_sh   = _per_terminal(g_sh,   n, 0.0, "branch", "terminal", id, :g_sh)
-        b_sh   = _per_terminal(b_sh,   n, 0.0, "branch", "terminal", id, :b_sh)
-        rate_a = _per_terminal(rate_a, n, Inf, "branch", "terminal", id, :rate_a; every = true)
+        g_shnt = _per_terminal(g_shnt, n, 0.0, "branch", "terminal", id, :g_shnt)
+        b_shnt = _per_terminal(b_shnt, n, 0.0, "branch", "terminal", id, :b_shnt)
+        s_max  = _per_terminal(s_max,  n, Inf, "branch", "terminal", id, :s_max; every = true)
 
-        _check_branch(id, n, r, x, g_sh, b_sh, rate_a, angmin, angmax)
-        _check_length(id, length_km)
-        return new(id, name, terminals, r, x, g_sh, b_sh, rate_a, angmin, angmax,
-                   length_km, status, ext)
+        _check_branch(id, n, r, x, g_shnt, b_shnt, s_max, v_angl_min, v_angl_max)
+        _check_length(id, l_km)
+        return new(id, name, terminals, r, x, g_shnt, b_shnt, s_max, v_angl_min, v_angl_max,
+                   l_km, status, ext)
     end
 end
 
 _per_terminal_data(::Type{Branch}) = true
 
-function _check_branch(id, n, r::Vector{Float64}, x::Vector{Float64}, g_sh::Vector{Float64},
-                       b_sh::Vector{Float64}, rate_a::Vector{Float64}, angmin::Real,
-                       angmax::Real)
+function _check_branch(id, n, r::Vector{Float64}, x::Vector{Float64}, g_shnt::Vector{Float64},
+                       b_shnt::Vector{Float64}, s_max::Vector{Float64}, v_angl_min::Real,
+                       v_angl_max::Real)
     # two terminals are one section, and a second one is what a third terminal is for
-    n > 2 || (iszero(r[2]) && iszero(x[2]) && iszero(g_sh[2]) && iszero(b_sh[2])) ||
+    n > 2 || (iszero(r[2]) && iszero(x[2]) && iszero(g_shnt[2]) && iszero(b_shnt[2])) ||
         throw(ArgumentError("branch $id has two terminals, which are one section: the second " *
-                            "entry of `r`, `x`, `g_sh` and `b_sh` is 0, and a branch whose " *
+                            "entry of `r`, `x`, `g_shnt` and `b_shnt` is 0, and a branch whose " *
                             "second section carries something has three terminals"))
     all(isfinite, r) && all(isfinite, x) ||
         throw(ArgumentError("branch $id has an impedance that is not finite"))
     all(k -> r[k]^2 + x[k]^2 > 0, 1:(n == 2 ? 1 : n)) ||
         throw(ArgumentError("branch $id has a section with no impedance, r and x are both 0: " *
                             "a bus coupler is a Switch"))
-    all(isfinite, g_sh) && all(isfinite, b_sh) ||
+    all(isfinite, g_shnt) && all(isfinite, b_shnt) ||
         throw(ArgumentError("branch $id has a shunt admittance that is not finite"))
-    all(>=(0), rate_a) ||
+    all(>=(0), s_max) ||
         throw(ArgumentError("branch $id has a rating that is negative or NaN"))
-    angmin <= angmax ||
-        throw(ArgumentError("branch $id has angmin above angmax"))
+    v_angl_min <= v_angl_max ||
+        throw(ArgumentError("branch $id has v_angl_min above v_angl_max"))
 
     return nothing
 end
@@ -157,8 +158,8 @@ function _check_branch(id, n, data...)
 end
 
 "refuse a route length that is negative or infinite; NaN says it is not known"
-function _check_length(id, length_km)
-    isnan(length_km) || (isfinite(length_km) && length_km >= 0) ||
+function _check_length(id, l_km)
+    isnan(l_km) || (isfinite(l_km) && l_km >= 0) ||
         throw(ArgumentError("branch $id has a length that is negative or infinite"))
 
     return nothing
@@ -169,27 +170,27 @@ register_edge_type!(Branch)
 """
     structure_gates(br)
 
-A branch writes its rating only where `rate_a` is finite and its angle limits
+A branch writes its rating only where `s_max` is finite and its angle limits
 only where they fall inside `(-π/2, π/2)`, so those three decide the shape of
 its model rather than a number in it. See [`structure_gates`](@ref).
 """
-structure_gates(::AbstractBranch) = (:rate_a, :angmin, :angmax)
+structure_gates(::AbstractBranch) = (:s_max, :v_angl_min, :v_angl_max)
 
 "the series impedance of every section of a branch, resolved at one network index"
 impedance(br::AbstractBranch) = (br.r, br.x)
 
 "the shunt admittance of every section of a branch, resolved at one network index"
-shunt_admittance(br::AbstractBranch) = (br.g_sh, br.b_sh)
+shunt_admittance(br::AbstractBranch) = (br.g_shnt, br.b_shnt)
 
 """
     dynamic_rating(br)
 
-The rating of a branch at one network index. Give `rate_a` a
+The rating of a branch at one network index. Give `s_max` a
 [`NetworkVector`](@ref) over the `:time` dimension and the thermal limit of the
 branch becomes a profile, a rating that follows the ambient conditions, without
 any change to the constraint that enforces it.
 """
-dynamic_rating(br::AbstractBranch) = br.rate_a
+dynamic_rating(br::AbstractBranch) = br.s_max
 
 "whether branch `e` has two terminals, which is one π-section between them"
 _is_pi(nm::NetworkModel, e::Int) = nterminals(edges(network(nm))[e]) == 2
@@ -341,7 +342,7 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
 
         a_fr, a_to = A
         i          = a_fr.node
-        y          = (br.g_sh[1] / 2, br.b_sh[1] / 2)
+        y          = (br.g_shnt[1] / 2, br.b_shnt[1] / 2)
 
         branch[e] = constraint_pi_section!(nm, i_term_real[a_fr], i_term_imag[a_fr], v_real[i], v_imag[i],
                                            a_to, e, (br.r[1], br.x[1]), y, y; nw)
@@ -368,7 +369,7 @@ function _constraint_sections!(nm::NetworkModel, br::AbstractBranch, e::Int, A; 
 
     sections = map(enumerate(A)) do (k, a)
         i    = a.node
-        g, b = br.g_sh[k] / 2, br.b_sh[k] / 2
+        g, b = br.g_shnt[k] / 2, br.b_shnt[k] / 2
 
         if iszero(g) && iszero(b)
             push!(csr, i_term_real[a])
@@ -384,7 +385,7 @@ function _constraint_sections!(nm::NetworkModel, br::AbstractBranch, e::Int, A; 
              v_imag[i] - v_pnt_imag == br.r[k] * csi[k] + br.x[k] * csr[k]); nw))
     end
 
-    g, b  = sum(br.g_sh) / 2, sum(br.b_sh) / 2
+    g, b  = sum(br.g_shnt) / 2, sum(br.b_shnt) / 2
     point = (constrain!(nm, :branch_point, (e, :real), JuMP.@build_constraint(
                  sum(csr) == g * v_pnt_real - b * v_pnt_imag); nw),
              constrain!(nm, :branch_point, (e, :imag), JuMP.@build_constraint(
@@ -408,9 +409,9 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_i
         br = edge(nm, e; nw)::T
         A  = edge_arcs(nm, e; nw)
 
-        rating[e] = constraint_edge_rating!(nm, e, br.rate_a; nw)
+        rating[e] = constraint_edge_rating!(nm, e, br.s_max; nw)
         length(A) == 2 &&
-            (angle[e] = constraint_edge_angle_difference!(nm, A[1], A[2], br.angmin, br.angmax; nw))
+            (angle[e] = constraint_edge_angle_difference!(nm, A[1], A[2], br.v_angl_min, br.v_angl_max; nw))
     end
 
     return nothing
@@ -510,9 +511,9 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_i
         A  = edge_arcs(nm, e; nw)
 
         limits[e] = length(A) == 2 ?
-            (constraint_linear_ratings!(nm, e, A, br.rate_a; nw),
-             constraint_linear_angle_difference!(nm, A[1], A[2], br.angmin, br.angmax; nw)) :
-            constraint_linear_ratings!(nm, e, A, br.rate_a; nw)
+            (constraint_linear_ratings!(nm, e, A, br.s_max; nw),
+             constraint_linear_angle_difference!(nm, A[1], A[2], br.v_angl_min, br.v_angl_max; nw)) :
+            constraint_linear_ratings!(nm, e, A, br.s_max; nw)
     end
 
     return nothing

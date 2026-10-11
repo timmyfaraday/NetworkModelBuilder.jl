@@ -12,7 +12,9 @@ older ones: git has them). Next id: **B32**.
     Stage 1 done: `test/nomenclature.jl` is red on purpose (1,639 old names written). Stage 2 done: `set_string_name` (D61), names on
     +2-4 % against the control (accepted by Tom), names off 26 % faster. Stage 3 done: variable keys, solution keys and the locals
     that hold a key's variables (438 identifiers, by syntax tree), 24 h chunk byte-identical; old names written 1,639 to 776, the
-    variable-key and solution-key checks green. Next: stage 4, the fields layer.
+    variable-key and solution-key checks green. Stage 4 done: the fields (struct, constructors, `_check_*`, keywords, accesses, symbols,
+    prose; about 2,000 identifiers by syntax tree), `baseMVA` to `s_base_mva` as field, accessor and keyword, tables, Matpower and Zorba
+    at their boundary; suite 3,447 pass, only the old-names check red (183 in `docs/src`), 24 h chunk byte-identical. Next: stage 5, docs.
     Constraints and their names are the next item.
 
 ## Next

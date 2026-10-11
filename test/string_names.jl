@@ -16,17 +16,17 @@
 
 "two nodes, a cheap generator behind a rated branch, a dear one at the load, over `dim`"
 function named_network(; dim::Dimension = Dimension())
-    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0), 2 => Node(; id = 2))
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0), 2 => Node(; id = 2))
     E = Dict{Int,AbstractEdge}(
-        1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, rate_a = 0.5))
+        1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, s_max = 0.5))
     U = Dict{Int,AbstractUnit}(
-        1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       pg = 1.0, cost = [0.0, 10.0]),
-        2 => Generator(; id = 2, node = 2, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       pg = 0.0, cost = [0.0, 100.0]),
-        3 => FixedLoad(; id = 3, node = 2, pd = 1.0, qd = 0.0))
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       p_set = 1.0, c = [0.0, 10.0]),
+        2 => Generator(; id = 2, node = 2, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       p_set = 0.0, c = [0.0, 100.0]),
+        3 => FixedLoad(; id = 3, node = 2, p_set = 1.0, q_set = 0.0))
 
-    return NetworkData(Network(I, E, U; dim); name = "named", baseMVA = 100.0)
+    return NetworkData(Network(I, E, U; dim); name = "named", s_base_mva = 100.0)
 end
 
 "whether no variable of the model has a name"

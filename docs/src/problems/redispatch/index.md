@@ -39,9 +39,9 @@ over a horizon is a `pg` that varies over `:time`:
 mn = set_dimension(data, Dimension(:time => 24); apply! = function (net, dim)
     for (u, g) in net.unit
         g isa Generator || continue
-        net.unit[u] = Generator(; id = g.id, node = g.node, pmin = g.pmin, pmax = g.pmax,
-                                qmin = g.qmin, qmax = g.qmax, cost = g.cost,
-                                pg = nw_vector(dim, :time, market_schedule[u]))
+        net.unit[u] = Generator(; id = g.id, node = g.node, p_min = g.p_min, p_max = g.p_max,
+                                q_min = g.q_min, q_max = g.q_max, c = g.c,
+                                p_set = nw_vector(dim, :time, market_schedule[u]))
     end
 end)
 ```
@@ -191,8 +191,8 @@ dim = Dimension(:time => 8760)
 dim_meta(dim, :time)[:period_length] = 24        # the periods are days
 
 solve_rd(set_dimension(data, dim), LPFFormulation, HiGHS.Optimizer;
-         redispatch = Redispatch(; overload = OverloadPrice(; per_energy = 500.0,
-                                                              per_peak   = 15_000.0)))
+         redispatch = Redispatch(; overload = OverloadPrice(; c_ener = 500.0,
+                                                              c_peak     = 15_000.0)))
 ```
 
 Every monitored edge gets one non-negative peak per period, `ô_e`, bounded from

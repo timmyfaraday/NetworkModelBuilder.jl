@@ -15,9 +15,10 @@
 # v0.13.0 - a two-winding transformer is rated at each terminal                #
 # v0.13.0 - its per-winding data is normalised in edge.jl                      #
 # v0.13.0 - a table may give a scalar where it takes an entry per winding      #
-# v0.13.0 - the docstring says what g_sh is, against a branch's                #
+# v0.13.0 - the docstring says what g_shnt is, against a branch's                #
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 export AbstractTransformer, Transformer, TapMode, FIXED, CONTINUOUS, STEPPED
@@ -66,9 +67,9 @@ model with no magnetising branch, the impedance on the first winding and a shunt
 on each: the star point then lies on the series path, and where the impedance is
 split between the windings does not matter.
 
-The ratio of a winding is `T = tm · exp(j·ta)`. Whether it is data or a decision
-is a property of the winding: `oltc` says whether the magnitude `tm` can be moved,
-as an on-load tap changer does, and `pst` whether the angle `ta` can, as a phase
+The ratio of a winding is `T = t_magn · exp(j·t_angl)`. Whether it is data or a decision
+is a property of the winding: `oltc` says whether the magnitude `t_magn` can be moved,
+as an on-load tap changer does, and `pst` whether the angle `t_angl` can, as a phase
 shifter does. A dispatch problem chooses a ratio that can move, between its
 limits; a power flow, which chooses nothing, holds it at the setpoint.
 
@@ -78,22 +79,22 @@ Every field with an entry per winding is indexed by terminal position.
 - `terminals`: the nodes the windings connect to, two or more.
 - `r`, `x`: the series resistance and reactance of each winding [pu], referred to
   the star point.
-- `g_sh`, `b_sh`: the shunt admittance behind each ratio [pu], zero by default, the
+- `g_shnt`, `b_shnt`: the shunt admittance behind each ratio [pu], zero by default, the
   whole of it at the terminal side of the winding. On a [`Branch`](@ref) the same
   names are the shunt of a section, half of it at each end.
-- `g_m`, `b_m`: the magnetising admittance at the star point [pu].
-- `tm`, `ta`: the magnitude [pu] and the angle [rad] of the ratio of each
+- `g_mgnt`, `b_mgnt`: the magnetising admittance at the star point [pu].
+- `t_magn`, `t_angl`: the magnitude [pu] and the angle [rad] of the ratio of each
   winding, or the setpoint of it where it can move.
 - `oltc`, `pst`: per winding, a [`TapMode`](@ref) or a `Bool`, `FIXED` by default.
-- `tm_min`, `tm_max`: the limits of the magnitude where `oltc` is `CONTINUOUS`,
+- `t_magn_min`, `t_magn_max`: the limits of the magnitude where `oltc` is `CONTINUOUS`,
   `0.9` and `1.1` by default.
-- `ta_min`, `ta_max`: the limits of the angle where `pst` is `CONTINUOUS`, `±π/12`
+- `t_angl_min`, `t_angl_max`: the limits of the angle where `pst` is `CONTINUOUS`, `±π/12`
   by default.
-- `tm_step`, `ta_step`: the distance between the positions of a winding that is
-  `STEPPED`, which run from `tm_min` to `tm_max` and from `ta_min` to `ta_max`;
+- `t_magn_step`, `t_angl_step`: the distance between the positions of a winding that is
+  `STEPPED`, which run from `t_magn_min` to `t_magn_max` and from `t_angl_min` to `t_angl_max`;
   `0.0125` and one degree by default.
-- `rate_a`: the apparent power rating at each terminal [pu], `Inf` when unlimited.
-- `angmin`, `angmax`: the limits on the voltage angle difference between the two
+- `s_max`: the apparent power rating at each terminal [pu], `Inf` when unlimited.
+- `v_angl_min`, `v_angl_max`: the limits on the voltage angle difference between the two
   terminals of a two-winding transformer [rad]. A transformer with more windings
   has none.
 - `status`: whether the transformer is in service.
@@ -101,12 +102,12 @@ Every field with an entry per winding is indexed by terminal position.
 
 A transformer with two windings accepts a scalar where a field takes an entry per
 winding: it stands for the first winding, and the second is neutral — a ratio of
-one, no shift, no impedance, no shunt — except for `rate_a`, which applies to
+one, no shift, no impedance, no shunt — except for `s_max`, which applies to
 both terminals. With more windings every such field is a vector.
 
 A winding that is both `oltc` and `pst` moves its magnitude and its angle at once,
-which in the current based formulation puts the ratio in a ring between `tm_min`
-and `tm_max`, cut to the angles between `ta_min` and `ta_max`.
+which in the current based formulation puts the ratio in a ring between `t_magn_min`
+and `t_magn_max`, cut to the angles between `t_angl_min` and `t_angl_max`.
 
 A `STEPPED` winding takes one of the positions of its range, a binary variable for
 each, which makes a dispatch problem mixed-integer: there are no duals, and in the
@@ -120,44 +121,44 @@ that steps one of the two and moves the other continuously is not built.
 
 # Examples
 ```julia
-julia> Transformer(; id = 1, terminals = [2, 7], r = 0.001, x = 0.1, tm = 1.05)
+julia> Transformer(; id = 1, terminals = [2, 7], r = 0.001, x = 0.1, t_magn = 1.05)
 
 julia> Transformer(; id = 2, terminals = [3, 4], r = 0.0, x = 0.1, pst = true,
-                     ta_min = -0.3, ta_max = 0.3)
+                     t_angl_min = -0.3, t_angl_max = 0.3)
 
 julia> Transformer(; id = 3, terminals = [1, 5, 6], r = [0.01, 0.02, 0.03],
-                     x = [0.1, 0.2, 0.3], g_m = 0.001, b_m = -0.01)
+                     x = [0.1, 0.2, 0.3], g_mgnt = 0.001, b_mgnt = -0.01)
 ```
 """
 Base.@kwdef struct Transformer <: AbstractTransformer
-    id       ::Int
-    name     ::String                              = ""
-    terminals::Vector{Int}
-    r        ::NetworkQuantity{Vector{Float64}}
-    x        ::NetworkQuantity{Vector{Float64}}
-    g_sh     ::NetworkQuantity{Vector{Float64}}    = 0.0
-    b_sh     ::NetworkQuantity{Vector{Float64}}    = 0.0
-    g_m      ::NetworkQuantity{Float64}            = 0.0
-    b_m      ::NetworkQuantity{Float64}            = 0.0
-    tm       ::NetworkQuantity{Vector{Float64}}    = 1.0
-    ta       ::NetworkQuantity{Vector{Float64}}    = 0.0
-    oltc     ::Vector{TapMode}                     = FIXED
-    pst      ::Vector{TapMode}                     = FIXED
-    tm_min   ::NetworkQuantity{Vector{Float64}}    = 0.9
-    tm_max   ::NetworkQuantity{Vector{Float64}}    = 1.1
-    ta_min   ::NetworkQuantity{Vector{Float64}}    = -pi / 12
-    ta_max   ::NetworkQuantity{Vector{Float64}}    =  pi / 12
-    tm_step  ::NetworkQuantity{Vector{Float64}}    = 0.0125
-    ta_step  ::NetworkQuantity{Vector{Float64}}    = pi / 180
-    rate_a   ::NetworkQuantity{Vector{Float64}}    = Inf
-    angmin   ::NetworkQuantity{Float64}            = -pi / 3
-    angmax   ::NetworkQuantity{Float64}            =  pi / 3
-    status   ::NetworkQuantity{Bool}               = true
-    ext      ::Dict{Symbol,Any}                    = Dict{Symbol,Any}()
+    id         ::Int
+    name       ::String                           = ""
+    terminals  ::Vector{Int}
+    r          ::NetworkQuantity{Vector{Float64}}
+    x          ::NetworkQuantity{Vector{Float64}}
+    g_shnt     ::NetworkQuantity{Vector{Float64}} = 0.0
+    b_shnt     ::NetworkQuantity{Vector{Float64}} = 0.0
+    g_mgnt     ::NetworkQuantity{Float64}         = 0.0
+    b_mgnt     ::NetworkQuantity{Float64}         = 0.0
+    t_magn     ::NetworkQuantity{Vector{Float64}} = 1.0
+    t_angl     ::NetworkQuantity{Vector{Float64}} = 0.0
+    oltc       ::Vector{TapMode}                  = FIXED
+    pst        ::Vector{TapMode}                  = FIXED
+    t_magn_min ::NetworkQuantity{Vector{Float64}} = 0.9
+    t_magn_max ::NetworkQuantity{Vector{Float64}} = 1.1
+    t_angl_min ::NetworkQuantity{Vector{Float64}} = -pi / 12
+    t_angl_max ::NetworkQuantity{Vector{Float64}} =  pi / 12
+    t_magn_step::NetworkQuantity{Vector{Float64}} = 0.0125
+    t_angl_step::NetworkQuantity{Vector{Float64}} = pi / 180
+    s_max      ::NetworkQuantity{Vector{Float64}} = Inf
+    v_angl_min ::NetworkQuantity{Float64}         = -pi / 3
+    v_angl_max ::NetworkQuantity{Float64}         =  pi / 3
+    status     ::NetworkQuantity{Bool}            = true
+    ext        ::Dict{Symbol,Any}                 = Dict{Symbol,Any}()
 
-    function Transformer(id, name, terminals, r, x, g_sh, b_sh, g_m, b_m, tm, ta, oltc, pst,
-                         tm_min, tm_max, ta_min, ta_max, tm_step, ta_step, rate_a, angmin,
-                         angmax, status, ext)
+    function Transformer(id, name, terminals, r, x, g_shnt, b_shnt, g_mgnt, b_mgnt, t_magn, t_angl,
+                         oltc, pst, t_magn_min, t_magn_max, t_angl_min, t_angl_max, t_magn_step,
+                         t_angl_step, s_max, v_angl_min, v_angl_max, status, ext)
         n = length(terminals)
         n >= 2 ||
             throw(ArgumentError("transformer $id has $n terminals, a transformer has at least two"))
@@ -165,28 +166,28 @@ Base.@kwdef struct Transformer <: AbstractTransformer
         per(x, neutral, field; every = false) =
             _per_terminal(x, n, neutral, "transformer", "winding", id, field; every)
 
-        r      = per(r,      0.0,      :r)
-        x      = per(x,      0.0,      :x)
-        g_sh   = per(g_sh,   0.0,      :g_sh)
-        b_sh   = per(b_sh,   0.0,      :b_sh)
-        tm     = per(tm,     1.0,      :tm)
-        ta     = per(ta,     0.0,      :ta)
-        tm_min = per(tm_min, 0.9,      :tm_min)
-        tm_max = per(tm_max, 1.1,      :tm_max)
-        ta_min = per(ta_min, -pi / 12, :ta_min)
-        ta_max = per(ta_max,  pi / 12, :ta_max)
-        tm_step = per(tm_step, 0.0125,   :tm_step)
-        ta_step = per(ta_step, pi / 180, :ta_step)
-        rate_a = per(rate_a, Inf,      :rate_a; every = true)
-        oltc   = _tap_modes(oltc, n, id, :oltc)
-        pst    = _tap_modes(pst,  n, id, :pst)
+        r           = per(r,           0.0,      :r)
+        x           = per(x,           0.0,      :x)
+        g_shnt      = per(g_shnt,      0.0,      :g_shnt)
+        b_shnt      = per(b_shnt,      0.0,      :b_shnt)
+        t_magn      = per(t_magn,      1.0,      :t_magn)
+        t_angl      = per(t_angl,      0.0,      :t_angl)
+        t_magn_min  = per(t_magn_min,  0.9,      :t_magn_min)
+        t_magn_max  = per(t_magn_max,  1.1,      :t_magn_max)
+        t_angl_min  = per(t_angl_min,  -pi / 12, :t_angl_min)
+        t_angl_max  = per(t_angl_max,   pi / 12, :t_angl_max)
+        t_magn_step = per(t_magn_step, 0.0125,   :t_magn_step)
+        t_angl_step = per(t_angl_step, pi / 180, :t_angl_step)
+        s_max       = per(s_max,       Inf,      :s_max; every = true)
+        oltc  = _tap_modes(oltc, n, id, :oltc)
+        pst   = _tap_modes(pst,  n, id, :pst)
 
-        _check_transformer(id, tm, ta, tm_min, tm_max, ta_min, ta_max, tm_step, ta_step,
-                           oltc, pst, angmin, angmax)
+        _check_transformer(id, t_magn, t_angl, t_magn_min, t_magn_max, t_angl_min, t_angl_max,
+                           t_magn_step, t_angl_step, oltc, pst, v_angl_min, v_angl_max)
 
-        return new(id, name, terminals, r, x, g_sh, b_sh, g_m, b_m, tm, ta, oltc, pst,
-                   tm_min, tm_max, ta_min, ta_max, tm_step, ta_step, rate_a, angmin, angmax,
-                   status, ext)
+        return new(id, name, terminals, r, x, g_shnt, b_shnt, g_mgnt, b_mgnt, t_magn, t_angl, oltc, pst,
+                   t_magn_min, t_magn_max, t_angl_min, t_angl_max, t_magn_step, t_angl_step, s_max,
+                   v_angl_min, v_angl_max, status, ext)
     end
 end
 
@@ -213,23 +214,23 @@ function _tap_modes(x, n::Int, id, field::Symbol)
                         "transformer only"))
 end
 
-function _check_transformer(id, tm, ta, tm_min, tm_max, ta_min, ta_max, tm_step, ta_step,
-                            oltc, pst, angmin, angmax)
-    all_nw(w -> all(>(0), w), tm) ||
+function _check_transformer(id, t_magn, t_angl, t_magn_min, t_magn_max, t_angl_min, t_angl_max,
+                            t_magn_step, t_angl_step, oltc, pst, v_angl_min, v_angl_max)
+    all_nw(w -> all(>(0), w), t_magn) ||
         throw(ArgumentError("transformer $id has a non-positive tap magnitude"))
-    all_nw(w -> all(>(0), w), tm_min) ||
-        throw(ArgumentError("transformer $id has a non-positive tm_min"))
-    all_nw((lo, hi) -> all(lo .<= hi), tm_min, tm_max) ||
-        throw(ArgumentError("transformer $id has tm_min above tm_max"))
-    all_nw((lo, hi) -> all(lo .<= hi), ta_min, ta_max) ||
-        throw(ArgumentError("transformer $id has ta_min above ta_max"))
-    all_nw(w -> all(a -> -pi / 2 < a < pi / 2, w), ta_min) &&
-        all_nw(w -> all(a -> -pi / 2 < a < pi / 2, w), ta_max) ||
+    all_nw(w -> all(>(0), w), t_magn_min) ||
+        throw(ArgumentError("transformer $id has a non-positive t_magn_min"))
+    all_nw((lo, hi) -> all(lo .<= hi), t_magn_min, t_magn_max) ||
+        throw(ArgumentError("transformer $id has t_magn_min above t_magn_max"))
+    all_nw((lo, hi) -> all(lo .<= hi), t_angl_min, t_angl_max) ||
+        throw(ArgumentError("transformer $id has t_angl_min above t_angl_max"))
+    all_nw(w -> all(a -> -pi / 2 < a < pi / 2, w), t_angl_min) &&
+        all_nw(w -> all(a -> -pi / 2 < a < pi / 2, w), t_angl_max) ||
         throw(ArgumentError("transformer $id has a ratio angle limit outside (-π/2, π/2)"))
-    all_nw(w -> all(>(0), w), tm_step) && all_nw(w -> all(>(0), w), ta_step) ||
+    all_nw(w -> all(>(0), w), t_magn_step) && all_nw(w -> all(>(0), w), t_angl_step) ||
         throw(ArgumentError("transformer $id has a step that is not positive"))
-    all_nw(<=, angmin, angmax) ||
-        throw(ArgumentError("transformer $id has angmin above angmax"))
+    all_nw(<=, v_angl_min, v_angl_max) ||
+        throw(ArgumentError("transformer $id has v_angl_min above v_angl_max"))
 
     for k in eachindex(oltc)
         steps_magnitude, steps_angle = oltc[k] === STEPPED, pst[k] === STEPPED
@@ -240,8 +241,8 @@ function _check_transformer(id, tm, ta, tm_min, tm_max, ta_min, ta_max, tm_step,
             throw(ArgumentError("winding $k of transformer $id steps one part of its ratio and " *
                                 "moves the other continuously, which is not built"))
 
-        steps_magnitude && _check_steps(id, k, "magnitude", tm, tm_min, tm_max, tm_step)
-        steps_angle     && _check_steps(id, k, "angle", ta, ta_min, ta_max, ta_step)
+        steps_magnitude && _check_steps(id, k, "magnitude", t_magn, t_magn_min, t_magn_max, t_magn_step)
+        steps_angle     && _check_steps(id, k, "angle", t_angl, t_angl_min, t_angl_max, t_angl_step)
     end
 
     return nothing
@@ -277,8 +278,8 @@ end
 
 register_edge_type!(Transformer)
 
-"a transformer writes a rating where a terminal's `rate_a` is finite, and angle limits where they bind"
-structure_gates(::Transformer) = (:rate_a, :angmin, :angmax)
+"a transformer writes a rating where a terminal's `s_max` is finite, and angle limits where they bind"
+structure_gates(::Transformer) = (:s_max, :v_angl_min, :v_angl_max)
 
 "whether the problem chooses the ratio magnitude of winding `k`"
 _moves_magnitude(::NetworkModel{P}, tf::Transformer, k::Int) where {P<:AbstractProblemType} =
@@ -362,7 +363,7 @@ _chosen_step(nm::NetworkModel, tf::Transformer, a::Arc, k::Int; nw::Int) =
 """
     tap_ratio(nm, tf, e, k; nw)
 
-The real and imaginary part of the ratio `T = tm · exp(j·ta)` of winding `k` of
+The real and imaginary part of the ratio `T = t_magn · exp(j·t_angl)` of winding `k` of
 transformer `e`.
 
 Two numbers where the winding holds its ratio, which is the case for a `FIXED`
@@ -373,12 +374,12 @@ the magnitude variable, or an expression in the binaries of its positions.
 function tap_ratio end
 
 tap_ratio(::NetworkModel, tf::Transformer, ::Int, k::Int; nw::Int) =
-    (tf.tm[k] * cos(tf.ta[k]), tf.tm[k] * sin(tf.ta[k]))
+    (tf.t_magn[k] * cos(tf.t_angl[k]), tf.t_magn[k] * sin(tf.t_angl[k]))
 
 """
     phase_shift(nm, tf, e, k; nw)
 
-The angle winding `k` of transformer `e` shifts, `ta`.
+The angle winding `k` of transformer `e` shifts, `t_angl`.
 
 The counterpart of [`tap_ratio`](@ref) for the linearized formulation, where only
 the angle survives: a number where the winding holds it, the variable the problem
@@ -387,7 +388,7 @@ positions where `pst` is `STEPPED`.
 """
 function phase_shift end
 
-phase_shift(::NetworkModel, tf::Transformer, ::Int, k::Int; nw::Int) = tf.ta[k]
+phase_shift(::NetworkModel, tf::Transformer, ::Int, k::Int; nw::Int) = tf.t_angl[k]
 
 ################################################################################
 # Transformer — variables                                                      #
@@ -398,7 +399,7 @@ phase_shift(::NetworkModel, tf::Transformer, ::Int, k::Int; nw::Int) = tf.ta[k]
 
 The complex voltage of the star point of every in-service transformer, `vsr` and
 `vsi`, and for every winding whose ratio the problem chooses, the voltage behind
-it, and the ratio itself: `tm` where only the magnitude moves, `tr` and `ti` where
+it, and the ratio itself: `t_magn` where only the magnitude moves, `tr` and `ti` where
 the angle does, with or without the magnitude. A variable of a winding is keyed by
 its [`Arc`](@ref).
 
@@ -430,14 +431,14 @@ end
 
 "the voltage of a node at one per unit and no angle, as seen behind the ratio of winding `k`"
 function _referred_start(tf::Transformer, k::Int)
-    tr, ti = tf.tm[k] * cos(tf.ta[k]), tf.tm[k] * sin(tf.ta[k])
+    tr, ti = tf.t_magn[k] * cos(tf.t_angl[k]), tf.t_magn[k] * sin(tf.t_angl[k])
 
     return tr / (tr^2 + ti^2), -ti / (tr^2 + ti^2)
 end
 
 "the variables of winding `k`, whose ratio the problem chooses"
 function _variable_winding!(nm::NetworkModel, tf::Transformer, a::Arc, k::Int; nw::Int)
-    tm, ta = tf.tm[k], tf.ta[k]
+    t_magn, t_angl = tf.t_magn[k], tf.t_angl[k]
 
     vtr0, vti0 = _referred_start(tf, k)
     variable!(nm, :v_wind_real, a; nw, start = vtr0)
@@ -446,19 +447,19 @@ function _variable_winding!(nm::NetworkModel, tf::Transformer, a::Arc, k::Int; n
     if _stepped(nm, tf, k)
         _variable_steps!(nm, tf, a, k; nw)
     elseif _moves_angle(nm, tf, k)
-        lo, hi   = tf.ta_min[k], tf.ta_max[k]
-        mlo, mhi = _moves_magnitude(nm, tf, k) ? (tf.tm_min[k], tf.tm_max[k]) : (tm, tm)
-        ms       = clamp(tm, mlo, mhi)
+        lo, hi   = tf.t_angl_min[k], tf.t_angl_max[k]
+        mlo, mhi = _moves_magnitude(nm, tf, k) ? (tf.t_magn_min[k], tf.t_magn_max[k]) : (t_magn, t_magn)
+        ms       = clamp(t_magn, mlo, mhi)
 
-        variable!(nm, :t_real, a; nw, start = ms * cos(ta),
+        variable!(nm, :t_real, a; nw, start = ms * cos(t_angl),
                   lower = mlo * cos(max(abs(lo), abs(hi))), upper = mhi)
-        variable!(nm, :t_imag, a; nw, start = ms * sin(ta),
+        variable!(nm, :t_imag, a; nw, start = ms * sin(t_angl),
                   lower = min(mlo * sin(lo), mhi * sin(lo)),
                   upper = max(mlo * sin(hi), mhi * sin(hi)))
     else
         variable!(nm, :t_magn, a; nw,
-                  start = clamp(tm, tf.tm_min[k], tf.tm_max[k]),
-                  lower = tf.tm_min[k], upper = tf.tm_max[k])
+                  start = clamp(t_magn, tf.t_magn_min[k], tf.t_magn_max[k]),
+                  lower = tf.t_magn_min[k], upper = tf.t_magn_max[k])
     end
 
     return nothing
@@ -466,7 +467,7 @@ end
 
 function tap_ratio(nm::NetworkModel{P,F}, tf::Transformer, e::Int, k::Int; nw::Int
                   ) where {P<:AbstractProblemType,F<:IVRFormulation}
-    _moves(nm, tf, k) || return (tf.tm[k] * cos(tf.ta[k]), tf.tm[k] * sin(tf.ta[k]))
+    _moves(nm, tf, k) || return (tf.t_magn[k] * cos(tf.t_angl[k]), tf.t_magn[k] * sin(tf.t_angl[k]))
 
     a = edge_arcs(nm, e; nw)[k]
     if _stepped(nm, tf, k)
@@ -479,8 +480,8 @@ function tap_ratio(nm::NetworkModel{P,F}, tf::Transformer, e::Int, k::Int; nw::I
 
     t_magn = var(nm, :t_magn, a; nw)
 
-    return (JuMP.@expression(nm.model, cos(tf.ta[k]) * t_magn),
-            JuMP.@expression(nm.model, sin(tf.ta[k]) * t_magn))
+    return (JuMP.@expression(nm.model, cos(tf.t_angl[k]) * t_magn),
+            JuMP.@expression(nm.model, sin(tf.t_angl[k]) * t_magn))
 end
 
 """
@@ -492,8 +493,8 @@ does not step is its setpoint.
 """
 function _step_values(::NetworkModel{P,F}, tf::Transformer, k::Int
                      ) where {P<:AbstractProblemType,F<:IVRFormulation}
-    ms = tf.oltc[k] === STEPPED ? _positions(tf.tm_min[k], tf.tm_max[k], tf.tm_step[k]) : [tf.tm[k]]
-    as = tf.pst[k]  === STEPPED ? _positions(tf.ta_min[k], tf.ta_max[k], tf.ta_step[k]) : [tf.ta[k]]
+    ms = tf.oltc[k] === STEPPED ? _positions(tf.t_magn_min[k], tf.t_magn_max[k], tf.t_magn_step[k]) : [tf.t_magn[k]]
+    as = tf.pst[k]  === STEPPED ? _positions(tf.t_angl_min[k], tf.t_angl_max[k], tf.t_angl_step[k]) : [tf.t_angl[k]]
 
     return [(m * cos(a), m * sin(a)) for m in ms for a in as]
 end
@@ -501,9 +502,9 @@ end
 "the index, among [`_step_values`](@ref), of the setpoint of winding `k`"
 function _step_start(::NetworkModel{P,F}, tf::Transformer, k::Int
                     ) where {P<:AbstractProblemType,F<:IVRFormulation}
-    i = tf.oltc[k] === STEPPED ? _position(tf.tm[k], tf.tm_min[k], tf.tm_max[k], tf.tm_step[k]) : 1
-    j = tf.pst[k]  === STEPPED ? _position(tf.ta[k], tf.ta_min[k], tf.ta_max[k], tf.ta_step[k]) : 1
-    na = tf.pst[k] === STEPPED ? length(_positions(tf.ta_min[k], tf.ta_max[k], tf.ta_step[k])) : 1
+    i = tf.oltc[k] === STEPPED ? _position(tf.t_magn[k], tf.t_magn_min[k], tf.t_magn_max[k], tf.t_magn_step[k]) : 1
+    j = tf.pst[k]  === STEPPED ? _position(tf.t_angl[k], tf.t_angl_min[k], tf.t_angl_max[k], tf.t_angl_step[k]) : 1
+    na = tf.pst[k] === STEPPED ? length(_positions(tf.t_angl_min[k], tf.t_angl_max[k], tf.t_angl_step[k])) : 1
 
     return (i - 1) * na + j
 end
@@ -555,7 +556,7 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = n
             vtr, vti, ctr, cti = _behind_ratio!(nm, tf, e, k, a; nw)
 
             # what leaves the winding's own shunt reaches the star point
-            gsh, bsh = tf.g_sh[k], tf.b_sh[k]
+            gsh, bsh = tf.g_shnt[k], tf.b_shnt[k]
             if iszero(gsh) && iszero(bsh)
                 push!(csr, ctr)
                 push!(csi, cti)
@@ -573,9 +574,9 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = n
 
         star[e] = (
             constrain!(nm, :star_balance, (e, :real), JuMP.@build_constraint(
-                sum(csr) == tf.g_m * v_star_real[e] - tf.b_m * v_star_imag[e]); nw),
+                sum(csr) == tf.g_mgnt * v_star_real[e] - tf.b_mgnt * v_star_imag[e]); nw),
             constrain!(nm, :star_balance, (e, :imag), JuMP.@build_constraint(
-                sum(csi) == tf.g_m * v_star_imag[e] + tf.b_m * v_star_real[e]); nw))
+                sum(csi) == tf.g_mgnt * v_star_imag[e] + tf.b_mgnt * v_star_real[e]); nw))
     end
 
     return nothing
@@ -607,13 +608,13 @@ function _behind_ratio!(nm::NetworkModel, tf::Transformer, e::Int, k::Int, a::Ar
                 JuMP.@expression(nm.model, tr * i_term_imag[a] - ti * i_term_real[a]))
     end
 
-    tm, ta = tf.tm[k], tf.ta[k]
-    tm == 1 && ta == 0 && return (v_real[i], v_imag[i], i_term_real[a], i_term_imag[a])
+    t_magn, t_angl = tf.t_magn[k], tf.t_angl[k]
+    t_magn == 1 && t_angl == 0 && return (v_real[i], v_imag[i], i_term_real[a], i_term_imag[a])
 
-    tr, ti = tm * cos(ta), tm * sin(ta)
+    tr, ti = t_magn * cos(t_angl), t_magn * sin(t_angl)
 
-    return (JuMP.@expression(nm.model, (tr * v_real[i] + ti * v_imag[i]) / tm^2),
-            JuMP.@expression(nm.model, (tr * v_imag[i] - ti * v_real[i]) / tm^2),
+    return (JuMP.@expression(nm.model, (tr * v_real[i] + ti * v_imag[i]) / t_magn^2),
+            JuMP.@expression(nm.model, (tr * v_imag[i] - ti * v_real[i]) / t_magn^2),
             JuMP.@expression(nm.model, tr * i_term_real[a] + ti * i_term_imag[a]),
             JuMP.@expression(nm.model, tr * i_term_imag[a] - ti * i_term_real[a]))
 end
@@ -626,7 +627,7 @@ terminal, where the problem watches the transformer for congestion, see
 [`is_monitored`](@ref); the limits on the voltage angle difference across a
 two-winding one; and, for a winding whose angle the problem chooses, that the
 ratio keeps its magnitude, `tr² + ti² = tm²`, and its angle stays between
-`ta_min` and `ta_max`. Where the magnitude is chosen too, the ratio stays in the
+`t_angl_min` and `t_angl_max`. Where the magnitude is chosen too, the ratio stays in the
 ring `tm_min² ≤ tr² + ti² ≤ tm_max²` instead. A winding that steps takes exactly one
 of its positions, `Σₛ zt = 1`.
 
@@ -644,9 +645,9 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::
         tf = edge(nm, e; nw)::Transformer
         A  = edge_arcs(nm, e; nw)
 
-        rating[e] = constraint_edge_rating!(nm, e, tf.rate_a; nw)
+        rating[e] = constraint_edge_rating!(nm, e, tf.s_max; nw)
         length(A) == 2 &&
-            (angle[e] = constraint_edge_angle_difference!(nm, A[1], A[2], tf.angmin, tf.angmax; nw))
+            (angle[e] = constraint_edge_angle_difference!(nm, A[1], A[2], tf.v_angl_min, tf.v_angl_max; nw))
 
         _constraint_steps!(nm, tf, e, A; nw)
         is_held(nm, :edge, e; nw) && continue
@@ -657,19 +658,19 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::
 
             magnitude = if _moves_magnitude(nm, tf, k)
                 (constrain!(nm, :tap_setting, (a, :magnitude_max),
-                            JuMP.@build_constraint(t_real^2 + t_imag^2 <= tf.tm_max[k]^2); nw),
+                            JuMP.@build_constraint(t_real^2 + t_imag^2 <= tf.t_magn_max[k]^2); nw),
                  constrain!(nm, :tap_setting, (a, :magnitude_min),
-                            JuMP.@build_constraint(t_real^2 + t_imag^2 >= tf.tm_min[k]^2); nw))
+                            JuMP.@build_constraint(t_real^2 + t_imag^2 >= tf.t_magn_min[k]^2); nw))
             else
                 (constrain!(nm, :tap_setting, (a, :magnitude),
-                            JuMP.@build_constraint(t_real^2 + t_imag^2 == tf.tm[k]^2); nw),)
+                            JuMP.@build_constraint(t_real^2 + t_imag^2 == tf.t_magn[k]^2); nw),)
             end
 
             tap[a] = (magnitude...,
                 constrain!(nm, :tap_setting, (a, :max),
-                           JuMP.@build_constraint(t_imag <= tan(tf.ta_max[k]) * t_real); nw),
+                           JuMP.@build_constraint(t_imag <= tan(tf.t_angl_max[k]) * t_real); nw),
                 constrain!(nm, :tap_setting, (a, :min),
-                           JuMP.@build_constraint(t_imag >= tan(tf.ta_min[k]) * t_real); nw))
+                           JuMP.@build_constraint(t_imag >= tan(tf.t_angl_min[k]) * t_real); nw))
         end
     end
 
@@ -685,7 +686,7 @@ end
 
 The angle of the star point of every in-service transformer with three or more
 windings, `vas`, and the angle of every winding whose `pst` is `CONTINUOUS` where
-the problem chooses, held between `ta_min` and `ta_max`. A winding whose `pst` is
+the problem chooses, held between `t_angl_min` and `t_angl_max`. A winding whose `pst` is
 `STEPPED` has a binary `zt` for each of its positions instead.
 
 A transformer with two windings has no star point here: its windings are in series
@@ -693,7 +694,7 @@ and only the sum of their impedances matters, so nothing is left to be a variabl
 
 !!! note "The tap magnitude does nothing here"
     With every voltage magnitude equal to one there is nothing for a ratio
-    magnitude to change, so `tm` does not appear in the linearized equations at
+    magnitude to change, so `t_magn` does not appear in the linearized equations at
     all. A winding that is `oltc` is therefore **inert** in this formulation: it is
     built and solved as an ordinary winding at its setpoint, and the control it
     offers an alternating current model is simply absent. If it is also `pst`, its
@@ -718,8 +719,8 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_
 
             _moves_angle(nm, tf, k) || continue
             variable!(nm, :t_angl, a; nw,
-                      start = clamp(tf.ta[k], tf.ta_min[k], tf.ta_max[k]),
-                      lower = tf.ta_min[k], upper = tf.ta_max[k])
+                      start = clamp(tf.t_angl[k], tf.t_angl_min[k], tf.t_angl_max[k]),
+                      lower = tf.t_angl_min[k], upper = tf.t_angl_max[k])
         end
     end
 
@@ -735,18 +736,18 @@ function phase_shift(nm::NetworkModel{P,F}, tf::Transformer, e::Int, k::Int; nw:
         return JuMP.@expression(nm.model, sum(S[s] * z_step[(a, s)] for s in eachindex(S)))
     end
 
-    return _moves_angle(nm, tf, k) ? var(nm, :t_angl, a; nw) : tf.ta[k]
+    return _moves_angle(nm, tf, k) ? var(nm, :t_angl, a; nw) : tf.t_angl[k]
 end
 
 "the angles winding `k` can take where it steps, one binary for each"
 _step_values(::NetworkModel{P,F}, tf::Transformer, k::Int
             ) where {P<:AbstractProblemType,F<:LPFFormulation} =
-    _positions(tf.ta_min[k], tf.ta_max[k], tf.ta_step[k])
+    _positions(tf.t_angl_min[k], tf.t_angl_max[k], tf.t_angl_step[k])
 
 "the index, among [`_step_values`](@ref), of the setpoint of winding `k`"
 _step_start(::NetworkModel{P,F}, tf::Transformer, k::Int
            ) where {P<:AbstractProblemType,F<:LPFFormulation} =
-    _position(tf.ta[k], tf.ta_min[k], tf.ta_max[k], tf.ta_step[k])
+    _position(tf.t_angl[k], tf.t_angl_min[k], tf.t_angl_max[k], tf.t_angl_step[k])
 
 """
     constraint_edge(nm, Transformer; nw)
@@ -832,9 +833,9 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::
         A  = edge_arcs(nm, e; nw)
 
         limits[e] = length(A) == 2 ?
-            (constraint_linear_ratings!(nm, e, A, tf.rate_a; nw),
-             constraint_linear_angle_difference!(nm, A[1], A[2], tf.angmin, tf.angmax; nw)) :
-            constraint_linear_ratings!(nm, e, A, tf.rate_a; nw)
+            (constraint_linear_ratings!(nm, e, A, tf.s_max; nw),
+             constraint_linear_angle_difference!(nm, A[1], A[2], tf.v_angl_min, tf.v_angl_max; nw)) :
+            constraint_linear_ratings!(nm, e, A, tf.s_max; nw)
 
         _constraint_steps!(nm, tf, e, A; nw)
     end
@@ -849,8 +850,8 @@ end
 """
     redispatch_controls(nm, Transformer)
 
-The ratio of a preventive winding, held equal across the contingencies: `tm`, `tr`
-and `ti` in the current based formulation, the angle `ta` in the linearized one,
+The ratio of a preventive winding, held equal across the contingencies: `t_magn`, `tr`
+and `ti` in the current based formulation, the angle `t_angl` in the linearized one,
 each of them keyed by the [`Arc`](@ref) of the winding it belongs to. The binaries
 of a winding that steps are not tied: a preventive winding reuses the ones of the
 base case, see [`is_held`](@ref).
@@ -874,7 +875,7 @@ redispatch_controls(::NetworkModel{P,F}, ::Type{Transformer}
     solution_edge!(entry, nm, Transformer, e, nw)
 
 Add the tap setting of every winding to the entry of its terminal, under `tap`: the
-magnitude `tm` and the angle `ta` of the ratio, and `tr` and `ti` in the current
+magnitude `t_magn` and the angle `t_angl` of the ratio, and `tr` and `ti` in the current
 based formulation. For a winding that holds its ratio this reports back what was
 given; for one the problem chose it is what the optimizer chose.
 
@@ -905,7 +906,7 @@ function solution_edge!(entry::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T
     tf = edge(nm, e; nw)::Transformer
 
     for (k, a) in enumerate(edge_arcs(nm, e; nw))
-        tap = Dict{String,Any}("t_magn" => tf.tm[k], "t_angl" => _value(phase_shift(nm, tf, e, k; nw)))
+        tap = Dict{String,Any}("t_magn" => tf.t_magn[k], "t_angl" => _value(phase_shift(nm, tf, e, k; nw)))
         _stepped(nm, tf, k) && (tap["z_step"] = _chosen_step(nm, tf, a, k; nw))
         _market!(tap, nm, tf, k)
 
@@ -917,4 +918,4 @@ end
 
 "add the setpoint of winding `k` to `tap` where the problem is a redispatch"
 _market!(tap::Dict{String,Any}, ::NetworkModel{P}, tf::Transformer, k::Int) where {P<:AbstractProblemType} =
-    P <: RedispatchProblem ? (tap["t_magn_mkt"] = tf.tm[k]; tap["t_angl_mkt"] = tf.ta[k]; nothing) : nothing
+    P <: RedispatchProblem ? (tap["t_magn_mkt"] = tf.t_magn[k]; tap["t_angl_mkt"] = tf.t_angl[k]; nothing) : nothing

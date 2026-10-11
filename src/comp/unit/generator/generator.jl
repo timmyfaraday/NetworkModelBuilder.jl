@@ -14,6 +14,7 @@
 # v0.12.9 - the energy rows are registered by constrain! alone                 #
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 export AbstractGenerator, Generator
@@ -43,74 +44,74 @@ A unit `(u, i)` that injects active and reactive power into its node.
 # Fields
 - `id`, `name`: the identifier and a human readable label.
 - `node`: the node the generator is connected to.
-- `pg`, `qg`: the active and reactive power setpoint [pu], used by a load flow,
+- `p_set`, `q_set`: the active and reactive power setpoint [pu], used by a load flow,
   and the **market dispatch** a [`RedispatchProblem`](@ref) moves away from.
-- `pmin`, `pmax`, `qmin`, `qmax`: the operating limits [pu], used by a dispatch
+- `p_min`, `p_max`, `q_min`, `q_max`: the operating limits [pu], used by a dispatch
   problem.
-- `vg`: the voltage magnitude setpoint [pu] carried through from the input data;
+- `v_magn_set`: the voltage magnitude setpoint [pu] carried through from the input data;
   the setpoint that is actually enforced is the one on the node.
-- `max_energy_per_period`: the most energy the generator may produce in one
+- `e_per_max`: the most energy the generator may produce in one
   period [pu·h], see [`period_ids`](@ref). `Inf`, the default, leaves it bounded
-  only by `pmax` at each step.
-- `cost`: the coefficients of the generation cost polynomial in **ascending**
+  only by `p_max` at each step.
+- `c`: the coefficients of the generation cost polynomial in **ascending**
   order and in per unit, so that the cost is
   `sum(cost[k] * pg^(k-1) for k in eachindex(cost))` [currency/h].
-- `cost_up`, `cost_dn`: the price of moving one per unit up and down in a
+- `c_up`, `c_dn`: the price of moving one per unit up and down in a
   [`RedispatchProblem`](@ref) [currency/pu/h]. `NaN`, the default, means the
   marginal generation cost at the market dispatch, see
   [`redispatch_price`](@ref).
 - `status`: whether the generator is in service.
 - `ext`: free-form storage.
 
-Every field but `id`, `name`, `node`, `max_energy_per_period` and `ext` may be
+Every field but `id`, `name`, `node`, `e_per_max` and `ext` may be
 given as a [`NetworkVector`](@ref). The energy limit is one number per period
-rather than one per network index, so it is not among them. Note that a network dependent `cost` is a
+rather than one per network index, so it is not among them. Note that a network dependent `c` is a
 `NetworkVector{Vector{Float64}}`: the plain `Vector{Float64}` is the polynomial,
 not a profile.
 
-A generator with `pmin` above `pmax` or `qmin` above `qmax`, a limit that is NaN,
+A generator with `p_min` above `p_max` or `q_min` above `q_max`, a limit that is NaN,
 a setpoint or a cost coefficient that is not finite, or a negative energy limit
 is refused: no model can use it. A limit of `-Inf` or `Inf` is how a bound is left
-out, and `cost_up` and `cost_dn` may be NaN.
+out, and `c_up` and `c_dn` may be NaN.
 """
 Base.@kwdef struct Generator <: AbstractGenerator
-    id                   ::Int
-    name                 ::String                           = ""
-    node                 ::Int
-    pg                   ::NetworkQuantity{Float64}         = 0.0
-    qg                   ::NetworkQuantity{Float64}         = 0.0
-    pmin                 ::NetworkQuantity{Float64}         = 0.0
-    pmax                 ::NetworkQuantity{Float64}         = Inf
-    qmin                 ::NetworkQuantity{Float64}         = -Inf
-    qmax                 ::NetworkQuantity{Float64}         = Inf
-    vg                   ::NetworkQuantity{Float64}         = 1.0
-    max_energy_per_period::Float64                          = Inf
-    cost                 ::NetworkQuantity{Vector{Float64}} = [0.0]
-    cost_up              ::NetworkQuantity{Float64}         = NaN
-    cost_dn              ::NetworkQuantity{Float64}         = NaN
-    status               ::NetworkQuantity{Bool}            = true
-    ext                  ::Dict{Symbol,Any}                 = Dict{Symbol,Any}()
+    id        ::Int
+    name      ::String                           = ""
+    node      ::Int
+    p_set     ::NetworkQuantity{Float64}         = 0.0
+    q_set     ::NetworkQuantity{Float64}         = 0.0
+    p_min     ::NetworkQuantity{Float64}         = 0.0
+    p_max     ::NetworkQuantity{Float64}         = Inf
+    q_min     ::NetworkQuantity{Float64}         = -Inf
+    q_max     ::NetworkQuantity{Float64}         = Inf
+    v_magn_set::NetworkQuantity{Float64}         = 1.0
+    e_per_max ::Float64                          = Inf
+    c         ::NetworkQuantity{Vector{Float64}} = [0.0]
+    c_up      ::NetworkQuantity{Float64}         = NaN
+    c_dn      ::NetworkQuantity{Float64}         = NaN
+    status    ::NetworkQuantity{Bool}            = true
+    ext       ::Dict{Symbol,Any}                 = Dict{Symbol,Any}()
 
-    function Generator(id, name, node, pg, qg, pmin, pmax, qmin, qmax, vg,
-                       max_energy_per_period, cost, cost_up, cost_dn, status, ext)
-        _check_generator(id, pg, qg, pmin, pmax, qmin, qmax, vg, max_energy_per_period, cost)
-        return new(id, name, node, pg, qg, pmin, pmax, qmin, qmax, vg,
-                   max_energy_per_period, cost, cost_up, cost_dn, status, ext)
+    function Generator(id, name, node, p_set, q_set, p_min, p_max, q_min, q_max, v_magn_set,
+                       e_per_max, c, c_up, c_dn, status, ext)
+        _check_generator(id, p_set, q_set, p_min, p_max, q_min, q_max, v_magn_set, e_per_max, c)
+        return new(id, name, node, p_set, q_set, p_min, p_max, q_min, q_max, v_magn_set,
+                   e_per_max, c, c_up, c_dn, status, ext)
     end
 end
 
-function _check_generator(id, pg, qg, pmin, pmax, qmin, qmax, vg, max_energy_per_period, cost)
-    max_energy_per_period >= 0 ||
+function _check_generator(id, p_set, q_set, p_min, p_max, q_min, q_max, v_magn_set, e_per_max, c)
+    e_per_max >= 0 ||
         throw(ArgumentError("generator $id has a negative energy limit"))
-    all_nw(isfinite, pg) && all_nw(isfinite, qg) && all_nw(isfinite, vg) ||
+    all_nw(isfinite, p_set) && all_nw(isfinite, q_set) && all_nw(isfinite, v_magn_set) ||
         throw(ArgumentError("generator $id has a setpoint that is not finite"))
-    all(x -> all_nw(!isnan, x), (pmin, pmax, qmin, qmax)) ||
+    all(x -> all_nw(!isnan, x), (p_min, p_max, q_min, q_max)) ||
         throw(ArgumentError("generator $id has a limit that is NaN"))
-    all_nw(<=, pmin, pmax) ||
-        throw(ArgumentError("generator $id has pmin above pmax"))
-    all_nw(<=, qmin, qmax) ||
-        throw(ArgumentError("generator $id has qmin above qmax"))
-    all_nw(c -> all(isfinite, c), cost) ||
+    all_nw(<=, p_min, p_max) ||
+        throw(ArgumentError("generator $id has p_min above p_max"))
+    all_nw(<=, q_min, q_max) ||
+        throw(ArgumentError("generator $id has q_min above q_max"))
+    all_nw(x -> all(isfinite, x), c) ||
         throw(ArgumentError("generator $id has a cost coefficient that is not finite"))
 
     return nothing
@@ -125,32 +126,32 @@ A generator is given a bound only where the limit is finite — and in a
 [`RedispatchProblem`](@ref) the bounds on its volumes follow the same two — so
 its capability decides the shape of its model. See [`structure_gates`](@ref).
 """
-structure_gates(::AbstractGenerator) = (:pmin, :pmax, :qmin, :qmax)
+structure_gates(::AbstractGenerator) = (:p_min, :p_max, :q_min, :q_max)
 
 """
-    generation_cost(g, pg)
+    generation_cost(g, p_gen)
 
-The generation cost of `g` at an active power `pg`, as a JuMP expression or a
+The generation cost of `g` at an active power `p_gen`, as a JuMP expression or a
 number.
 
 Coefficients that are zero are skipped, and the linear and quadratic terms are
 written as products rather than powers. Both matter: a cost vector padded with
 zeros — which is what Matpower writes for a quadratic cost declared with `ncost`
-above three — would otherwise put `pg^3` and `pg^4` into the objective and make
+above three — would otherwise put `p_gen^3` and `p_gen^4` into the objective and make
 the whole model nonlinear, when it is in fact quadratic. A
 [`LPFFormulation`](@ref) is a linear program or a quadratic one, and stays that
 way only if nothing needlessly raises its objective's degree.
 """
-function generation_cost(g::AbstractGenerator, pg)
-    c = g.cost
+function generation_cost(g::AbstractGenerator, p_gen)
+    c = g.c
     isempty(c) && return 0.0
 
     total = c[1]
     for k in 2:length(c)
         iszero(c[k]) && continue
-        total += k == 2 ? c[k] * pg :
-                 k == 3 ? c[k] * pg * pg :
-                          c[k] * pg^(k - 1)
+        total += k == 2 ? c[k] * p_gen :
+                 k == 3 ? c[k] * p_gen * p_gen :
+                          c[k] * p_gen^(k - 1)
     end
 
     return total
@@ -196,10 +197,10 @@ function _variable_generator_power(nm::NetworkModel, ::Type{T}, nw::Int, bounded
 
     for u in ids(nm, T; nw)
         g = unit(nm, u; nw)::T
-        variable!(nm, :p_gen, u; nw, start = g.pg,
-                  lower = bounded ? g.pmin : nothing, upper = bounded ? g.pmax : nothing)
-        variable!(nm, :q_gen, u; nw, start = g.qg,
-                  lower = bounded ? g.qmin : nothing, upper = bounded ? g.qmax : nothing)
+        variable!(nm, :p_gen, u; nw, start = g.p_set,
+                  lower = bounded ? g.p_min : nothing, upper = bounded ? g.p_max : nothing)
+        variable!(nm, :q_gen, u; nw, start = g.q_set,
+                  lower = bounded ? g.q_min : nothing, upper = bounded ? g.q_max : nothing)
     end
 
     return nothing
@@ -232,8 +233,8 @@ function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     for u in ids(nm, T; nw)
         g  = unit(nm, u; nw)::T
         nd = node(nm, g.node; nw)
-        bound!(p_gen[u]; fix = nd.type == REF ? nothing : g.pg)
-        bound!(q_gen[u]; fix = nd.type == PQ  ? g.qg : nothing)
+        bound!(p_gen[u]; fix = nd.type == REF ? nothing : g.p_set)
+        bound!(q_gen[u]; fix = nd.type == PQ  ? g.q_set : nothing)
     end
 
     return nothing
@@ -275,18 +276,18 @@ posed over contingencies gets one limit per period *per contingency*, and a
 
 This is what a fuel allocation, a water licence or an emissions allowance looks
 like once it reaches the model: a bound on the *energy* of a period that says
-nothing about how the generator spends it within one. `pmax` cannot express it —
+nothing about how the generator spends it within one. `p_max` cannot express it —
 a plant that may run flat out for four hours of a day and not at all for the
-other twenty has the same `pmax` as one that may run all day.
+other twenty has the same `p_max` as one that may run all day.
 
-The sum is over the net output, so a generator with a negative `pmin` has what it
+The sum is over the net output, so a generator with a negative `p_min` has what it
 absorbs counted against what it produced. A limit of infinity — the default — is
 the absence of a row rather than a row with an infinite right hand side.
 """
 function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
                                  ) where {P<:AbstractDispatchProblem,F<:AbstractFormulationType,
                                           T<:AbstractGenerator}
-    any(c -> c isa T && isfinite(c.max_energy_per_period), values(units(network(nm)))) ||
+    any(c -> c isa T && isfinite(c.e_per_max), values(units(network(nm)))) ||
         return nothing
     require_time_dimension(nm, T)
 
@@ -296,12 +297,12 @@ function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
 
         for u in ids(nm, T; nw = n)
             g = unit(nm, u; nw = n)::T
-            isfinite(g.max_energy_per_period) || continue
+            isfinite(g.e_per_max) || continue
 
             constrain!(nm, :generator_energy, u, JuMP.@build_constraint(
                 sum(time_step(nm, m) * var(nm, :p_gen, u; nw = m)
                     for m in window if haskey(var(nm, :p_gen; nw = m), u); init = 0.0) <=
-                g.max_energy_per_period); nw = n)
+                g.e_per_max); nw = n)
         end
     end
 
@@ -337,7 +338,7 @@ end
     variable_unit(nm, T; nw)
 
 The active power of every in-service generator. There is no reactive power in a
-linearized formulation, so `qg` is not created and the generator's reactive
+linearized formulation, so `q_gen` is not created and the generator's reactive
 limits play no part.
 """
 variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
@@ -354,8 +355,8 @@ function _variable_generator_active(nm::NetworkModel, ::Type{T}, nw::Int, bounde
 
     for u in ids(nm, T; nw)
         g = unit(nm, u; nw)::T
-        variable!(nm, :p_gen, u; nw, start = g.pg,
-                  lower = bounded ? g.pmin : nothing, upper = bounded ? g.pmax : nothing)
+        variable!(nm, :p_gen, u; nw, start = g.p_set,
+                  lower = bounded ? g.p_min : nothing, upper = bounded ? g.p_max : nothing)
     end
 
     return nothing
@@ -377,7 +378,7 @@ function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     p_gen = var(nm, :p_gen; nw)
     for u in ids(nm, T; nw)
         g = unit(nm, u; nw)::T
-        bound!(p_gen[u]; fix = node(nm, g.node; nw).type == REF ? nothing : g.pg)
+        bound!(p_gen[u]; fix = node(nm, g.node; nw).type == REF ? nothing : g.p_set)
     end
 
     return nothing
@@ -403,23 +404,23 @@ end
 ################################################################################
 
 """
-    marginal_cost(g, pg)
+    marginal_cost(g, p_gen)
 
 The derivative of the generation cost of `g` with respect to its active power,
-`sum(k * cost[k+1] * pg^(k-1) for k)`, as a JuMP expression or a number.
+`sum(k * c[k+1] * p_gen^(k-1) for k)`, as a JuMP expression or a number.
 
 Zero coefficients are skipped for the same reason they are in
 [`generation_cost`](@ref): a Matpower cost vector padded with zeros would
 otherwise raise the degree of whatever this enters.
 """
-function marginal_cost(g::AbstractGenerator, pg)
-    c = g.cost
+function marginal_cost(g::AbstractGenerator, p_gen)
+    c = g.c
     length(c) < 2 && return 0.0
 
     total = c[2]
     for k in 3:length(c)
         iszero(c[k]) && continue
-        total += k == 3 ? (k - 1) * c[k] * pg : (k - 1) * c[k] * pg^(k - 2)
+        total += k == 3 ? (k - 1) * c[k] * p_gen : (k - 1) * c[k] * p_gen^(k - 2)
     end
 
     return total
@@ -431,7 +432,7 @@ end
 The price of moving `g` one per unit up and one per unit down, as a pair
 `(c↑, c↓)` [currency/pu/h].
 
-Where `cost_up` or `cost_dn` is `NaN` — the default — the marginal generation
+Where `c_up` or `c_dn` is `NaN` — the default — the marginal generation
 cost at the market dispatch stands in for it. That default prices a redispatch
 by the volume it moves weighted by what the generator's own cost curve says a
 unit of its output is worth, which is the usual proxy when no bid prices are
@@ -440,10 +441,10 @@ explicitly to price a real balancing bid, and note that a *downward* price is
 what it costs the system to have the generator back off, not the fuel it saves.
 """
 function redispatch_price(g::AbstractGenerator)
-    mc = marginal_cost(g, g.pg)
+    mc = marginal_cost(g, g.p_set)
 
-    return (isnan(g.cost_up) ? mc : g.cost_up,
-            isnan(g.cost_dn) ? mc : g.cost_dn)
+    return (isnan(g.c_up) ? mc : g.c_up,
+            isnan(g.c_dn) ? mc : g.c_dn)
 end
 
 """
@@ -482,9 +483,9 @@ function _variable_generator_redispatch(nm::NetworkModel, ::Type{T}, nw::Int
         g = unit(nm, u; nw)::T
 
         variable!(nm, :p_gen_up, u; nw, start = 0.0,
-                  lower = 0.0, upper = isfinite(g.pmax) ? max(g.pmax - g.pg, 0.0) : nothing)
+                  lower = 0.0, upper = isfinite(g.p_max) ? max(g.p_max - g.p_set, 0.0) : nothing)
         variable!(nm, :p_gen_dn, u; nw, start = 0.0,
-                  lower = 0.0, upper = isfinite(g.pmin) ? max(g.pg - g.pmin, 0.0) : nothing)
+                  lower = 0.0, upper = isfinite(g.p_min) ? max(g.p_set - g.p_min, 0.0) : nothing)
     end
 
     return nothing
@@ -500,9 +501,9 @@ power into the market dispatch and the volumes moved away from it,
 p^{\\text{g}}_{u} = p^{\\text{g,mkt}}_{u} + p^{\\uparrow}_{u} - p^{\\downarrow}_{u} .
 ```
 
-The market dispatch is the setpoint `pg` the generator already carries — the
+The market dispatch is the setpoint `p_set` the generator already carries — the
 same field a load flow holds it at. A redispatch over a horizon therefore takes
-its market schedule from a `pg` that varies over `:time`, see
+its market schedule from a `p_set` that varies over `:time`, see
 [`NetworkVector`](@ref).
 
 The two volumes are separate non-negative variables because they are priced
@@ -535,7 +536,7 @@ function _constraint_generator_redispatch(nm::NetworkModel, ::Type{T}, nw::Int
     for u in ids(nm, T; nw)
         g = unit(nm, u; nw)::T
         split[u] = constrain!(nm, :generator_redispatch, u,
-                       JuMP.@build_constraint(p_gen[u] == g.pg + p_gen_up[u] - p_gen_dn[u]); nw)
+                       JuMP.@build_constraint(p_gen[u] == g.p_set + p_gen_up[u] - p_gen_dn[u]); nw)
     end
 
     return nothing
@@ -563,7 +564,7 @@ function _solution_generator_redispatch!(sol::Dict{String,Any}, nm::NetworkModel
                                          u::Int, nw::Int)
     haskey(var(nm; nw), :p_gen_up) || return nothing
 
-    sol["p_gen_mkt"] = unit(nm, u; nw).pg
+    sol["p_gen_mkt"] = unit(nm, u; nw).p_set
     sol["p_gen_up"]      = JuMP.value(var(nm, :p_gen_up, u; nw))
     sol["p_gen_dn"]      = JuMP.value(var(nm, :p_gen_dn, u; nw))
 

@@ -95,8 +95,8 @@ data = set_dimension(data, Dimension(:time => 24); apply! = function (net, dim)
     for (u, ld) in net.unit
         ld isa FixedLoad || continue
         net.unit[u] = FixedLoad(; id = ld.id, name = ld.name, node = ld.node,
-                                pd = nw_vector(dim, :time, ld.pd .* profile),
-                                qd = nw_vector(dim, :time, ld.qd .* profile))
+                                p_set = nw_vector(dim, :time, ld.p_set .* profile),
+                                q_set = nw_vector(dim, :time, ld.q_set .* profile))
     end
 end)
 ```

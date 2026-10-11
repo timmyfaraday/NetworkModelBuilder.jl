@@ -9,6 +9,7 @@
 # v0.8.0 - initial implementation                                              #
 # v0.12.0 - a phase shift range moves a winding, pst_cost is deprecated        #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 ################################################################################
@@ -24,7 +25,7 @@
 # The translation is deliberately on this side of the boundary rather than in
 # Python. It keeps the caller thin, it makes the package independently
 # exercisable on real Zorba grids, and it puts the unit conversion in one place:
-# Zorba is in MW and degrees, this package is per unit on `baseMVA` and radians.
+# Zorba is in MW and degrees, this package is per unit on `s_base_mva` and radians.
 
 """
     ZorbaLink
@@ -147,7 +148,7 @@ The four settings are `RdsSettings` and its defaults:
   [`EnergyNotServed`](@ref) and a [`Spill`](@ref) at every node.
 - `pst_cost`: deprecated, and without effect. A phase shifter is a non-costly
   measure, so there is no price of a radian of phase shift to give.
-- `baseMVA`: Zorba's `BASE_POWER_MVA`, `100.0` by default. The reactances are
+- `s_base_mva`: Zorba's `BASE_POWER_MVA`, `100.0` by default. The reactances are
   per unit on it, so it has to be the number Zorba used.
 
 and two that Zorba has no way of saying:
@@ -170,12 +171,12 @@ tables = zorba_tables(data, result)
 ```
 """
 function parse_zorba(; grid, net_position, hvdc = nothing, outage = nothing,
-                       name::String = "zorba", baseMVA::Real = 100.0,
+                       name::String = "zorba", s_base_mva::Real = 100.0,
                        overload_penalty::Union{Real,Symbol} = 1e3,
                        wiggle_room::Real = 0.0, pst_cost::Union{Nothing,Real} = nothing,
                        contingency_weight::Union{Nothing,AbstractVector{<:Real}} = nothing)
-    base = Float64(baseMVA)
-    base > 0 || throw(ArgumentError("`baseMVA` is $base, which is not a power base"))
+    base = Float64(s_base_mva)
+    base > 0 || throw(ArgumentError("`s_base_mva` is $base, which is not a power base"))
     pst_cost === nothing ||
         @warn "`pst_cost` is deprecated and has no effect: a phase shifter is a non-costly measure"
 
@@ -190,7 +191,7 @@ function parse_zorba(; grid, net_position, hvdc = nothing, outage = nothing,
 
     study = ZorbaStudy(links, outages, times,
                        _zorba_redispatch(overload_penalty, base, states))
-    data  = NetworkData(Network(I, E, U; dim); name, baseMVA = base,
+    data  = NetworkData(Network(I, E, U; dim); name, s_base_mva = base,
                         ext = Dict{Symbol,Any}(:zorba => study))
 
     return data
@@ -227,7 +228,7 @@ function _zorba_redispatch(overload_penalty::Union{Real,Symbol}, base::Float64, 
 
     # the peak price Zorba has no field for is left at zero
     return Redispatch(;
-        overload = OverloadPrice(; per_energy = overload_penalty * base * states))
+        overload = OverloadPrice(; c_ener = overload_penalty * base * states))
 end
 
 """
@@ -343,7 +344,7 @@ end
 function _zorba_nodes(nodes::Vector{String})
     I = Dict{Int,AbstractNode}()
     for (i, nm) in enumerate(nodes)
-        I[i] = Node(; id = i, name = nm, type = i == 1 ? REF : PQ, va = 0.0)
+        I[i] = Node(; id = i, name = nm, type = i == 1 ? REF : PQ, v_angl_set = 0.0)
     end
 
     return I
@@ -395,12 +396,12 @@ function _zorba_edges(grid, hvdc, nodes::Vector{String}, dim::Dimension,
         # Zorba writes no angle difference limits at all, and ±π/2 is what this
         # package reads as *unbounded* rather than as a very wide bound
         common = (; id = e, name = nm, terminals = [i, j], r = 0.0, x = Float64(x[r]),
-                    rate_a = rate, angmin = -pi / 2, angmax = pi / 2,
+                    s_max  = rate, v_angl_min = -pi / 2, v_angl_max = pi / 2,
                     status = _zorba_status(dim, outages, out_links, nm))
 
         E[e] = iszero(deg) ? Branch(; common...) :
                              Transformer(; common..., pst = true,
-                                           ta_min = -deg2rad(deg), ta_max = deg2rad(deg))
+                                           t_angl_min = -deg2rad(deg), t_angl_max = deg2rad(deg))
         push!(links, ZorbaLink(e, nm, String(from[r]), String(to[r]), false))
     end
 
@@ -428,8 +429,8 @@ function _zorba_edges(grid, hvdc, nodes::Vector{String}, dim::Dimension,
         # Zorba prices the magnitude of the transfer, per MWh; a link scheduled
         # at zero pays for every per unit it moves away from that, which is the
         # same sum written as a redispatch
-        E[e] = DCLink(; id = e, name = nm, terminals = [i, j], rate_a = Inf,
-                        pdc = 0.0, cost = Float64(cost[r]) * base)
+        E[e] = DCLink(; id = e, name = nm, terminals = [i, j], s_max = Inf,
+                        p_set = 0.0, c = Float64(cost[r]) * base)
         push!(links, ZorbaLink(e, nm, f, t, true))
     end
 
@@ -496,8 +497,8 @@ function _zorba_units(nodes::Vector{String}, injection::Matrix{Float64}, dim::Di
 
     U = Dict{Int,AbstractUnit}()
     for (i, nm) in enumerate(nodes)
-        U[i] = FixedLoad(; id = i, name = nm, node = i, qd = 0.0,
-                           pd = nw_vector(dim, :time, -injection[i, :]))
+        U[i] = FixedLoad(; id = i, name = nm, node = i, q_set = 0.0,
+                           p_set = nw_vector(dim, :time, -injection[i, :]))
     end
 
     iszero(wiggle) && return U
@@ -505,9 +506,9 @@ function _zorba_units(nodes::Vector{String}, injection::Matrix{Float64}, dim::Di
     n, room = length(nodes), wiggle / base
     for (i, nm) in enumerate(nodes)
         U[n + i]     = EnergyNotServed(; id = n + i, name = nm, node = i,
-                                         pmax = room, cost = 0.0)
+                                         p_max = room, c = 0.0)
         U[2 * n + i] = Spill(; id = 2 * n + i, name = nm, node = i,
-                               pmax = room, cost = 0.0)
+                               p_max = room, c = 0.0)
     end
 
     return U
@@ -614,8 +615,8 @@ were held at.
 
 # The sign of a phase shift
 
-This package writes the flow as `p = -b(θᵢ - θⱼ - ta)` and Zorba as
-`P = (θᵢ - θⱼ + shift)·B`, so `ta` is the negation of Zorba's phase shift and the
+This package writes the flow as `p = -b(θᵢ - θⱼ - t_angl)` and Zorba as
+`P = (θᵢ - θⱼ + shift)·B`, so `t_angl` is the negation of Zorba's phase shift and the
 negation is applied here. A study that compares the two column by column would
 otherwise find every phase shifter mirrored and every flow right.
 """
@@ -632,7 +633,7 @@ end
 function _zorba_flows(data::NetworkData, result::Dict{String,Any})
     zs   = zorba_study(data)
     dim  = dimension(data)
-    base = data.baseMVA
+    base = data.s_base_mva
     rows = length(zs.link) * length(zs.time_id) * length(zs.outage)
 
     outage      = Vector{Union{Missing,String}}(undef, rows)

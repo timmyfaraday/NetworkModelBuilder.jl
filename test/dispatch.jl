@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 @testset "problem and formulation dispatch" begin
@@ -76,9 +77,9 @@
 
         # a dispatch problem bounds the voltage and the generator power instead
         @test JuMP.has_upper_bound(_NMB.var(opf, :v_real, 1))
-        @test JuMP.upper_bound(_NMB.var(opf, :v_real, 1)) == node(opf, 1).vmax
+        @test JuMP.upper_bound(_NMB.var(opf, :v_real, 1)) == node(opf, 1).v_magn_max
         @test !JuMP.is_fixed(_NMB.var(opf, :p_gen, 1))
-        @test JuMP.upper_bound(_NMB.var(opf, :p_gen, 1)) ≈ unit(opf, 1).pmax
+        @test JuMP.upper_bound(_NMB.var(opf, :p_gen, 1)) ≈ unit(opf, 1).p_max
 
         # the PV magnitude setpoint exists only in a load flow, the limits only in a dispatch
         @test haskey(_NMB.con(lf), :node_voltage_setpoint)

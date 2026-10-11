@@ -12,20 +12,21 @@
 # v0.12.6 - a solution holds the indices and components asked for              #
 # v0.13.0 - a branch holds one entry per terminal of a field                   #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 "a copy of load `ld` whose demand follows `profile` over dimension `:time`"
 profiled(ld::FixedLoad, dim, profile) =
     FixedLoad(; id = ld.id, name = ld.name, node = ld.node,
-         pd = nw_vector(dim, :time, ld.pd .* profile),
-         qd = nw_vector(dim, :time, ld.qd .* profile),
+         p_set = nw_vector(dim, :time, ld.p_set .* profile),
+         q_set = nw_vector(dim, :time, ld.q_set .* profile),
          status = ld.status, ext = ld.ext)
 
 "a copy of branch `br` that is out of service at the network indices in `out`"
 outaged(br::Branch, dim, out) =
     Branch(; id = br.id, name = br.name, terminals = br.terminals, r = br.r, x = br.x,
-           g_sh = br.g_sh, b_sh = br.b_sh,
-           rate_a = br.rate_a, angmin = br.angmin, angmax = br.angmax,
+           g_shnt = br.g_shnt, b_shnt = br.b_shnt,
+           s_max  = br.s_max, v_angl_min = br.v_angl_min, v_angl_max = br.v_angl_max,
            status = nw_vector(dim, (n, c) -> n ∉ out), ext = br.ext)
 
 "apply a `:time` profile to every load"
@@ -45,7 +46,7 @@ const PROFILE = [0.9, 1.0, 1.1]
         @test dim_length(mn) == 3
         @test nw_ids(mn) == [1, 2, 3]
         @test dim_names(mn) == (:time,)
-        @test baseMVA(mn) == baseMVA(data)
+        @test s_base_mva(mn) == s_base_mva(data)
 
         # one graph, not one per network index
         @test network(mn) isa Network
@@ -67,7 +68,7 @@ const PROFILE = [0.9, 1.0, 1.1]
         net  = network(mn)
 
         ld = units(net)[6]::FixedLoad
-        @test is_nw_varying(ld.pd)               # the demand was made to vary
+        @test is_nw_varying(ld.p_set)               # the demand was made to vary
         @test !is_nw_varying(ld.node)            # the node it hangs off did not
         @test !is_nw_varying(ld.status)
         @test has_nw_data(ld)
@@ -78,7 +79,7 @@ const PROFILE = [0.9, 1.0, 1.1]
 
         gen = units(net)[1]::Generator
         @test !has_nw_data(gen)
-        @test gen.cost isa Vector{Float64}       # a polynomial, not a profile
+        @test gen.c isa Vector{Float64}       # a polynomial, not a profile
     end
 
     @testset "nw_value resolves both cases" begin
@@ -88,14 +89,14 @@ const PROFILE = [0.9, 1.0, 1.1]
         ld   = units(net)[6]::FixedLoad
 
         for n in nw_ids(mn)
-            @test nw_value(mn, ld.pd, n) ≈ ld.pd.data[n]
+            @test nw_value(mn, ld.p_set, n) ≈ ld.p_set.data[n]
             @test nw_value(mn, ld.node, n) == ld.node          # a constant passes through
-            @test unit(net, 6; nw = n).pd ≈ ld.pd.data[n]      # resolved component
+            @test unit(net, 6; nw = n).p_set ≈ ld.p_set.data[n]      # resolved component
             @test unit(net, 6; nw = n).node == ld.node
         end
-        @test nw_values(mn, ld.pd) == ld.pd.data
+        @test nw_values(mn, ld.p_set) == ld.p_set.data
         @test nw_values(mn, ld.node) == fill(ld.node, 3)
-        @test_throws ArgumentError nw_value(mn, ld.pd, 9)
+        @test_throws ArgumentError nw_value(mn, ld.p_set, 9)
     end
 
     @testset "nw_vector in its three forms" begin
@@ -115,9 +116,9 @@ const PROFILE = [0.9, 1.0, 1.1]
         data = quiet(() -> parse_file(case("case5")))
         mn   = set_dimension(data, Dimension(:time => 3); apply! = scale_loads(PROFILE))
 
-        base = sum(unit(network(data), u).pd for u in ids(network(data), FixedLoad))
+        base = sum(unit(network(data), u).p_set for u in ids(network(data), FixedLoad))
         for n in nw_ids(mn)
-            total = sum(unit(network(mn), u; nw = n).pd for u in ids(network(mn), FixedLoad; nw = n))
+            total = sum(unit(network(mn), u; nw = n).p_set for u in ids(network(mn), FixedLoad; nw = n))
             @test total ≈ base * PROFILE[n]
         end
     end
@@ -331,14 +332,14 @@ const PROFILE = [0.9, 1.0, 1.1]
         # the whole graph is the profile data plus a constant: take the profiles
         # away and what is left is what a single network index costs
         single   = set_dimension(data, Dimension(:time => 1); apply! = scale_loads([1.0]))
-        profiles = 2 * sum(length(units(net)[u].pd) * sizeof(Float64) for u in ids(net, FixedLoad))
+        profiles = 2 * sum(length(units(net)[u].p_set) * sizeof(Float64) for u in ids(net, FixedLoad))
         @test Base.summarysize(net) - profiles <
               Base.summarysize(network(single)) + 4_000
 
         # and the data that does vary is there, indexed by the network index
         ld = units(net)[6]::FixedLoad
-        @test length(ld.pd) == 1000
-        @test unit(net, 6; nw = 500).pd ≈ nw_value(mn, ld.pd, 500)
+        @test length(ld.p_set) == 1000
+        @test unit(net, 6; nw = 500).p_set ≈ nw_value(mn, ld.p_set, 500)
     end
 
     @testset "replicate is deprecated but still folds correctly" begin
@@ -348,7 +349,7 @@ const PROFILE = [0.9, 1.0, 1.1]
             for (u, cmp) in net.unit
                 cmp isa FixedLoad || continue
                 net.unit[u] = FixedLoad(; id = cmp.id, name = cmp.name, node = cmp.node,
-                                   pd = cmp.pd * PROFILE[n], qd = cmp.qd * PROFILE[n],
+                                   p_set = cmp.p_set * PROFILE[n], q_set = cmp.q_set * PROFILE[n],
                                    status = cmp.status, ext = cmp.ext)
             end
         end
@@ -358,14 +359,14 @@ const PROFILE = [0.9, 1.0, 1.1]
         # the per-index copies were folded back into one graph
         @test network(mn) isa Network
         @test dim_length(mn) == 3
-        @test is_nw_varying(units(network(mn))[6].pd)     # the demand differed
+        @test is_nw_varying(units(network(mn))[6].p_set)     # the demand differed
         @test !is_nw_varying(units(network(mn))[6].node)  # the node did not
         @test !has_nw_data(edges(network(mn))[1])         # no branch was touched
 
         # and it agrees with what set_dimension builds directly
         direct = set_dimension(data, Dimension(:time => 3); apply! = scale_loads(PROFILE))
         for n in nw_ids(mn), u in ids(network(mn), FixedLoad; nw = n)
-            @test unit(network(mn), u; nw = n).pd ≈ unit(network(direct), u; nw = n).pd
+            @test unit(network(mn), u; nw = n).p_set ≈ unit(network(direct), u; nw = n).p_set
         end
     end
 end

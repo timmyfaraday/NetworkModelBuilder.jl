@@ -18,6 +18,7 @@
 # v0.13.0 - a Float64 vector is kept, so a window rebuilds a branch cheaply    #
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 export register_edge_type!, edge_types
@@ -251,12 +252,12 @@ constraint_edge_coupling(::NetworkModel, ::Type{T}) where {T<:AbstractEdge} = no
 ################################################################################
 
 """
-    constraint_edge_rating!(nm, e, rate_a; nw)
+    constraint_edge_rating!(nm, e, s_max; nw)
 
-Bound the apparent power at every terminal of edge `e` by `rate_a`,
+Bound the apparent power at every terminal of edge `e` by `s_max`,
 `(v^{\\text{r}}_i{}^2 + v^{\\text{i}}_i{}^2)(c^{\\text{r}}_a{}^2 + c^{\\text{i}}_a{}^2) \\le
 (s^{\\text{max}}_e)^2`. Written per terminal, it applies to an edge with any
-number of them. `rate_a` is one number for every terminal or one per terminal, and
+number of them. `s_max` is one number for every terminal or one per terminal, and
 a terminal whose rating is not finite is not bounded.
 
 Skipped where the data leaves every rating unbounded, and where the problem does
@@ -275,9 +276,9 @@ worst of them rather than a separate allowance for each. The constraint stays th
 same degree it already was and is written under its own key, since a row whose
 set is `≤ (s^{max})^2` cannot be updated in place into one holding a variable.
 """
-function constraint_edge_rating!(nm::NetworkModel, e::Int, rate_a::Union{Real,AbstractVector};
+function constraint_edge_rating!(nm::NetworkModel, e::Int, s_max::Union{Real,AbstractVector};
                                  nw::Int)
-    _any_finite(rate_a) && is_monitored(nm, e) || return nothing
+    _any_finite(s_max) && is_monitored(nm, e) || return nothing
 
     v_real, v_imag           = var(nm, :v_real;      nw), var(nm, :v_imag;      nw)
     i_term_real, i_term_imag = var(nm, :i_term_real; nw), var(nm, :i_term_imag; nw)
@@ -287,25 +288,25 @@ function constraint_edge_rating!(nm::NetworkModel, e::Int, rate_a::Union{Real,Ab
         return [constrain!(nm, :edge_rating, (e, t),
                     JuMP.@build_constraint(
                         (v_real[a.node]^2 + v_imag[a.node]^2) * (i_term_real[a]^2 + i_term_imag[a]^2) <=
-                        _rating_at(rate_a, t)^2); nw)
-                for (t, a) in enumerate(edge_arcs(nm, e; nw)) if isfinite(_rating_at(rate_a, t))]
+                        _rating_at(s_max, t)^2); nw)
+                for (t, a) in enumerate(edge_arcs(nm, e; nw)) if isfinite(_rating_at(s_max, t))]
 
     ol = variable_edge_overload!(nm, e; nw)
 
     return [constrain!(nm, :edge_overload, (e, t),
                 JuMP.@build_constraint(
                     (v_real[a.node]^2 + v_imag[a.node]^2) * (i_term_real[a]^2 + i_term_imag[a]^2) <=
-                    (_rating_at(rate_a, t) + ol)^2); nw)
-            for (t, a) in enumerate(edge_arcs(nm, e; nw)) if isfinite(_rating_at(rate_a, t))]
+                    (_rating_at(s_max, t) + ol)^2); nw)
+            for (t, a) in enumerate(edge_arcs(nm, e; nw)) if isfinite(_rating_at(s_max, t))]
 end
 
 "the rating of terminal `t`, where a rating is one number for every terminal or one per terminal"
-_rating_at(rate_a::Real, ::Int) = rate_a
-_rating_at(rate_a::AbstractVector, t::Int) = rate_a[t]
+_rating_at(s_max::Real, ::Int) = s_max
+_rating_at(s_max::AbstractVector, t::Int) = s_max[t]
 
 "whether any terminal has a rating that bounds anything"
-_any_finite(rate_a::Real) = isfinite(rate_a)
-_any_finite(rate_a::AbstractVector) = any(isfinite, rate_a)
+_any_finite(s_max::Real) = isfinite(s_max)
+_any_finite(s_max::AbstractVector) = any(isfinite, s_max)
 
 """
     variable_edge_overload!(nm, e; nw)
@@ -325,14 +326,14 @@ function variable_edge_overload!(nm::NetworkModel, e::Int; nw::Int)
 end
 
 """
-    constraint_edge_angle_difference!(nm, a_fr, a_to, angmin, angmax; nw)
+    constraint_edge_angle_difference!(nm, a_fr, a_to, v_angl_min, v_angl_max; nw)
 
 Bound the voltage angle difference across a two-terminal edge. Skipped where the
 data leaves it unbounded.
 """
 function constraint_edge_angle_difference!(nm::NetworkModel, a_fr::Arc, a_to::Arc,
-                                           angmin::Real, angmax::Real; nw::Int)
-    angmin > -pi / 2 || angmax < pi / 2 || return nothing
+                                           v_angl_min::Real, v_angl_max::Real; nw::Int)
+    v_angl_min > -pi / 2 || v_angl_max < pi / 2 || return nothing
 
     v_real, v_imag = var(nm, :v_real; nw), var(nm, :v_imag; nw)
     i, j           = a_fr.node, a_to.node
@@ -340,10 +341,10 @@ function constraint_edge_angle_difference!(nm::NetworkModel, a_fr::Arc, a_to::Ar
     return (
         constrain!(nm, :edge_angle, (a_fr.edge, :max),
             JuMP.@build_constraint(v_imag[i] * v_real[j] - v_real[i] * v_imag[j] <=
-                tan(angmax) * (v_real[i] * v_real[j] + v_imag[i] * v_imag[j])); nw),
+                tan(v_angl_max) * (v_real[i] * v_real[j] + v_imag[i] * v_imag[j])); nw),
         constrain!(nm, :edge_angle, (a_fr.edge, :min),
             JuMP.@build_constraint(v_imag[i] * v_real[j] - v_real[i] * v_imag[j] >=
-                tan(angmin) * (v_real[i] * v_real[j] + v_imag[i] * v_imag[j])); nw),
+                tan(v_angl_min) * (v_real[i] * v_real[j] + v_imag[i] * v_imag[j])); nw),
     )
 end
 
@@ -401,11 +402,11 @@ function constraint_linear_flow!(nm::NetworkModel, e::Int, a_fr::Arc, a_to::Arc,
 end
 
 """
-    constraint_linear_ratings!(nm, e, arcs, rate_a; nw)
+    constraint_linear_ratings!(nm, e, arcs, s_max; nw)
 
 The rating at each terminal of an edge with any number of them in a linearized
 formulation: a bound on the terminal power, since with no reactive power in the
-model apparent power is active power. `rate_a` is one number for every terminal
+model apparent power is active power. `s_max` is one number for every terminal
 or one per terminal, and a terminal whose rating is not finite has no row.
 Skipped where no terminal has a finite rating, and where the problem does not
 watch the edge for congestion, see [`is_monitored`](@ref).
@@ -429,28 +430,28 @@ objective pays for `o_e` and so never lifts it further than one of the two rows
 requires.
 """
 function constraint_linear_ratings!(nm::NetworkModel, e::Int, arcs,
-                                    rate_a::Union{Real,AbstractVector}; nw::Int)
-    _any_finite(rate_a) && is_monitored(nm, e) || return nothing
+                                    s_max::Union{Real,AbstractVector}; nw::Int)
+    _any_finite(s_max) && is_monitored(nm, e) || return nothing
 
     p_term = var(nm, :p_term; nw)
     price  = overload_price(nm)
 
     price === nothing &&
         return [constrain!(nm, :linear_rating, (e, t),
-                           JuMP.@build_constraint(-_rating_at(rate_a, t) <= p_term[a] <= _rating_at(rate_a, t)); nw)
-                for (t, a) in enumerate(arcs) if isfinite(_rating_at(rate_a, t))]
+                           JuMP.@build_constraint(-_rating_at(s_max, t) <= p_term[a] <= _rating_at(s_max, t)); nw)
+                for (t, a) in enumerate(arcs) if isfinite(_rating_at(s_max, t))]
 
     ol = variable_edge_overload!(nm, e; nw)
 
     return [(constrain!(nm, :linear_overload, (e, t, :pos),
-                        JuMP.@build_constraint(p_term[a] - ol <= _rating_at(rate_a, t)); nw),
+                        JuMP.@build_constraint(p_term[a] - ol <= _rating_at(s_max, t)); nw),
              constrain!(nm, :linear_overload, (e, t, :neg),
-                        JuMP.@build_constraint(-p_term[a] - ol <= _rating_at(rate_a, t)); nw))
-            for (t, a) in enumerate(arcs) if isfinite(_rating_at(rate_a, t))]
+                        JuMP.@build_constraint(-p_term[a] - ol <= _rating_at(s_max, t)); nw))
+            for (t, a) in enumerate(arcs) if isfinite(_rating_at(s_max, t))]
 end
 
 """
-    constraint_linear_angle_difference!(nm, a_fr, a_to, angmin, angmax; nw)
+    constraint_linear_angle_difference!(nm, a_fr, a_to, v_angl_min, v_angl_max; nw)
 
 Bound the voltage angle difference across a two-terminal edge in a linearized
 formulation, where the limit is already linear,
@@ -463,14 +464,14 @@ Skipped where the data leaves it unbounded. The angle limit is not congestion, s
 it holds whether or not the problem watches the edge, see [`is_monitored`](@ref).
 """
 function constraint_linear_angle_difference!(nm::NetworkModel, a_fr::Arc, a_to::Arc,
-                                             angmin::Real, angmax::Real; nw::Int)
-    angmin > -pi / 2 || angmax < pi / 2 || return nothing
+                                             v_angl_min::Real, v_angl_max::Real; nw::Int)
+    v_angl_min > -pi / 2 || v_angl_max < pi / 2 || return nothing
 
     v_angl = var(nm, :v_angl; nw)
     i, j   = a_fr.node, a_to.node
 
     return constrain!(nm, :linear_angle, a_fr.edge,
-                      JuMP.@build_constraint(angmin <= v_angl[i] - v_angl[j] <= angmax); nw)
+                      JuMP.@build_constraint(v_angl_min <= v_angl[i] - v_angl[j] <= v_angl_max); nw)
 end
 
 ################################################################################

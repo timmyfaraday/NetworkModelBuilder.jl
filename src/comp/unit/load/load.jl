@@ -9,6 +9,7 @@
 # v0.3.0 - component hierarchy                                                 #
 # v0.10.1 - exports its own public names                                       #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 export AbstractLoad, demand
@@ -72,9 +73,9 @@ function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     power = get!(() -> Dict{Int,Any}(), con(nm; nw), :load_power)
 
     for u in ids(nm, T; nw)
-        ld     = unit(nm, u; nw)::T
-        pd, qd = demand(nm, ld, u; nw)
-        power[u] = constraint_unit_power!(nm, u, -pd, -qd; nw)
+        ld           = unit(nm, u; nw)::T
+        p_set, q_set = demand(nm, ld, u; nw)
+        power[u] = constraint_unit_power!(nm, u, -p_set, -q_set; nw)
     end
 
     return nothing
@@ -86,9 +87,9 @@ end
 
 function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T},
                         u::Int, nw::Int) where {P<:AbstractProblemType,F<:AbstractACFormulation,T<:AbstractLoad}
-    pd, qd = demand(nm, unit(nm, u; nw)::T, u; nw)
-    sol["p_set"] = _value(pd)
-    sol["q_set"] = _value(qd)
+    p_set, q_set = demand(nm, unit(nm, u; nw)::T, u; nw)
+    sol["p_set"] = _value(p_set)
+    sol["q_set"] = _value(q_set)
 
     return nothing
 end
@@ -116,8 +117,8 @@ function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     power = get!(() -> Dict{Int,Any}(), con(nm; nw), :load_power)
 
     for u in ids(nm, T; nw)
-        pd = first(demand(nm, unit(nm, u; nw)::T, u; nw))
-        power[u] = constraint_unit_injection!(nm, u, -pd; nw)
+        p_set = first(demand(nm, unit(nm, u; nw)::T, u; nw))
+        power[u] = constraint_unit_injection!(nm, u, -p_set; nw)
     end
 
     return nothing

@@ -204,7 +204,12 @@ end
 
 "a name a file spells on purpose, as a word or as the name of something that is not a quantity: `(file, name)`"
 const NOM_EXEMPT = Set([("test/rd.jl", "overload"),                         # a word in the `show` of `Redispatch`
-                        ("scripts/run_year_redispatch.jl", "overload")])    # the name of an output table
+                        ("scripts/run_year_redispatch.jl", "overload"),     # the name of an output table
+                        ("src/core/redispatch.jl", "overload"),             # the field of `Redispatch`, a word
+                        ("test/zorba.jl", "overload"),                      # the same field, read back
+                        ("src/io/matpower.jl", "baseMVA"),                  # Matpower's own key and local
+                        ("src/io/zorba.jl", "cost"),                       # the `cost` column of Zorba's hvdc table
+                        ("scripts/SteeringPlanData.jl", "energy_capacity")])  # a column of the steering plan's CSV
 
 "where the old names of the map are still written: `(file, line, name)`"
 function nom_stragglers()

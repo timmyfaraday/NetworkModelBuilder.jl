@@ -60,6 +60,11 @@ grammar as code.
 `r`, `x` and the words above do not change. `Zorba` adapter keywords (`overload_penalty`, `wiggle_room`, `contingency_weight`,
 `hvdc`, `grid`) follow Zorba's vocabulary and stay.
 
+Two types may share a new name: a generator's `pg`, a fixed load's `pd` and a storage unit's `ps` are all `p_set`, so a unit table
+has one `p_set` column for all of them. The readers keep the names of what they read: the `baseMVA` key and local of Matpower, its
+`pd`, `qd`, `gs`, `bs`, the `cost` column of Zorba's `hvdc` table and the `energy_capacity` column of the steering plan's CSV; the
+exemptions of `test/nomenclature.jl` list them.
+
 ## Variable keys, old to new
 
 | owner | rename |

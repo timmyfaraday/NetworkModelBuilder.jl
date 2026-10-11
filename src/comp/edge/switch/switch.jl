@@ -9,6 +9,7 @@
 # v0.11.0 - initial implementation                                             #
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 export AbstractSwitch, Switch, SwitchLock, FREE, LOCKED
@@ -42,7 +43,7 @@ so a susceptance close to infinity: with a reactance of `1e-7` the matrix holds
 switch has no impedance to choose, so there is nothing to round.
 
 A concrete switch carries `id`, `name`, `terminals` (exactly two), `lock`,
-`position`, `rate_a`, `angmin`, `angmax`, `status` and `ext`. Every field but
+`position`, `s_max`, `v_angl_min`, `v_angl_max`, `status` and `ext`. Every field but
 `id`, `name`, `terminals`, `lock` and `ext` may be a [`NetworkVector`](@ref).
 """
 abstract type AbstractSwitch <: AbstractEdge end
@@ -61,11 +62,11 @@ A two-terminal edge `(e, i, j)` that is either closed or open.
   locked this is the position; where it is free it is the position the problem
   starts from. An integer rather than a flag so that a switch with more terminals
   can take it further than two values.
-- `rate_a`: the rating [pu], `Inf` when unlimited. An equipment limit, so a
+- `s_max`: the rating [pu], `Inf` when unlimited. An equipment limit, so a
   dispatch problem enforces it whether or not the switch is monitored for
   congestion. A free switch needs a finite one.
-- `angmin`, `angmax`: the angle difference allowed across the switch while it is
-  open [rad]. A closed switch has none by construction, so `angmin ≤ 0 ≤ angmax`.
+- `v_angl_min`, `v_angl_max`: the angle difference allowed across the switch while it is
+  open [rad]. A closed switch has none by construction, so `v_angl_min ≤ 0 ≤ v_angl_max`.
 - `status`: whether the switch is in service. Out of service it is absent from
   the network like any edge, which leaves its two nodes apart.
 - `ext`: free-form storage.
@@ -77,40 +78,40 @@ Every field but `id`, `name`, `terminals`, `lock` and `ext` may be given as a
 ```julia
 julia> Switch(; id = 1, terminals = [2, 7])                    # a closed coupler
 
-julia> Switch(; id = 2, terminals = [3, 4], lock = FREE, position = 0, rate_a = 2.0)
+julia> Switch(; id = 2, terminals = [3, 4], lock = FREE, position = 0, s_max = 2.0)
 ```
 """
 Base.@kwdef struct Switch <: AbstractSwitch
-    id       ::Int
-    name     ::String                   = ""
-    terminals::Vector{Int}
-    lock     ::SwitchLock               = LOCKED
-    position ::NetworkQuantity{Int}     = 1
-    rate_a   ::NetworkQuantity{Float64} = Inf
-    angmin   ::NetworkQuantity{Float64} = -Float64(pi)
-    angmax   ::NetworkQuantity{Float64} =  Float64(pi)
-    status   ::NetworkQuantity{Bool}    = true
-    ext      ::Dict{Symbol,Any}         = Dict{Symbol,Any}()
+    id        ::Int
+    name      ::String                   = ""
+    terminals ::Vector{Int}
+    lock      ::SwitchLock               = LOCKED
+    position  ::NetworkQuantity{Int}     = 1
+    s_max     ::NetworkQuantity{Float64} = Inf
+    v_angl_min::NetworkQuantity{Float64} = -Float64(pi)
+    v_angl_max::NetworkQuantity{Float64} =  Float64(pi)
+    status    ::NetworkQuantity{Bool}    = true
+    ext       ::Dict{Symbol,Any}         = Dict{Symbol,Any}()
 
-    function Switch(id, name, terminals, lock, position, rate_a, angmin, angmax,
+    function Switch(id, name, terminals, lock, position, s_max, v_angl_min, v_angl_max,
                     status, ext)
-        _check_switch(id, terminals, position, rate_a, angmin, angmax)
-        return new(id, name, terminals, lock, position, rate_a, angmin, angmax,
+        _check_switch(id, terminals, position, s_max, v_angl_min, v_angl_max)
+        return new(id, name, terminals, lock, position, s_max, v_angl_min, v_angl_max,
                    status, ext)
     end
 end
 
-function _check_switch(id, terminals, position, rate_a, angmin, angmax)
+function _check_switch(id, terminals, position, s_max, v_angl_min, v_angl_max)
     length(terminals) == 2 ||
         throw(ArgumentError("switch $id has $(length(terminals)) terminals, a switch has exactly two"))
     all_nw(p -> p == 0 || p == 1, position) ||
         throw(ArgumentError("switch $id has a position other than 0 (open) or 1 (closed)"))
-    all_nw(>=(0), rate_a) ||
+    all_nw(>=(0), s_max) ||
         throw(ArgumentError("switch $id has a negative rating"))
-    all_nw(<=(0), angmin) && all_nw(>=(0), angmax) ||
+    all_nw(<=(0), v_angl_min) && all_nw(>=(0), v_angl_max) ||
         throw(ArgumentError("switch $id has an open angle range that leaves out zero, " *
-                            "which is what a closed switch has: angmin must be at most 0 " *
-                            "and angmax at least 0"))
+                            "which is what a closed switch has: v_angl_min must be at most 0 " *
+                            "and v_angl_max at least 0"))
 
     return nothing
 end
@@ -133,11 +134,11 @@ can_open(::Dimension, sw::AbstractSwitch, ::Int) = sw.lock === FREE
 """
     structure_gates(sw)
 
-A switch writes a rating only where `rate_a` is finite, and writes different rows
+A switch writes a rating only where `s_max` is finite, and writes different rows
 for an open position than for a closed one, so those two decide the shape of its
 model rather than a number in it. See [`structure_gates`](@ref).
 """
-structure_gates(::AbstractSwitch) = (:rate_a, :position)
+structure_gates(::AbstractSwitch) = (:s_max, :position)
 
 ################################################################################
 # Switch — what the problem makes of it                                        #
@@ -298,10 +299,10 @@ end
 
 "the error a free switch without a finite rating is refused with"
 _require_rating(e::Int, sw::AbstractSwitch) =
-    isfinite(sw.rate_a) ||
+    isfinite(sw.s_max) ||
         throw(ArgumentError("switch $e is free and has no finite rating, which the rows " *
                             "that let a dispatch problem open it are written with; give " *
-                            "it a `rate_a`, or lock it"))
+                            "it a `s_max`, or lock it"))
 
 ################################################################################
 # Switch — the linearized formulation                                          #
@@ -347,18 +348,18 @@ function _free_switch_rows!(nm::NetworkModel{P,F}, e::Int, sw::AbstractSwitch,
 
     return (
         constrain!(nm, :switch_angle_range, (e, :max), JuMP.@build_constraint(
-            v_angl[i] - v_angl[j] <= sw.angmax * (1 - z_sw)); nw),
+            v_angl[i] - v_angl[j] <= sw.v_angl_max * (1 - z_sw)); nw),
         constrain!(nm, :switch_angle_range, (e, :min), JuMP.@build_constraint(
-            v_angl[i] - v_angl[j] >= sw.angmin * (1 - z_sw)); nw),
+            v_angl[i] - v_angl[j] >= sw.v_angl_min * (1 - z_sw)); nw),
         constrain!(nm, :switch_flow_range, (e, :max), JuMP.@build_constraint(
-            p_term[a_fr] <= sw.rate_a * z_sw); nw),
+            p_term[a_fr] <= sw.s_max * z_sw); nw),
         constrain!(nm, :switch_flow_range, (e, :min), JuMP.@build_constraint(
-            p_term[a_fr] >= -sw.rate_a * z_sw); nw),
+            p_term[a_fr] >= -sw.s_max * z_sw); nw),
     )
 end
 
 _loop_bound(::NetworkModel{P,F}, ::Int, sw::AbstractSwitch; nw::Int = 0
-           ) where {P<:AbstractProblemType,F<:LPFFormulation} = sw.rate_a
+           ) where {P<:AbstractProblemType,F<:LPFFormulation} = sw.s_max
 
 function _switch_cycle_rows!(nm::NetworkModel{P,F}, cycle; nw::Int
                             ) where {P<:AbstractProblemType,F<:LPFFormulation}
@@ -391,11 +392,11 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_i
 
     for e in ids(nm, T; nw)
         sw = edge(nm, e; nw)::T
-        (_held(nm, sw) && sw.position == 1 && isfinite(sw.rate_a)) || continue
+        (_held(nm, sw) && sw.position == 1 && isfinite(sw.s_max)) || continue
 
         a_fr = first(edge_arcs(nm, e; nw))
         limits[e] = constrain!(nm, :switch_rating, e,
-                               JuMP.@build_constraint(-sw.rate_a <= p_term[a_fr] <= sw.rate_a); nw)
+                               JuMP.@build_constraint(-sw.s_max <= p_term[a_fr] <= sw.s_max); nw)
     end
 
     return nothing
@@ -461,7 +462,7 @@ function _free_switch_rows!(nm::NetworkModel{P,F}, e::Int, sw::AbstractSwitch,
     i, j                     = a_fr.node, a_to.node
     ni, nj                   = node(nm, i; nw), node(nm, j; nw)
 
-    M = 2 * max(ni.vmax, nj.vmax)
+    M = 2 * max(ni.v_magn_max, nj.v_magn_max)
     C = _current_bound(nm, e, sw, a_fr, a_to; nw)
 
     return (
@@ -490,13 +491,13 @@ be at either end, which is what a bound on a current is written with
 """
 function _current_bound(nm::NetworkModel, e::Int, sw::AbstractSwitch,
                         a_fr::Arc, a_to::Arc; nw::Int)
-    vmin = min(node(nm, a_fr.node; nw).vmin, node(nm, a_to.node; nw).vmin)
-    vmin > 0 ||
-        throw(ArgumentError("switch $e joins a node with a lower voltage limit of $vmin, " *
+    v_magn_min = min(node(nm, a_fr.node; nw).v_magn_min, node(nm, a_to.node; nw).v_magn_min)
+    v_magn_min > 0 ||
+        throw(ArgumentError("switch $e joins a node with a lower voltage limit of $v_magn_min, " *
                             "and the bound on its current is the rating over that limit; " *
-                            "give the nodes a positive `vmin`, or lock it"))
+                            "give the nodes a positive `v_magn_min`, or lock it"))
 
-    return sw.rate_a / vmin
+    return sw.s_max / v_magn_min
 end
 
 _loop_bound(nm::NetworkModel{P,F}, e::Int, sw::AbstractSwitch; nw::Int
@@ -550,11 +551,11 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_i
 
     for e in ids(nm, T; nw)
         sw = edge(nm, e; nw)::T
-        (isfinite(sw.rate_a) && (!_held(nm, sw) || sw.position == 1)) || continue
+        (isfinite(sw.s_max) && (!_held(nm, sw) || sw.position == 1)) || continue
 
         a = first(edge_arcs(nm, e; nw))
         limits[e] = constrain!(nm, :switch_rating, e, JuMP.@build_constraint(
-            (v_real[a.node]^2 + v_imag[a.node]^2) * (i_term_real[a]^2 + i_term_imag[a]^2) <= sw.rate_a^2); nw)
+            (v_real[a.node]^2 + v_imag[a.node]^2) * (i_term_real[a]^2 + i_term_imag[a]^2) <= sw.s_max^2); nw)
     end
 
     return nothing
@@ -745,10 +746,10 @@ function _loop_bound_sum(nm::NetworkModel, cycle; nw::Int)
     total = 0.0
     for (e, _) in cycle
         sw = edge(nm, e; nw)
-        isfinite(sw.rate_a) ||
+        isfinite(sw.s_max) ||
             throw(ArgumentError("switch $e is in a loop that a free switch can close, and " *
                                 "the row of that loop is written with the rating of every " *
-                                "switch in it; give it a finite `rate_a`"))
+                                "switch in it; give it a finite `s_max`"))
         total += _loop_bound(nm, e, sw; nw)
     end
 

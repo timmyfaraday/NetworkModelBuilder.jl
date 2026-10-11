@@ -1,6 +1,6 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Van Acker (B30 merged, tagged v0.13.0 and pushed; D54).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Van Acker (B30 merged and tagged v0.13.0; B31 decided, D55-D61).
 
 ## Where NMB stands
 
@@ -19,7 +19,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Va
   on 2026-10-11 B30 (v0.13.0).
 - `test-zorba-run` is merged into `main` and kept; the next Zorba change can start from `main`.
 - `b5-switch-edge`, `b11-unified-transformer` merged and deleted; `b21-topology-lookup`, `b22-build-solution`,
-  `b25-guard-rails`, `b23-validation`, `b24-typed-registers`, `b30-one-branch` merged, kept. Next free decision id: **D55**.
+  `b25-guard-rails`, `b23-validation`, `b24-typed-registers`, `b30-one-branch` merged, kept. Next free decision id: **D62**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -46,8 +46,9 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Va
   (`validation.md`); suite 3295, the Zorba year breaks no rule, a 24 h chunk is byte-identical to v0.12.7.
 - B24 done (v0.12.9, D49, tagged): `registered` a field of `NetworkModel`, seven write-only `nm.ext` registers deleted, a
   reused variable key and a twice-written constraint id raise; a held model 7.3 MB smaller (not 56.5, `lessons.md`).
-- B30 done (v0.13.0, D50-D54, tagged): one `Branch` (`length_km` NaN by default), `pi_model.jl` split, rating and angle apart, n π-sections
-  at a point; suite 3351, 24 h chunk byte-identical, cost = control, a lossy transformer unchanged from v0.12.9 (`one-branch-terminals.md`).
+- B30 done (v0.13.0, D50-D54, tagged): one `Branch`, shared fragments in `edge.jl`; suite 3351, chunk byte-identical (`one-branch-terminals.md`).
+- B31 decided (D55-D61), not started: one nomenclature `symbol_primary_secondary` for fields and keys, hard removal, `set_string_name`;
+  `knowledge/plan/naming.md`, `knowledge/nomenclature.md`; v0.14.0 on `b31-nomenclature`, cut from `main`.
 - Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
 - B11 merged, tagged `v0.12.0` (`unified-transformer.md`, D28-D36); Zorba flows are not unique without a phase shifter price (D34).
 - B12 done: `scripts/` run on `Transformer`; week 1 beside a same-day pre-B11 control (`runs/_b12*`): 14 of 14 chunks
@@ -68,7 +69,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Va
 
 ## Next
 
-1. B26, B27 (the review's order); then B20, B7, B3, B4, B13, B19, B28, B29, see `backlog.md`.
+1. B31 (decided, `knowledge/plan/naming.md`), then B26, B27 (the review's order); then B20, B7, B3, B4, B13, B19, B28, B29, see `backlog.md`.
 
 ## Blocked / waiting
 

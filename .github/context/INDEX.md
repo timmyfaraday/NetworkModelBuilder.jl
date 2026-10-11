@@ -9,6 +9,7 @@
 | `conventions.md` | Writing commits, PR descriptions, specs, run prompts, tests or docs. |
 | `environment.md` | Anything fails because of the machine: Julia, PowerShell, git, CI. Also before installing anything. |
 | `lessons.md` | Planning a cross-check against a reference implementation, a large refactor, or a concurrency fix. |
+| `knowledge/nomenclature.md` | Naming a field, a variable key, a solution key or a keyword that holds a quantity; the grammar, the vocabulary and the old-to-new map. |
 | `setup-feedback.md` | At wrap-up, to log friction with the setup; and when proposing a setup change. |
 | `setup-changelog.md` | When a setup file behaves unexpectedly: was it changed recently, and why? |
 | `agent-runs/` | Writing or reviewing an agent-run prompt/report (unattended/overnight tasks). `agent-runs/README.md` has the rules. |

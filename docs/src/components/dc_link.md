@@ -34,17 +34,18 @@ Two things follow, and both are why such a link gets built in the first place:
 
 ## Parameters
 
-| symbol | field | description | unit |
+| symbol | code name | description | unit |
 |:-------|:------|:------------|:-----|
 | | `id`, `name` | identifier and label | |
 | ``(i, j)`` | `terminals` | the from and to node, flow positive from ``i`` to ``j`` | |
-| ``s^{\text{max}}_{e}`` | `rate_a` | transfer rating | pu |
-| ``\ell^{0}_{e}`` | `loss_fixed` | no-load loss of the stations | pu |
-| ``\ell^{1}_{e}`` | `loss_prop` | loss per unit transferred, below one | |
+| ``s^{\text{max}}_{e}`` | `s_max` | transfer rating | pu |
+| ``\ell^{0}_{e}`` | `p_loss_fix` | no-load loss of the stations | pu |
+| ``\ell^{1}_{e}`` | `p_loss_prop` | loss per unit transferred, below one | |
 | | `reverse` | whether it may carry from ``j`` to ``i`` | |
-| ``p^{\text{dc,mkt}}_{e}`` | `pdc` | the market schedule | pu |
-| ``c_{e}`` | `cost` | price of moving one per unit away from `pdc` | currency/pu/h |
+| ``p^{\text{dc,mkt}}_{e}`` | `p_set` | the market schedule | pu |
+| ``c_{e}`` | `c` | price of moving one per unit away from `p_set` | currency/pu/h |
 | | `status` | in service | |
+| | `ext` | free-form storage, carried along and never read | |
 
 Every field but `id`, `name`, `terminals`, `reverse` and `ext` may be a
 [`NetworkVector`](@ref). `reverse` describes what the equipment is able to do
@@ -54,14 +55,14 @@ and so does not vary over the network index; take a link out through `status`.
 
 ### In the `LPFFormulation`
 
-| symbol | key | index | description | unit |
+| symbol | code name | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``p_{a}`` | `:p` | arc | terminal active power, node into edge | pu |
-| ``t_{e}`` | `:pdct` | edge | power sent into the link | pu |
-| ``p^{\uparrow}_{e}`` | `:pdcup` | edge | moved up from the schedule, redispatch only | pu |
-| ``p^{\downarrow}_{e}`` | `:pdcdn` | edge | moved down from the schedule, redispatch only | pu |
+| ``p_{a}`` | `:p_term` | arc | terminal active power, node into edge | pu |
+| ``t_{e}`` | `:p_dcl_thru` | edge | power sent into the link | pu |
+| ``p^{\uparrow}_{e}`` | `:p_dcl_up` | edge | moved up from the schedule, redispatch only | pu |
+| ``p^{\downarrow}_{e}`` | `:p_dcl_dn` | edge | moved down from the schedule, redispatch only | pu |
 
-``t_{e}`` exists only where `loss_prop` is non-zero, and only in a dispatch
+``t_{e}`` exists only where `p_loss_prop` is non-zero, and only in a dispatch
 problem — see [The transfer, and why it is a variable](@ref).
 
 ### In the `IVRFormulation`
@@ -103,8 +104,8 @@ objective pays for.
 | the problem | is ``t_{e}`` settled on what is sent? |
 |:-----------------------------------|:------------------------------------------|
 | dispatch, generation priced        | yes — the objective pushes it down        |
-| dispatch, `loss_prop` zero         | vacuously — there is no ``t_{e}``         |
-| power flow                         | vacuously — the transfer is `pdc`, data   |
+| dispatch, `p_loss_prop` zero         | vacuously — there is no ``t_{e}``         |
+| power flow                         | vacuously — the transfer is `p_set`, data   |
 | dispatch, nobody paid to generate  | **no** — nothing pushes it down           |
 
 The last row is a degenerate way to pose the question rather than a case the
@@ -166,7 +167,7 @@ price for both directions: a link is symmetric equipment and moving it either
 way is the same intervention. What is priced is the **move**, not the transfer —
 a link left at its schedule costs nothing however much it carries.
 
-A `cost` of zero, the default, makes it a **non-costly** measure, taken before
+A `c` of zero, the default, makes it a **non-costly** measure, taken before
 anything that is priced, which is usually the right model of a link the operator
 already controls. It is then the DC counterpart of the phase shifter of a
 [`Transformer`](@ref), and

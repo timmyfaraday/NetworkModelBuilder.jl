@@ -27,12 +27,12 @@ data = parse_tables(
             terminals = [[1, 2]],
             r         = [0.0],
             x         = [0.1],
-            rate_a    = [0.5]),
+            s_max     = [0.5]),
     unit = (id        = [1, 2],
             component = ["Generator", "FixedLoad"],
             node      = [1, 2],
-            pmax      = [5.0, missing],
-            pd        = [missing, 1.0]))
+            p_max     = [5.0, missing],
+            p_set     = [missing, 1.0]))
 ```
 
 ## The tables
@@ -68,13 +68,13 @@ given**, and the component takes its default. This is what lets one flat table
 hold several component types: a `Branch` row leaves the columns belonging to a
 `DCLink` empty, which is also exactly what stacking two frames produces.
 
-A field with an entry per terminal — `r`, `x`, `g_sh`, `b_sh` and `rate_a` of a
+A field with an entry per terminal — `r`, `x`, `g_shnt`, `b_shnt` and `s_max` of a
 [`Branch`](@ref), the same and more of a [`Transformer`](@ref) — takes a list in a
 cell, or a plain number where the component says a number will do: for two
 terminals a number is the first entry, and a rating is the rating of every
 terminal. A table of two-terminal branches therefore reads as it always has, and a
 branch with three terminals gives a list. A list is the only thing a field such as
-the `cost` of a generator takes.
+the `c` of a generator takes.
 
 ### Profiles
 
@@ -90,8 +90,8 @@ Everything that varies over the network index goes in one long table:
 
 Each `(family, id, field)` group becomes a [`NetworkVector`](@ref) on that
 component, and overrides whatever constant the component's own table gave. An
-outage is a `status` that varies; a load profile is a `pd` that does; a rating
-that follows the weather is a `rate_a` that does.
+outage is a `status` that varies; a load profile is a `p_set` that does; a rating
+that follows the weather is a `s_max` that does.
 
 Every group has to give **every** network index, exactly once. A group that is
 short is far more likely to be a filter that dropped rows than a deliberate
@@ -168,10 +168,10 @@ pl.DataFrame({
     "id":        [1, 2],
     "component": ["Generator", "FixedLoad"],
     "node":      [1, 2],
-    "pmax":      [5.0, None],
-    "pd":        [None, 1.0],
+    "p_max":      [5.0, None],
+    "p_set":        [None, 1.0],
 }).write_ipc("belgium/unit.arrow")
 ```
 
 A `None` is a `missing`, and therefore a default. A list column — `terminals`,
-or the `cost` polynomial of a generator — is a list column on both sides.
+or the `c` polynomial of a generator — is a list column on both sides.

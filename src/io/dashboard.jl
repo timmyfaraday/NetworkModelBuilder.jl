@@ -7,6 +7,8 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.10.0 - initial implementation                                             #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 ################################################################################
@@ -27,11 +29,11 @@
 function _terminal_power(entry::Dict{String,Any}, label::String)
     terminal = get(entry, "terminal", nothing)
     from     = terminal === nothing ? nothing : get(terminal, "1", nothing)
-    (from === nothing || !haskey(from, "p")) &&
+    (from === nothing || !haskey(from, "p_term")) &&
         throw(ArgumentError("the solution of edge $label carries no terminal power, which " *
                             "every formulation with a model reports; this one has none"))
 
-    return from["p"]
+    return from["p_term"]
 end
 
 """
@@ -111,7 +113,7 @@ function security_tables(data::NetworkData, result::Dict{String,Any};
                             "has $(dim_length(data, :time)) time steps"))
 
     dim  = dimension(data)
-    base = baseMVA(data)
+    base = s_base_mva(data)
     nt, nc, ne = length(time_id), length(contingencies), length(edge_ids)
 
     comp   = [edge(net, e; nw = nw_id_default(net)) for e in edge_ids]

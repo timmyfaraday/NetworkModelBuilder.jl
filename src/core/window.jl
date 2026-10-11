@@ -11,6 +11,7 @@
 # v0.11.0 - two integers are two shapes                                        #
 # v0.12.1 - a structure gate asks what the model's own guard asks              #
 # v0.13.0 - the docstring names the linearized ratings, not the limits         #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 ################################################################################
@@ -73,7 +74,7 @@ function window(data::NetworkData, name::Symbol, coord)
 
     net = Network(I, E, U; dim = sub, ext = deepcopy(network(data).ext))
 
-    return NetworkData(net; name = data.name, baseMVA = baseMVA(data),
+    return NetworkData(net; name = data.name, s_base_mva = s_base_mva(data),
                        ext = deepcopy(data.ext))
 end
 
@@ -209,7 +210,7 @@ back, because a window's last time step is the horizon's last time step only for
 the window that closes it.
 
 Returned unchanged unless the type says otherwise. A [`Storage`](@ref) unit with
-an `energy_final` has a method; nothing else in the package aims at anything, so
+an `e_fin` has a method; nothing else in the package aims at anything, so
 nothing else needs one.
 """
 interior_state(c::AbstractComponent) = c
@@ -246,8 +247,8 @@ model has, rather than only what they say.
 Most component data is a coefficient: change a load and the same constraint
 holds a different number. A handful of fields are not, because the code that
 writes the model asks a question of them first and writes nothing when the
-answer is no — a `rate_a` of `Inf` produces no rating at all, a `pmax` of `Inf`
-produces no upper bound, an `angmin` of `-π/2` produces no angle limit. A field
+answer is no — a `s_max` of `Inf` produces no rating at all, a `p_max` of `Inf`
+produces no upper bound, an `v_angl_min` of `-π/2` produces no angle limit. A field
 like that changes the *shape* of the model, not a number in it.
 
 Returns `()` unless the type says otherwise, which is the right answer for a
@@ -259,7 +260,7 @@ The methods in this package correspond one for one to the guards in the model:
 the `isfinite` tests in `constraint_edge_rating!`, `constraint_linear_ratings!`,
 `_variable_generator_power`, `_variable_generator_active` and the flexible load,
 the `±π/2` test in `constraint_edge_angle_difference!`, and the `iszero` test of a
-DC link's `loss_prop`, which decides whether the link has a transfer variable.
+DC link's `p_loss_prop`, which decides whether the link has a transfer variable.
 """
 structure_gates(::AbstractComponent) = ()
 
@@ -300,7 +301,7 @@ Two things have to agree, and the second is the one that is easy to miss:
 
 1. the [`Topology`](@ref), i.e. which components are in service — see
    [`same_topology`](@ref);
-2. every [`structure_gates`](@ref) field, because a `rate_a` that is finite at
+2. every [`structure_gates`](@ref) field, because a `s_max` that is finite at
    one index and `Inf` at another writes a rating at one and not at the other
    while the topology sits perfectly still.
 
@@ -340,8 +341,8 @@ end
 
 same_structure(data::NetworkData, a::Int, b::Int) = same_structure(network(data), a, b)
 
-const _ANGLE_GATES = (:angmin, :angmax)
-const _ZERO_GATES  = (:loss_prop,)
+const _ANGLE_GATES = (:v_angl_min, :v_angl_max)
+const _ZERO_GATES  = (:p_loss_prop,)
 
 """
     _gate(field, x)
@@ -349,9 +350,9 @@ const _ZERO_GATES  = (:loss_prop,)
 What the value `x` of a [`structure_gates`](@ref) `field` means structurally: the
 answer to the question the model asks of that field before it writes anything.
 
-- an angle limit, `angmin` or `angmax`, is asked whether it bounds anything and
+- an angle limit, `v_angl_min` or `v_angl_max`, is asked whether it bounds anything and
   whether it lies inside `(-π/2, π/2)`, where it stops being a limit;
-- `loss_prop` is asked whether it is zero, which is whether a DC link has a
+- `p_loss_prop` is asked whether it is zero, which is whether a DC link has a
   transfer variable;
 - every other limit, a rating or an operating limit, is asked only whether it is
   finite. `π/2` is where an angle stops being a limit and means nothing to a

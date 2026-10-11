@@ -10,30 +10,31 @@ NodeType
 
 ## Parameters
 
-| symbol | field | description | unit |
+| symbol | code name | description | unit |
 |:-------|:------|:------------|:-----|
 | | `id` | identifier | |
 | | `name` | label | |
 | | `type` | [`PQ`](@ref NodeType), [`PV`](@ref NodeType), [`REF`](@ref NodeType) or [`ISOLATED`](@ref NodeType) | |
-| ``v^{\text{m}}_{i}`` | `vm` | voltage magnitude setpoint | pu |
-| ``v^{\text{a}}_{i}`` | `va` | voltage angle setpoint | rad |
-| ``v^{\text{min}}_{i}`` | `vmin` | lower voltage magnitude limit | pu |
-| ``v^{\text{max}}_{i}`` | `vmax` | upper voltage magnitude limit | pu |
-| | `base_kv` | voltage base | kV |
+| ``v^{\text{m}}_{i}`` | `v_magn_set` | voltage magnitude setpoint | pu |
+| ``v^{\text{a}}_{i}`` | `v_angl_set` | voltage angle setpoint | rad |
+| ``v^{\text{min}}_{i}`` | `v_magn_min` | lower voltage magnitude limit | pu |
+| ``v^{\text{max}}_{i}`` | `v_magn_max` | upper voltage magnitude limit | pu |
+| | `v_base_kv` | voltage base | kV |
 | | `area`, `zone` | bookkeeping identifiers | |
 | | `status` | in service | |
+| | `ext` | free-form storage; `:v_real_init`, `:v_imag_init` and `:v_angl_init` set where the solver starts the voltage | |
 
-Every field but `id`, `name`, `base_kv`, `area`, `zone` and `ext` may be a
+Every field but `id`, `name`, `v_base_kv`, `area`, `zone` and `ext` may be a
 [`NetworkVector`](@ref).
 
 ## Variables
 
 ### In the `IVRFormulation`
 
-| symbol | key | index | description | unit |
+| symbol | code name | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``v^{\text{r}}_{i}`` | `:vr` | node | real part of the voltage | pu |
-| ``v^{\text{i}}_{i}`` | `:vi` | node | imaginary part of the voltage | pu |
+| ``v^{\text{r}}_{i}`` | `:v_real` | node | real part of the voltage | pu |
+| ``v^{\text{i}}_{i}`` | `:v_imag` | node | imaginary part of the voltage | pu |
 
 Whether they are bounded depends on the problem. A power flow leaves them free,
 so that the solver is not steered away from the one physical answer. A dispatch
@@ -42,9 +43,9 @@ below.
 
 ### In the `LPFFormulation`
 
-| symbol | key | index | description | unit |
+| symbol | code name | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``v^{\text{a}}_{i}`` | `:va` | node | voltage angle | rad |
+| ``v^{\text{a}}_{i}`` | `:v_angl` | node | voltage angle | rad |
 
 There is no magnitude variable: it is one by assumption. The angle is unbounded
 whatever the problem, since the differences that matter are bounded on the edges
@@ -65,12 +66,12 @@ that span them.
 Kirchhoff's current law, at every node, in the `IVRFormulation`:
 
 ```math
-\sum_{a \in A(i)} c_{a} = \sum_{u \in U(i)} c_{u}
+\sum_{a \in A(i)} i_{a} = \sum_{u \in U(i)} i_{u}
 ```
 
 with ``c_a`` the current flowing from the node into an edge terminal and ``c_u``
 the current a unit injects. Every kind of unit contributes to the same sum
-through the shared `:cru` and `:ciu` variables, which is what keeps this
+through the shared `:i_unit_real` and `:i_unit_imag` variables, which is what keeps this
 constraint independent of what a network contains.
 
 ### Voltage reference

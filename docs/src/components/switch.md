@@ -32,15 +32,16 @@ SwitchLock
 
 ## Parameters
 
-| symbol | field | description | unit |
+| symbol | code name | description | unit |
 |:-------|:------|:------------|:-----|
 | | `id`, `name` | identifier and label | |
 | ``(i, j)`` | `terminals` | the two nodes it connects, exactly two | |
 | | `lock` | [`LOCKED`](@ref SwitchLock) or [`FREE`](@ref SwitchLock) | |
 | ``z^{0}_{e}`` | `position` | `0` for open, `1` for closed | |
-| ``s^{\text{max}}_{e}`` | `rate_a` | the rating, `Inf` when unlimited; a free switch needs a finite one | pu |
-| ``\theta^{\text{min}}_{e}``, ``\theta^{\text{max}}_{e}`` | `angmin`, `angmax` | the angle difference allowed across it while open | rad |
+| ``s^{\text{max}}_{e}`` | `s_max` | the rating, `Inf` when unlimited; a free switch needs a finite one | pu |
+| ``\theta^{\text{min}}_{e}``, ``\theta^{\text{max}}_{e}`` | `v_angl_min`, `v_angl_max` | the angle difference allowed across it while open | rad |
 | | `status` | in service | |
+| | `ext` | free-form storage, carried along and never read | |
 
 Every field but `id`, `name`, `terminals`, `lock` and `ext` may be a
 [`NetworkVector`](@ref). `lock` describes what the equipment is allowed to do and so
@@ -62,17 +63,17 @@ different kind of model: see [A free switch](@ref).
 
 ### In the `LPFFormulation`
 
-| symbol | key | index | description | unit |
+| symbol | code name | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``p_{a}`` | `:p` | arc | terminal active power, node into edge | pu |
-| ``z_{e}`` | `:zsw` | edge | closed position, a binary variable, free switches in a dispatch problem only | |
+| ``p_{a}`` | `:p_term` | arc | terminal active power, node into edge | pu |
+| ``z_{e}`` | `:z_sw` | edge | closed position, a binary variable, free switches in a dispatch problem only | |
 
 ### In the `IVRFormulation`
 
-| symbol | key | index | description | unit |
+| symbol | code name | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``c^{\text{r}}_{a}``, ``c^{\text{i}}_{a}`` | `:cr`, `:ci` | arc | terminal current, node into edge | pu |
-| ``z_{e}`` | `:zsw` | edge | closed position, a binary variable, free switches in a dispatch problem only | |
+| ``i^{\text{r}}_{a}``, ``i^{\text{i}}_{a}`` | `:i_term_real`, `:i_term_imag` | arc | terminal current, node into edge | pu |
+| ``z_{e}`` | `:z_sw` | edge | closed position, a binary variable, free switches in a dispatch problem only | |
 
 A switch has no variables of its own beyond that. ``z_{e}`` starts at the position
 in the data.
@@ -90,7 +91,7 @@ imaginary current. Then, for a switch the problem holds where it is,
 
 | position | `LPFFormulation` | `IVRFormulation` |
 |:---------|:-----------------|:-----------------|
-| open     | ``p_{a^{\text{f}}} = 0`` | ``c^{\text{r}}_{a^{\text{f}}} = c^{\text{i}}_{a^{\text{f}}} = 0`` |
+| open     | ``p_{a^{\text{f}}} = 0`` | ``i^{\text{r}}_{a^{\text{f}}} = i^{\text{i}}_{a^{\text{f}}} = 0`` |
 | closed   | ``v^{\text{a}}_{i} = v^{\text{a}}_{j}`` | ``v^{\text{r}}_{i} = v^{\text{r}}_{j}``, ``v^{\text{i}}_{i} = v^{\text{i}}_{j}`` |
 
 A closed switch is an **equality, not a merged node**: both of its nodes stay in
@@ -100,7 +101,7 @@ question from what a switch is.
 
 ### The rating
 
-A finite `rate_a` bounds a closed switch in a dispatch problem,
+A finite `s_max` bounds a closed switch in a dispatch problem,
 
 ```math
 -s^{\text{max}}_{e} \le p_{a^{\text{f}}} \le s^{\text{max}}_{e}
@@ -110,7 +111,7 @@ in the `LPFFormulation`, and in the `IVRFormulation`
 
 ```math
 \left( (v^{\text{r}}_{i})^2 + (v^{\text{i}}_{i})^2 \right)
-\left( (c^{\text{r}}_{a^{\text{f}}})^2 + (c^{\text{i}}_{a^{\text{f}}})^2 \right)
+\left( (i^{\text{r}}_{a^{\text{f}}})^2 + (i^{\text{i}}_{a^{\text{f}}})^2 \right)
 \le (s^{\text{max}}_{e})^2 .
 ```
 
@@ -171,7 +172,7 @@ of the current through it, with
 ```math
 \left| v_{i} - v_{j} \right| \le M_{e} (1 - z_{e}) ,
 \qquad
-\left| c_{a^{\text{f}}} \right| \le C_{e} z_{e} ,
+\left| i_{a^{\text{f}}} \right| \le C_{e} z_{e} ,
 \qquad
 M_{e} = 2 \max(v^{\text{max}}_{i}, v^{\text{max}}_{j}) ,
 \quad
@@ -186,9 +187,9 @@ dispatch at all, as [Coffrin2014](@citet) find.
 
 Three things follow, and none of them is optional:
 
-- **A free switch needs a finite `rate_a`**, since the rating is what the big-M rows
+- **A free switch needs a finite `s_max`**, since the rating is what the big-M rows
   are written with; the model is not built without one. In the `IVRFormulation` the
-  nodes it joins need a positive `vmin` for the same reason.
+  nodes it joins need a positive `v_magn_min` for the same reason.
 - **There are no prices.** A mixed-integer program has no duals, so a model with a
   free switch reports [`active_nodal_price`](@ref) as `nothing` and the `dual_status`
   of its result as `NO_SOLUTION`. A model whose switches are all locked keeps them.
@@ -241,7 +242,7 @@ impedance and only the free ones counted.
 
 That is one row for each simple cycle, which is exponential in the worst case. The
 model is not built when there are more than `1000` such loops at a network index,
-nor where a switch of one has no finite `rate_a`, since the sum is written with it;
+nor where a switch of one has no finite `s_max`, since the sum is written with it;
 lock some of the free switches, or rate the others.
 
 ### Opening a switch can split the network
@@ -291,9 +292,9 @@ problem chooses.
 ```@example switch
 using NetworkModelBuilder, HiGHS, JuMP
 
-branch(id, i, j; rate) = Branch(; id, terminals = [i, j], r = 0.0, x = 0.1, rate_a = rate)
+branch(id, i, j; rate) = Branch(; id, terminals = [i, j], r = 0.0, x = 0.1, s_max = rate)
 switch(id, i, j; rate, lock, position = 1) =
-    Switch(; id, terminals = [i, j], rate_a = rate, lock = lock, position = position)
+    Switch(; id, terminals = [i, j], s_max = rate, lock = lock, position = position)
 
 function ring(lock, positions = (1, 1, 1))
     I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF),
@@ -305,9 +306,9 @@ function ring(lock, positions = (1, 1, 1))
         4 => switch(4, 1, 2; rate = 0.8, lock, position = positions[2]),
         5 => switch(5, 2, 3; rate = 5.0, lock, position = positions[3]))
     U = Dict{Int,AbstractUnit}(
-        1 => Generator(; id = 1, node = 1, pmax = 5.0, cost = [0.0, 1.0]),
-        2 => Generator(; id = 2, node = 3, pmax = 5.0, cost = [0.0, 10.0]),
-        3 => FixedLoad(; id = 3, node = 2, pd = 1.8))
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, c = [0.0, 1.0]),
+        2 => Generator(; id = 2, node = 3, p_max = 5.0, c = [0.0, 10.0]),
+        3 => FixedLoad(; id = 3, node = 2, p_set = 1.8))
 
     return NetworkData(Network(I, E, U))
 end

@@ -12,6 +12,7 @@
 # v0.11.0 - adds the switch component page                                     #
 # v0.11.0 - cites the literature through DocumenterCitations                   #
 # v0.12.0 - warns about a page over 150 KiB, not 100                           #
+# v0.14.0 - adds the nomenclature page                                         #
 ################################################################################
 
 using Documenter
@@ -37,6 +38,7 @@ makedocs(
         "Home" => "index.md",
         "Manual" => [
             "Concepts for newcomers"    => "manual/concepts.md",
+            "Nomenclature"              => "manual/nomenclature.md",
             "The extended graph"        => "manual/extended_graph.md",
             "The network index"         => "manual/network_index.md",
             "Problems and formulations" => "manual/problems_formulations.md",

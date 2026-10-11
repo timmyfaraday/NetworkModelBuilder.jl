@@ -8,6 +8,9 @@
 # Changelog:                                                                   #
 # v0.3.0 - component hierarchy                                                 #
 # v0.10.1 - exports its own public names                                       #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
+# v0.14.0 - the docstrings follow the nomenclature                             #
 ################################################################################
 
 export AbstractLoad, demand
@@ -58,9 +61,9 @@ function demand end
 Fix the power a load injects into its node at minus its withdrawal,
 
 ```math
-v^{\\text{r}}_{i} c^{\\text{r}}_{u} + v^{\\text{i}}_{i} c^{\\text{i}}_{u} = -p^{\\text{d}}_{u},
+v^{\\text{r}}_{i} i^{\\text{r}}_{u} + v^{\\text{i}}_{i} i^{\\text{i}}_{u} = -p^{\\text{d}}_{u},
 \\qquad
-v^{\\text{i}}_{i} c^{\\text{r}}_{u} - v^{\\text{r}}_{i} c^{\\text{i}}_{u} = -q^{\\text{d}}_{u}.
+v^{\\text{i}}_{i} i^{\\text{r}}_{u} - v^{\\text{r}}_{i} i^{\\text{i}}_{u} = -q^{\\text{d}}_{u}.
 ```
 
 Written this way the load draws a constant power at any voltage, which is the
@@ -71,9 +74,9 @@ function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     power = get!(() -> Dict{Int,Any}(), con(nm; nw), :load_power)
 
     for u in ids(nm, T; nw)
-        ld     = unit(nm, u; nw)::T
-        pd, qd = demand(nm, ld, u; nw)
-        power[u] = constraint_unit_power!(nm, u, -pd, -qd; nw)
+        ld           = unit(nm, u; nw)::T
+        p_set, q_set = demand(nm, ld, u; nw)
+        power[u] = constraint_unit_power!(nm, u, -p_set, -q_set; nw)
     end
 
     return nothing
@@ -85,16 +88,16 @@ end
 
 function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T},
                         u::Int, nw::Int) where {P<:AbstractProblemType,F<:AbstractACFormulation,T<:AbstractLoad}
-    pd, qd = demand(nm, unit(nm, u; nw)::T, u; nw)
-    sol["pd"] = _value(pd)
-    sol["qd"] = _value(qd)
+    p_set, q_set = demand(nm, unit(nm, u; nw)::T, u; nw)
+    sol["p_set"] = _value(p_set)
+    sol["q_set"] = _value(q_set)
 
     return nothing
 end
 
 function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T},
                         u::Int, nw::Int) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractLoad}
-    sol["pd"] = _value(first(demand(nm, unit(nm, u; nw)::T, u; nw)))
+    sol["p_set"] = _value(first(demand(nm, unit(nm, u; nw)::T, u; nw)))
 
     return nothing
 end
@@ -115,8 +118,8 @@ function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     power = get!(() -> Dict{Int,Any}(), con(nm; nw), :load_power)
 
     for u in ids(nm, T; nw)
-        pd = first(demand(nm, unit(nm, u; nw)::T, u; nw))
-        power[u] = constraint_unit_injection!(nm, u, -pd; nw)
+        p_set = first(demand(nm, unit(nm, u; nw)::T, u; nw))
+        power[u] = constraint_unit_injection!(nm, u, -p_set; nw)
     end
 
     return nothing

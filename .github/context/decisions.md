@@ -4,7 +4,7 @@ The rules that still constrain NMB. Read the section for the area you are touchi
 changing it.
 
 How to use this file:
-- A new decision gets the next free id (**D55**), goes in the Log at the bottom, and is written by
+- A new decision gets the next free id (**D63**), goes in the Log at the bottom, and is written by
   the `record-decision` skill. `Decided by` is a person's username, never an agent.
 - A decision that changes a rule below edits the rule in place and cites the new id. The old
   wording goes to the archive line of the id it came from.
@@ -73,8 +73,8 @@ How to use this file:
   the defect it is meant to catch.
 - **A constructor refuses input a model cannot use, in service or not** (D48): `Node`, `Generator`,
   `FixedLoad`, `Shunt` and the branch family check ordered limits, finite setpoints and impedances,
-  `r² + x² > 0`, `rate_a >= 0` and a `length_km` that is NaN (unknown) or `>= 0` (D50), with `all_nw` so that a `NetworkVector` is checked at
-  every index, and raise an `ArgumentError` naming the component. `base_kv` may be 0, which means
+  `r² + x² > 0`, `s_max >= 0` and an `l_km` that is NaN (unknown) or `>= 0` (D50), with `all_nw` so that a `NetworkVector` is checked at
+  every index, and raise an `ArgumentError` naming the component. `v_base_kv` may be 0, which means
   unknown. The signs of `r` and `x`, and `pg` against its limits, are not checked.
 - **The package's own state is fields, not keys of `nm.ext`, and a key is not reused** (D49):
   `registered` is a field of `NetworkModel`; the registers that only repeated what
@@ -86,6 +86,22 @@ How to use this file:
   type's file** (D51): `edge/edge.jl` and `unit/unit.jl`, not a file of fragments of their own.
 - **A rating and an angle limit are separate constraints, and `constraint_linear_ratings!` is the one linear rating, for
   two terminals as for more** (D52); `constraint_linear_limits!` is removed.
+- **A quantity is named `symbol_primary_secondary[_unit]`** (D55): lowercase snake_case, singular, a descriptor of at most
+  4 letters from the closed lists of `knowledge/nomenclature.md`, empty slots dropped, the lists disjoint and used in a fixed
+  order (what, part, qualifier, unit), a key with at least one descriptor; what is not a quantity is a plain word. The symbols are `v i p q s r x g b e t c l z k η`: current is `i` and cost
+  is `c`, in the docs mathematics too, and `η` is the one non-ASCII symbol (D56). Planned as v0.14.0, spec `knowledge/plan/naming.md`.
+- **A variable key names the owner, a field does not, and a local equals its key** (D57): `:p_gen` and `Generator.p_max`; a role
+  only one owner has takes the owner's place (`:p_chg`). Inside the package `rate_a` is `s_max`, `angmin` and `angmax` are `v_angl_min`
+  and `v_angl_max`, `base_kv` is `v_base_kv`, `baseMVA` is `s_base_mva`, `length_km` is `l_km`; Matpower, PowerModels and Zorba names
+  live in their readers (D58).
+- **A rename is a hard removal: no alias, no hint, every layer tested** (D59): the old name fails, and a test finds none left in
+  `src`, `test`, `docs/src`, `scripts` and `benchmark`.
+- **A solve takes `set_string_name::Bool = true`** (D61): false builds no variable names and calls
+  `JuMP.set_string_names_on_creation(model, false)`; true leaves a `jump_model` given by the caller as it is. Constraints are named in a
+  later step.
+- **A key of `ext` the package reads for a quantity follows the grammar** (D62): a node's `:v_real_init`, `:v_imag_init` and
+  `:v_angl_init` start the voltage (`init` is the qualifier of an initial value, as in `e_init`); an `ext` key that is not a quantity,
+  such as `:source_id`, `:country` or `:zorba`, stays a plain word.
 
 ## Concurrency
 
@@ -141,8 +157,8 @@ How to use this file:
   (D16). Such a model has no duals, so nodal prices are `nothing`; tests that solve one use HiGHS.
 - **A closed switch is an equality of the voltage at its two nodes with a free flow, an open one a
   zero flow; nodes are not merged** (D17). A locked switch writes exact rows chosen by its
-  position. A free one writes big-M rows, needs a finite `rate_a`, which is an equipment limit in
-  every dispatch problem whether or not the edge is monitored, and takes `angmin`/`angmax` as the
+  position. A free one writes big-M rows, needs a finite `s_max`, which is an equipment limit in
+  every dispatch problem whether or not the edge is monitored, and takes `v_angl_min`/`v_angl_max` as the
   angle difference allowed across it when open. To be revisited with network reduction (B7).
 - **A free switch can be a preventive or a corrective measure, and is non-costly** (D18).
 - **`BusbarSwitch` and `CircuitBreaker` are added later than `AbstractSwitch` and `Switch`** (D19).
@@ -184,18 +200,18 @@ How to use this file:
   it reuses the base case's, and nothing is tied; its continuous ratio stays tied. A corrective one
   keeps a set per contingency** (D36).
 - **A structure gate asks what the model's own guard asks of that field** (D43): `isfinite` of a limit,
-  the ±π/2 test of an angle limit, `iszero` of a `DCLink`'s `loss_prop`. A generator limit that crosses
+  the ±π/2 test of an angle limit, `iszero` of a `DCLink`'s `p_loss_prop`. A generator limit that crosses
   1.571 pu is not a change of the shape of the model, and was read as one, so a rolling horizon with
   `reuse = true` rebuilt almost every window.
 - **A repeated `topology` lookup is answered from the last answer, held in one atomic slot on the
   `Network`: a cache of a derivation, one entry however many network indices, not a table** (D45).
   Two entries if, after B21, `topology` is still above 3 % of the pipeline profile.
-- **A cable and an overhead line are a `Branch` with another `length_km`, not types: `Cable` and `OverheadLine`
-  are removed with no shim, `Branch` carries `length_km`, NaN meaning unknown and being the default** (D50). `AbstractBranch`
+- **A cable and an overhead line are a `Branch` with another `l_km`, not types: `Cable` and `OverheadLine`
+  are removed with no shim, `Branch` carries `l_km`, NaN meaning unknown and being the default** (D50). `AbstractBranch`
   stays as the extension hook. Planned as v0.13.0; spec `knowledge/plan/one-branch.md`.
 - **A `Branch` has two or more terminals: `n` π-sections coupled at one point with the shunts there aggregated, two
   terminals being the single π as before; its fields are vectors with one entry per terminal, as a transformer's, and the
-  shunt of a section, `g_sh` and `b_sh`, is split equally between its two ends** (D53).
+  shunt of a section, `g_shnt` and `b_shnt`, is split equally between its two ends** (D53).
   Spec `knowledge/plan/one-branch-terminals.md`.
 
 ## Zorba pipeline (`scripts/`)
@@ -232,6 +248,8 @@ How to use this file:
   references in a non-canonical `@bibliography` block, and `docs/src/references.md` is the one
   canonical list. An entry is written as in the published paper, with a `doi` where it is known,
   and carries only the pages and details that were read in a source, never ones made up.
+- **Every concrete component type has its own parameters table and its own variables table, with the symbol, the code name, a
+  description and a unit** (D60), and a test compares a type's table with its `fieldnames`.
 
 ---
 
@@ -591,3 +609,43 @@ Changes: new rule in Component model. Tom chose per-terminal vectors like the tr
 Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Component model
 Why: `r`, `x`, `g_sh`, `b_sh` and `rate_a` of a `Branch` became vectors (D53), and the table reader asked for a list wherever a field is a vector, so every table of two-terminal branches failed (8 testsets of `test/tables.jl`). The constructors take a number for two terminals (D29, D53), and a flat table holds Matpower-like rows.
 Changes: new rule in Component model. Tom confirmed the reader's change: a type opts in through `_per_terminal_data`, which `Branch` and `Transformer` do, so a `Transformer` row may now give a number too; `cost` of a generator stays a list.
+
+### D55 — A quantity is named `symbol_primary_secondary[_unit]`
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
+Why: names were Matpower's, or one letter and a suffix chosen where it was written (`:pg`, `:psc`, `:csi`, `:vpr`), so one letter carried several meanings (`s` six, `p`, `t` and `c` three each), a bound was glued (`pmax`), underscored (`tm_min`), a prefix (`max_energy_per_period`) or a word (`charge_rating`), and one quantity had two spellings (`gs` and `g_sh`). Surveyed: 72 field names, 42 variable keys, about 60 keywords.
+Changes: new rule in Code conventions. Tom proposed the form and confirmed the grammar; the lists of descriptors (parts, locations, owners, roles; bounds, references, directions; units), the disjoint classes and the symbols are in `knowledge/nomenclature.md`. Constraints and function names are a later step.
+
+### D56 — Current is `i`, cost is `c`, efficiency is `η`
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
+Why: `c` was current and also cost, charge and cycle, and an index is never a quantity, so `i_term_real` and `for i in I` do not meet. `η` is a valid identifier, stable under NFC, and works as a field, a keyword and an Arrow or Parquet column that `pyarrow` reads back; the docs already write `η`.
+Changes: the symbols in the D55 rule. In the docs mathematics current becomes `i` and cost keeps `c`, by meaning.
+
+### D57 — A key names the owner, a field does not, a local equals its key
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
+Why: the variables of every type share one dictionary per network index, so a key needs the owner (`:p_gen`, `:p_stor_up`, `:p_term`); a field is reached through its type (`Generator.p_max`). A local that equals its key makes the code, the docs and the solution use one name.
+Changes: new rule in Code conventions. Tom chose this over the owner in both, over a registry namespaced by type, and over a shorthand for the locals of an equation.
+
+### D58 — The Matpower-derived names are renamed inside the package
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
+Why: `rate_a`, `angmin`, `angmax`, `base_kv`, `baseMVA` and `length_km` carry no symbol, or a unit that the grammar puts in a slot. `s_max` also stands for a `DCLink` and the linearized model, where apparent power is active power; `v_angl_min` is the angle difference across an edge, which the docs index says.
+Changes: `rate_a` `s_max`, `angmin` `v_angl_min`, `angmax` `v_angl_max`, `base_kv` `v_base_kv`, `baseMVA` `s_base_mva`, `length_km` `l_km`. The readers keep the names of their sources.
+
+### D59 — A rename is a hard removal, fully tested, in v0.14.0
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
+Why: asked whether the table reader's refusal of an old column should also name the new field, Tom answered no, hard removal everywhere, and asked that it be fully tested. As with D28 and D50.
+Changes: new rule in Code conventions. No alias and no hint map; tests that the vocabulary is respected, that no old name is left, and that every type's table round-trips through Arrow and Parquet; v0.14.0.
+
+### D60 — Every component has its own parameters table and variables table in the docs
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Documentation
+Why: `load.md` and `slack.md` hold two types in one variables table. The tables are where a symbol, its code name and its unit meet, so each concrete type has its own.
+Changes: new rule in Documentation, applied with the rename; a test compares a type's table with its `fieldnames`.
+
+### D61 — A solve takes `set_string_name`, default true
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
+Why: names are built at 45 call sites and read by nothing. On the real step-3 window `instantiate_model` took 1,958 and 1,977 ms with JuMP's names off against 2,437 and 2,697 ms (19 to 27 %), about 0.5 s of a 125 s chunk since the pipeline then updates the model.
+Changes: new rule in Code conventions. A `jump_model` given by the caller is left as it is when the option is true. This step names variables only; constraints are named in the next.
+
+### D62 — A key of `ext` the package reads for a quantity follows the grammar
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
+Why: `:vr_start`, `:vi_start` and `:va_start` of a node's `ext` set the start of the voltage and are read by the package, so they are quantities that D55 left unnamed. Tom asked for them to follow the nomenclature; `init` is the qualifier of an initial value.
+Changes: new rule in Code conventions. `:vr_start` `:v_real_init`, `:vi_start` `:v_imag_init`, `:va_start` `:v_angl_init`, a hard removal (D59), checked by `test/nomenclature.jl`.

@@ -15,7 +15,7 @@ It rests on three approximations:
 Applying them to the exact flow of a π-equivalent leaves
 
 ```math
-p_{a^{\text{f}}} = -b_{e} \left(v^{\text{a}}_{i} - v^{\text{a}}_{j} - ta_{e}\right),
+p_{a^{\text{f}}} = -b_{e} \left(v^{\text{a}}_{i} - v^{\text{a}}_{j} - t^{\text{a}}_{e}\right),
 \qquad
 p_{a^{\text{t}}} = -p_{a^{\text{f}}} ,
 ```
@@ -32,8 +32,8 @@ quadratic one where the generation cost is quadratic.
 | reactive power | gone |
 | series resistance | kept, in ``b_{e}`` — see below |
 | losses | gone — the model is lossless by construction |
-| the turns ratio magnitude ``tm_{e}`` | gone — there is no magnitude for it to change |
-| the turns ratio angle ``ta_{e}`` | kept, and still a control |
+| the turns ratio magnitude ``t^{\text{m}}_{e}`` | gone — there is no magnitude for it to change |
+| the turns ratio angle ``t^{\text{a}}_{e}`` | kept, and still a control |
 | a shunt's susceptance ``b^{\text{s}}_{u}`` | gone |
 | a shunt's conductance ``g^{\text{s}}_{u}`` | kept, as a constant withdrawal |
 
@@ -52,7 +52,7 @@ network, where ``r \ll x``, and grows as that stops being true.
 
 The ratio *angle* survives the linearization and the ratio *magnitude* does not.
 That is not an implementation choice — with every magnitude fixed at one there
-is nothing for ``tm`` to act on.
+is nothing for ``t^{\text{m}}`` to act on.
 
 So a winding of a [`Transformer`](@ref) that is `pst` is a genuine control in this
 formulation, and a linear one: its angle enters the flow directly, where the current
@@ -101,10 +101,10 @@ The model is checked against PowerModels.jl v0.21's `DCPPowerModel`:
     Second, and more subtly, case5 connects nodes 3 and 4 twice with the same
     impedance, oriented oppositely. PowerModels' parser normalizes the second one
     to the first one's direction, and in doing so refers its impedance across the
-    tap, turning ``b`` into ``b/tm^2``. Only *then* does it drop the tap. This
+    tap, turning ``b`` into ``b/(t^{\text{m}})^2``. Only *then* does it drop the tap. This
     package drops the tap on the data as given.
 
-    Neither is wrong. Once ``tm`` is discarded, a transformer's impedance is no
+    Neither is wrong. Once ``t^{\text{m}}`` is discarded, a transformer's impedance is no
     longer referable from one side to the other, so a linearized model is
     sensitive to which side the input data referred it to — a real limitation of
     the approximation rather than of either implementation. What this model does

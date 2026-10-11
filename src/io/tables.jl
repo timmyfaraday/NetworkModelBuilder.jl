@@ -10,6 +10,7 @@
 # v0.9.2 - a column-length mismatch is a clear error, not a BoundsError        #
 # v0.9.3 - an all-empty table set warns instead of silently building nothing   #
 # v0.13.0 - a scalar cell is read for a field with an entry per terminal       #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 ################################################################################
@@ -78,7 +79,7 @@ function component_types()
 end
 
 """
-    parse_tables(; node, edge, unit, profile, dimension, dim, name, baseMVA, types)
+    parse_tables(; node, edge, unit, profile, dimension, dim, name, s_base_mva, types)
 
 Build a [`NetworkData`](@ref) from tables.
 
@@ -115,7 +116,7 @@ nothing about 8760 hours costs nothing. Pass `dim` instead to give a
 # Keywords
 
 - `dim`: a [`Dimension`](@ref), overriding the `dimension` table.
-- `name`, `baseMVA`: as [`NetworkData`](@ref) takes them.
+- `name`, `s_base_mva`: as [`NetworkData`](@ref) takes them.
 - `types`: extra `name => type` pairs, merged over [`component_types`](@ref),
   for a type that is not registered.
 
@@ -133,18 +134,18 @@ data = parse_tables(
             terminals = [[1, 2]],
             r         = [0.0],
             x         = [0.1],
-            rate_a    = [0.5]),
+            s_max     = [0.5]),
     unit = (id        = [1, 2],
             component = ["Generator", "FixedLoad"],
             node      = [1, 2],
-            pmax      = [5.0, missing],
-            pd        = [missing, 1.0]))
+            p_max     = [5.0, missing],
+            p_set     = [missing, 1.0]))
 ```
 """
 function parse_tables(; node, edge, unit,
                         profile = nothing, dimension = nothing,
                         dim::Union{Nothing,Dimension} = nothing,
-                        name::String = "unnamed", baseMVA::Real = 100.0,
+                        name::String = "unnamed", s_base_mva::Real = 100.0,
                         types::AbstractDict{String,<:Type} = Dict{String,Type}())
     lookup = merge(component_types(), Dict{String,Type}(types))
     d      = dim === nothing ? _parse_dimension(dimension) : dim
@@ -159,7 +160,7 @@ function parse_tables(; node, edge, unit,
     isempty(I) && isempty(E) && isempty(U) &&
         @warn "parse_tables built an empty network; check that the node, edge and unit tables were not all filtered or joined away"
 
-    return NetworkData(Network(I, E, U; dim = d); name, baseMVA = Float64(baseMVA))
+    return NetworkData(Network(I, E, U; dim = d); name, s_base_mva = Float64(s_base_mva))
 end
 
 ################################################################################

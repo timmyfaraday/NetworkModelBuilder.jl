@@ -10,6 +10,7 @@
 # v0.2.0 - network dependent data stored per component                         #
 # v0.6.0 - periods group the coordinates of a dimension                        #
 # v0.12.2 - has_nw_data and nw_component read each field by constant index     #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 ################################################################################
@@ -487,7 +488,7 @@ The component `c` with every one of its [`NetworkVector`](@ref) fields replaced
 by its value at network index `n`.
 
 The result is the same concrete type as `c`, so the code that writes variables
-and constraints reads plain fields — `br.r`, `ld.pd` — and never has to know
+and constraints reads plain fields — `br.r`, `ld.p_set` — and never has to know
 that the stored component holds a profile. A component with no network dependent
 field is returned untouched, without allocating.
 
@@ -514,7 +515,7 @@ Whether `f` holds for `xs` at every network index.
 
 Constants are broadcast against the [`NetworkVector`](@ref)s, so this is what a
 component constructor uses to validate a field that may or may not vary:
-`all_nw(>(0), tm)` accepts a constant tap ratio and a profile of them alike.
+`all_nw(>(0), t_magn)` accepts a constant tap ratio and a profile of them alike.
 """
 function all_nw(f, xs...)
     lengths = [length(x.data) for x in xs if x isa NetworkVector]

@@ -91,12 +91,12 @@ const STEP_BE    = parse(Int, get(ENV, "NMB_STEP_BE", "1"))
 const VIOLATION_TOL = 1e-3
 
 # The costliest redispatch in the data is the thermal ceiling, 477 $/MWh = 47,700 $/pu
-# at `baseMVA = 100`. Each last-resort price clears the one below it: overloading a
+# at `s_base_mva = 100`. Each last-resort price clears the one below it: overloading a
 # monitored line costs 10x that ceiling, dumping surplus generation 5x the overload price,
 # and shedding real demand 10x the overload price, so demand is the very last thing to go.
-const OVERLOAD_PRICE      = OverloadPrice(; per_energy = 10 * 47_700.0)
-const LOAD_SHEDDING_PRICE = 10 * OVERLOAD_PRICE.per_energy
-const SPILLAGE_PRICE      = 5 * OVERLOAD_PRICE.per_energy
+const OVERLOAD_PRICE      = OverloadPrice(; c_ener = 10 * 47_700.0)
+const LOAD_SHEDDING_PRICE = 10 * OVERLOAD_PRICE.c_ener
+const SPILLAGE_PRICE      = 5 * OVERLOAD_PRICE.c_ener
 
 Threads.nthreads() == 1 &&
     @warn "running on one thread: start Julia with `-t N` for the chunks to solve in parallel"
@@ -106,7 +106,7 @@ Threads.nthreads() == 1 &&
 ################################################################################
 
 println("[setup] loading network data for hours $HOURS ...")
-data = load_network(DATA_DIR; hours = HOURS, baseMVA = 100.0)
+data = load_network(DATA_DIR; hours = HOURS, s_base_mva = 100.0)
 
 println("[setup] loading Elia's N-1 study contingency events ...")
 raw_events           = load_contingency_events(CONTINGENCY_XLSX)

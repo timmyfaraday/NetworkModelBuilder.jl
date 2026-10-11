@@ -12,20 +12,22 @@ Generator
 
 ## Parameters
 
-| symbol | field | description | unit |
+| symbol | code name | description | unit |
 |:-------|:------|:------------|:-----|
 | | `id`, `name` | identifier and label | |
 | ``i`` | `node` | the node it is connected to | |
-| ``p^{\text{g,set}}_{u}`` | `pg` | active power setpoint | pu |
-| ``q^{\text{g,set}}_{u}`` | `qg` | reactive power setpoint | pu |
-| ``p^{\text{min}}_{u}``, ``p^{\text{max}}_{u}`` | `pmin`, `pmax` | active power limits | pu |
-| ``q^{\text{min}}_{u}``, ``q^{\text{max}}_{u}`` | `qmin`, `qmax` | reactive power limits | pu |
-| | `vg` | voltage setpoint carried from the input data | pu |
-| ``E^{\text{max}}_{u}`` | `max_energy_per_period` | most energy produced in one period | pu·h |
-| ``c_{u,k}`` | `cost` | cost polynomial, ascending, per unit | currency/h |
+| ``p^{\text{g,set}}_{u}`` | `p_set` | active power setpoint | pu |
+| ``q^{\text{g,set}}_{u}`` | `q_set` | reactive power setpoint | pu |
+| ``p^{\text{min}}_{u}``, ``p^{\text{max}}_{u}`` | `p_min`, `p_max` | active power limits | pu |
+| ``q^{\text{min}}_{u}``, ``q^{\text{max}}_{u}`` | `q_min`, `q_max` | reactive power limits | pu |
+| | `v_magn_set` | voltage setpoint carried from the input data | pu |
+| ``E^{\text{max}}_{u}`` | `e_per_max` | most energy produced in one period | pu·h |
+| ``c_{u,k}`` | `c` | cost polynomial, ascending, per unit | currency/h |
+| ``c^{\uparrow}_{u}``, ``c^{\downarrow}_{u}`` | `c_up`, `c_dn` | price of moving one per unit up and down from the market schedule in a redispatch; `NaN` is the marginal cost at the market dispatch | currency/pu/h |
 | | `status` | in service | |
+| | `ext` | free-form storage, carried along and never read | |
 
-`cost` is ascending in the power: `cost[k]` multiplies ``(p^{\text{g}}_{u})^{k-1}``.
+`c` is ascending in the power: `c[k]` multiplies ``(p^{\text{g}}_{u})^{k-1}``.
 A network dependent cost is a `NetworkVector{Vector{Float64}}` — the plain
 `Vector{Float64}` is the polynomial, not a profile.
 
@@ -33,25 +35,27 @@ A network dependent cost is a `NetworkVector{Vector{Float64}}` — the plain
 
 ### In the `IVRFormulation`
 
-| symbol | key | index | description | unit |
+| symbol | code name | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``c^{\text{r}}_{u}`` | `:cru` | unit | real injected current | pu |
-| ``c^{\text{i}}_{u}`` | `:ciu` | unit | imaginary injected current | pu |
-| ``p^{\text{g}}_{u}`` | `:pg` | unit | active power | pu |
-| ``q^{\text{g}}_{u}`` | `:qg` | unit | reactive power | pu |
+| ``i^{\text{r}}_{u}`` | `:i_unit_real` | unit | real injected current | pu |
+| ``i^{\text{i}}_{u}`` | `:i_unit_imag` | unit | imaginary injected current | pu |
+| ``p^{\text{g}}_{u}`` | `:p_gen` | unit | active power | pu |
+| ``q^{\text{g}}_{u}`` | `:q_gen` | unit | reactive power | pu |
+| ``p^{\uparrow}_{u}``, ``p^{\downarrow}_{u}`` | `:p_gen_up`, `:p_gen_dn` | unit | moved up and down from the market schedule, redispatch only | pu |
 
-The injection currents are shared by every unit type. `pg` and `qg` are free in
+The injection currents are shared by every unit type. `:p_gen` and `:q_gen` are free in
 a power flow, where [`constraint_unit`](@ref) fixes them at their setpoint
 instead, and bounded by the operating limits in a dispatch problem.
 
 ### In the `LPFFormulation`
 
-| symbol | key | index | description | unit |
+| symbol | code name | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``p_{u}`` | `:pu` | unit | active power injected into the node | pu |
-| ``p^{\text{g}}_{u}`` | `:pg` | unit | active power | pu |
+| ``p_{u}`` | `:p_unit` | unit | active power injected into the node | pu |
+| ``p^{\text{g}}_{u}`` | `:p_gen` | unit | active power | pu |
+| ``p^{\uparrow}_{u}``, ``p^{\downarrow}_{u}`` | `:p_gen_up`, `:p_gen_dn` | unit | moved up and down from the market schedule, redispatch only | pu |
 
-There is no reactive power, so `qg` is not created and the reactive limits play
+There is no reactive power, so `:q_gen` is not created and the reactive limits play
 no part. In a load flow the `PV` and `PQ` distinction disappears with it: every
 generator away from the reference node holds its active setpoint and nothing
 else.
@@ -61,9 +65,9 @@ else.
 The power a generator injects, against the current it injects:
 
 ```math
-p^{\text{g}}_{u} = v^{\text{r}}_{i} c^{\text{r}}_{u} + v^{\text{i}}_{i} c^{\text{i}}_{u},
+p^{\text{g}}_{u} = v^{\text{r}}_{i} i^{\text{r}}_{u} + v^{\text{i}}_{i} i^{\text{i}}_{u},
 \qquad
-q^{\text{g}}_{u} = v^{\text{i}}_{i} c^{\text{r}}_{u} - v^{\text{r}}_{i} c^{\text{i}}_{u} .
+q^{\text{g}}_{u} = v^{\text{i}}_{i} i^{\text{r}}_{u} - v^{\text{r}}_{i} i^{\text{i}}_{u} .
 ```
 
 In a **power flow** the setpoint follows the role of the node:
@@ -71,8 +75,8 @@ In a **power flow** the setpoint follows the role of the node:
 | node type | ``p^{\text{g}}_{u}`` | ``q^{\text{g}}_{u}`` |
 |:----------|:---------------------|:---------------------|
 | `REF` | free | free |
-| `PV` | fixed at `pg` | free, follows the voltage setpoint |
-| `PQ` | fixed at `pg` | fixed at `qg` |
+| `PV` | fixed at `p_set` | free, follows the voltage setpoint |
+| `PQ` | fixed at `p_set` | fixed at `q_set` |
 
 Where several generators share a `PV` or `REF` node, their split of the free
 quantity is not determined by the model; the solver returns one admissible split.
@@ -82,7 +86,7 @@ the work.
 
 ### Across network indices
 
-A generator that carries a finite `max_energy_per_period` gets one row per
+A generator that carries a finite `e_per_max` gets one row per
 period:
 
 ```math
@@ -96,12 +100,12 @@ the limit is then a limit over the whole problem.
 
 This is what a fuel allocation, a water licence or an emissions allowance looks
 like once it reaches the model: a bound on the **energy** of a period that says
-nothing about how the generator spends it within one. `pmax` cannot express it —
+nothing about how the generator spends it within one. `p_max` cannot express it —
 a plant that may run flat out for four hours of a day and not at all for the
-other twenty has the same `pmax` as one that may run all day, and only the
-second of them is what `pmax` alone describes.
+other twenty has the same `p_max` as one that may run all day, and only the
+second of them is what `p_max` alone describes.
 
-The sum is over the net output, so a generator with a negative `pmin` has what it
+The sum is over the net output, so a generator with a negative `p_min` has what it
 absorbs counted against what it produced. An infinite limit — the default — is
 the **absence** of a row rather than a row with an infinite right hand side, and
 a generator that carries a finite one turns its problem into one that couples

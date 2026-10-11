@@ -15,6 +15,9 @@
 # v0.12.1 - a limit past pi/2 does not change the shape of a model             #
 # v0.12.6 - a window builds only what it commits, and what is reported         #
 # v0.12.9 - the held controls are read through held_controls                   #
+# v0.14.0 - a variable is named by the model, not by its caller                #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The
@@ -25,21 +28,21 @@
 function radial_network(; dim::Dimension = Dimension(), rate::Float64 = 0.5,
                           pd = 1.0, pg_market = 1.0,
                           extra::Dict{Int,AbstractUnit} = Dict{Int,AbstractUnit}())
-    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0),
                                2 => Node(; id = 2))
     E = Dict{Int,AbstractEdge}(
-        1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, rate_a = rate))
+        1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, s_max = rate))
     U = Dict{Int,AbstractUnit}(
         # the cheap generator the market ran up, far from the load
-        1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       pg = pg_market, cost = [0.0, 10.0]),
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       p_set = pg_market, c = [0.0, 10.0]),
         # the expensive one behind the constraint
-        2 => Generator(; id = 2, node = 2, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       pg = 0.0, cost = [0.0, 100.0]),
-        3 => FixedLoad(; id = 3, node = 2, pd = pd, qd = 0.0))
+        2 => Generator(; id = 2, node = 2, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       p_set = 0.0, c = [0.0, 100.0]),
+        3 => FixedLoad(; id = 3, node = 2, p_set = pd, q_set = 0.0))
     merge!(U, extra)
 
-    return NetworkData(Network(I, E, U; dim); name = "radial", baseMVA = 100.0)
+    return NetworkData(Network(I, E, U; dim); name = "radial", s_base_mva = 100.0)
 end
 
 """
@@ -54,35 +57,35 @@ function meshed_network(; dim::Dimension = Dimension(), rate::Float64 = 0.5,
     ps_limit = shift ? 0.3 : 0.0
     status   = isempty(out) ? true : nw_vector(dim, (n, c) -> n ∉ out)
 
-    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0),
                                2 => Node(; id = 2), 3 => Node(; id = 3))
     shifter = star ?
         Transformer(; id = 2, terminals = [1, 2, 4], r = 0.0, x = [0.05, 0.05, 0.1],
                     pst = [true, false, false],
-                    ta_min = [-ps_limit, 0.0, 0.0], ta_max = [ps_limit, 0.0, 0.0], tap...) :
+                    t_angl_min = [-ps_limit, 0.0, 0.0], t_angl_max = [ps_limit, 0.0, 0.0], tap...) :
         Transformer(; id = 2, terminals = [1, 2], r = 0.0, x = 0.1, pst = true,
-                    ta_min = -ps_limit, ta_max = ps_limit, tap...)
+                    t_angl_min = -ps_limit, t_angl_max = ps_limit, tap...)
     star && (I[4] = Node(; id = 4))
     E = Dict{Int,AbstractEdge}(
-        1 => Branch(; id = 1, terminals = [1, 3], r = 0.0, x = 0.1, rate_a = rate),
+        1 => Branch(; id = 1, terminals = [1, 3], r = 0.0, x = 0.1, s_max = rate),
         2 => shifter,
         3 => Branch(; id = 3, terminals = [2, 3], r = 0.0, x = 0.1, status = status))
     U = Dict{Int,AbstractUnit}(
-        1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       pg = 1.0, cost = [0.0, 10.0]),
-        2 => Generator(; id = 2, node = 3, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       pg = 0.0, cost = [0.0, 100.0]),
-        3 => FixedLoad(; id = 3, node = 3, pd = 1.0, qd = 0.0))
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       p_set = 1.0, c = [0.0, 10.0]),
+        2 => Generator(; id = 2, node = 3, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       p_set = 0.0, c = [0.0, 100.0]),
+        3 => FixedLoad(; id = 3, node = 3, p_set = 1.0, q_set = 0.0))
 
-    return NetworkData(Network(I, E, U; dim); name = "meshed", baseMVA = 100.0)
+    return NetworkData(Network(I, E, U; dim); name = "meshed", s_base_mva = 100.0)
 end
 
 "the tap of the phase shifter, edge 2, at network index `n`"
 ps_tap(result, n = 1) = nw_solution(result, n)["edge"]["2"]["terminal"]["1"]["tap"]
 
 "the redispatch volumes of every generator of a solution at network index `n`"
-volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"],
-                                    nw_solution(result, n)["unit"]["$u"]["pgdn"])
+volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["p_gen_up"],
+                                    nw_solution(result, n)["unit"]["$u"]["p_gen_dn"])
                               for u in ("1", "2"))
 
 @testset "redispatch" begin
@@ -105,15 +108,15 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         nm = instantiate_model(radial_network(), RedispatchProblem, LPFFormulation)
 
         # pg splits into the setpoint plus what was moved, and nothing else
-        @test haskey(_NMB.var(nm), :pgup)
-        @test haskey(_NMB.var(nm), :pgdn)
+        @test haskey(_NMB.var(nm), :p_gen_up)
+        @test haskey(_NMB.var(nm), :p_gen_dn)
         @test haskey(_NMB.con(nm), :generator_redispatch)
-        @test JuMP.lower_bound(_NMB.var(nm, :pgup, 1)) == 0.0
-        @test JuMP.lower_bound(_NMB.var(nm, :pgdn, 1)) == 0.0
+        @test JuMP.lower_bound(_NMB.var(nm, :p_gen_up, 1)) == 0.0
+        @test JuMP.lower_bound(_NMB.var(nm, :p_gen_dn, 1)) == 0.0
 
         # the headroom left in each direction bounds the volumes
-        @test JuMP.upper_bound(_NMB.var(nm, :pgup, 1)) ≈ 5.0 - 1.0   # pmax - pg
-        @test JuMP.upper_bound(_NMB.var(nm, :pgdn, 1)) ≈ 1.0 - 0.0   # pg - pmin
+        @test JuMP.upper_bound(_NMB.var(nm, :p_gen_up, 1)) ≈ 5.0 - 1.0   # p_max - pg
+        @test JuMP.upper_bound(_NMB.var(nm, :p_gen_dn, 1)) ≈ 1.0 - 0.0   # pg - p_min
     end
 
     @testset "a feasible market dispatch is not redispatched" begin
@@ -123,8 +126,8 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
 
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
         @test result["objective"] ≈ 0.0 atol = 1e-5
-        @test nw_solution(result)["unit"]["1"]["pg"] ≈ 1.0 atol = 1e-5
-        @test nw_solution(result)["unit"]["1"]["pg_market"] ≈ 1.0
+        @test nw_solution(result)["unit"]["1"]["p_gen"] ≈ 1.0 atol = 1e-5
+        @test nw_solution(result)["unit"]["1"]["p_gen_mkt"] ≈ 1.0
     end
 
     @testset "congestion is relieved at the price of the volumes moved" begin
@@ -142,11 +145,11 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         @test result["objective"] ≈ 0.5 * 100.0 + 0.5 * 10.0 atol = 1e-5
 
         # and the branch is at its rating rather than beyond it
-        @test abs(nw_solution(result)["edge"]["1"]["terminal"]["1"]["p"]) ≤ 0.5 + 1e-6
+        @test abs(nw_solution(result)["edge"]["1"]["terminal"]["1"]["p_term"]) ≤ 0.5 + 1e-6
 
         # the volumes net out: the load did not change and the model is lossless
-        @test sum(nw_solution(result)["unit"]["$u"]["pgup"] -
-                  nw_solution(result)["unit"]["$u"]["pgdn"] for u in 1:2) ≈ 0.0 atol = 1e-6
+        @test sum(nw_solution(result)["unit"]["$u"]["p_gen_up"] -
+                  nw_solution(result)["unit"]["$u"]["p_gen_dn"] for u in 1:2) ≈ 0.0 atol = 1e-6
     end
 
     @testset "an explicit price is used where it is given" begin
@@ -154,9 +157,9 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         data = radial_network()
         net  = network(data)
         g    = units(net)[2]::Generator
-        units(net)[2] = Generator(; id = g.id, node = g.node, pg = g.pg, pmax = g.pmax,
-                                  qmin = g.qmin, qmax = g.qmax, cost = g.cost,
-                                  cost_up = 40.0, cost_dn = 5.0)
+        units(net)[2] = Generator(; id = g.id, node = g.node, p_set = g.p_set, p_max = g.p_max,
+                                  q_min = g.q_min, q_max = g.q_max, c = g.c,
+                                  c_up = 40.0, c_dn = 5.0)
 
         @test redispatch_price(units(net)[2]) == (40.0, 5.0)
         @test redispatch_price(units(net)[1]) == (10.0, 10.0)   # the cost curve stands in
@@ -173,7 +176,7 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         none = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
                                     redispatch = Redispatch(; monitored = Int[])))
         @test none["objective"] ≈ 0.0 atol = 1e-5
-        @test nw_solution(none)["unit"]["1"]["pg"] ≈ 1.0 atol = 1e-5
+        @test nw_solution(none)["unit"]["1"]["p_gen"] ≈ 1.0 atol = 1e-5
 
         # watching the one edge that is congested is the same as watching them all
         one = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
@@ -202,15 +205,15 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
                                     LPFFormulation, OPTIMIZER))
         @test with["termination_status"] == JuMP.LOCALLY_SOLVED
         @test with["objective"] ≈ 0.0 atol = 1e-5
-        @test abs(nw_solution(with)["edge"]["1"]["terminal"]["1"]["p"]) ≤ 0.5 + 1e-6
+        @test abs(nw_solution(with)["edge"]["1"]["terminal"]["1"]["p_term"]) ≤ 0.5 + 1e-6
 
         # the shifter moved, and it steered flow onto the parallel path. Which
         # angle it settled on is not determined: every setting that brings the
         # corridor under 0.5 costs the same nothing, so the solver returns one of
         # them, and `-0.05` — the setting that just clears the rating — is only
         # the mildest of those.
-        @test ps_tap(with)["ta"] < -1e-3
-        @test abs(nw_solution(with)["edge"]["3"]["terminal"]["1"]["p"]) > 0.5 - 1e-6
+        @test ps_tap(with)["t_angl"] < -1e-3
+        @test abs(nw_solution(with)["edge"]["3"]["terminal"]["1"]["p_term"]) > 0.5 - 1e-6
 
         # take the control away and the same congestion has to be paid for
         without = quiet(() -> solve_rd(meshed_network(; shift = false),
@@ -225,12 +228,12 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         tap    = ps_tap(result)
 
         @test result["objective"] ≈ 0.0 atol = 1e-5
-        @test -0.3 - 1e-6 <= tap["ta"] <= 0.3 + 1e-6
+        @test -0.3 - 1e-6 <= tap["t_angl"] <= 0.3 + 1e-6
 
         # the setpoint the market had is reported next to the angle it moved to
-        @test tap["ta_market"] == 0.0
-        @test tap["tm_market"] == 1.0
-        @test tap["tm"] == 1.0
+        @test tap["t_angl_mkt"] == 0.0
+        @test tap["t_magn_mkt"] == 1.0
+        @test tap["t_magn"] == 1.0
 
         # the movement has no volumes of its own, since there is no price to pay
         # them on
@@ -246,9 +249,9 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
 
     @testset "a storage unit is a measure over the time window" begin
         dim     = Dimension(:time => 2)
-        battery = Storage(; id = 4, node = 2, energy_capacity = 0.5, energy_initial = 0.25,
-                          charge_rating = 0.5, discharge_rating = 0.5,
-                          charge_efficiency = 1.0, discharge_efficiency = 1.0)
+        battery = Storage(; id = 4, node = 2, e_max = 0.5, e_init = 0.25,
+                          p_chg_max = 0.5, p_dch_max = 0.5,
+                          η_chg = 1.0, η_dch = 1.0)
         data = radial_network(; dim, extra = Dict{Int,AbstractUnit}(4 => battery))
 
         result = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER))
@@ -261,24 +264,24 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         # Only the *net* volume of the battery is determined: both its prices are
         # zero, so nothing stops the solver from adding the same amount to the
         # upward and the downward volume, and it does.
-        moved = sum(nw_solution(result, n)["unit"]["4"]["psup"] -
-                    nw_solution(result, n)["unit"]["4"]["psdn"] for n in 1:2)
+        moved = sum(nw_solution(result, n)["unit"]["4"]["p_stor_up"] -
+                    nw_solution(result, n)["unit"]["4"]["p_stor_dn"] for n in 1:2)
         @test moved ≈ 0.25 atol = 1e-5
-        @test sum(nw_solution(result, n)["unit"]["2"]["pgup"] for n in 1:2) ≈ 0.75 atol = 1e-5
-        @test sum(nw_solution(result, n)["unit"]["1"]["pgdn"] for n in 1:2) ≈ 1.0 atol = 1e-5
+        @test sum(nw_solution(result, n)["unit"]["2"]["p_gen_up"] for n in 1:2) ≈ 0.75 atol = 1e-5
+        @test sum(nw_solution(result, n)["unit"]["1"]["p_gen_dn"] for n in 1:2) ≈ 1.0 atol = 1e-5
         @test result["objective"] ≈ 0.75 * 100.0 + 1.0 * 10.0 atol = 1e-4
 
         # the market schedule of a storage unit is its setpoint too
-        @test nw_solution(result)["unit"]["4"]["ps_market"] == 0.0
+        @test nw_solution(result)["unit"]["4"]["p_stor_mkt"] == 0.0
 
         # price the battery above the generator and it stays where the market put it
-        dear = Storage(; id = 4, node = 2, energy_capacity = 0.5, energy_initial = 0.25,
-                       charge_rating = 0.5, discharge_rating = 0.5,
-                       charge_efficiency = 1.0, discharge_efficiency = 1.0,
-                       cost_up = 500.0, cost_dn = 500.0)
+        dear = Storage(; id = 4, node = 2, e_max = 0.5, e_init = 0.25,
+                       p_chg_max = 0.5, p_dch_max = 0.5,
+                       η_chg = 1.0, η_dch = 1.0,
+                       c_up = 500.0, c_dn = 500.0)
         idle = quiet(() -> solve_rd(radial_network(; dim, extra = Dict{Int,AbstractUnit}(4 => dear)),
                                     LPFFormulation, OPTIMIZER))
-        @test sum(nw_solution(idle, n)["unit"]["4"]["psup"] for n in 1:2) ≈ 0.0 atol = 1e-5
+        @test sum(nw_solution(idle, n)["unit"]["4"]["p_stor_up"] for n in 1:2) ≈ 0.0 atol = 1e-5
         @test idle["objective"] ≈ 1.0 * 100.0 + 1.0 * 10.0 atol = 1e-3
     end
 
@@ -300,14 +303,14 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         @test corrective["objective"] < preventive["objective"] - 1e-6
 
         # under a preventive setup the volumes are the same in both states
-        for u in ("1", "2"), key in ("pgup", "pgdn")
+        for u in ("1", "2"), key in ("p_gen_up", "p_gen_dn")
             @test nw_solution(preventive, 1)["unit"][u][key] ≈
                   nw_solution(preventive, 2)["unit"][u][key] atol = 1e-6
         end
 
         # and under a corrective one the base case is left alone
-        @test nw_solution(corrective, 1)["unit"]["2"]["pgup"] ≈ 0.0 atol = 1e-6
-        @test nw_solution(corrective, 2)["unit"]["2"]["pgup"] > 1e-3
+        @test nw_solution(corrective, 1)["unit"]["2"]["p_gen_up"] ≈ 0.0 atol = 1e-6
+        @test nw_solution(corrective, 2)["unit"]["2"]["p_gen_up"] > 1e-3
     end
 
     @testset "the control mode is per component" begin
@@ -326,8 +329,8 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
 
         # generator 1 is tied across the states, generator 2 is not
         tied = held_controls(nm)
-        @test (:unit, 1, :pgup, 2) in tied
-        @test (:unit, 2, :pgup, 2) ∉ tied
+        @test (:unit, 1, :p_gen_up, 2) in tied
+        @test (:unit, 2, :p_gen_up, 2) ∉ tied
 
         # held is what is tied: never the base case, never a corrective measure, and
         # nothing at all without a redispatch
@@ -339,8 +342,8 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
 
         result = quiet(() -> optimize_model!(nm, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
-        @test nw_solution(result, 1)["unit"]["1"]["pgdn"] ≈
-              nw_solution(result, 2)["unit"]["1"]["pgdn"] atol = 1e-6
+        @test nw_solution(result, 1)["unit"]["1"]["p_gen_dn"] ≈
+              nw_solution(result, 2)["unit"]["1"]["p_gen_dn"] atol = 1e-6
     end
 
     @testset "the objective is an expectation over the contingencies" begin
@@ -388,14 +391,14 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         ivr = instantiate_model(meshed_network(), RedispatchProblem, IVRFormulation)
         lpf = instantiate_model(meshed_network(), RedispatchProblem, LPFFormulation)
 
-        @test redispatch_controls(ivr, Generator) == (:pgup, :pgdn)
-        @test redispatch_controls(lpf, Generator) == (:pgup, :pgdn)
-        @test redispatch_controls(ivr, Storage) == (:psc, :psd, :psup, :psdn)
+        @test redispatch_controls(ivr, Generator) == (:p_gen_up, :p_gen_dn)
+        @test redispatch_controls(lpf, Generator) == (:p_gen_up, :p_gen_dn)
+        @test redispatch_controls(ivr, Storage) == (:p_chg, :p_dch, :p_stor_up, :p_stor_dn)
 
         # the ratio is carried differently in the two formulations; the positions of a
         # winding that steps are not tied, the preventive one reuses the base case's
-        @test redispatch_controls(ivr, Transformer) == (:tm, :tr, :ti)
-        @test redispatch_controls(lpf, Transformer) == (:ta,)
+        @test redispatch_controls(ivr, Transformer) == (:t_magn, :t_real, :t_imag)
+        @test redispatch_controls(lpf, Transformer) == (:t_angl,)
 
         # a load is no measure at all
         @test redispatch_controls(lpf, FixedLoad) == ()
@@ -424,11 +427,11 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         data = meshed_network(; dim, out = (2,))
 
         nm = instantiate_model(data, RedispatchProblem, LPFFormulation)
-        @test (:edge, Arc(2, 1, 1), :ta, 2) in held_controls(nm)
+        @test (:edge, Arc(2, 1, 1), :t_angl, 2) in held_controls(nm)
 
         result = quiet(() -> optimize_model!(nm, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
-        @test ps_tap(result, 1)["ta"] ≈ ps_tap(result, 2)["ta"] atol = 1e-6
+        @test ps_tap(result, 1)["t_angl"] ≈ ps_tap(result, 2)["t_angl"] atol = 1e-6
 
         # left corrective it may steer differently in each state
         free = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
@@ -446,13 +449,13 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
 
         # the same measure, up to the losses the linearized model discards
-        @test nw_solution(result)["unit"]["2"]["pgup"] > 0.4
-        @test nw_solution(result)["unit"]["1"]["pgdn"] > 0.4
+        @test nw_solution(result)["unit"]["2"]["p_gen_up"] > 0.4
+        @test nw_solution(result)["unit"]["1"]["p_gen_dn"] > 0.4
         @test result["objective"] > 0.0
 
         # the rating is a limit on apparent power here, so it binds too
-        s = hypot(nw_solution(result)["edge"]["1"]["terminal"]["1"]["p"],
-                  nw_solution(result)["edge"]["1"]["terminal"]["1"]["q"])
+        s = hypot(nw_solution(result)["edge"]["1"]["terminal"]["1"]["p_term"],
+                  nw_solution(result)["edge"]["1"]["terminal"]["1"]["q_term"])
         @test s ≤ 0.5 + 1e-5
     end
 
@@ -467,7 +470,7 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         @test market["objective"] > 0.0
 
         # and it leaves the network congested, which is the point of the exercise
-        @test any(abs(nw_solution(market)["edge"]["$e"]["terminal"]["$k"]["p"]) >
+        @test any(abs(nw_solution(market)["edge"]["$e"]["terminal"]["$k"]["p_term"]) >
                   rating_at(edge(network(data), e), k) + 1e-5
                   for e in ids(network(data), AbstractEdge), k in 1:2)
 
@@ -477,7 +480,7 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         @test result["objective"] > market["objective"] + 1e-6
         for e in ids(network(data), AbstractEdge), k in 1:2
             rate = rating_at(edge(network(data), e), k)
-            @test abs(nw_solution(result)["edge"]["$e"]["terminal"]["$k"]["p"]) ≤ rate + 1e-5
+            @test abs(nw_solution(result)["edge"]["$e"]["terminal"]["$k"]["p_term"]) ≤ rate + 1e-5
         end
     end
 
@@ -506,16 +509,16 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
                                     redispatch = Redispatch(; overload = 500.0)))
         @test dear["termination_status"] == JuMP.LOCALLY_SOLVED
         @test dear["objective"] ≈ hard["objective"] atol = 1e-5
-        @test nw_solution(dear)["edge"]["1"]["overload"] ≈ 0.0 atol = 1e-6
+        @test nw_solution(dear)["edge"]["1"]["s_ovl"] ≈ 0.0 atol = 1e-6
 
         cheap = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
                                      redispatch = Redispatch(; overload = 20.0)))
         @test cheap["termination_status"] == JuMP.LOCALLY_SOLVED
         # nothing is redispatched: 0.5 of overload at 20 beats 0.5 relieved at 110
         @test cheap["objective"] ≈ 0.5 * 20.0 atol = 1e-5
-        @test nw_solution(cheap)["edge"]["1"]["overload"] ≈ 0.5 atol = 1e-6
-        @test nw_solution(cheap)["unit"]["1"]["pg"] ≈ 1.0 atol = 1e-6
-        @test abs(nw_solution(cheap)["edge"]["1"]["terminal"]["1"]["p"]) ≈ 1.0 atol = 1e-6
+        @test nw_solution(cheap)["edge"]["1"]["s_ovl"] ≈ 0.5 atol = 1e-6
+        @test nw_solution(cheap)["unit"]["1"]["p_gen"] ≈ 1.0 atol = 1e-6
+        @test abs(nw_solution(cheap)["edge"]["1"]["terminal"]["1"]["p_term"]) ≈ 1.0 atol = 1e-6
     end
 
     @testset "an infeasible congestion becomes an expensive one" begin
@@ -523,9 +526,9 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         # relieve it and a hard rating has no answer at all
         data = radial_network(; rate = 0.1)
         g    = units(network(data))[2]::Generator
-        units(network(data))[2] = Generator(; id = g.id, node = g.node, pg = 0.0,
-                                            pmax = 0.0, qmin = -5.0, qmax = 5.0,
-                                            cost = g.cost)
+        units(network(data))[2] = Generator(; id = g.id, node = g.node, p_set = 0.0,
+                                            p_max = 0.0, q_min = -5.0, q_max = 5.0,
+                                            c     = g.c)
 
         hard = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER))
         @test hard["termination_status"] != JuMP.LOCALLY_SOLVED
@@ -534,7 +537,7 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
                                       redispatch = Redispatch(; overload = 30.0)))
         @test priced["termination_status"] == JuMP.LOCALLY_SOLVED
         # the flow is the load, and 0.9 of it is past the rating
-        @test nw_solution(priced)["edge"]["1"]["overload"] ≈ 0.9 atol = 1e-6
+        @test nw_solution(priced)["edge"]["1"]["s_ovl"] ≈ 0.9 atol = 1e-6
         @test priced["objective"] ≈ 0.9 * 30.0 atol = 1e-5
     end
 
@@ -543,14 +546,14 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
 
         hard = instantiate_model(data, RedispatchProblem, LPFFormulation)
         @test overload_price(hard) === nothing
-        @test !haskey(_NMB.var(hard), :ol)
+        @test !haskey(_NMB.var(hard), :s_ovl)
         @test haskey(_NMB.registered_constraints(hard), (1, :linear_rating, (1, 1)))
 
         rd = Redispatch(; overload = 500.0)
         soft = instantiate_model(data, RedispatchProblem, LPFFormulation;
                                  ext = Dict{Symbol,Any}(:redispatch => rd))
-        @test overload_price(soft) == OverloadPrice(; per_energy = 500.0)
-        @test haskey(_NMB.var(soft), :ol)
+        @test overload_price(soft) == OverloadPrice(; c_ener = 500.0)
+        @test haskey(_NMB.var(soft), :s_ovl)
 
         # the hard row is gone and the pair that replaced it is under its own key,
         # since a range constraint cannot be updated in place into a one-sided one
@@ -559,8 +562,8 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         @test haskey(_NMB.registered_constraints(soft), (1, :linear_overload, (1, 1, :neg)))
 
         # one overload per edge, shared by its terminals, and non-negative
-        @test length(_NMB.var(soft, :ol)) == 1
-        @test JuMP.lower_bound(_NMB.var(soft, :ol, 1)) == 0.0
+        @test length(_NMB.var(soft, :s_ovl)) == 1
+        @test JuMP.lower_bound(_NMB.var(soft, :s_ovl, 1)) == 0.0
     end
 
     @testset "an unwatched edge is not priced either" begin
@@ -571,7 +574,7 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
                                ext = Dict{Symbol,Any}(:redispatch => rd))
         # `is_monitored` is asked first: an edge nobody watches has no rating to
         # exceed, so it gets no overload variable and costs nothing
-        @test !haskey(_NMB.var(nm), :ol) || isempty(_NMB.var(nm, :ol))
+        @test !haskey(_NMB.var(nm), :s_ovl) || isempty(_NMB.var(nm, :s_ovl))
         @test _NMB.overload_cost(nm) == 0.0
 
         result = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; redispatch = rd))
@@ -587,7 +590,7 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         opf = instantiate_model(data, OptimalPowerFlowProblem, LPFFormulation;
                                 ext = Dict{Symbol,Any}(:redispatch => rd))
         @test overload_price(opf) === nothing
-        @test !haskey(_NMB.var(opf), :ol)
+        @test !haskey(_NMB.var(opf), :s_ovl)
     end
 
     @testset "the current based formulation prices it too" begin
@@ -597,14 +600,14 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         dear = quiet(() -> solve_rd(data, IVRFormulation, OPTIMIZER;
                                     redispatch = Redispatch(; overload = 5000.0)))
         @test dear["termination_status"] == JuMP.LOCALLY_SOLVED
-        @test nw_solution(dear)["edge"]["1"]["overload"] ≈ 0.0 atol = 1e-5
+        @test nw_solution(dear)["edge"]["1"]["s_ovl"] ≈ 0.0 atol = 1e-5
         @test dear["objective"] ≈ hard["objective"] rtol = 1e-4
 
         cheap = quiet(() -> solve_rd(data, IVRFormulation, OPTIMIZER;
                                      redispatch = Redispatch(; overload = 1.0)))
         @test cheap["termination_status"] == JuMP.LOCALLY_SOLVED
         # the apparent power flow runs past the rating rather than paying to move
-        @test nw_solution(cheap)["edge"]["1"]["overload"] > 0.4
+        @test nw_solution(cheap)["edge"]["1"]["s_ovl"] > 0.4
         @test cheap["objective"] < hard["objective"]
 
         # and it is the AC rating that was relaxed, under its own key
@@ -620,39 +623,39 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         dim  = Dimension(:contingency => [Dict{Symbol,Any}(:weight => w) for w in (1.0, 2.0)])
         data = radial_network(; dim, rate = 0.1)
         g    = units(network(data))[2]::Generator
-        units(network(data))[2] = Generator(; id = g.id, node = g.node, pg = 0.0,
-                                            pmax = 0.0, qmin = -5.0, qmax = 5.0,
-                                            cost = g.cost)
+        units(network(data))[2] = Generator(; id = g.id, node = g.node, p_set = 0.0,
+                                            p_max = 0.0, q_min = -5.0, q_max = 5.0,
+                                            c     = g.c)
 
         result = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
                                       redispatch = Redispatch(; overload = 30.0)))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
         for n in 1:2
-            @test nw_solution(result, n)["edge"]["1"]["overload"] ≈ 0.9 atol = 1e-6
+            @test nw_solution(result, n)["edge"]["1"]["s_ovl"] ≈ 0.9 atol = 1e-6
         end
         @test result["objective"] ≈ (1.0 + 2.0) * 0.9 * 30.0 atol = 1e-4
     end
 
     @testset "an overload price validates what it is given" begin
-        @test_throws ArgumentError OverloadPrice(; per_energy = -1.0)
-        @test_throws ArgumentError OverloadPrice(; per_energy = Inf)
+        @test_throws ArgumentError OverloadPrice(; c_ener = -1.0)
+        @test_throws ArgumentError OverloadPrice(; c_ener = Inf)
         @test_throws ArgumentError Redispatch(; overload = -1.0)
 
-        @test Redispatch(; overload = 500.0).overload == OverloadPrice(; per_energy = 500.0)
+        @test Redispatch(; overload = 500.0).overload == OverloadPrice(; c_ener = 500.0)
         @test Redispatch().overload === nothing
         @test occursin("overload at 500.0 per pu",
                        sprint(show, Redispatch(; overload = 500.0)))
         @test !occursin("overload", sprint(show, Redispatch()))
 
         # the peak price is a second, independent price on the same setup
-        @test_throws ArgumentError OverloadPrice(; per_energy = 1.0, per_peak = -1.0)
-        @test_throws ArgumentError OverloadPrice(; per_energy = 1.0, per_peak = Inf)
-        @test OverloadPrice(; per_energy = 1.0).per_peak == 0.0
+        @test_throws ArgumentError OverloadPrice(; c_ener = 1.0, c_peak = -1.0)
+        @test_throws ArgumentError OverloadPrice(; c_ener = 1.0, c_peak = Inf)
+        @test OverloadPrice(; c_ener = 1.0).c_peak == 0.0
         @test occursin("150.0 per pu of peak",
-                       sprint(show, OverloadPrice(; per_energy = 0.0, per_peak = 150.0)))
+                       sprint(show, OverloadPrice(; c_ener = 0.0, c_peak = 150.0)))
         @test occursin("and 150.0 per pu of peak",
-                       sprint(show, Redispatch(; overload = OverloadPrice(; per_energy = 0.0,
-                                                                            per_peak = 150.0))))
+                       sprint(show, Redispatch(; overload = OverloadPrice(; c_ener = 0.0,
+                                                                            c_peak = 150.0))))
         @test !occursin("of peak", sprint(show, Redispatch(; overload = 500.0)))
     end
 
@@ -665,7 +668,7 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
     #   one period  : relieve 0.4 in the first hour, 110(0.4) + 150(0.1) = 59
     #   two periods : every hour is its own peak, 110(0.5) + 110(0.1)    = 66
     peak_setup(per_peak = 150.0) =
-        Redispatch(; overload = OverloadPrice(; per_energy = 0.0, per_peak))
+        Redispatch(; overload = OverloadPrice(; c_ener = 0.0, c_peak = per_peak))
 
     function peak_network(; period::Union{Nothing,Int} = nothing)
         dim = Dimension(:time => 2)
@@ -680,8 +683,8 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
                                       redispatch = peak_setup()))
 
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
-        @test nw_solution(result, 1)["edge"]["1"]["overload"] ≈ 0.1 atol = 1e-6
-        @test nw_solution(result, 2)["edge"]["1"]["overload"] ≈ 0.1 atol = 1e-6
+        @test nw_solution(result, 1)["edge"]["1"]["s_ovl"] ≈ 0.1 atol = 1e-6
+        @test nw_solution(result, 2)["edge"]["1"]["s_ovl"] ≈ 0.1 atol = 1e-6
         @test result["objective"] ≈ 110 * 0.4 + 150 * 0.1 atol = 1e-4
     end
 
@@ -691,8 +694,8 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         result = quiet(() -> solve_rd(peak_network(; period = 1), LPFFormulation,
                                       OPTIMIZER; redispatch = peak_setup()))
 
-        @test nw_solution(result, 1)["edge"]["1"]["overload"] ≈ 0.0 atol = 1e-6
-        @test nw_solution(result, 2)["edge"]["1"]["overload"] ≈ 0.0 atol = 1e-6
+        @test nw_solution(result, 1)["edge"]["1"]["s_ovl"] ≈ 0.0 atol = 1e-6
+        @test nw_solution(result, 2)["edge"]["1"]["s_ovl"] ≈ 0.0 atol = 1e-6
         @test result["objective"] ≈ 110 * 0.5 + 110 * 0.1 atol = 1e-4
     end
 
@@ -701,10 +704,10 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
                                ext = Dict{Symbol,Any}(:redispatch => peak_setup()))
 
         # one variable per edge per period, registered where the period starts
-        @test haskey(_NMB.var(nm; nw = 1), :olp)
-        @test !haskey(_NMB.var(nm; nw = 2), :olp)
-        @test JuMP.lower_bound(_NMB.var(nm, :olp, 1; nw = 1)) == 0.0
-        @test !JuMP.has_upper_bound(_NMB.var(nm, :olp, 1; nw = 1))
+        @test haskey(_NMB.var(nm; nw = 1), :s_ovl_peak)
+        @test !haskey(_NMB.var(nm; nw = 2), :s_ovl_peak)
+        @test JuMP.lower_bound(_NMB.var(nm, :s_ovl_peak, 1; nw = 1)) == 0.0
+        @test !JuMP.has_upper_bound(_NMB.var(nm, :s_ovl_peak, 1; nw = 1))
 
         # and one row per index of the period, bounding the peak from below
         @test haskey(_NMB.registered_constraints(nm), (1, :overload_peak, (1, 1)))
@@ -721,7 +724,7 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["pgup"]
         # a plain per-energy price leaves the model exactly as it was
         nm = instantiate_model(peak_network(), RedispatchProblem, LPFFormulation;
                                ext = Dict{Symbol,Any}(:redispatch => Redispatch(; overload = 500.0)))
-        @test !haskey(_NMB.var(nm; nw = 1), :olp)
+        @test !haskey(_NMB.var(nm; nw = 1), :s_ovl_peak)
         @test horizon_cost(nm) == 0.0
 
         # a hard rating writes neither, and so does a problem with no peak at all
@@ -783,26 +786,26 @@ function rolling_network(prices = ROLLING_PRICES; energy = 0.4, energy_final = N
                         extra_dims = ())
     dim = Dimension(:time => length(prices), extra_dims...)
 
-    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0),
                                2 => Node(; id = 2))
     E = Dict{Int,AbstractEdge}(
-        1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, rate_a = 0.5))
+        1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, s_max = 0.5))
     U = Dict{Int,AbstractUnit}(
-        1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       pg = 1.0, cost = [0.0, 10.0]),
-        2 => Generator(; id = 2, node = 2, pmax = 5.0, qmin = -5.0, qmax = 5.0, pg = 0.0,
-                       cost = nw_vector(dim, :time, [[0.0, c] for c in prices])),
-        3 => FixedLoad(; id = 3, node = 2, pd = 1.0, qd = 0.0),
-        4 => Storage(; id = 4, node = 2, energy_capacity = energy, energy_initial = energy,
-                     energy_final = energy_final,
-                     charge_rating = 0.0, discharge_rating = 0.5,
-                     charge_efficiency = 1.0, discharge_efficiency = 1.0))
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       p_set = 1.0, c = [0.0, 10.0]),
+        2 => Generator(; id = 2, node = 2, p_max = 5.0, q_min = -5.0, q_max = 5.0, p_set = 0.0,
+                       c = nw_vector(dim, :time, [[0.0, c] for c in prices])),
+        3 => FixedLoad(; id = 3, node = 2, p_set = 1.0, q_set = 0.0),
+        4 => Storage(; id = 4, node = 2, e_max = energy, e_init = energy,
+                     e_fin = energy_final,
+                     p_chg_max = 0.0, p_dch_max = 0.5,
+                     η_chg = 1.0, η_dch = 1.0))
 
-    return NetworkData(Network(I, E, U; dim); name = "rolling", baseMVA = 100.0)
+    return NetworkData(Network(I, E, U; dim); name = "rolling", s_base_mva = 100.0)
 end
 
 "the discharge of the battery at every time step of a result"
-discharge(result, steps) = [nw_solution(result, n)["unit"]["4"]["psd"] for n in steps]
+discharge(result, steps) = [nw_solution(result, n)["unit"]["4"]["p_dch"] for n in steps]
 
 
 # Four hours behind the constraint, every one of them overloading by 0.5, and
@@ -813,23 +816,23 @@ function peak_rolling_network()
     dim = Dimension(:time => 4)
     dim_meta(dim, :time)[:period_length] = 2
 
-    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0),
                                2 => Node(; id = 2))
     E = Dict{Int,AbstractEdge}(
-        1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, rate_a = 0.5))
+        1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, s_max = 0.5))
     U = Dict{Int,AbstractUnit}(
-        1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       pg = 1.0, cost = [0.0, 10.0]),
-        2 => Generator(; id = 2, node = 2, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       pg = 0.0, cost = [0.0, 100.0]),
-        3 => FixedLoad(; id = 3, node = 2, pd = 1.0, qd = 0.0))
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       p_set = 1.0, c = [0.0, 10.0]),
+        2 => Generator(; id = 2, node = 2, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       p_set = 0.0, c = [0.0, 100.0]),
+        3 => FixedLoad(; id = 3, node = 2, p_set = 1.0, q_set = 0.0))
 
-    return NetworkData(Network(I, E, U; dim); name = "peak", baseMVA = 100.0)
+    return NetworkData(Network(I, E, U; dim); name = "peak", s_base_mva = 100.0)
 end
 
 "a redispatch that prices only the worst overload of a period"
 peak_only(per_peak = 50.0) =
-    Redispatch(; overload = OverloadPrice(; per_energy = 0.0, per_peak))
+    Redispatch(; overload = OverloadPrice(; c_ener = 0.0, c_peak = per_peak))
 
 "an edge without physics whose one integer decides the shape of a model"
 Base.@kwdef struct IntegerGate <: AbstractEdge
@@ -851,16 +854,16 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         @test dim_names(w) == (:time,)
         @test dim_length(w) == 2
         @test nw_ids(w) == [1, 2]                     # indexed from one, not from two
-        @test baseMVA(w) == baseMVA(data)
+        @test s_base_mva(w) == s_base_mva(data)
 
         # the profile of the source is sliced, not recomputed
         for (k, n) in enumerate(2:3)
-            @test unit(network(w), 2; nw = k).cost == unit(network(data), 2; nw = n).cost
+            @test unit(network(w), 2; nw = k).c == unit(network(data), 2; nw = n).c
         end
 
         # and what does not vary is left as a plain value
         @test !has_nw_data(units(network(w))[1])
-        @test units(network(w))[3].pd == 1.0
+        @test units(network(w))[3].p_set == 1.0
     end
 
     @testset "a window keeps every other dimension whole" begin
@@ -901,7 +904,7 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
             1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1),
             2 => Branch(; id = 2, terminals = [1, 2], r = 0.0, x = 0.2, status = out))
         U    = Dict{Int,AbstractUnit}(1 => Generator(; id = 1, node = 1),
-                                      2 => FixedLoad(; id = 2, node = 2, pd = 0.1))
+                                      2 => FixedLoad(; id = 2, node = 2, p_set = 0.1))
         data = NetworkData(Network(I, E, U; dim))
 
         # a window that spans the outage still switches
@@ -939,8 +942,8 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         @test length(topologies(net)) == 1
 
         # the gates are the fields the model asks a question of before writing
-        @test structure_gates(edges(net)[1]) == (:rate_a, :angmin, :angmax)
-        @test structure_gates(units(net)[1]) == (:pmin, :pmax, :qmin, :qmax)
+        @test structure_gates(edges(net)[1]) == (:s_max, :v_angl_min, :v_angl_max)
+        @test structure_gates(units(net)[1]) == (:p_min, :p_max, :q_min, :q_max)
         @test structure_gates(units(net)[3]) == ()          # a fixed load has none
         @test structure_gates(units(net)[4]) == ()          # nor a storage unit
     end
@@ -949,7 +952,7 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         dim  = Dimension(:time => 4)
         data = rolling_network()
         net  = network(data)
-        net.edge[1] = Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, rate_a = 0.5,
+        net.edge[1] = Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, s_max = 0.5,
                              status = nw_vector(dim, (n, c) -> n != 3))
         data = NetworkData(Network(net.node, net.edge, net.unit; dim))
 
@@ -966,7 +969,7 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         dim  = Dimension(:time => 3)
         net  = network(rolling_network())
         net.edge[1] = Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1,
-                             rate_a = nw_vector(dim, [0.5, 0.9, Inf]))
+                             s_max = nw_vector(dim, [0.5, 0.9, Inf]))
         data = NetworkData(Network(net.node, net.edge, net.unit; dim))
 
         # the topology cannot tell the difference: nothing went out of service
@@ -995,9 +998,9 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         v(x) = nw_vector(dim, x)
         function limited(; pmax = 5.0, rate_a = 0.5, angmin = -pi / 2)
             net = network(rolling_network([10.0, 40.0, 90.0]))
-            net.unit[1] = Generator(; id = 1, node = 1, qmin = -5.0, qmax = 5.0, pg = 1.0,
-                                    pmax, cost = [0.0, 10.0])
-            net.edge[1] = Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, rate_a, angmin)
+            net.unit[1] = Generator(; id = 1, node = 1, q_min = -5.0, q_max = 5.0, p_set = 1.0,
+                                    p_max = pmax, c = [0.0, 10.0])
+            net.edge[1] = Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, s_max = rate_a, v_angl_min = angmin)
             return NetworkData(Network(net.node, net.edge, net.unit; dim))
         end
 
@@ -1020,11 +1023,11 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         prices = [10.0, 40.0, 90.0, 200.0]
         dim    = Dimension(:time => 4)
         net    = network(rolling_network(prices))
-        net.unit[2] = Generator(; id = 2, node = 2, qmin = -5.0, qmax = 5.0, pg = 0.0,
-                                pmax = nw_vector(dim, [1.0, 2.0, 1.0, 2.0]),
-                                cost = nw_vector(dim, :time, [[0.0, c] for c in prices]))
+        net.unit[2] = Generator(; id = 2, node = 2, q_min = -5.0, q_max = 5.0, p_set = 0.0,
+                                p_max = nw_vector(dim, [1.0, 2.0, 1.0, 2.0]),
+                                c     = nw_vector(dim, :time, [[0.0, c] for c in prices]))
         data = NetworkData(Network(net.node, net.edge, net.unit; dim); name = "rolling",
-                           baseMVA = 100.0)
+                           s_base_mva = 100.0)
 
         built  = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1))
         reused = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1,
@@ -1040,7 +1043,7 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         # used to ask, so a switch open at one index and closed at the next would
         # have been updated into the wrong shape
         dim = Dimension(:time => 3)
-        I   = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0), 2 => Node(; id = 2))
+        I   = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0), 2 => Node(; id = 2))
         E   = Dict{Int,AbstractEdge}(
             1 => IntegerGate(; id = 1, terminals = [1, 2], gate = nw_vector(dim, [1, 0, 1])))
         data = NetworkData(Network(I, E, Dict{Int,AbstractUnit}(); dim))
@@ -1062,8 +1065,8 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         @test one["objective"] ≈ full["objective"] atol = 1e-6
         @test one["objective"] ≈ 55.0 atol = 1e-4          # worked out in this file
         for n in 1:4
-            @test nw_solution(one, n)["unit"]["4"]["psd"] ≈
-                  nw_solution(full, n)["unit"]["4"]["psd"] atol = 1e-5
+            @test nw_solution(one, n)["unit"]["4"]["p_dch"] ≈
+                  nw_solution(full, n)["unit"]["4"]["p_dch"] atol = 1e-5
         end
     end
 
@@ -1150,8 +1153,8 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         energy = 0.4
         for n in 1:4
             battery = nw_solution(result, n)["unit"]["4"]
-            energy -= battery["psd"]
-            @test battery["es"] ≈ energy atol = 1e-5
+            energy -= battery["p_dch"]
+            @test battery["e_stor"] ≈ energy atol = 1e-5
             @test energy >= -1e-6
         end
 
@@ -1168,12 +1171,12 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         carried = initial_state(battery, nm, 1)
 
         @test carried isa Storage
-        @test carried.energy_initial ≈ JuMP.value(_NMB.var(nm, :es, 4; nw = 1))
-        @test carried.energy_initial != battery.energy_initial
+        @test carried.e_init ≈ JuMP.value(_NMB.var(nm, :e_stor, 4; nw = 1))
+        @test carried.e_init != battery.e_init
         # everything that is not state is left exactly as it was
         @test carried.node == battery.node
-        @test carried.discharge_rating == battery.discharge_rating
-        @test carried.energy_capacity == battery.energy_capacity
+        @test carried.p_dch_max == battery.p_dch_max
+        @test carried.e_max == battery.e_max
 
         # nothing else in the package carries anything
         @test initial_state(units(network(data))[1], nm, 1) === units(network(data))[1]
@@ -1189,7 +1192,7 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
                                           OPTIMIZER; horizon = 2, step = 1))
 
         @test units(network(data))[4] === before
-        @test units(network(data))[4].energy_initial == 0.4
+        @test units(network(data))[4].e_init == 0.4
     end
 
     @testset "it rolls any problem, not only a redispatch" begin
@@ -1236,7 +1239,7 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         data = rolling_network()
         flat = NetworkData(Network(deepcopy(nodes(network(data))), deepcopy(edges(network(data))),
                                    Dict{Int,AbstractUnit}(1 => Generator(; id = 1, node = 1),
-                                                          3 => FixedLoad(; id = 3, node = 2, pd = 0.1))))
+                                                          3 => FixedLoad(; id = 3, node = 2, p_set = 0.1))))
 
         # a rolling horizon runs along `:time`, and says so where there is none
         err = try
@@ -1277,7 +1280,7 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
                                     redispatch = Redispatch(; monitored = Int[])))
         @test none["objective"] ≈ 0.0 atol = 1e-5
         for n in 1:4
-            @test nw_solution(none, n)["unit"]["1"]["pg"] ≈ 1.0 atol = 1e-5
+            @test nw_solution(none, n)["unit"]["1"]["p_gen"] ≈ 1.0 atol = 1e-5
         end
     end
 
@@ -1293,18 +1296,18 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
 
         values = _NMB._overlap_values(nm, kept, 1)
         @test all(n in (2, 3) for (n, _, _) in keys(values))     # source indices, not local
-        @test (2, :pg, 1) in keys(values)
-        @test values[(2, :pg, 1)] ≈ JuMP.value(_NMB.var(nm, :pg, 1; nw = 2))
+        @test (2, :p_gen, 1) in keys(values)
+        @test values[(2, :p_gen, 1)] ≈ JuMP.value(_NMB.var(nm, :p_gen, 1; nw = 2))
 
         # the next window starts from them where the two overlap, and is left
         # alone where it is seeing a step for the first time
         next = instantiate_model(window(data, :time, 2:4), RedispatchProblem, LPFFormulation)
         _NMB._warm_start!(next, values, window_indices(data, :time, 2:4))
 
-        @test JuMP.start_value(_NMB.var(next, :pg, 1; nw = 1)) ≈ values[(2, :pg, 1)]
-        @test JuMP.start_value(_NMB.var(next, :pg, 1; nw = 2)) ≈ values[(3, :pg, 1)]
-        @test JuMP.start_value(_NMB.var(next, :pg, 1; nw = 3)) ==
-              unit(network(data), 1; nw = 4).pg          # step 4 is new, so it keeps its own
+        @test JuMP.start_value(_NMB.var(next, :p_gen, 1; nw = 1)) ≈ values[(2, :p_gen, 1)]
+        @test JuMP.start_value(_NMB.var(next, :p_gen, 1; nw = 2)) ≈ values[(3, :p_gen, 1)]
+        @test JuMP.start_value(_NMB.var(next, :p_gen, 1; nw = 3)) ==
+              unit(network(data), 1; nw = 4).p_set          # step 4 is new, so it keeps its own
     end
 
     @testset "a warm start changes the path, not the answer" begin
@@ -1317,7 +1320,7 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
                                     warm_start = true))
 
         @test warm["objective"] ≈ cold["objective"] rtol = 1e-6
-        for n in 1:4, key in ("psd", "es")
+        for n in 1:4, key in ("p_dch", "e_stor")
             @test nw_solution(warm, n)["unit"]["4"][key] ≈
                   nw_solution(cold, n)["unit"]["4"][key] atol = 1e-5
         end
@@ -1433,13 +1436,13 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
 
                 @test result["termination_status"] == built["termination_status"]
                 @test result["objective"] ≈ built["objective"] rtol = 1e-6
-                for n in 1:4, key in ("pg", "pgup", "pgdn")
+                for n in 1:4, key in ("p_gen", "p_gen_up", "p_gen_dn")
                     @test nw_solution(result, n)["unit"]["2"][key] ≈
                           nw_solution(built, n)["unit"]["2"][key] atol = 1e-5
                 end
                 # the battery carried its state across the windows either way
-                @test nw_solution(result, 4)["unit"]["4"]["es"] ≈
-                      nw_solution(built, 4)["unit"]["4"]["es"] atol = 1e-5
+                @test nw_solution(result, 4)["unit"]["4"]["e_stor"] ≈
+                      nw_solution(built, 4)["unit"]["4"]["e_stor"] atol = 1e-5
             end
 
             # one model served the windows that had the same shape; the short one
@@ -1469,8 +1472,8 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
                                           redispatch = rd, reuse = true, warm_start = true))
             @test reused["objective"] ≈ built["objective"] rtol = 1e-6
             for n in 1:4
-                @test nw_solution(reused, n)["edge"]["1"]["overload"] ≈
-                      nw_solution(built, n)["edge"]["1"]["overload"] atol = 1e-5
+                @test nw_solution(reused, n)["edge"]["1"]["s_ovl"] ≈
+                      nw_solution(built, n)["edge"]["1"]["s_ovl"] atol = 1e-5
             end
 
             # one model really did serve several windows
@@ -1481,7 +1484,7 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         # the roll reports a violation there instead of paying 210 to avoid it
         priced = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
                                       horizon = 2, step = 1, redispatch = rd))
-        @test sum(nw_solution(priced, n)["edge"]["1"]["overload"] for n in 1:4) > 1e-4
+        @test sum(nw_solution(priced, n)["edge"]["1"]["s_ovl"] for n in 1:4) > 1e-4
     end
 
     @testset "a roll groups its steps the way the problem did" begin
@@ -1514,7 +1517,7 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         dim  = Dimension(:time => 6)
         net  = network(rolling_network([10.0, 40.0, 90.0, 200.0, 30.0, 60.0]))
         net.edge[1] = Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1,
-                             rate_a = nw_vector(dim, [0.5, 0.5, Inf, 0.5, 0.5, 0.5]))
+                             s_max = nw_vector(dim, [0.5, 0.5, Inf, 0.5, 0.5, 0.5]))
         data = NetworkData(Network(net.node, net.edge, net.unit; dim))
 
         built  = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; horizon = 2, step = 1))
@@ -1550,10 +1553,10 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         data = rolling_network()
         nm   = instantiate_model(window(data, :time, 1:2), RedispatchProblem, LPFFormulation)
 
-        z = variable!(nm, :z, 7; nw = 1, base_name = "1_z[7]", start = 1.0, binary = true)
+        z = variable!(nm, :z, 7; nw = 1, start = 1.0, binary = true)
         @test JuMP.is_binary(z)
         @test JuMP.start_value(z) == 1.0
-        @test !JuMP.is_binary(variable!(nm, :w, 7; nw = 1, base_name = "1_w[7]"))
+        @test !JuMP.is_binary(variable!(nm, :w, 7; nw = 1))
 
         # asked for again it is the same variable, not a second one
         count = JuMP.num_variables(nm.model)
@@ -1633,7 +1636,7 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         whole = quiet(() -> solve_rd(rolling_network(; energy_final = 0.2),
                                      LPFFormulation, OPTIMIZER))
         @test whole["objective"] ≈ 95.0 atol = 1e-4
-        @test nw_solution(whole, 4)["unit"]["4"]["es"] ≈ 0.2 atol = 1e-6
+        @test nw_solution(whole, 4)["unit"]["4"]["e_stor"] ≈ 0.2 atol = 1e-6
 
         # rolled with the whole horizon in view, the roll reproduces it exactly:
         # the three windows that do not reach the end hold their energy rather
@@ -1643,7 +1646,7 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         @test rolled["objective"] ≈ 95.0 atol = 1e-4
         @test discharge(rolled, 1:3) ≈ [0.0, 0.0, 0.0] atol = 1e-6
         @test discharge(rolled, 4:4) ≈ [0.2] atol = 1e-6
-        @test nw_solution(rolled, 4)["unit"]["4"]["es"] ≈ 0.2 atol = 1e-6
+        @test nw_solution(rolled, 4)["unit"]["4"]["e_stor"] ≈ 0.2 atol = 1e-6
     end
 
     @testset "a lookahead too short to see a target can walk past it" begin

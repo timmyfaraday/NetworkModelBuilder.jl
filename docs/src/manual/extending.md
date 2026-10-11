@@ -78,11 +78,13 @@ see [`update_model!`](@ref).
 A new component type has nothing to do differently: write the equations as they
 read, hand them over with a key that says which constraint they are, and give
 each one an `id` that distinguishes it from the others the same component
-writes.
+writes. A variable is not named by the component: [`variable!`](@ref) and
+[`variables!`](@ref) name it from its key and its `id`, and leave it unnamed when
+the solve asked for `set_string_name = false`.
 
 A key is not a private name. `var` and `con` are shared by the package and by
 every extension, so an extension **prefixes its keys with its own name**, as
-`:star_vr` rather than `:vsr`, which a [`Transformer`](@ref) already uses.
+`:star_vr` rather than `:v_star_real`, which a [`Transformer`](@ref) already uses.
 Where a key is asked for again with an index set or a type of `id` other than
 the one it holds, [`variable!`](@ref), [`variables!`](@ref) and
 [`variable_container!`](@ref) raise an `ArgumentError` naming the key and the

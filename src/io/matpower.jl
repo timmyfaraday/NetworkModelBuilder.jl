@@ -10,6 +10,7 @@
 # v0.9.1 - a bare case file name is found from the bundled test data           #
 # v0.12.0 - a branch with a ratio is a transformer of two windings             #
 # v0.13.0 - a branch takes the charging b as the shunt of its section          #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 ################################################################################
@@ -141,7 +142,7 @@ function _matpower_network(mp::Dict{String,Any})
     net = Network(I, E, U)
     ext = Dict{Symbol,Any}(:matpower => mp)
 
-    return NetworkData(net; name = mp["name"], baseMVA, ext)
+    return NetworkData(net; name = mp["name"], s_base_mva = baseMVA, ext)
 end
 
 function _matpower_nodes(bus::Matrix{Float64}, gen::Matrix{Float64})
@@ -169,11 +170,11 @@ function _matpower_nodes(bus::Matrix{Float64}, gen::Matrix{Float64})
         end
 
         I[i] = Node(; id = i, name = "bus $i", type, status,
-                    vm = bus[k, 8], va = deg2rad(bus[k, 9]),
-                    base_kv = bus[k, 10],
-                    vmax = size(bus, 2) >= 12 ? bus[k, 12] : 1.1,
-                    vmin = size(bus, 2) >= 13 ? bus[k, 13] : 0.9,
-                    area = Int(bus[k, 7]), zone = size(bus, 2) >= 11 ? Int(bus[k, 11]) : 1,
+                    v_magn_set = bus[k, 8], v_angl_set = deg2rad(bus[k, 9]),
+                    v_base_kv = bus[k, 10],
+                    v_magn_max = size(bus, 2) >= 12 ? bus[k, 12] : 1.1,
+                    v_magn_min = size(bus, 2) >= 13 ? bus[k, 13] : 0.9,
+                    area       = Int(bus[k, 7]), zone = size(bus, 2) >= 11 ? Int(bus[k, 11]) : 1,
                     ext = Dict{Symbol,Any}(:source_id => i))
     end
 
@@ -195,9 +196,9 @@ function _correct_reference_node!(I::Dict{Int,AbstractNode}, name::AbstractStrin
     i  = first(candidates)
     nd = I[i]::Node
     @warn "`$name` declares no reference bus, promoting bus $i to reference"
-    I[i] = Node(; id = nd.id, name = nd.name, type = REF, vm = nd.vm, va = nd.va,
-                vmin = nd.vmin, vmax = nd.vmax, base_kv = nd.base_kv,
-                area = nd.area, zone = nd.zone, status = nd.status, ext = nd.ext)
+    I[i] = Node(; id = nd.id, name = nd.name, type = REF, v_magn_set = nd.v_magn_set, v_angl_set = nd.v_angl_set,
+                v_magn_min = nd.v_magn_min, v_magn_max = nd.v_magn_max, v_base_kv = nd.v_base_kv,
+                area       = nd.area, zone = nd.zone, status = nd.status, ext = nd.ext)
 
     return nothing
 end
@@ -211,11 +212,11 @@ function _matpower_edges(branch::Matrix{Float64}, baseMVA::Float64)
         ratio  = branch[e, 9]
         angle  = branch[e, 10]
         common = (id = e, terminals = [f, t],
-                  r = branch[e, 3], x = branch[e, 4], b_sh = b,
-                  rate_a = rate <= 0 ? Inf : rate / baseMVA,
-                  angmin = size(branch, 2) >= 12 ? deg2rad(branch[e, 12]) : -pi / 2,
-                  angmax = size(branch, 2) >= 13 ? deg2rad(branch[e, 13]) :  pi / 2,
-                  status = branch[e, 11] > 0,
+                  r = branch[e, 3], x = branch[e, 4], b_shnt = b,
+                  s_max      = rate <= 0 ? Inf : rate / baseMVA,
+                  v_angl_min = size(branch, 2) >= 12 ? deg2rad(branch[e, 12]) : -pi / 2,
+                  v_angl_max = size(branch, 2) >= 13 ? deg2rad(branch[e, 13]) :  pi / 2,
+                  status     = branch[e, 11] > 0,
                   ext = Dict{Symbol,Any}(:source_id => (f, t, e)))
 
         # Matpower writes a branch and a transformer into the same table; a turns
@@ -225,10 +226,10 @@ function _matpower_edges(branch::Matrix{Float64}, baseMVA::Float64)
         # charging.
         E[e] = if (ratio != 0 && ratio != 1) || angle != 0
             Transformer(; id = e, name = "transformer $e", terminals = [f, t],
-                        r = common.r, x = common.x, b_sh = [b / 2, b / 2],
-                        tm = ratio == 0 ? 1.0 : ratio, ta = deg2rad(angle),
-                        rate_a = common.rate_a, angmin = common.angmin,
-                        angmax = common.angmax, status = common.status, ext = common.ext)
+                        r = common.r, x = common.x, b_shnt = [b / 2, b / 2],
+                        t_magn = ratio == 0 ? 1.0 : ratio, t_angl = deg2rad(angle),
+                        s_max      = common.s_max, v_angl_min = common.v_angl_min,
+                        v_angl_max = common.v_angl_max, status = common.status, ext = common.ext)
         else
             Branch(; common..., name = "branch $e")
         end
@@ -242,11 +243,11 @@ function _matpower_generators!(U::Dict{Int,AbstractUnit}, u::Int, gen::Matrix{Fl
     for k in axes(gen, 1)
         u += 1
         U[u] = Generator(; id = u, name = "generator $k", node = Int(gen[k, 1]),
-                         pg = gen[k, 2] / baseMVA, qg = gen[k, 3] / baseMVA,
-                         qmax = gen[k, 4] / baseMVA, qmin = gen[k, 5] / baseMVA,
-                         vg = gen[k, 6], status = gen[k, 8] > 0,
-                         pmax = gen[k, 9] / baseMVA, pmin = gen[k, 10] / baseMVA,
-                         cost = _matpower_cost(gencost, k, baseMVA),
+                         p_set = gen[k, 2] / baseMVA, q_set = gen[k, 3] / baseMVA,
+                         q_max = gen[k, 4] / baseMVA, q_min = gen[k, 5] / baseMVA,
+                         v_magn_set = gen[k, 6], status = gen[k, 8] > 0,
+                         p_max = gen[k, 9] / baseMVA, p_min = gen[k, 10] / baseMVA,
+                         c     = _matpower_cost(gencost, k, baseMVA),
                          ext = Dict{Symbol,Any}(:source_id => k))
     end
 
@@ -279,7 +280,7 @@ function _matpower_loads!(U::Dict{Int,AbstractUnit}, u::Int, bus::Matrix{Float64
         (pd == 0.0 && qd == 0.0) && continue
         u += 1
         i = Int(bus[k, 1])
-        U[u] = FixedLoad(; id = u, name = "load at bus $i", node = i, pd, qd,
+        U[u] = FixedLoad(; id = u, name = "load at bus $i", node = i, p_set = pd, q_set = qd,
                     ext = Dict{Symbol,Any}(:source_id => i))
     end
 
@@ -292,7 +293,7 @@ function _matpower_shunts!(U::Dict{Int,AbstractUnit}, u::Int, bus::Matrix{Float6
         (gs == 0.0 && bs == 0.0) && continue
         u += 1
         i = Int(bus[k, 1])
-        U[u] = Shunt(; id = u, name = "shunt at bus $i", node = i, gs, bs,
+        U[u] = Shunt(; id = u, name = "shunt at bus $i", node = i, g = gs, b = bs,
                      ext = Dict{Symbol,Any}(:source_id => i))
     end
 

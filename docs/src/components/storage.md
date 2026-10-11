@@ -12,34 +12,37 @@ Storage
 
 ## Parameters
 
-| symbol | field | description | unit |
+| symbol | code name | description | unit |
 |:-------|:------|:------------|:-----|
 | | `id`, `name`, `node` | identifier, label, node | |
-| ``p^{\text{s,set}}_{u}``, ``q^{\text{s,set}}_{u}`` | `ps`, `qs` | injection setpoint, used by a power flow | pu |
-| ``e^{\text{max}}_{u}`` | `energy_capacity` | usable energy capacity | pu·h |
-| ``e^{0}_{u}`` | `energy_initial` | energy held before the first step | pu·h |
-| ``e^{\text{f}}_{u}`` | `energy_final` | energy required after the last step, or `NaN` | pu·h |
-| ``p^{\text{sc,max}}_{u}`` | `charge_rating` | charge power limit | pu |
-| ``p^{\text{sd,max}}_{u}`` | `discharge_rating` | discharge power limit | pu |
-| ``\eta^{\text{c}}_{u}`` | `charge_efficiency` | one-way charge efficiency, in ``(0,1]`` | |
-| ``\eta^{\text{d}}_{u}`` | `discharge_efficiency` | one-way discharge efficiency, in ``(0,1]`` | |
-| ``k^{\text{max}}_{u}`` | `max_cycles_per_period` | equivalent full cycles allowed per period | |
-| ``c^{\text{tp}}_{u}`` | `cost_throughput` | price of one per unit discharged | currency/pu/h |
-| ``c^{\text{cyc}}_{u}`` | `cost_cycle` | price of one equivalent full cycle | currency/cycle |
-| ``q^{\text{min}}_{u}``, ``q^{\text{max}}_{u}`` | `qmin`, `qmax` | reactive power limits | pu |
+| ``p^{\text{s,set}}_{u}``, ``q^{\text{s,set}}_{u}`` | `p_set`, `q_set` | injection setpoint, used by a power flow | pu |
+| ``e^{\text{max}}_{u}`` | `e_max` | usable energy capacity | pu·h |
+| ``e^{0}_{u}`` | `e_init` | energy held before the first step | pu·h |
+| ``e^{\text{f}}_{u}`` | `e_fin` | energy required after the last step, or `NaN` | pu·h |
+| ``p^{\text{sc,max}}_{u}`` | `p_chg_max` | charge power limit | pu |
+| ``p^{\text{sd,max}}_{u}`` | `p_dch_max` | discharge power limit | pu |
+| ``\eta^{\text{c}}_{u}`` | `η_chg` | one-way charge efficiency, in ``(0,1]`` | |
+| ``\eta^{\text{d}}_{u}`` | `η_dch` | one-way discharge efficiency, in ``(0,1]`` | |
+| ``k^{\text{max}}_{u}`` | `k_cycl_max` | equivalent full cycles allowed per period | |
+| ``c^{\text{tp}}_{u}`` | `c_thru` | price of one per unit discharged | currency/pu/h |
+| ``c^{\text{cyc}}_{u}`` | `c_cycl` | price of one equivalent full cycle | currency/cycle |
+| ``q^{\text{min}}_{u}``, ``q^{\text{max}}_{u}`` | `q_min`, `q_max` | reactive power limits | pu |
+| ``c^{\uparrow}_{u}``, ``c^{\downarrow}_{u}`` | `c_up`, `c_dn` | price of injecting one per unit more and less than the market schedule in a redispatch | currency/pu/h |
 | | `status` | in service | |
+| | `ext` | free-form storage, carried along and never read | |
 
 ## Variables
 
 ### In the `IVRFormulation`, dispatch problems
 
-| symbol | key | index | description | unit |
+| symbol | code name | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``c^{\text{r}}_{u}``, ``c^{\text{i}}_{u}`` | `:cru`, `:ciu` | unit | injected current | pu |
-| ``p^{\text{sc}}_{u}`` | `:psc` | unit | charge power, ``\ge 0`` | pu |
-| ``p^{\text{sd}}_{u}`` | `:psd` | unit | discharge power, ``\ge 0`` | pu |
-| ``e_{u}`` | `:es` | unit | state of charge | pu·h |
-| ``q^{\text{s}}_{u}`` | `:qs` | unit | reactive power | pu |
+| ``i^{\text{r}}_{u}``, ``i^{\text{i}}_{u}`` | `:i_unit_real`, `:i_unit_imag` | unit | injected current | pu |
+| ``p^{\text{sc}}_{u}`` | `:p_chg` | unit | charge power, ``\ge 0`` | pu |
+| ``p^{\text{sd}}_{u}`` | `:p_dch` | unit | discharge power, ``\ge 0`` | pu |
+| ``e_{u}`` | `:e_stor` | unit | state of charge | pu·h |
+| ``q^{\text{s}}_{u}`` | `:q_stor` | unit | reactive power | pu |
+| ``p^{\uparrow}_{u}``, ``p^{\downarrow}_{u}`` | `:p_stor_up`, `:p_stor_dn` | unit | moved up and down from the market schedule, redispatch only | pu |
 
 A power flow creates none of these: there the unit holds its setpoint.
 
@@ -55,10 +58,10 @@ reason a flexible load's energy balance is.
 The injection, against the current:
 
 ```math
-v^{\text{r}}_{i} c^{\text{r}}_{u} + v^{\text{i}}_{i} c^{\text{i}}_{u}
+v^{\text{r}}_{i} i^{\text{r}}_{u} + v^{\text{i}}_{i} i^{\text{i}}_{u}
 = p^{\text{sd}}_{u} - p^{\text{sc}}_{u},
 \qquad
-v^{\text{i}}_{i} c^{\text{r}}_{u} - v^{\text{r}}_{i} c^{\text{i}}_{u} = q^{\text{s}}_{u} .
+v^{\text{i}}_{i} i^{\text{r}}_{u} - v^{\text{r}}_{i} i^{\text{i}}_{u} = q^{\text{s}}_{u} .
 ```
 
 ### Across network indices
@@ -88,7 +91,7 @@ inflow
 
 ### The end of the horizon
 
-A unit that carries an `energy_final` is pinned at the last `:time` coordinate:
+A unit that carries an `e_fin` is pinned at the last `:time` coordinate:
 
 ```math
 e_{u,n} = e^{\text{f}}_{u} \quad \text{at the last } n \text{ along } \texttt{:time}
@@ -118,7 +121,7 @@ interior_state
 
 ### The cycle limit
 
-A unit that carries a finite `max_cycles_per_period` gets one row per period:
+A unit that carries a finite `k_cycl_max` gets one row per period:
 
 ```math
 \sum_{n \in \mathcal{P}} \Delta t_{n} \, p^{\text{sd}}_{u,n}
@@ -153,18 +156,18 @@ constraint_storage_cycles!
 
 ## Cost
 
-| what | field | where it is paid |
+| what | code name | where it is paid |
 |:-----|:------|:-----------------|
-| moving energy | `cost_throughput` | [`dispatch_cost`](@ref), once per network index |
-| turning a cycle | `cost_cycle` | [`period_cost`](@ref), once per period |
-| leaving a market schedule | `cost_up`, `cost_dn` | [`redispatch_cost`](@ref), once per network index |
+| moving energy | `c_thru` | [`dispatch_cost`](@ref), once per network index |
+| turning a cycle | `c_cycl` | [`period_cost`](@ref), once per period |
+| leaving a market schedule | `c_up`, `c_dn` | [`redispatch_cost`](@ref), once per network index |
 
 The first two measure different wear and a unit may carry either or both: a
 battery that discharges half its capacity twice pays for one cycle, while the
 throughput price charges it for the whole of what it moved either way. The
 throughput price is also in `redispatch_cost`, because degradation does not care
 why the energy moved — a battery asked to relieve a congestion wears exactly as
-much as one following a schedule, and `cost_up` and `cost_dn` price the
+much as one following a schedule, and `c_up` and `c_dn` price the
 *deviation* rather than the movement.
 
 !!! note "Charging and discharging at once"

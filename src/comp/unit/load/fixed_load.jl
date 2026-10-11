@@ -9,6 +9,7 @@
 # v0.3.0 - component hierarchy                                                 #
 # v0.10.1 - exports its own public names                                       #
 # v0.12.8 - a load refuses a demand that is not finite                         #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 export FixedLoad
@@ -23,7 +24,7 @@ export FixedLoad
 A unit `(u, i)` that withdraws a given active and reactive power from its node.
 
 The demand is data: no problem type gives the model any say in it. A demand that
-follows a profile is still a fixed load — give `pd` and `qd` a
+follows a profile is still a fixed load — give `p_set` and `q_set` a
 [`NetworkVector`](@ref) and each network index gets its own number. What makes a
 load *flexible* is that the model chooses the number, see
 [`FlexibleLoad`](@ref).
@@ -31,7 +32,7 @@ load *flexible* is that the model chooses the number, see
 # Fields
 - `id`, `name`: the identifier and a human readable label.
 - `node`: the node the load is connected to.
-- `pd`, `qd`: the active and reactive power withdrawn [pu].
+- `p_set`, `q_set`: the active and reactive power withdrawn [pu].
 - `status`: whether the load is in service.
 - `ext`: free-form storage.
 
@@ -40,20 +41,20 @@ injects, which is what a net position is.
 """
 Base.@kwdef struct FixedLoad <: AbstractLoad
     id    ::Int
-    name  ::String                    = ""
+    name  ::String                   = ""
     node  ::Int
-    pd    ::NetworkQuantity{Float64}  = 0.0
-    qd    ::NetworkQuantity{Float64}  = 0.0
-    status::NetworkQuantity{Bool}     = true
-    ext   ::Dict{Symbol,Any}          = Dict{Symbol,Any}()
+    p_set ::NetworkQuantity{Float64} = 0.0
+    q_set ::NetworkQuantity{Float64} = 0.0
+    status::NetworkQuantity{Bool}    = true
+    ext   ::Dict{Symbol,Any}         = Dict{Symbol,Any}()
 
-    function FixedLoad(id, name, node, pd, qd, status, ext)
-        all_nw(isfinite, pd) && all_nw(isfinite, qd) ||
+    function FixedLoad(id, name, node, p_set, q_set, status, ext)
+        all_nw(isfinite, p_set) && all_nw(isfinite, q_set) ||
             throw(ArgumentError("load $id has a demand that is not finite"))
-        return new(id, name, node, pd, qd, status, ext)
+        return new(id, name, node, p_set, q_set, status, ext)
     end
 end
 
 register_unit_type!(FixedLoad)
 
-demand(::NetworkModel, ld::FixedLoad, ::Int; nw::Int) = (ld.pd, ld.qd)
+demand(::NetworkModel, ld::FixedLoad, ::Int; nw::Int) = (ld.p_set, ld.q_set)

@@ -10,22 +10,22 @@ See [The linearized formulation](@ref) for what the approximations discard.
 
 ## Variables
 
-| symbol | key | index set | bounds |
+| symbol | code name | index set | bounds |
 |:-------|:----|:----------|:-------|
-| ``v^{\text{a}}_{i}`` | `:va` | ``i \in I`` | free |
-| ``p_{a}`` | `:p` | ``a \in A`` | free |
-| ``v^{\text{as}}_{e}`` | `:vas` | ``e \in E^{\text{tf}}``, three or more windings | free |
-| ``ta_{a}`` | `:ta` | ``a \in A^{\text{ta}}`` | ``[ta^{\text{min}}_{a}, ta^{\text{max}}_{a}]`` |
-| ``z^{\text{t}}_{a,s}`` | `:zt` | ``a \in A^{\text{zt}}``, every position ``s`` | binary |
-| ``p_{u}`` | `:pu` | ``u \in U`` | free |
-| ``p^{\text{g}}_{u}`` | `:pg` | ``u \in U^{\text{g}}`` | ``[p^{\text{min}}_{u}, p^{\text{max}}_{u}]`` |
-| ``p^{\uparrow}_{u}, p^{\downarrow}_{u}`` | `:pgup`, `:pgdn` | ``u \in U^{\text{g}}`` | the headroom each way |
-| ``p^{\text{d}}_{u}`` | `:pdf` | ``u \in U^{\text{fl}}`` | ``[p^{\text{d,min}}_{u}, p^{\text{d,max}}_{u}]`` |
-| ``p^{\text{sc}}_{u}, p^{\text{sd}}_{u}`` | `:psc`, `:psd` | ``u \in U^{\text{s}}`` | ``[0, \cdot^{\text{max}}_{u}]`` |
-| ``e_{u}`` | `:es` | ``u \in U^{\text{s}}`` | ``[0, e^{\text{max}}_{u}]`` |
-| ``p^{\uparrow}_{u}, p^{\downarrow}_{u}`` | `:psup`, `:psdn` | ``u \in U^{\text{s}}`` | the headroom each way |
+| ``v^{\text{a}}_{i}`` | `:v_angl` | ``i \in I`` | free |
+| ``p_{a}`` | `:p_term` | ``a \in A`` | free |
+| ``v^{\text{as}}_{e}`` | `:v_star_angl` | ``e \in E^{\text{tf}}``, three or more windings | free |
+| ``t^{\text{a}}_{a}`` | `:t_angl` | ``a \in A^{\text{ta}}`` | ``[t^{\text{a,min}}_{a}, t^{\text{a,max}}_{a}]`` |
+| ``z^{\text{t}}_{a,s}`` | `:z_step` | ``a \in A^{\text{zt}}``, every position ``s`` | binary |
+| ``p_{u}`` | `:p_unit` | ``u \in U`` | free |
+| ``p^{\text{g}}_{u}`` | `:p_gen` | ``u \in U^{\text{g}}`` | ``[p^{\text{min}}_{u}, p^{\text{max}}_{u}]`` |
+| ``p^{\uparrow}_{u}, p^{\downarrow}_{u}`` | `:p_gen_up`, `:p_gen_dn` | ``u \in U^{\text{g}}`` | the headroom each way |
+| ``p^{\text{d}}_{u}`` | `:p_flex` | ``u \in U^{\text{fl}}`` | ``[p^{\text{d,min}}_{u}, p^{\text{d,max}}_{u}]`` |
+| ``p^{\text{sc}}_{u}, p^{\text{sd}}_{u}`` | `:p_chg`, `:p_dch` | ``u \in U^{\text{s}}`` | ``[0, \cdot^{\text{max}}_{u}]`` |
+| ``e_{u}`` | `:e_stor` | ``u \in U^{\text{s}}`` | ``[0, e^{\text{max}}_{u}]`` |
+| ``p^{\uparrow}_{u}, p^{\downarrow}_{u}`` | `:p_stor_up`, `:p_stor_dn` | ``u \in U^{\text{s}}`` | the headroom each way |
 
-No voltage magnitude, no reactive power, no current — and no ``tm_{a}``, since a
+No voltage magnitude, no reactive power, no current — and no ``t^{\text{m}}_{a}``, since a
 winding that is `oltc` is inert here. A winding that is `pst` is not, and it is
 the free measure a redispatch reaches for first. Where it steps, the problem is
 mixed-integer, no longer a linear program, and has no duals.
@@ -50,10 +50,10 @@ v^{\text{a}}_{i} = v^{\text{a,set}}_{i} \quad \forall i \in I^{\text{ref}},
 ### At the edges
 
 Flow, ``\forall e \in E^{\text{br}}``, and ``\forall e \in E^{\text{tf}}`` with two windings,
-whose shift is ``ta_{e,1} - ta_{e,2}``:
+whose shift is ``t^{\text{a}}_{e,1} - t^{\text{a}}_{e,2}``:
 
 ```math
-p_{a^{\text{f}}_{e}} = -b_{e} \left(v^{\text{a}}_{i} - v^{\text{a}}_{j} - ta_{e}\right),
+p_{a^{\text{f}}_{e}} = -b_{e} \left(v^{\text{a}}_{i} - v^{\text{a}}_{j} - t^{\text{a}}_{e}\right),
 \qquad
 p_{a^{\text{t}}_{e}} = -p_{a^{\text{f}}_{e}}
 ```
@@ -90,7 +90,7 @@ p_{u} &= -g^{\text{s}}_{u} & && \forall u \in U^{\text{sh}}
 The state of charge, the energy of a flexible load, and the preventive
 equalities — identical to the
 [IVR formulation](@ref "Redispatch in the IVR formulation") but for which
-variables a winding contributes: the angle ``ta_{a}`` here, the pair
+variables a winding contributes: the angle ``t^{\text{a}}_{a}`` here, the pair
 ``(t^{\text{r}}_{a}, t^{\text{i}}_{a})`` there.
 
 ## A worked example
@@ -122,13 +122,12 @@ data = parse_tables(
             terminals = [[1, 2]],
             r         = [0.0],
             x         = [0.1],
-            rate_a    = [0.5]),
+            s_max     = [0.5]),
     unit = (id        = [1, 2, 3],
             component = ["Generator", "Generator", "FixedLoad"],
             node      = [1, 2, 2],
-            pg        = [1.0, 0.0, missing],
-            cost      = [[0.0, 10.0], [0.0, 100.0], missing],
-            pd        = [missing, missing, 1.0]))
+            p_set     = [1.0, 0.0, 1.0],
+            c         = [[0.0, 10.0], [0.0, 100.0], missing]))
 
 result = solve_rd(data, LPFFormulation,
                   optimizer_with_attributes(HiGHS.Optimizer, "output_flag" => true);

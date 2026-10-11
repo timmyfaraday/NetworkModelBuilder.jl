@@ -11,6 +11,8 @@
 # v0.12.0 - a measure may belong to one terminal of an edge                    #
 # v0.12.0 - a measure held at the base case builds no rows of its own          #
 # v0.12.0 - a held measure may reuse the binaries of the base case             #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 ################################################################################
@@ -18,7 +20,7 @@
 ################################################################################
 
 """
-    OverloadPrice(; per_energy, per_peak)
+    OverloadPrice(; c_ener, c_peak)
 
 What exceeding the rating of a monitored edge costs: per per-unit of excess at
 one network index, and per per-unit of the worst excess of a period.
@@ -35,10 +37,10 @@ about how the question is being asked, like `monitored`, and the same network
 priced two ways is two questions about one set of data.
 
 # Fields
-- `per_energy`: the cost of one per-unit of overload at one network index, which
+- `c_ener`: the cost of one per-unit of overload at one network index, which
   the objective weights like any other per-index cost — so with a `:weight` of
   the step duration it is a cost per per-unit-hour.
-- `per_peak`: the cost of one per-unit of the **worst** overload of a period,
+- `c_peak`: the cost of one per-unit of the **worst** overload of a period,
   charged once per period per state of the world. Zero, the default, writes no
   peak at all.
 
@@ -50,29 +52,29 @@ a cost that spans network indices, so it is paid through
 duration of a step, since a peak is not a rate, and weighted by the probability
 of the contingency it occurs in, see [`period_weight`](@ref).
 
-A non-zero `per_peak` needs a `:time` dimension to hold the periods, and the
+A non-zero `c_peak` needs a `:time` dimension to hold the periods, and the
 periods themselves are declared on that dimension, see [`period_ids`](@ref).
 With no grouping declared there is one period spanning the whole horizon, and a
 peak charge is then a charge on the worst overload of the problem.
 """
 Base.@kwdef struct OverloadPrice
-    per_energy::Float64
-    per_peak  ::Float64 = 0.0
+    c_ener::Float64
+    c_peak::Float64 = 0.0
 
-    function OverloadPrice(per_energy, per_peak)
-        for (name, price) in ((:per_energy, per_energy), (:per_peak, per_peak))
+    function OverloadPrice(c_ener, c_peak)
+        for (name, price) in ((:c_ener, c_ener), (:c_peak, c_peak))
             price >= 0 ||
                 throw(ArgumentError("an overload price of $price is negative, which pays the problem to overload an edge"))
             isfinite(price) ||
                 throw(ArgumentError("an overload price of $price is not a way to write a hard rating, leave `overload` at `nothing` for that"))
         end
-        return new(per_energy, per_peak)
+        return new(c_ener, c_peak)
     end
 end
 
 function Base.show(io::IO, op::OverloadPrice)
-    print(io, "OverloadPrice(", op.per_energy, " per pu")
-    iszero(op.per_peak) || print(io, ", ", op.per_peak, " per pu of peak")
+    print(io, "OverloadPrice(", op.c_ener, " per pu")
+    iszero(op.c_peak) || print(io, ", ", op.c_peak, " per pu of peak")
     print(io, ")")
 end
 
@@ -120,7 +122,7 @@ julia> Redispatch(; monitored = [3, 7, 11])
 julia> Redispatch(; control = :corrective,
                     exception = Dict((:unit, 1) => :preventive))
 
-julia> Redispatch(; monitored = [3, 7], overload = OverloadPrice(; per_energy = 500.0))
+julia> Redispatch(; monitored = [3, 7], overload = OverloadPrice(; c_ener = 500.0))
 ```
 """
 struct Redispatch
@@ -144,7 +146,7 @@ function Redispatch(; monitored::Union{Nothing,AbstractVector{<:Integer}} = noth
 
     return Redispatch(monitored === nothing ? nothing : sort!(unique(Int.(monitored))),
                       control, Dict{Tuple{Symbol,Int},Symbol}(exception),
-                      overload isa Real ? OverloadPrice(; per_energy = overload) : overload)
+                      overload isa Real ? OverloadPrice(; c_ener = overload) : overload)
 end
 
 _check_control(mode::Symbol) =
@@ -157,9 +159,9 @@ function Base.show(io::IO, rd::Redispatch)
           ", ", rd.control)
     isempty(rd.exception) || print(io, " with $(length(rd.exception)) exception(s)")
     if rd.overload !== nothing
-        print(io, ", overload at ", rd.overload.per_energy, " per pu")
-        iszero(rd.overload.per_peak) ||
-            print(io, " and ", rd.overload.per_peak, " per pu of peak")
+        print(io, ", overload at ", rd.overload.c_ener, " per pu")
+        iszero(rd.overload.c_peak) ||
+            print(io, " and ", rd.overload.c_peak, " per pu of peak")
     end
     print(io, ")")
 end
@@ -285,7 +287,7 @@ This is the single dispatch point [`constraint_redispatch_control`](@ref) walks,
 so an extension package that adds a controllable component gets it into the
 preventive-corrective split by giving it one method. The keys depend on the
 formulation as well as on the type: a [`Transformer`](@ref) carries the ratio of a
-winding as `(:tm, :tr, :ti)` in the current based formulation and as `(:ta,)` in
+winding as `(:t_magn, :t_real, :t_imag)` in the current based formulation and as `(:t_angl,)` in
 the linearized one.
 
 A key may name a variable that belongs to one terminal of an edge, registered

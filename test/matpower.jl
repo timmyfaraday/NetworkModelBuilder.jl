@@ -10,6 +10,7 @@
 # v0.9.1 - a bare case file name is found from the bundled test data           #
 # v0.12.0 - a transformer has an entry per winding                             #
 # v0.13.0 - a branch holds one entry per terminal of a field                   #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 @testset "matpower" begin
@@ -19,7 +20,7 @@
         net  = network(data)
 
         @test data.name == "case14"
-        @test baseMVA(data) == 100.0
+        @test s_base_mva(data) == 100.0
         @test dim_length(data) == 1
 
         @test length(ids(net, Node))      == 14
@@ -38,21 +39,21 @@
         @test node(net, 1).type == REF
         @test node(net, 2).type == PV
         @test node(net, 4).type == PQ
-        @test node(net, 1).vm   == 1.06
+        @test node(net, 1).v_magn_set   == 1.06
 
         # everything is per unit on baseMVA, every angle in radians
-        @test unit(net, 1).pmax ≈ 3.324
-        @test unit(net, 1).pg   ≈ 2.324
-        @test unit(net, 17).bs  ≈ 0.19
+        @test unit(net, 1).p_max ≈ 3.324
+        @test unit(net, 1).p_set   ≈ 2.324
+        @test unit(net, 17).b  ≈ 0.19
         @test edge(net, 8)::Transformer isa Transformer
-        @test edge(net, 8).tm   ≈ [0.978, 1.0]     # the ratio sits on the from winding
-        @test edge(net, 8).ta   ≈ [0.0, 0.0]
-        @test edge(net, 1).b_sh ≈ [0.0528, 0.0]   # the charging of the whole line, half at each end
-        @test edge(net, 1).rate_a == [Inf, Inf]   # a zero rating means unlimited
-        @test edge(net, 1).angmax ≈ deg2rad(360)
+        @test edge(net, 8).t_magn   ≈ [0.978, 1.0]     # the ratio sits on the from winding
+        @test edge(net, 8).t_angl   ≈ [0.0, 0.0]
+        @test edge(net, 1).b_shnt ≈ [0.0528, 0.0]   # the charging of the whole line, half at each end
+        @test edge(net, 1).s_max == [Inf, Inf]   # a zero rating means unlimited
+        @test edge(net, 1).v_angl_max ≈ deg2rad(360)
 
         # the cost polynomial is stored ascending and rescaled to per unit
-        @test unit(net, 1).cost ≈ [0.0, 20 * 100, 0.0430292599 * 100^2, 0.0, 0.0]
+        @test unit(net, 1).c ≈ [0.0, 20 * 100, 0.0430292599 * 100^2, 0.0, 0.0]
         @test generation_cost(unit(net, 1), 1.0) ≈ 0.0 + 2000.0 + 430.292599
     end
 
@@ -78,9 +79,9 @@
         @test ids(net, Node) == [1, 2, 3, 4, 10]
         @test node(net, 10).type == PV
         @test edge(net, 5)::Transformer isa Transformer
-        @test edge(net, 5).tm ≈ [1.05, 1.0]
-        @test edge(net, 5).ta ≈ [deg2rad(1.0), 0.0]
-        @test edge(net, 6).ta ≈ [deg2rad(-1.0), 0.0]
+        @test edge(net, 5).t_magn ≈ [1.05, 1.0]
+        @test edge(net, 5).t_angl ≈ [deg2rad(1.0), 0.0]
+        @test edge(net, 6).t_angl ≈ [deg2rad(-1.0), 0.0]
     end
 
     @testset "a bare case file name resolves from anywhere" begin

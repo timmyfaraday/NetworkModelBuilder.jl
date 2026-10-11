@@ -9,6 +9,9 @@
 # v0.7.0 - energy not served and spill                                         #
 # v0.8.0 - a slack unit takes a side in the preventive-corrective split        #
 # v0.10.1 - exports its own public names                                       #
+# v0.14.0 - a variable is named by the model, not at the call site             #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 export AbstractSlackUnit, EnergyNotServed, Spill
@@ -51,9 +54,9 @@ energy not served at that node and its cost is the value of lost load.
 # Fields
 - `id`, `name`: the identifier and a human readable label.
 - `node`: the node whose balance is relaxed.
-- `pmax`: the most that may go unserved [pu]. `Inf`, the default, leaves the
+- `p_max`: the most that may go unserved [pu]. `Inf`, the default, leaves the
   volume unbounded, which is what makes a dispatch problem always feasible.
-- `cost`: the price of one per unit **injected** [currency/pu/h], which must be
+- `c`: the price of one per unit **injected** [currency/pu/h], which must be
   non-negative — see [`Spill`](@ref) for why the sign is checked rather than the
   pair.
 - `status`: whether the unit is in service.
@@ -63,18 +66,18 @@ Base.@kwdef struct EnergyNotServed <: AbstractSlackUnit
     id    ::Int
     name  ::String                   = ""
     node  ::Int
-    pmax  ::NetworkQuantity{Float64} = Inf
-    cost  ::NetworkQuantity{Float64} = 5000.0
+    p_max ::NetworkQuantity{Float64} = Inf
+    c     ::NetworkQuantity{Float64} = 5000.0
     status::NetworkQuantity{Bool}    = true
     ext   ::Dict{Symbol,Any}         = Dict{Symbol,Any}()
 
-    function EnergyNotServed(id, name, node, pmax, cost, status, ext)
-        all_nw(>=(0), pmax) ||
-            throw(ArgumentError("energy not served $id has a negative pmax"))
-        all_nw(>=(0), cost) ||
+    function EnergyNotServed(id, name, node, p_max, c, status, ext)
+        all_nw(>=(0), p_max) ||
+            throw(ArgumentError("energy not served $id has a negative p_max"))
+        all_nw(>=(0), c) ||
             throw(ArgumentError("energy not served $id has a negative cost, which pays " *
                                 "the problem to leave demand unserved"))
-        return new(id, name, node, pmax, cost, status, ext)
+        return new(id, name, node, p_max, c, status, ext)
     end
 end
 
@@ -92,9 +95,9 @@ is the energy spilled at that node.
 # Fields
 - `id`, `name`: the identifier and a human readable label.
 - `node`: the node whose balance is relaxed.
-- `pmax`: the most that may be spilled [pu].
-- `cost`: the price of one per unit **injected** [currency/pu/h], which must be
-  non-positive. A spill withdraws, so a `cost` of `-500.0` — the default — is a
+- `p_max`: the most that may be spilled [pu].
+- `c`: the price of one per unit **injected** [currency/pu/h], which must be
+  non-positive. A spill withdraws, so a `c` of `-500.0` — the default — is a
   charge of `500` per per unit spilled.
 - `status`: whether the unit is in service.
 - `ext`: free-form storage.
@@ -119,19 +122,19 @@ Base.@kwdef struct Spill <: AbstractSlackUnit
     id    ::Int
     name  ::String                   = ""
     node  ::Int
-    pmax  ::NetworkQuantity{Float64} = Inf
-    cost  ::NetworkQuantity{Float64} = -500.0
+    p_max ::NetworkQuantity{Float64} = Inf
+    c     ::NetworkQuantity{Float64} = -500.0
     status::NetworkQuantity{Bool}    = true
     ext   ::Dict{Symbol,Any}         = Dict{Symbol,Any}()
 
-    function Spill(id, name, node, pmax, cost, status, ext)
-        all_nw(>=(0), pmax) ||
-            throw(ArgumentError("spill $id has a negative pmax"))
-        all_nw(<=(0), cost) ||
+    function Spill(id, name, node, p_max, c, status, ext)
+        all_nw(>=(0), p_max) ||
+            throw(ArgumentError("spill $id has a negative p_max"))
+        all_nw(<=(0), c) ||
             throw(ArgumentError("spill $id has a positive cost, which pays the problem " *
                                 "to spill; the price is the price of an injection, and a " *
                                 "spill withdraws"))
-        return new(id, name, node, pmax, cost, status, ext)
+        return new(id, name, node, p_max, c, status, ext)
     end
 end
 
@@ -155,10 +158,10 @@ slack_sign(::Spill)           = -1.0
 """
     structure_gates(su)
 
-A slack unit is given an upper bound only where `pmax` is finite, so that field
+A slack unit is given an upper bound only where `p_max` is finite, so that field
 decides the shape of its model. See [`structure_gates`](@ref).
 """
-structure_gates(::AbstractSlackUnit) = (:pmax,)
+structure_gates(::AbstractSlackUnit) = (:p_max,)
 
 ################################################################################
 # Slack unit — variables                                                       #
@@ -167,7 +170,7 @@ structure_gates(::AbstractSlackUnit) = (:pmax,)
 """
     variable_unit(nm, T; nw)
 
-The volume of every in-service slack unit, non-negative and bounded by `pmax`.
+The volume of every in-service slack unit, non-negative and bounded by `p_max`.
 
 One variable serves both types: what separates them is the sign it enters the
 node balance with, see [`slack_sign`](@ref), so the volume itself is always the
@@ -183,12 +186,12 @@ variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
 function variable_slack_volume!(nm::NetworkModel, ::Type{T}; nw::Int) where {T<:AbstractSlackUnit}
     isempty(ids(nm, T; nw)) && return nothing
 
-    variable_container!(nm, :psl; nw)
+    variable_container!(nm, :p_slk; nw)
 
     for u in ids(nm, T; nw)
         su = unit(nm, u; nw)::T
-        variable!(nm, :psl, u; nw, base_name = "$(nw)_psl[$u]", start = 0.0,
-                  lower = 0.0, upper = su.pmax)
+        variable!(nm, :p_slk, u; nw, start = 0.0,
+                  lower = 0.0, upper = su.p_max)
     end
 
     return nothing
@@ -228,12 +231,12 @@ constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
 function _constraint_slack_power(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractSlackUnit}
     isempty(ids(nm, T; nw)) && return nothing
 
-    psl   = var(nm, :psl; nw)
+    p_slk = var(nm, :p_slk; nw)
     power = get!(() -> Dict{Int,Any}(), con(nm; nw), :slack_power)
 
     for u in ids(nm, T; nw)
         su = unit(nm, u; nw)::T
-        p  = JuMP.@expression(nm.model, slack_sign(su) * psl[u])
+        p  = JuMP.@expression(nm.model, slack_sign(su) * p_slk[u])
         power[u] = constraint_unit_power!(nm, u, p, 0.0; nw)
     end
 
@@ -259,10 +262,10 @@ a slack unit has no market schedule to move away from, so every per unit it
 takes is the intervention itself.
 """
 function slack_cost(nm::NetworkModel, ::Type{T}, u::Int; nw::Int) where {T<:AbstractSlackUnit}
-    haskey(var(nm; nw), :psl) || return 0.0
+    haskey(var(nm; nw), :p_slk) || return 0.0
     su = unit(nm, u; nw)::T
 
-    return JuMP.@expression(nm.model, su.cost * slack_sign(su) * var(nm, :psl, u; nw))
+    return JuMP.@expression(nm.model, su.c * slack_sign(su) * var(nm, :p_slk, u; nw))
 end
 
 dispatch_cost(nm::NetworkModel, ::Type{T}, u::Int; nw::Int) where {T<:AbstractSlackUnit} =
@@ -283,7 +286,7 @@ is worth more precisely because it is never paid for a state that did not occur.
 Which one a problem means is a statement about how it is posed, so it is set on
 the setup rather than on the unit.
 """
-redispatch_controls(::NetworkModel, ::Type{T}) where {T<:AbstractSlackUnit} = (:psl,)
+redispatch_controls(::NetworkModel, ::Type{T}) where {T<:AbstractSlackUnit} = (:p_slk,)
 
 ################################################################################
 # Slack unit — solution                                                        #
@@ -292,8 +295,8 @@ redispatch_controls(::NetworkModel, ::Type{T}) where {T<:AbstractSlackUnit} = (:
 "the volume of slack unit `u`, where the problem gave it one"
 function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel, ::Type{T}, u::Int, nw::Int
                        ) where {T<:AbstractSlackUnit}
-    haskey(var(nm; nw), :psl) && haskey(var(nm, :psl; nw), u) || return nothing
-    sol["psl"] = JuMP.value(var(nm, :psl, u; nw))
+    haskey(var(nm; nw), :p_slk) && haskey(var(nm, :p_slk; nw), u) || return nothing
+    sol["p_slk"] = JuMP.value(var(nm, :p_slk, u; nw))
 
     return nothing
 end
@@ -328,13 +331,13 @@ constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
 function _constraint_slack_injection(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractSlackUnit}
     isempty(ids(nm, T; nw)) && return nothing
 
-    psl   = var(nm, :psl; nw)
+    p_slk = var(nm, :p_slk; nw)
     power = get!(() -> Dict{Int,Any}(), con(nm; nw), :slack_power)
 
     for u in ids(nm, T; nw)
         su = unit(nm, u; nw)::T
         power[u] = constraint_unit_injection!(nm, u,
-                       JuMP.@expression(nm.model, slack_sign(su) * psl[u]); nw)
+                       JuMP.@expression(nm.model, slack_sign(su) * p_slk[u]); nw)
     end
 
     return nothing

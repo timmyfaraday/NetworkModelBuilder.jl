@@ -31,20 +31,19 @@ data = parse_tables(
             terminals = [[1, 2]],
             r         = [0.0],
             x         = [0.1],
-            rate_a    = [0.5]),
+            s_max     = [0.5]),
     unit = (id        = [1, 2, 3],
             component = ["Generator", "Generator", "FixedLoad"],
             node      = [1, 2, 2],
-            pg        = [1.0, 0.0, missing],
-            cost      = [[0.0, 10.0], [0.0, 100.0], missing],
-            pd        = [missing, missing, 1.0]))
+            p_set     = [1.0, 0.0, 1.0],
+            c         = [[0.0, 10.0], [0.0, 100.0], missing]))
 
 optimizer = optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 0)
 nothing # hide
 ```
 
 A [`LoadFlowProblem`](@ref) asks *what flows, given the dispatch as it
-stands*. `pg` is not a decision here — the branch is left to carry whatever a
+stands*. `p_set` is not a decision here — the branch is left to carry whatever a
 fixed 1.0 and 0.0 imply, rating or not:
 
 ```@example concepts-question
@@ -53,8 +52,8 @@ print_summary(lf)
 ```
 
 An [`OptimalPowerFlowProblem`](@ref) asks a different question — *what
-dispatch is cheapest, given the network's limits* — so `pg` becomes a decision
-bounded by `pmin`/`pmax`, and the branch's `rate_a` is now enforced rather than
+dispatch is cheapest, given the network's limits* — so `p_set` becomes a decision
+bounded by `p_min`/`p_max`, and the branch's `s_max` is now enforced rather than
 merely reported on:
 
 ```@example concepts-question
@@ -67,7 +66,7 @@ branch forces it to — the same physics, the same network, a different
 question.
 
 A [`RedispatchProblem`](@ref) asks a third question — *given a dispatch
-already decided (by a market, by the file's own `pg`), what is the cheapest
+already decided (by a market, by the file's own `p_set`), what is the cheapest
 way to adjust it so the network can carry it* — with the answer expressed as
 volumes moved rather than an absolute dispatch. [Redispatch](@ref) works this
 same network through in full, including its `RedispatchProblem` under
@@ -103,7 +102,7 @@ by hand, `solution_tables` is a tidy `NamedTuple` view over the same numbers:
 ```@example concepts-question
 tables = solution_tables(data, opf)
 
-(dict = nw_solution(opf)["node"]["2"]["vm"], column = tables.node.vm)
+(dict = nw_solution(opf)["node"]["2"]["v_magn"], column = tables.node.v_magn)
 ```
 
 Both read the same solve. `nw_solution` is the one-value-at-a-time reach;

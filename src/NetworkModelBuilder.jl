@@ -20,6 +20,7 @@
 # v0.11.0 - the component walk is a dependency of the compiled package         #
 # v0.11.0 - islands, and the check a model makes of them                       #
 # v0.12.0 - exports is_held                                                    #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 module NetworkModelBuilder
@@ -112,7 +113,7 @@ module NetworkModelBuilder
     export AbstractComponent, AbstractNode, AbstractEdge, AbstractUnit
     export Arc, Topology, Network, NetworkData
     export set_dimension, replicate
-    export network, dimension, baseMVA, topology, topologies, switchable, nw_id_default
+    export network, dimension, s_base_mva, topology, topologies, switchable, nw_id_default
     export nodes, edges, units, arcs, node, edge, unit
     export node_arcs, node_units, edge_arcs, ids, islands
     export component_id, status, is_active, terminals, nterminals, connects, can_open

@@ -59,7 +59,7 @@ package is explicit about which is which.
 
 | distinction | changes the model? | why the type exists |
 |:------------|:-------------------|:--------------------|
-| a cable vs an overhead line | **no** — the same π-equivalent | not a type: each is a [`Branch`](@ref), with its own `length_km` and its own rating |
+| a cable vs an overhead line | **no** — the same π-equivalent | not a type: each is a [`Branch`](@ref), with its own `l_km` and its own rating |
 | [`Branch`](@ref) vs [`Transformer`](@ref) | **yes** — the turns ratio and the voltage behind it | a branch transports, a transformer transforms |
 | a winding that holds its ratio vs one that moves or steps | **yes** — the ratio becomes a variable, or a binary for each position, in a dispatch problem | a property of a winding of one [`Transformer`](@ref), not a type: a device can be a tap changer and a phase shifter at once |
 | [`FixedLoad`](@ref) vs [`FlexibleLoad`](@ref) | **yes** — the demand becomes a variable, and constraints span network indices | who chooses the demand |

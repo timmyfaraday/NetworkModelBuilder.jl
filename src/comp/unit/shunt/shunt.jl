@@ -9,6 +9,9 @@
 # v0.3.0 - component hierarchy                                                 #
 # v0.10.1 - exports its own public names                                       #
 # v0.12.8 - a shunt refuses an admittance that is not finite                   #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
+# v0.14.0 - the docstrings follow the nomenclature                             #
 ################################################################################
 
 export AbstractShunt, Shunt
@@ -39,28 +42,28 @@ A unit `(u, i)` of constant admittance.
 # Fields
 - `id`, `name`: the identifier and a human readable label.
 - `node`: the node the shunt is connected to.
-- `gs`, `bs`: the conductance and susceptance of the shunt admittance
+- `g`, `b`: the conductance and susceptance of the shunt admittance
   `y^{\\text{s}}_u = g^{\\text{s}}_u + j b^{\\text{s}}_u` [pu].
 - `status`: whether the shunt is in service.
 - `ext`: free-form storage.
 
-`gs`, `bs` and `status` may be given as a [`NetworkVector`](@ref); a switched
-capacitor bank is a `bs` that varies over the network index. An admittance that is
-not finite is refused; a negative `bs` is an inductor, and is not.
+`g`, `b` and `status` may be given as a [`NetworkVector`](@ref); a switched
+capacitor bank is a `b` that varies over the network index. An admittance that is
+not finite is refused; a negative `b` is an inductor, and is not.
 """
 Base.@kwdef struct Shunt <: AbstractShunt
     id    ::Int
-    name  ::String                    = ""
+    name  ::String                   = ""
     node  ::Int
-    gs    ::NetworkQuantity{Float64}  = 0.0
-    bs    ::NetworkQuantity{Float64}  = 0.0
-    status::NetworkQuantity{Bool}     = true
-    ext   ::Dict{Symbol,Any}          = Dict{Symbol,Any}()
+    g     ::NetworkQuantity{Float64} = 0.0
+    b     ::NetworkQuantity{Float64} = 0.0
+    status::NetworkQuantity{Bool}    = true
+    ext   ::Dict{Symbol,Any}         = Dict{Symbol,Any}()
 
-    function Shunt(id, name, node, gs, bs, status, ext)
-        all_nw(isfinite, gs) && all_nw(isfinite, bs) ||
+    function Shunt(id, name, node, g, b, status, ext)
+        all_nw(isfinite, g) && all_nw(isfinite, b) ||
             throw(ArgumentError("shunt $id has an admittance that is not finite"))
-        return new(id, name, node, gs, bs, status, ext)
+        return new(id, name, node, g, b, status, ext)
     end
 end
 
@@ -77,25 +80,25 @@ Fix the current a shunt injects into its node at `c_u = -y^{\\text{s}}_u v_i`,
 i.e.,
 
 ```math
-c^{\\text{r}}_{u} = -\\left(g^{\\text{s}}_{u} v^{\\text{r}}_{i} - b^{\\text{s}}_{u} v^{\\text{i}}_{i}\\right),
+i^{\\text{r}}_{u} = -\\left(g^{\\text{s}}_{u} v^{\\text{r}}_{i} - b^{\\text{s}}_{u} v^{\\text{i}}_{i}\\right),
 \\qquad
-c^{\\text{i}}_{u} = -\\left(g^{\\text{s}}_{u} v^{\\text{i}}_{i} + b^{\\text{s}}_{u} v^{\\text{r}}_{i}\\right).
+i^{\\text{i}}_{u} = -\\left(g^{\\text{s}}_{u} v^{\\text{i}}_{i} + b^{\\text{s}}_{u} v^{\\text{r}}_{i}\\right).
 ```
 """
 function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractProblemType,F<:IVRFormulation,T<:AbstractShunt}
-    vr,  vi  = var(nm, :vr;  nw), var(nm, :vi;  nw)
-    cru, ciu = var(nm, :cru; nw), var(nm, :ciu; nw)
-    current  = get!(() -> Dict{Int,Any}(), con(nm; nw), :shunt_current)
+    v_real, v_imag           = var(nm, :v_real;      nw), var(nm, :v_imag;      nw)
+    i_unit_real, i_unit_imag = var(nm, :i_unit_real; nw), var(nm, :i_unit_imag; nw)
+    current                  = get!(() -> Dict{Int,Any}(), con(nm; nw), :shunt_current)
 
     for u in ids(nm, T; nw)
         sh = unit(nm, u; nw)::T
         i  = sh.node
         current[u] = (
             constrain!(nm, :shunt_current, (u, :real),
-                       JuMP.@build_constraint(cru[u] == -(sh.gs * vr[i] - sh.bs * vi[i])); nw),
+                       JuMP.@build_constraint(i_unit_real[u] == -(sh.g * v_real[i] - sh.b * v_imag[i])); nw),
             constrain!(nm, :shunt_current, (u, :imag),
-                       JuMP.@build_constraint(ciu[u] == -(sh.gs * vi[i] + sh.bs * vr[i])); nw))
+                       JuMP.@build_constraint(i_unit_imag[u] == -(sh.g * v_imag[i] + sh.b * v_real[i])); nw))
     end
 
     return nothing
@@ -108,8 +111,8 @@ end
 function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel, ::Type{T}, u::Int, nw::Int
                        ) where {T<:AbstractShunt}
     sh = unit(nm, u; nw)::T
-    sol["gs"] = sh.gs
-    sol["bs"] = sh.bs
+    sol["g"] = sh.g
+    sol["b"] = sh.b
 
     return nothing
 end
@@ -140,7 +143,7 @@ function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     current = get!(() -> Dict{Int,Any}(), con(nm; nw), :shunt_current)
 
     for u in ids(nm, T; nw)
-        current[u] = constraint_unit_injection!(nm, u, -(unit(nm, u; nw)::T).gs; nw)
+        current[u] = constraint_unit_injection!(nm, u, -(unit(nm, u; nw)::T).g; nw)
     end
 
     return nothing

@@ -8,13 +8,13 @@ See [The linearized formulation](@ref) for what the approximations discard.
 
 ## Variables
 
-| symbol | key | index set | bounds |
+| symbol | code name | index set | bounds |
 |:-------|:----|:----------|:-------|
-| ``v^{\text{a}}_{i}`` | `:va` | ``i \in I`` | free |
-| ``p_{a}`` | `:p` | ``a \in A`` | free |
-| ``v^{\text{as}}_{e}`` | `:vas` | ``e \in E^{\text{tf}}``, three or more windings | free |
-| ``p_{u}`` | `:pu` | ``u \in U`` | free |
-| ``p^{\text{g}}_{u}`` | `:pg` | ``u \in U^{\text{g}}`` | free |
+| ``v^{\text{a}}_{i}`` | `:v_angl` | ``i \in I`` | free |
+| ``p_{a}`` | `:p_term` | ``a \in A`` | free |
+| ``v^{\text{as}}_{e}`` | `:v_star_angl` | ``e \in E^{\text{tf}}``, three or more windings | free |
+| ``p_{u}`` | `:p_unit` | ``u \in U`` | free |
+| ``p^{\text{g}}_{u}`` | `:p_gen` | ``u \in U^{\text{g}}`` | free |
 
 There is no magnitude variable, no current, and no reactive power.
 
@@ -49,7 +49,7 @@ Branch, ``\forall e \in E^{\text{br}}``, and transformer with two windings,
 is that of both windings together:
 
 ```math
-p_{a^{\text{f}}_{e}} = -b_{e} \left(v^{\text{a}}_{i} - v^{\text{a}}_{j} - ta_{e,1} + ta_{e,2}\right),
+p_{a^{\text{f}}_{e}} = -b_{e} \left(v^{\text{a}}_{i} - v^{\text{a}}_{j} - t^{\text{a}}_{e,1} + t^{\text{a}}_{e,2}\right),
 \qquad
 p_{a^{\text{t}}_{e}} = -p_{a^{\text{f}}_{e}}
 ```
@@ -61,7 +61,7 @@ appear, so a winding that is `oltc` is indistinguishable from one that is not.
 Transformer with three or more windings, ``\forall e \in E^{\text{tf}}``:
 
 ```math
-p_{a_{e,k}} = -b_{e,k} \left(v^{\text{a}}_{i_k} - ta_{e,k} - v^{\text{as}}_{e}\right)
+p_{a_{e,k}} = -b_{e,k} \left(v^{\text{a}}_{i_k} - t^{\text{a}}_{e,k} - v^{\text{as}}_{e}\right)
 \quad \forall k,
 \qquad
 \sum_{k} p_{a_{e,k}} = 0

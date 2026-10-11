@@ -12,6 +12,9 @@
 # v0.12.0 - a measure held at the base case builds no rows of its own          #
 # v0.12.6 - a window builds the solution of what it commits                    #
 # v0.12.9 - the control and peak rows are registered by constrain! alone       #
+# v0.14.0 - a variable is named by the model, not at the call site             #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 ################################################################################
@@ -195,15 +198,15 @@ above, so the objective pulls it down onto the largest overload of the period
 and no binary is needed to make the maximum tight.
 
 A no-op unless the setup carries an [`OverloadPrice`](@ref) with a non-zero
-`per_peak`, since a peak nothing pays for is a free variable and a row per index
+`c_peak`, since a peak nothing pays for is a free variable and a row per index
 for nothing.
 """
 function constraint_overload_peak(nm::NetworkModel)
     price = overload_price(nm)
     price === nothing && return nothing
-    iszero(price.per_peak) && return nothing
+    iszero(price.c_peak) && return nothing
     has_dim(nm, :time) ||
-        throw(ArgumentError("a `per_peak` overload price charges the worst overload of a " *
+        throw(ArgumentError("a `c_peak` overload price charges the worst overload of a " *
                             "period, but this problem has no `:time` dimension for periods " *
                             "to group; give it one with " *
                             "`set_dimension(data, Dimension(:time => n))`"))
@@ -214,17 +217,17 @@ function constraint_overload_peak(nm::NetworkModel)
         monitored = _overloaded_edges(nm, window)
         isempty(monitored) && continue
 
-        variable_container!(nm, :olp; nw = n)
+        variable_container!(nm, :s_ovl_peak; nw = n)
         for e in monitored
-            olp = variable!(nm, :olp, e; nw = n, base_name = "$(n)_olp[$e]",
+            olp = variable!(nm, :s_ovl_peak, e; nw = n,
                             start = 0.0, lower = 0.0)
             for m in window
-                haskey(var(nm; nw = m), :ol) || continue
-                ol = var(nm, :ol; nw = m)
-                haskey(ol, e) || continue
+                haskey(var(nm; nw = m), :s_ovl) || continue
+                s_ovl = var(nm, :s_ovl; nw = m)
+                haskey(s_ovl, e) || continue
 
                 constrain!(nm, :overload_peak, (e, m),
-                           JuMP.@build_constraint(ol[e] <= olp); nw = n)
+                           JuMP.@build_constraint(s_ovl[e] <= olp); nw = n)
             end
         end
     end
@@ -236,8 +239,8 @@ end
 function _overloaded_edges(nm::NetworkModel, window)
     found = Int[]
     for m in window
-        haskey(var(nm; nw = m), :ol) || continue
-        union!(found, keys(var(nm, :ol; nw = m)))
+        haskey(var(nm; nw = m), :s_ovl) || continue
+        union!(found, keys(var(nm, :s_ovl; nw = m)))
     end
 
     return sort!(found)
@@ -326,13 +329,13 @@ per-unit-hour without this having to know it.
 function overload_cost(nm::NetworkModel; nw::Int = nw_id_default(nm))
     price = overload_price(nm)
     price === nothing && return 0.0
-    haskey(var(nm; nw), :ol) || return 0.0
+    haskey(var(nm; nw), :s_ovl) || return 0.0
 
-    ol = var(nm, :ol; nw)
+    s_ovl = var(nm, :s_ovl; nw)
 
     return JuMP.@expression(nm.model,
-                            price.per_energy *
-                            sum(ol[e] for e in sort!(collect(keys(ol))); init = 0.0))
+                            price.c_ener *
+                            sum(s_ovl[e] for e in sort!(collect(keys(s_ovl))); init = 0.0))
 end
 
 """
@@ -381,18 +384,18 @@ end
 function _overload_peak_cost(nm::NetworkModel, ids)
     price = overload_price(nm)
     price === nothing && return 0.0
-    iszero(price.per_peak) && return 0.0
+    iszero(price.c_peak) && return 0.0
 
     total = JuMP.AffExpr(0.0)
 
     for n in nw_ids(nm)
-        haskey(var(nm; nw = n), :olp) || continue
+        haskey(var(nm; nw = n), :s_ovl_peak) || continue
         ids === nothing || all(in(ids), period_ids(nm, n, :time)) || continue
 
-        olp = var(nm, :olp; nw = n)
-        c   = price.per_peak * period_weight(nm, n, :time)
-        for e in sort!(collect(keys(olp)))
-            JuMP.add_to_expression!(total, c, olp[e])
+        s_ovl_peak = var(nm, :s_ovl_peak; nw = n)
+        c          = price.c_peak * period_weight(nm, n, :time)
+        for e in sort!(collect(keys(s_ovl_peak)))
+            JuMP.add_to_expression!(total, c, s_ovl_peak[e])
         end
     end
 
@@ -409,8 +412,8 @@ function solution_overload_peak(nm::NetworkModel)
     peaks = Dict{Tuple{Int,Int},Float64}()
 
     for n in nw_ids(nm)
-        haskey(var(nm; nw = n), :olp) || continue
-        for (e, v) in var(nm, :olp; nw = n)
+        haskey(var(nm; nw = n), :s_ovl_peak) || continue
+        for (e, v) in var(nm, :s_ovl_peak; nw = n)
             peaks[(e, n)] = JuMP.value(v)
         end
     end
@@ -624,9 +627,9 @@ Remaining keyword arguments reach [`instantiate_model`](@ref) and
 !!! note "A flexible load keeps its energy per window"
     The energy balance of a [`FlexibleLoad`](@ref) holds over the horizon it is
     posed on, so in a rolling solve it holds over each **window** rather than
-    over the whole problem. With the default `energy = NaN` that is what should
+    over the whole problem. With the default `e_set = NaN` that is what should
     happen — the target is the nominal energy of the window itself — but an
-    `energy` given explicitly is read as a per-window target, not a per-day one.
+    `e_set` given explicitly is read as a per-window target, not a per-day one.
 
 # Examples
 ```julia
@@ -635,7 +638,7 @@ julia> result = solve_rolling_horizon(mn, RedispatchProblem, LPFFormulation, HiG
 
 julia> result["objective"]              # the committed cost over the whole day
 
-julia> nw_solution(result, 17)["unit"]["3"]["pgup"]
+julia> nw_solution(result, 17)["unit"]["3"]["p_gen_up"]
 ```
 """
 function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimizer;
@@ -737,7 +740,7 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
 
     result = Dict{String,Any}(
         "name"               => data.name,
-        "baseMVA"            => baseMVA(data),
+        "s_base_mva"         => s_base_mva(data),
         "problem_type"       => P,
         "formulation_type"   => F,
         "termination_status" => _rolling_status(windows),
@@ -813,7 +816,7 @@ end
 function _warn_unpriced_periods(nm, closes::Int)
     (nm === nothing || closes > 0) && return nothing
     price = overload_price(nm)
-    (price === nothing || iszero(price.per_peak)) && return nothing
+    (price === nothing || iszero(price.c_peak)) && return nothing
 
     @warn "no window both saw a whole period and committed it, so the peak overload " *
           "charge is in the objective of every window and in none of the cost this roll " *
@@ -833,7 +836,7 @@ _rolling_state(data::NetworkData) =
     NetworkData(Network(deepcopy(nodes(network(data))), deepcopy(edges(network(data))),
                         deepcopy(units(network(data)));
                         dim = dimension(data), ext = deepcopy(network(data).ext));
-                name = data.name, baseMVA = baseMVA(data), ext = deepcopy(data.ext))
+                name = data.name, s_base_mva = s_base_mva(data), ext = deepcopy(data.ext))
 
 """
     _carry_state!(state, nm, committed)

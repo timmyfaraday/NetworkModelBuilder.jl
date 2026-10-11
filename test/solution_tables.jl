@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.10.2 - initial implementation                                             #
 # v0.12.0 - the phase shifter is a Transformer                                 #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 # `solution_tables` is a view over the same kind of `result` every other test
@@ -32,17 +33,17 @@
         @test length(tables.edge.id) == 2
         @test length(tables.unit.id) == 3
 
-        @test issubset([:id, :name, :type, :vm, :va], propertynames(tables.node))
-        @test issubset([:id, :name, :type, :terminal, :node, :p], propertynames(tables.edge))
-        @test issubset([:id, :name, :type, :node, :p], propertynames(tables.unit))
+        @test issubset([:id, :name, :type, :v_magn, :v_angl], propertynames(tables.node))
+        @test issubset([:id, :name, :type, :terminal, :node, :p_term], propertynames(tables.edge))
+        @test issubset([:id, :name, :type, :node, :p_unit], propertynames(tables.unit))
 
         @test tables.node.type == ["REF", "PQ"]
 
         # a linearized solve never carries reactive power or current: the columns
         # they would need are not merely `missing` here, they are not there at all
-        @test :q  ∉ propertynames(tables.edge)
-        @test :cr ∉ propertynames(tables.edge)
-        @test :q  ∉ propertynames(tables.unit)
+        @test :q_term  ∉ propertynames(tables.edge)
+        @test :i_term_real ∉ propertynames(tables.edge)
+        @test :q_unit  ∉ propertynames(tables.unit)
     end
 
     @testset "a generator and a load leave different columns behind" begin
@@ -50,13 +51,13 @@
         result = quiet(() -> solve_lf(data, LPFFormulation, OPTIMIZER))
         tables = solution_tables(data, result)
 
-        @test only(tables.unit.pg[tables.unit.id .== 1]) isa Real
-        @test only(tables.unit.pd[tables.unit.id .== 3]) isa Real
+        @test only(tables.unit.p_gen[tables.unit.id .== 1]) isa Real
+        @test only(tables.unit.p_set[tables.unit.id .== 3]) isa Real
 
-        # `pg` is a real column here — some unit does carry it — so the load's
-        # entry is `missing`, not simply absent; likewise `pd` for a generator
-        @test ismissing(only(tables.unit.pg[tables.unit.id .== 3]))
-        @test ismissing(only(tables.unit.pd[tables.unit.id .== 1]))
+        # `p_gen` is a real column here — some unit does carry it — so the load's
+        # entry is `missing`, not simply absent; likewise `p_set` for a generator
+        @test ismissing(only(tables.unit.p_gen[tables.unit.id .== 3]))
+        @test ismissing(only(tables.unit.p_set[tables.unit.id .== 1]))
     end
 
     @testset "an IVR solve carries what a linearized one cannot" begin
@@ -64,8 +65,8 @@
         result = quiet(() -> solve_lf(data, IVRFormulation, OPTIMIZER))
         tables = solution_tables(data, result)
 
-        @test issubset([:q, :cr, :ci], propertynames(tables.edge))
-        @test issubset([:q, :cru, :ciu], propertynames(tables.unit))
+        @test issubset([:q_term, :i_term_real, :i_term_imag], propertynames(tables.edge))
+        @test issubset([:q_unit, :i_unit_real, :i_unit_imag], propertynames(tables.unit))
     end
 
     @testset "an edge with more than two terminals gets one row per terminal" begin
@@ -109,14 +110,14 @@
         # the linearized formulation carries the tap as a magnitude and an angle,
         # not as the real/imaginary pair the current based one needs to stay
         # polynomial — see `solution_edge!` in `transformer.jl`
-        @test issubset([:tap_tm, :tap_ta], propertynames(tables.edge))
+        @test issubset([:tap_t_magn, :tap_t_angl], propertynames(tables.edge))
 
         shifter = tables.edge.type .== "Transformer"
         branch  = tables.edge.type .== "Branch"
         @test count(shifter) == 2      # one transformer, two terminals
         @test count(branch)  == 4      # two branches, two terminals each
 
-        @test all(!ismissing, tables.edge.tap_tm[shifter])
-        @test all(ismissing,  tables.edge.tap_tm[branch])
+        @test all(!ismissing, tables.edge.tap_t_magn[shifter])
+        @test all(ismissing,  tables.edge.tap_t_magn[branch])
     end
 end

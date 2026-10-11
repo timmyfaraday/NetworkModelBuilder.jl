@@ -41,7 +41,7 @@ Every unit — generator, load, storage, shunt — injects through the same vari
 pair, so Kirchhoff's current law at a node is
 
 ```math
-\sum_{a \in A(i)} c_{a} = \sum_{u \in U(i)} c_{u}
+\sum_{a \in A(i)} i_{a} = \sum_{u \in U(i)} i_{u}
 ```
 
 and in code
@@ -109,5 +109,5 @@ status
 component_id
 network
 dimension
-baseMVA
+s_base_mva
 ```

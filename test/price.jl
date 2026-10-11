@@ -7,6 +7,8 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.7.0 - nodal prices from the duals of the node balance                     #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 # Two nodes, a cheap generator on one and a dear one on the other, and a branch
@@ -16,18 +18,18 @@
 
 "a two node network whose branch carries `rate`, or as much as it likes"
 function priced_network(; rate = Inf, pd = 1.0, dim::Dimension = Dimension())
-    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0),
                                2 => Node(; id = 2))
     E = Dict{Int,AbstractEdge}(
-        1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, rate_a = rate))
+        1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, s_max = rate))
     U = Dict{Int,AbstractUnit}(
-        1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       cost = [0.0, 10.0]),
-        2 => Generator(; id = 2, node = 2, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       cost = [0.0, 100.0]),
-        3 => FixedLoad(; id = 3, node = 2, pd = pd, qd = 0.0))
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       c = [0.0, 10.0]),
+        2 => Generator(; id = 2, node = 2, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       c = [0.0, 100.0]),
+        3 => FixedLoad(; id = 3, node = 2, p_set = pd, q_set = 0.0))
 
-    return NetworkData(Network(I, E, U; dim); name = "priced", baseMVA = 100.0)
+    return NetworkData(Network(I, E, U; dim); name = "priced", s_base_mva = 100.0)
 end
 
 "the nodal price of every node of a result at network index `n`"
@@ -159,8 +161,8 @@ prices(result, n = 1) = [nw_solution(result, n)["node"]["$i"]["lambda"] for i in
         @test node["2"]["lambda_real"] ≈ 109.9399 atol = 1e-3
         @test !isapprox(node["2"]["lambda_real"], 100.0; atol = 1.0)
         @test node["2"]["lambda_real"] ≈
-              node["2"]["vr"] * node["2"]["lambda"] +
-              node["2"]["vi"] * node["2"]["lambda_q"] atol = 1e-6
+              node["2"]["v_real"] * node["2"]["lambda"] +
+              node["2"]["v_imag"] * node["2"]["lambda_q"] atol = 1e-6
     end
 
     @testset "the rotation recovers the price the linearization gives" begin

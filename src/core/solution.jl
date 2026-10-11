@@ -9,6 +9,8 @@
 # v0.1.0 - initial implementation                                              #
 # v0.10.2 - a tidy solution_tables view, alongside nw_solution                 #
 # v0.12.6 - a solution holds the indices and components asked for              #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 ################################################################################
@@ -26,11 +28,11 @@ values; that entry mirrors the extended graph, with a `"node"`, `"edge"` and
 `"unit"` dictionary per network index:
 
 ```
-result["solution"]["nw"]["1"]["node"]["4"]["vm"]
+result["solution"]["nw"]["1"]["node"]["4"]["v_magn"]
 ```
 
 Use [`nw_solution`](@ref) to reach one network index without spelling out the
-path. All quantities are in per unit on `result["baseMVA"]`, all angles in
+path. All quantities are in per unit on `result["s_base_mva"]`, all angles in
 radians.
 
 `nws` says which network indices the entry holds, all of them by default. Building
@@ -66,7 +68,7 @@ function build_solution(nm::NetworkModel{P,F}; nws::AbstractVector{Int} = nm.nws
 
     result = Dict{String,Any}(
         "name"               => nm.data.name,
-        "baseMVA"            => nm.data.baseMVA,
+        "s_base_mva"         => nm.data.s_base_mva,
         "problem_type"       => P,
         "formulation_type"   => F,
         "termination_status" => JuMP.termination_status(nm.model),
@@ -152,9 +154,9 @@ rather than kept `missing` throughout.
 
 | table  | one row per                    | columns                                                  |
 |:-------|:--------------------------------|:-----------------------------------------------------------|
-| `node` | network index, node              | `id`, `name`, `type` (`PQ`/`PV`/`REF`/`ISOLATED`), `vm`, `va`, ... |
-| `edge` | network index, edge, terminal     | `id`, `name`, `type`, `terminal`, `node`, `p`, `q`, ...      |
-| `unit` | network index, unit               | `id`, `name`, `type`, `node`, `p`, `q`, ...                  |
+| `node` | network index, node              | `id`, `name`, `type` (`PQ`/`PV`/`REF`/`ISOLATED`), `v_magn`, `v_angl`, ... |
+| `edge` | network index, edge, terminal     | `id`, `name`, `type`, `terminal`, `node`, `p_term`, `q_term`, ...      |
+| `unit` | network index, unit               | `id`, `name`, `type`, `node`, `p_unit`, `q_unit`, ...                  |
 
 This is an addition alongside [`nw_solution`](@ref), not a replacement — the
 nested dictionary stays exactly as it is, the direct read of `result`.
@@ -167,8 +169,8 @@ return.
 # Examples
 ```julia
 tables = solution_tables(data, result)
-tables.node.vm                              # every node's voltage, every index
-tables.edge.p[tables.edge.terminal .== 1]   # the flow into every edge's terminal 1
+tables.node.v_magn                          # every node's voltage, every index
+tables.edge.p_term[tables.edge.terminal .== 1]   # the flow into every edge's terminal 1
 ```
 """
 function solution_tables(data::NetworkData, result::Dict{String,Any})
@@ -301,15 +303,15 @@ function print_summary(io::IO, result::Dict{String,Any}; nw::Int = 1)
     haskey(result, "objective") && Printf.@printf(io, ", objective %.6f", result["objective"])
     Printf.@printf(io, "\n\nnode        vm [pu]     va [deg]\n")
     for i in sort(collect(keys(sol["node"])), by = x -> parse(Int, x))
-        Printf.@printf(io, "%-8s %10.5f %12.5f\n", i, sol["node"][i]["vm"],
-                       rad2deg(sol["node"][i]["va"]))
+        Printf.@printf(io, "%-8s %10.5f %12.5f\n", i, sol["node"][i]["v_magn"],
+                       rad2deg(sol["node"][i]["v_angl"]))
     end
 
     Printf.@printf(io, "\nunit     type        node      p [pu]      q [pu]\n")
     for u in sort(collect(keys(sol["unit"])), by = x -> parse(Int, x))
         e = sol["unit"][u]
         Printf.@printf(io, "%-8s %-11s %5d %11.5f %11.5f\n", u, e["type"], e["node"],
-                       e["p"], e["q"])
+                       e["p_unit"], e["q_unit"])
     end
 
     return nothing

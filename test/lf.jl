@@ -8,6 +8,8 @@
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
 # v0.12.4 - solve_time test allows a solve faster than the clock               #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 # The reference values below are the AC power flow solution of PowerModels.jl
@@ -45,14 +47,14 @@ const CASE5_LF_VA = Dict(1 => 3.585141, 2 => 0.031853, 3 => 0.482437,
         @test result["objective"] ≈ 0.0 atol = 1e-8
 
         for (i, vm) in CASE14_LF_VM
-            @test sol["node"]["$i"]["vm"] ≈ vm atol = 1e-6
+            @test sol["node"]["$i"]["v_magn"] ≈ vm atol = 1e-6
         end
         for (i, va) in CASE14_LF_VA
-            @test rad2deg(sol["node"]["$i"]["va"]) ≈ va atol = 1e-5
+            @test rad2deg(sol["node"]["$i"]["v_angl"]) ≈ va atol = 1e-5
         end
         for (u, pg) in CASE14_LF_PG
-            @test sol["unit"]["$u"]["pg"] ≈ pg atol = 1e-6
-            @test sol["unit"]["$u"]["qg"] ≈ CASE14_LF_QG[u] atol = 1e-6
+            @test sol["unit"]["$u"]["p_gen"] ≈ pg atol = 1e-6
+            @test sol["unit"]["$u"]["q_gen"] ≈ CASE14_LF_QG[u] atol = 1e-6
         end
     end
 
@@ -66,21 +68,21 @@ const CASE5_LF_VA = Dict(1 => 3.585141, 2 => 0.031853, 3 => 0.482437,
             nd = node(net, i)
             nd.type == PQ && continue
             # the reference and the PV nodes hold their voltage magnitude setpoint
-            @test sol["node"]["$i"]["vm"] ≈ nd.vm atol = 1e-8
+            @test sol["node"]["$i"]["v_magn"] ≈ nd.v_magn_set atol = 1e-8
         end
-        @test rad2deg(sol["node"]["1"]["va"]) ≈ 0.0 atol = 1e-8
+        @test rad2deg(sol["node"]["1"]["v_angl"]) ≈ 0.0 atol = 1e-8
 
         for u in ids(net, Generator)
             g = unit(net, u)
             node(net, g.node).type == REF && continue
             # every generator away from the reference holds its active setpoint
-            @test sol["unit"]["$u"]["pg"] ≈ g.pg atol = 1e-8
+            @test sol["unit"]["$u"]["p_gen"] ≈ g.p_set atol = 1e-8
         end
 
         for u in ids(net, FixedLoad)
             ld = unit(net, u)
-            @test sol["unit"]["$u"]["p"] ≈ -ld.pd atol = 1e-8
-            @test sol["unit"]["$u"]["q"] ≈ -ld.qd atol = 1e-8
+            @test sol["unit"]["$u"]["p_unit"] ≈ -ld.p_set atol = 1e-8
+            @test sol["unit"]["$u"]["q_unit"] ≈ -ld.q_set atol = 1e-8
         end
     end
 
@@ -91,14 +93,14 @@ const CASE5_LF_VA = Dict(1 => 3.585141, 2 => 0.031853, 3 => 0.482437,
         sol    = nw_solution(result)
 
         for i in ids(net, Node)
-            into_edges = sum(sol["edge"]["$(a.edge)"]["terminal"]["$(a.terminal)"]["p"]
+            into_edges = sum(sol["edge"]["$(a.edge)"]["terminal"]["$(a.terminal)"]["p_term"]
                              for a in node_arcs(net, i); init = 0.0)
-            from_units = sum(sol["unit"]["$u"]["p"] for u in node_units(net, i); init = 0.0)
+            from_units = sum(sol["unit"]["$u"]["p_unit"] for u in node_units(net, i); init = 0.0)
             @test into_edges ≈ from_units atol = 1e-7
 
-            into_edges = sum(sol["edge"]["$(a.edge)"]["terminal"]["$(a.terminal)"]["q"]
+            into_edges = sum(sol["edge"]["$(a.edge)"]["terminal"]["$(a.terminal)"]["q_term"]
                              for a in node_arcs(net, i); init = 0.0)
-            from_units = sum(sol["unit"]["$u"]["q"] for u in node_units(net, i); init = 0.0)
+            from_units = sum(sol["unit"]["$u"]["q_unit"] for u in node_units(net, i); init = 0.0)
             @test into_edges ≈ from_units atol = 1e-7
         end
     end
@@ -109,10 +111,10 @@ const CASE5_LF_VA = Dict(1 => 3.585141, 2 => 0.031853, 3 => 0.482437,
 
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
         for (i, vm) in CASE5_LF_VM
-            @test sol["node"]["$i"]["vm"] ≈ vm atol = 1e-6
+            @test sol["node"]["$i"]["v_magn"] ≈ vm atol = 1e-6
         end
         for (i, va) in CASE5_LF_VA
-            @test rad2deg(sol["node"]["$i"]["va"]) ≈ va atol = 1e-5
+            @test rad2deg(sol["node"]["$i"]["v_angl"]) ≈ va atol = 1e-5
         end
     end
 
@@ -121,7 +123,7 @@ const CASE5_LF_VA = Dict(1 => 3.585141, 2 => 0.031853, 3 => 0.482437,
 
         @test result["problem_type"] === LoadFlowProblem
         @test result["formulation_type"] === IVRFormulation
-        @test result["baseMVA"] == 100.0
+        @test result["s_base_mva"] == 100.0
         @test result["solve_time"] >= 0.0
         @test_throws KeyError nw_solution(result, 2)
 

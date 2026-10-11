@@ -12,6 +12,7 @@
 # v0.12.9 - a variable key is not reused for another set of variables          #
 # v0.12.9 - a constraint id is not written twice in the first build            #
 # v0.12.9 - the register of constraints is a field of the model                #
+# v0.14.0 - a variable is named from its key and id, and may be unnamed        #
 ################################################################################
 
 # A model built for one window of a rolling horizon is very nearly the model the
@@ -120,11 +121,15 @@ registered_constraints(nm::NetworkModel) = nm.registered
 ################################################################################
 
 """
-    variable!(nm, key, id; nw, base_name, start, lower, upper, fix, binary)
+    variable!(nm, key, id; nw, start, lower, upper, fix, binary)
 
 The variable registered under `(key, id)` at network index `nw`, created on
 first sight and returned as it is on second — with its bounds brought to what
 the arguments say either way.
+
+It is named from its key and its id, `1_pg[3]`, `2_tr[4,1]` for terminal 1 of edge 4,
+and `1_zt[4,1,2]` for position 2 of it, unless the model was built with
+`set_string_name = false`, see [`instantiate_model`](@ref).
 
 `id` is what tells one variable of `key` from another: the identifier of a
 component, or an [`Arc`](@ref) where the variable belongs to one terminal of an
@@ -149,7 +154,7 @@ limit that was `1.0` in one window and `Inf` in the next leaves the variable
 free rather than bounded by infinity. `fix` pins the variable outright, as a
 load flow does to a generator setpoint, and releases it where it is `nothing`.
 """
-function variable!(nm::NetworkModel, key::Symbol, id; nw::Int, base_name::String = "",
+function variable!(nm::NetworkModel, key::Symbol, id; nw::Int,
                    start = nothing, lower = nothing, upper = nothing, fix = nothing,
                    binary::Bool = false)
     store = get!(() -> Dict{typeof(id),JuMP.VariableRef}(), var(nm; nw), key)
@@ -158,7 +163,7 @@ function variable!(nm::NetworkModel, key::Symbol, id; nw::Int, base_name::String
     v     = get(store, id, nothing)
 
     if v === nothing
-        v = JuMP.@variable(nm.model, base_name = base_name)
+        v = JuMP.@variable(nm.model, base_name = nm.string_names ? _variable_name(nw, key, id) : "")
         binary && JuMP.set_binary(v)
         start === nothing || JuMP.set_start_value(v, start)
         store[id] = v
@@ -166,6 +171,17 @@ function variable!(nm::NetworkModel, key::Symbol, id; nw::Int, base_name::String
 
     return bound!(v; lower, upper, fix)
 end
+
+"""
+    _variable_name(nw, key, id)
+
+The name of the variable `key` of `id` at network index `nw`: `1_pg[3]` for a
+component, `2_tr[4,1]` for terminal 1 of edge 4 and `1_zt[4,1,2]` for position 2 of it.
+"""
+_variable_name(nw::Int, key::Symbol, id) = "$(nw)_$(key)[$id]"
+_variable_name(nw::Int, key::Symbol, a::Arc) = "$(nw)_$(key)[$(a.edge),$(a.terminal)]"
+_variable_name(nw::Int, key::Symbol, (a, s)::Tuple{Arc,Int}) =
+    "$(nw)_$(key)[$(a.edge),$(a.terminal),$s]"
 
 """
     variable_container!(nm, keys...; nw, idtype = Int)
@@ -193,12 +209,13 @@ function variable_container!(nm::NetworkModel, keys::Symbol...; nw::Int, idtype:
 end
 
 """
-    variables!(nm, key, indices; nw, base_name, start)
+    variables!(nm, key, indices; nw, start)
 
 The container of variables registered under `key` at network index `nw`, one per
 entry of `indices`, created on first sight and returned untouched on second. A
 key that already holds a dictionary of variables, or an array over other
-`indices`, raises an `ArgumentError`: a key names one set of variables.
+`indices`, raises an `ArgumentError`: a key names one set of variables. Its
+variables are named `1_vr[3]`, as those of [`variable!`](@ref) are.
 
 The counterpart of [`variable!`](@ref) for the containers a whole index set
 shares — the node voltages, the terminal flows, the unit injections. None of
@@ -206,8 +223,7 @@ them carries a bound that the data can move, so there is nothing to bring up to
 date; where a caller does bound them, as a dispatch problem bounds a voltage by
 the magnitude limit of its node, it does so through [`bound!`](@ref).
 """
-function variables!(nm::NetworkModel, key::Symbol, indices; nw::Int,
-                    base_name::String = "", start = _ -> 0.0)
+function variables!(nm::NetworkModel, key::Symbol, indices; nw::Int, start = _ -> 0.0)
     existing = get(var(nm; nw), key, nothing)
     if existing !== nothing
         _holds(existing, indices) ||
@@ -216,7 +232,8 @@ function variables!(nm::NetworkModel, key::Symbol, indices; nw::Int,
         return existing
     end
 
-    v = JuMP.@variable(nm.model, [i in indices], base_name = base_name)
+    v = JuMP.@variable(nm.model, [i in indices],
+                       base_name = nm.string_names ? "$(nw)_$(key)" : "")
     for i in indices
         JuMP.set_start_value(v[i], start(i))
     end

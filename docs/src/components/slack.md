@@ -23,12 +23,13 @@ slack_sign
 
 ## Parameters
 
-| symbol | field | description | unit |
+| symbol | code name | description | unit |
 |:-------|:------|:------------|:-----|
 | | `id`, `name`, `node` | identifier, label, node | |
-| ``p^{\text{sl,max}}_{u}`` | `pmax` | the most that may be relaxed | pu |
-| ``c_{u}`` | `cost` | the price of one per unit **injected** | currency/pu/h |
+| ``p^{\text{sl,max}}_{u}`` | `p_max` | the most that may be relaxed | pu |
+| ``c_{u}`` | `c` | the price of one per unit **injected** | currency/pu/h |
 | | `status` | in service | |
+| | `ext` | free-form storage, carried along and never read | |
 
 ``\sigma_{u}``, the sign of the unit, is not a field: it is
 [`slack_sign`](@ref), ``+1`` for an [`EnergyNotServed`](@ref) and ``-1`` for a
@@ -57,15 +58,22 @@ Read against the volume rather than the injection, the defaults are a charge of
 
 ## Variables
 
-### In dispatch problems, both formulations
-
-| symbol | key | index | description | unit |
-|:-------|:----|:------|:------------|:-----|
-| ``p^{\text{sl}}_{u}`` | `:psl` | unit | the volume relaxed, ``\ge 0`` | pu |
-
 One variable serves both types, and it is always the *amount* of the relaxation
 rather than a signed injection. A power flow creates none: there is nothing to
-relax in a problem that decides nothing, and the unit sits idle at zero.
+relax in a problem that decides nothing, and the unit sits idle at zero. It is the
+same in both formulations.
+
+### `EnergyNotServed`
+
+| symbol | code name | index | description | unit |
+|:-------|:----------|:------|:------------|:-----|
+| ``p^{\text{sl}}_{u}`` | `:p_slk` | unit | the demand left unserved, dispatch problems only, ``\ge 0`` | pu |
+
+### `Spill`
+
+| symbol | code name | index | description | unit |
+|:-------|:----------|:------|:------------|:-----|
+| ``p^{\text{sl}}_{u}`` | `:p_slk` | unit | the injection spilled, dispatch problems only, ``\ge 0`` | pu |
 
 A slack unit exchanges no reactive power in either formulation. What it stands
 for is energy that was not served or not placed, and neither has a reactive
@@ -76,10 +84,10 @@ counterpart.
 The injection, against the current:
 
 ```math
-v^{\text{r}}_{i} c^{\text{r}}_{u} + v^{\text{i}}_{i} c^{\text{i}}_{u}
+v^{\text{r}}_{i} i^{\text{r}}_{u} + v^{\text{i}}_{i} i^{\text{i}}_{u}
 = \sigma_{u} p^{\text{sl}}_{u},
 \qquad
-v^{\text{i}}_{i} c^{\text{r}}_{u} - v^{\text{r}}_{i} c^{\text{i}}_{u} = 0 .
+v^{\text{i}}_{i} i^{\text{r}}_{u} - v^{\text{r}}_{i} i^{\text{i}}_{u} = 0 .
 ```
 
 ### In the `LPFFormulation`
@@ -123,5 +131,5 @@ unit.
 A bounded, priced slack on the node balance is what these are, whatever else it
 is called. A "wiggle room" on the balance, a per-node curtailment variable, a
 penalty term added to the objective by hand — all of them are an
-`EnergyNotServed` with a tight `pmax` and a price, and none of them needs a
+`EnergyNotServed` with a tight `p_max` and a price, and none of them needs a
 mechanism of its own.

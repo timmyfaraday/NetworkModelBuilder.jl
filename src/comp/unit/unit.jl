@@ -10,6 +10,9 @@
 # v0.9.4 - registering a unit type is safe from concurrent threads             #
 # v0.10.1 - exports its own public names                                       #
 # v0.12.6 - the solution builders are cheaper and hold what is asked           #
+# v0.14.0 - a variable is named by the model, not at the call site             #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the docstrings follow the nomenclature                             #
 ################################################################################
 
 export register_unit_type!, unit_types
@@ -63,8 +66,8 @@ function variable_unit_injection_current(nm::NetworkModel{P,F}; nw::Int = nw_id_
                                         ) where {P<:AbstractProblemType,F<:IVRFormulation}
     U = ids(nm, AbstractUnit; nw)
 
-    variables!(nm, :cru, U; nw, base_name = "$(nw)_cru")
-    variables!(nm, :ciu, U; nw, base_name = "$(nw)_ciu")
+    variables!(nm, :i_unit_real, U; nw)
+    variables!(nm, :i_unit_imag, U; nw)
 
     return nothing
 end
@@ -98,7 +101,7 @@ function variable_unit_injection_power(nm::NetworkModel{P,F}; nw::Int = nw_id_de
                                       ) where {P<:AbstractProblemType,F<:LPFFormulation}
     U = ids(nm, AbstractUnit; nw)
 
-    variables!(nm, :pu, U; nw, base_name = "$(nw)_pu")
+    variables!(nm, :p_unit, U; nw)
 
     return nothing
 end
@@ -152,9 +155,9 @@ end
 Link the power a unit exchanges with its node to the current it injects,
 
 ```math
-p = v^{\\text{r}}_{i} c^{\\text{r}}_{u} + v^{\\text{i}}_{i} c^{\\text{i}}_{u},
+p = v^{\\text{r}}_{i} i^{\\text{r}}_{u} + v^{\\text{i}}_{i} i^{\\text{i}}_{u},
 \\qquad
-q = v^{\\text{i}}_{i} c^{\\text{r}}_{u} - v^{\\text{r}}_{i} c^{\\text{i}}_{u}.
+q = v^{\\text{i}}_{i} i^{\\text{r}}_{u} - v^{\\text{r}}_{i} i^{\\text{i}}_{u}.
 ```
 
 `p` and `q` are injections, so a load hands in the negative of what it
@@ -163,15 +166,15 @@ implementation serve a generator whose power is a decision, a fixed load whose
 power is data, and a flexible load whose power is a decision within an envelope.
 """
 function constraint_unit_power!(nm::NetworkModel, u::Int, p, q; nw::Int)
-    i        = node(unit(nm, u; nw))
-    vr,  vi  = var(nm, :vr;  nw), var(nm, :vi;  nw)
-    cru, ciu = var(nm, :cru; nw), var(nm, :ciu; nw)
+    i                        = node(unit(nm, u; nw))
+    v_real, v_imag           = var(nm, :v_real;      nw), var(nm, :v_imag;      nw)
+    i_unit_real, i_unit_imag = var(nm, :i_unit_real; nw), var(nm, :i_unit_imag; nw)
 
     return (
         constrain!(nm, :unit_power, (u, :active),
-                   JuMP.@build_constraint(p == vr[i] * cru[u] + vi[i] * ciu[u]); nw),
+                   JuMP.@build_constraint(p == v_real[i] * i_unit_real[u] + v_imag[i] * i_unit_imag[u]); nw),
         constrain!(nm, :unit_power, (u, :reactive),
-                   JuMP.@build_constraint(q == vi[i] * cru[u] - vr[i] * ciu[u]); nw))
+                   JuMP.@build_constraint(q == v_imag[i] * i_unit_real[u] - v_real[i] * i_unit_imag[u]); nw))
 end
 
 """
@@ -183,7 +186,7 @@ negative of what it withdraws.
 """
 constraint_unit_injection!(nm::NetworkModel, u::Int, p; nw::Int) =
     constrain!(nm, :unit_injection, u,
-               JuMP.@build_constraint(var(nm, :pu, u; nw) == p); nw)
+               JuMP.@build_constraint(var(nm, :p_unit, u; nw) == p); nw)
 
 ################################################################################
 # Unit — constraints across network indices                                    #
@@ -262,23 +265,23 @@ function solution_unit(nm::NetworkModel{P,F}, nw::Int; only::Union{Bool,Set{Int}
         us = _asked(ids(nm, T; nw), only)
         isempty(us) && continue
 
-        type       = string(nameof(T))
-        vrs, vis   = var(nm, :vr; nw), var(nm, :vi; nw)
-        crus, cius = var(nm, :cru; nw), var(nm, :ciu; nw)
+        type                     = string(nameof(T))
+        v_real, v_imag           = var(nm, :v_real;      nw), var(nm, :v_imag;      nw)
+        i_unit_real, i_unit_imag = var(nm, :i_unit_real; nw), var(nm, :i_unit_imag; nw)
         for u in us
             i   = node(unit(nm, u; nw))
-            vr  = JuMP.value(vrs[i])
-            vi  = JuMP.value(vis[i])
-            cru = JuMP.value(crus[u])
-            ciu = JuMP.value(cius[u])
+            vr  = JuMP.value(v_real[i])
+            vi  = JuMP.value(v_imag[i])
+            cru = JuMP.value(i_unit_real[u])
+            ciu = JuMP.value(i_unit_imag[u])
 
             entry         = Dict{String,Any}()
             entry["type"] = type
             entry["node"] = i
-            entry["cru"]  = cru
-            entry["ciu"]  = ciu
-            entry["p"]    = vr * cru + vi * ciu
-            entry["q"]    = vi * cru - vr * ciu
+            entry["i_unit_real"]  = cru
+            entry["i_unit_imag"]  = ciu
+            entry["p_unit"]    = vr * cru + vi * ciu
+            entry["q_unit"]    = vi * cru - vr * ciu
             solution_unit!(entry, nm, T, u, nw)
             sol[string(u)] = entry
         end
@@ -301,13 +304,13 @@ function solution_unit(nm::NetworkModel{P,F}, nw::Int; only::Union{Bool,Set{Int}
         us = _asked(ids(nm, T; nw), only)
         isempty(us) && continue
 
-        type = string(nameof(T))
-        pus  = var(nm, :pu; nw)
+        type   = string(nameof(T))
+        p_unit = var(nm, :p_unit; nw)
         for u in us
             entry         = Dict{String,Any}()
             entry["type"] = type
             entry["node"] = node(unit(nm, u; nw))
-            entry["p"]    = JuMP.value(pus[u])
+            entry["p_unit"]    = JuMP.value(p_unit[u])
             solution_unit!(entry, nm, T, u, nw)
             sol[string(u)] = entry
         end

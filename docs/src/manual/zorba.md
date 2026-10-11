@@ -17,7 +17,7 @@ The alternative is a translator in Python that hands this package its own
 tables. Putting it here instead buys three things: the caller stays thin, the
 package becomes independently exercisable on real Zorba grids without a Python
 process anywhere near it, and the unit conversion happens in exactly one place —
-Zorba is in MW and degrees, this package is per unit on `baseMVA` and radians.
+Zorba is in MW and degrees, this package is per unit on `s_base_mva` and radians.
 
 The hand-off is Arrow either way, which is the same boundary [Tabular
 input](@ref) already uses.
@@ -71,7 +71,7 @@ something to strip out.
 | its `value_mw`                       | a [`FixedLoad`](@ref) withdrawing the negation of it           |
 | a row of `grid` with `pst_deg == 0`  | a [`Branch`](@ref)                                             |
 | a row with a phase shift range       | a [`Transformer`](@ref) whose first winding is a phase shifter, `pst = true` |
-| its `capacity`                       | `rate_a`, in per unit; blank is unlimited                      |
+| its `capacity`                       | `s_max`, in per unit; blank is unlimited                       |
 | an `Hvdc`                            | a [`DCLink`](@ref) scheduled at zero and priced per per-unit   |
 | an outage                            | a `:contingency` coordinate, carried on the `status` of the links it takes out |
 | `overload_penalty`                   | an [`OverloadPrice`](@ref), or a hard rating for `:force`      |
@@ -139,10 +139,10 @@ determined, and a comparison with Zorba is one of the overload and not of the fl
 This package writes the linearized flow as
 
 ```math
-p = -b \left(\theta_{i} - \theta_{j} - ta\right)
+p = -b \left(\theta_{i} - \theta_{j} - t^{\text{a}}\right)
 ```
 
-and Zorba as ``P = (\theta_{i} - \theta_{j} + s) B``, so `ta` is the **negation**
+and Zorba as ``P = (\theta_{i} - \theta_{j} + s) B``, so ``t^{\text{a}}`` (`t_angl`) is the **negation**
 of Zorba's phase shift. The negation is applied in [`zorba_tables`](@ref) and
 nowhere else: a study that compared the two column by column would otherwise
 find every phase shifter mirrored and every flow right, which is the hardest

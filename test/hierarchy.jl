@@ -10,6 +10,8 @@
 # v0.12.0 - one Transformer; its controls are flags, not types                 #
 # v0.13.0 - one Branch, so no branch type is compared with another             #
 # v0.13.0 - a branch holds one entry per terminal of a field                   #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the fields follow the nomenclature                                 #
 ################################################################################
 
 "case5 with edge 5, which has a turns ratio, rebuilt as a transformer carrying `extra`"
@@ -20,11 +22,11 @@ function as_transformer(; extra...)
     E    = Dict{Int,AbstractEdge}(net.edge)
 
     E[5] = Transformer(; id = tf.id, name = tf.name, terminals = tf.terminals, r = tf.r, x = tf.x,
-                       g_sh = tf.g_sh, b_sh = tf.b_sh, tm = tf.tm, ta = tf.ta, rate_a = tf.rate_a,
-                       angmin = tf.angmin, angmax = tf.angmax, status = tf.status, extra...)
+                       g_shnt = tf.g_shnt, b_shnt = tf.b_shnt, t_magn = tf.t_magn, t_angl = tf.t_angl, s_max = tf.s_max,
+                       v_angl_min = tf.v_angl_min, v_angl_max = tf.v_angl_max, status = tf.status, extra...)
 
     return NetworkData(Network(net.node, E, net.unit);
-                       name = "case5 with a controlled transformer", baseMVA = baseMVA(data))
+                       name = "case5 with a controlled transformer", s_base_mva = s_base_mva(data))
 end
 
 @testset "component hierarchy" begin
@@ -40,8 +42,8 @@ end
         @test Shunt <: AbstractShunt <: AbstractUnit
 
         # a branch transports and so has no turns ratio; a transformer does
-        @test :tm ∉ fieldnames(Branch)
-        @test :tm ∈ fieldnames(Transformer)
+        @test :t_magn ∉ fieldnames(Branch)
+        @test :t_magn ∈ fieldnames(Transformer)
 
         for T in (Branch, DCLink, Switch, Transformer)
             @test T in edge_types()
@@ -51,8 +53,8 @@ end
         @test !isdefined(_NMB, :Cable) && !isdefined(_NMB, :OverheadLine)
         @test !any(T -> nameof(T) in (:Cable, :OverheadLine), edge_types())
 
-        # a rating that follows the weather is a profile in the `rate_a` of any branch
-        br = Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, rate_a = 1.5)
+        # a rating that follows the weather is a profile in the `s_max` of any branch
+        br = Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, s_max = 1.5)
         @test dynamic_rating(br) == [1.5, 1.5]
         for T in (Generator, FixedLoad, FlexibleLoad, Storage, Shunt)
             @test T in unit_types()
@@ -64,14 +66,14 @@ end
         # move must behave exactly as the one it was built from
         reference = quiet(() -> solve_lf(case("case5"), IVRFormulation, OPTIMIZER))
 
-        for data in (as_transformer(; pst = true, ta_min = -0.3, ta_max = 0.3),
-                     as_transformer(; oltc = true, tm_min = 0.9, tm_max = 1.1))
+        for data in (as_transformer(; pst = true, t_angl_min = -0.3, t_angl_max = 0.3),
+                     as_transformer(; oltc = true, t_magn_min = 0.9, t_magn_max = 1.1))
             result = quiet(() -> solve_lf(data, IVRFormulation, OPTIMIZER))
 
             @test result["termination_status"] == JuMP.LOCALLY_SOLVED
             for i in keys(nw_solution(reference)["node"])
-                @test nw_solution(result)["node"][i]["vm"] ≈
-                      nw_solution(reference)["node"][i]["vm"] atol = 1e-7
+                @test nw_solution(result)["node"][i]["v_magn"] ≈
+                      nw_solution(reference)["node"][i]["v_magn"] atol = 1e-7
             end
         end
     end
@@ -80,8 +82,8 @@ end
         fixed = quiet(() -> solve_opf(case("case5"), IVRFormulation, OPTIMIZER))
 
         @testset "$name" for (name, extra) in (
-                ("angle", (pst  = true, ta_min = -0.2, ta_max = 0.2)),
-                ("magnitude", (oltc = true, tm_min = 0.9, tm_max = 1.1)))
+                ("angle", (pst  = true, t_angl_min = -0.2, t_angl_max = 0.2)),
+                ("magnitude", (oltc = true, t_magn_min = 0.9, t_magn_max = 1.1)))
             data   = as_transformer(; extra...)
             nm     = instantiate_model(data, OptimalPowerFlowProblem, IVRFormulation)
             result = quiet(() -> optimize_model!(nm, OPTIMIZER))
@@ -94,11 +96,11 @@ end
             # and the tap it chose sits inside its limits
             tap = nw_solution(result)["edge"]["5"]["terminal"]["1"]["tap"]
             if name == "angle"
-                @test tap["tm"] ≈ edge(nm, 5).tm[1] atol = 1e-6     # magnitude preserved
-                @test -0.2 - 1e-6 <= tap["ta"] <= 0.2 + 1e-6
+                @test tap["t_magn"] ≈ edge(nm, 5).t_magn[1] atol = 1e-6     # magnitude preserved
+                @test -0.2 - 1e-6 <= tap["t_angl"] <= 0.2 + 1e-6
             else
-                @test 0.9 - 1e-6 <= tap["tm"] <= 1.1 + 1e-6
-                @test tap["ta"] ≈ edge(nm, 5).ta[1] atol = 1e-6     # angle preserved
+                @test 0.9 - 1e-6 <= tap["t_magn"] <= 1.1 + 1e-6
+                @test tap["t_angl"] ≈ edge(nm, 5).t_angl[1] atol = 1e-6     # angle preserved
             end
         end
     end
@@ -107,25 +109,25 @@ end
         r, x = [0.010, 0.020, 0.030], [0.100, 0.200, 0.300]
 
         star = NetworkData(Network(
-            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.02),
+            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.02),
                                    2 => Node(; id = 2), 3 => Node(; id = 3)),
             Dict{Int,AbstractEdge}(1 => Transformer(; id = 1,
                                                     terminals = [1, 2, 3],
                                                     r = r, x = x)),
             Dict{Int,AbstractUnit}(1 => Generator(; id = 1, node = 1),
-                                   2 => FixedLoad(; id = 2, node = 2, pd = 0.40, qd = 0.15),
-                                   3 => FixedLoad(; id = 3, node = 3, pd = 0.25, qd = 0.10)));
+                                   2 => FixedLoad(; id = 2, node = 2, p_set = 0.40, q_set = 0.15),
+                                   3 => FixedLoad(; id = 3, node = 3, p_set = 0.25, q_set = 0.10)));
             name = "star")
 
         split = NetworkData(Network(
-            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.02),
+            Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.02),
                                    2 => Node(; id = 2), 3 => Node(; id = 3),
                                    4 => Node(; id = 4)),
             Dict{Int,AbstractEdge}(k => Branch(; id = k, terminals = [k, 4],
                                                r = r[k], x = x[k]) for k in 1:3),
             Dict{Int,AbstractUnit}(1 => Generator(; id = 1, node = 1),
-                                   2 => FixedLoad(; id = 2, node = 2, pd = 0.40, qd = 0.15),
-                                   3 => FixedLoad(; id = 3, node = 3, pd = 0.25, qd = 0.10)));
+                                   2 => FixedLoad(; id = 2, node = 2, p_set = 0.40, q_set = 0.15),
+                                   3 => FixedLoad(; id = 3, node = 3, p_set = 0.25, q_set = 0.10)));
             name = "split")
 
         # the star point is not a node: three nodes, one edge, three arcs
@@ -137,10 +139,10 @@ end
         b = quiet(() -> solve_lf(split, IVRFormulation, OPTIMIZER))
 
         for i in 1:3
-            @test nw_solution(a)["node"]["$i"]["vm"] ≈ nw_solution(b)["node"]["$i"]["vm"] atol = 1e-8
-            @test nw_solution(a)["node"]["$i"]["va"] ≈ nw_solution(b)["node"]["$i"]["va"] atol = 1e-8
+            @test nw_solution(a)["node"]["$i"]["v_magn"] ≈ nw_solution(b)["node"]["$i"]["v_magn"] atol = 1e-8
+            @test nw_solution(a)["node"]["$i"]["v_angl"] ≈ nw_solution(b)["node"]["$i"]["v_angl"] atol = 1e-8
         end
-        @test nw_solution(a)["unit"]["1"]["p"] ≈ nw_solution(b)["unit"]["1"]["p"] atol = 1e-8
+        @test nw_solution(a)["unit"]["1"]["p_unit"] ≈ nw_solution(b)["unit"]["1"]["p_unit"] atol = 1e-8
 
         # the star point appears in the edge, and nowhere among the nodes
         @test !haskey(nw_solution(a)["node"], "4")
@@ -160,17 +162,17 @@ to.
 function price_network(prices; extra::Dict{Int,AbstractUnit} = Dict{Int,AbstractUnit}())
     dim = Dimension(:time => length(prices))
 
-    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0),
                                2 => Node(; id = 2))
     E = Dict{Int,AbstractEdge}(1 => Branch(; id = 1, terminals = [1, 2],
                                            r = 0.001, x = 0.01))
     U = Dict{Int,AbstractUnit}(
-        1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       cost = nw_vector(dim, [[0.0, p] for p in prices])),
-        2 => FixedLoad(; id = 2, node = 2, pd = 0.20, qd = 0.05))
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       c = nw_vector(dim, [[0.0, p] for p in prices])),
+        2 => FixedLoad(; id = 2, node = 2, p_set = 0.20, q_set = 0.05))
     merge!(U, extra)
 
-    return NetworkData(Network(I, E, U; dim); name = "prices", baseMVA = 100.0)
+    return NetworkData(Network(I, E, U; dim); name = "prices", s_base_mva = 100.0)
 end
 
 """
@@ -183,23 +185,23 @@ Base.@kwdef struct InflowStorage <: AbstractStorage
     id                   ::Int
     name                 ::String                   = ""
     node                 ::Int
-    ps                   ::NetworkQuantity{Float64} = 0.0
-    qs                   ::NetworkQuantity{Float64} = 0.0
-    energy_capacity      ::NetworkQuantity{Float64} = 0.0
-    energy_initial       ::Float64                  = 0.0
-    energy_final         ::Float64                  = NaN
-    charge_rating        ::NetworkQuantity{Float64} = 0.0
-    discharge_rating     ::NetworkQuantity{Float64} = 0.0
-    charge_efficiency    ::Float64                  = 1.0
-    discharge_efficiency ::Float64                  = 1.0
-    max_cycles_per_period::Float64                  = Inf
-    cost_throughput      ::NetworkQuantity{Float64} = 0.0
-    cost_cycle           ::Float64                  = 0.0
+    p_set                   ::NetworkQuantity{Float64} = 0.0
+    q_set                   ::NetworkQuantity{Float64} = 0.0
+    e_max      ::NetworkQuantity{Float64} = 0.0
+    e_init       ::Float64                  = 0.0
+    e_fin         ::Float64                  = NaN
+    p_chg_max        ::NetworkQuantity{Float64} = 0.0
+    p_dch_max     ::NetworkQuantity{Float64} = 0.0
+    η_chg    ::Float64                  = 1.0
+    η_dch ::Float64                  = 1.0
+    k_cycl_max::Float64                  = Inf
+    c_thru      ::NetworkQuantity{Float64} = 0.0
+    c_cycl           ::Float64                  = 0.0
     net_inflow           ::NetworkQuantity{Float64} = 0.0
-    qmin                 ::NetworkQuantity{Float64} = 0.0
-    qmax                 ::NetworkQuantity{Float64} = 0.0
-    cost_up              ::NetworkQuantity{Float64} = 0.0
-    cost_dn              ::NetworkQuantity{Float64} = 0.0
+    q_min                 ::NetworkQuantity{Float64} = 0.0
+    q_max                 ::NetworkQuantity{Float64} = 0.0
+    c_up              ::NetworkQuantity{Float64} = 0.0
+    c_dn              ::NetworkQuantity{Float64} = 0.0
     status               ::NetworkQuantity{Bool}    = true
     ext                  ::Dict{Symbol,Any}         = Dict{Symbol,Any}()
 end
@@ -216,9 +218,9 @@ end
 
 "the charge, discharge and state of charge of unit 3 over `steps` of a result"
 storage_path(result, steps) =
-    ([nw_solution(result, n)["unit"]["3"]["psc"] for n in steps],
-     [nw_solution(result, n)["unit"]["3"]["psd"] for n in steps],
-     [nw_solution(result, n)["unit"]["3"]["es"]  for n in steps])
+    ([nw_solution(result, n)["unit"]["3"]["p_chg"] for n in steps],
+     [nw_solution(result, n)["unit"]["3"]["p_dch"] for n in steps],
+     [nw_solution(result, n)["unit"]["3"]["e_stor"]  for n in steps])
 
 """
 A two node network whose cheap generator carries an energy limit, with an
@@ -229,19 +231,19 @@ function allocation_network(prices, limit; period::Union{Nothing,Int} = nothing)
     dim = Dimension(:time => length(prices))
     period === nothing || (dim_meta(dim, :time)[:period_length] = period)
 
-    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, vm = 1.0),
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0),
                                2 => Node(; id = 2))
     E = Dict{Int,AbstractEdge}(1 => Branch(; id = 1, terminals = [1, 2],
                                            r = 0.0, x = 0.01))
     U = Dict{Int,AbstractUnit}(
-        1 => Generator(; id = 1, node = 1, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       max_energy_per_period = limit,
-                       cost = nw_vector(dim, [[0.0, p] for p in prices])),
-        2 => Generator(; id = 2, node = 2, pmax = 5.0, qmin = -5.0, qmax = 5.0,
-                       cost = [0.0, 200.0]),
-        3 => FixedLoad(; id = 3, node = 2, pd = 0.20, qd = 0.05))
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       e_per_max = limit,
+                       c = nw_vector(dim, [[0.0, p] for p in prices])),
+        2 => Generator(; id = 2, node = 2, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       c = [0.0, 200.0]),
+        3 => FixedLoad(; id = 3, node = 2, p_set = 0.20, q_set = 0.05))
 
-    return NetworkData(Network(I, E, U; dim); name = "allocation", baseMVA = 100.0)
+    return NetworkData(Network(I, E, U; dim); name = "allocation", s_base_mva = 100.0)
 end
 
 const PRICES = [10.0, 100.0, 50.0]
@@ -249,15 +251,15 @@ const PRICES = [10.0, 100.0, 50.0]
 @testset "units that couple network indices" begin
 
     @testset "a flexible load moves demand to the cheap step" begin
-        flat = FlexibleLoad(; id = 3, node = 2, pd_nominal = 0.10, qd_nominal = 0.02,
-                            pd_min = 0.0, pd_max = 0.15)
+        flat = FlexibleLoad(; id = 3, node = 2, p_nom = 0.10, q_nom = 0.02,
+                            p_min = 0.0, p_max = 0.15)
         data = price_network(PRICES; extra = Dict{Int,AbstractUnit}(3 => flat))
 
         result = quiet(() -> solve_model(data, OptimalPowerFlowProblem,
                                          IVRFormulation, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
 
-        pd = [nw_solution(result, n)["unit"]["3"]["pd"] for n in 1:3]
+        pd = [nw_solution(result, n)["unit"]["3"]["p_set"] for n in 1:3]
 
         # it fills the cheapest step to the brim, then prefers the next cheapest
         @test pd[1] ≈ 0.15 atol = 1e-5
@@ -269,8 +271,8 @@ const PRICES = [10.0, 100.0, 50.0]
 
         # reactive demand follows at the nominal power factor
         for n in 1:3
-            @test nw_solution(result, n)["unit"]["3"]["qd"] ≈
-                  0.2 * nw_solution(result, n)["unit"]["3"]["pd"] atol = 1e-8
+            @test nw_solution(result, n)["unit"]["3"]["q_set"] ≈
+                  0.2 * nw_solution(result, n)["unit"]["3"]["p_set"] atol = 1e-8
         end
     end
 
@@ -278,15 +280,15 @@ const PRICES = [10.0, 100.0, 50.0]
         # six steps, cheap-dear-cheap in each half, grouped into two days: the
         # load may shift within a day but may not borrow energy from the other
         prices = [10.0, 100.0, 50.0, 10.0, 100.0, 50.0]
-        flat   = FlexibleLoad(; id = 3, node = 2, pd_nominal = 0.10, qd_nominal = 0.02,
-                              pd_min = 0.0, pd_max = 0.15)
+        flat   = FlexibleLoad(; id = 3, node = 2, p_nom = 0.10, q_nom = 0.02,
+                              p_min = 0.0, p_max = 0.15)
         data   = price_network(prices; extra = Dict{Int,AbstractUnit}(3 => flat))
         dim_meta(dimension(data), :time)[:period_length] = 3
 
         result = quiet(() -> solve_model(data, OptimalPowerFlowProblem,
                                          LPFFormulation, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
-        pd = [nw_solution(result, n)["unit"]["3"]["pd"] for n in 1:6]
+        pd = [nw_solution(result, n)["unit"]["3"]["p_set"] for n in 1:6]
 
         # each day balances on its own, rather than the horizon balancing as one
         @test sum(pd[1:3]) ≈ 3 * 0.10 atol = 1e-6
@@ -300,35 +302,35 @@ const PRICES = [10.0, 100.0, 50.0]
         loose = quiet(() -> solve_model(price_network(prices;
                                             extra = Dict{Int,AbstractUnit}(3 => flat)),
                                         OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
-        @test sum(nw_solution(loose, n)["unit"]["3"]["pd"] for n in 1:6) ≈ 6 * 0.10 atol = 1e-6
+        @test sum(nw_solution(loose, n)["unit"]["3"]["p_set"] for n in 1:6) ≈ 6 * 0.10 atol = 1e-6
         @test loose["objective"] <= result["objective"] + 1e-8
     end
 
     @testset "a flexible load is fixed in a load flow" begin
-        flat = FlexibleLoad(; id = 3, node = 2, pd_nominal = 0.10, qd_nominal = 0.02,
-                            pd_min = 0.0, pd_max = 0.15)
+        flat = FlexibleLoad(; id = 3, node = 2, p_nom = 0.10, q_nom = 0.02,
+                            p_min = 0.0, p_max = 0.15)
         data = price_network(PRICES; extra = Dict{Int,AbstractUnit}(3 => flat))
 
         result = quiet(() -> solve_model(data, LoadFlowProblem, IVRFormulation, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
         for n in 1:3
-            @test nw_solution(result, n)["unit"]["3"]["pd"] ≈ 0.10 atol = 1e-8
+            @test nw_solution(result, n)["unit"]["3"]["p_set"] ≈ 0.10 atol = 1e-8
         end
     end
 
     @testset "a storage unit arbitrages the price" begin
-        battery = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
-                          charge_rating = 0.2, discharge_rating = 0.2,
-                          charge_efficiency = 0.95, discharge_efficiency = 0.95)
+        battery = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
+                          p_chg_max = 0.2, p_dch_max = 0.2,
+                          η_chg = 0.95, η_dch = 0.95)
         data = price_network(PRICES; extra = Dict{Int,AbstractUnit}(3 => battery))
 
         result = quiet(() -> solve_model(data, OptimalPowerFlowProblem,
                                          IVRFormulation, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
 
-        psc = [nw_solution(result, n)["unit"]["3"]["psc"] for n in 1:3]
-        psd = [nw_solution(result, n)["unit"]["3"]["psd"] for n in 1:3]
-        es  = [nw_solution(result, n)["unit"]["3"]["es"]  for n in 1:3]
+        psc = [nw_solution(result, n)["unit"]["3"]["p_chg"] for n in 1:3]
+        psd = [nw_solution(result, n)["unit"]["3"]["p_dch"] for n in 1:3]
+        es  = [nw_solution(result, n)["unit"]["3"]["e_stor"]  for n in 1:3]
 
         # it charges when power is cheap and discharges when it is dear
         @test psc[1] > 0.01
@@ -354,8 +356,8 @@ const PRICES = [10.0, 100.0, 50.0]
     # generator 0.4 and 0.0 to make, which is 4 — a gain of 18 for 0.2 pu moved,
     # or 90 per pu. Every number below is that 90 against a price.
     @testset "a battery pays for what it moves" begin
-        plain = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
-                        charge_rating = 0.2, discharge_rating = 0.2)
+        plain = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
+                        p_chg_max = 0.2, p_dch_max = 0.2)
         free  = quiet(() -> solve_model(arbitrage_network(plain), OptimalPowerFlowProblem,
                                         LPFFormulation, OPTIMIZER))
         psc, psd, _ = storage_path(free, 1:2)
@@ -365,16 +367,16 @@ const PRICES = [10.0, 100.0, 50.0]
 
         # a throughput price below 90 per pu leaves the arbitrage worth doing and
         # simply charges for it
-        cheap = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
-                        charge_rating = 0.2, discharge_rating = 0.2, cost_throughput = 50.0)
+        cheap = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
+                        p_chg_max = 0.2, p_dch_max = 0.2, c_thru = 50.0)
         result = quiet(() -> solve_model(arbitrage_network(cheap), OptimalPowerFlowProblem,
                                          LPFFormulation, OPTIMIZER))
         @test storage_path(result, 1:2)[2][2] ≈ 0.2 atol = 1e-6
         @test result["objective"] ≈ 4.0 + 50.0 * 0.2 atol = 1e-4
 
         # above it the battery is better off doing nothing at all
-        dear = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
-                       charge_rating = 0.2, discharge_rating = 0.2, cost_throughput = 100.0)
+        dear = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
+                       p_chg_max = 0.2, p_dch_max = 0.2, c_thru = 100.0)
         idle = quiet(() -> solve_model(arbitrage_network(dear), OptimalPowerFlowProblem,
                                        LPFFormulation, OPTIMIZER))
         @test storage_path(idle, 1:2)[2][2] < 1e-6
@@ -384,16 +386,16 @@ const PRICES = [10.0, 100.0, 50.0]
     @testset "a battery pays per cycle, which is not per unit of energy" begin
         # 0.2 pu out of a capacity of 0.5 is 0.4 of a cycle, so a price of 20 per
         # cycle is 40 per pu — below the 90 the arbitrage is worth
-        cheap  = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
-                         charge_rating = 0.2, discharge_rating = 0.2, cost_cycle = 20.0)
+        cheap  = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
+                         p_chg_max = 0.2, p_dch_max = 0.2, c_cycl = 20.0)
         result = quiet(() -> solve_model(arbitrage_network(cheap), OptimalPowerFlowProblem,
                                          LPFFormulation, OPTIMIZER))
         @test storage_path(result, 1:2)[2][2] ≈ 0.2 atol = 1e-6
         @test result["objective"] ≈ 4.0 + 20.0 * 0.4 atol = 1e-4
 
         # and 100 per cycle is 200 per pu, which is not
-        dear = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
-                       charge_rating = 0.2, discharge_rating = 0.2, cost_cycle = 100.0)
+        dear = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
+                       p_chg_max = 0.2, p_dch_max = 0.2, c_cycl = 100.0)
         idle = quiet(() -> solve_model(arbitrage_network(dear), OptimalPowerFlowProblem,
                                        LPFFormulation, OPTIMIZER))
         @test storage_path(idle, 1:2)[2][2] < 1e-6
@@ -403,24 +405,24 @@ const PRICES = [10.0, 100.0, 50.0]
         # horizon term rather than through any one network index
         nm = instantiate_model(arbitrage_network(cheap), OptimalPowerFlowProblem,
                                LPFFormulation)
-        @test JuMP.coefficient(horizon_cost(nm), _NMB.var(nm, :psd, 3; nw = 2)) ≈ 20.0 / 0.5
-        @test JuMP.coefficient(network_cost(nm, 2), _NMB.var(nm, :psd, 3; nw = 2)) ≈ 0.0
+        @test JuMP.coefficient(horizon_cost(nm), _NMB.var(nm, :p_dch, 3; nw = 2)) ≈ 20.0 / 0.5
+        @test JuMP.coefficient(network_cost(nm, 2), _NMB.var(nm, :p_dch, 3; nw = 2)) ≈ 0.0
         @test period_cost(nm, Storage, 3; nw = 1) isa JuMP.AbstractJuMPScalar
         @test period_cost(nm, FixedLoad, 2; nw = 1) == 0.0
     end
 
     @testset "a cycle limit is written once per period" begin
         # a limit of 0.2 cycles on a capacity of 0.5 is 0.1 pu·h of discharge
-        limited = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
-                          charge_rating = 0.2, discharge_rating = 0.2,
-                          max_cycles_per_period = 0.2)
+        limited = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
+                          p_chg_max = 0.2, p_dch_max = 0.2,
+                          k_cycl_max = 0.2)
         result  = quiet(() -> solve_model(arbitrage_network(limited),
                                           OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
         @test sum(storage_path(result, 1:2)[2]) ≈ 0.1 atol = 1e-6
 
         # with no limit the same battery moves twice as much
-        plain = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
-                        charge_rating = 0.2, discharge_rating = 0.2)
+        plain = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
+                        p_chg_max = 0.2, p_dch_max = 0.2)
         free  = quiet(() -> solve_model(arbitrage_network(plain), OptimalPowerFlowProblem,
                                         LPFFormulation, OPTIMIZER))
         @test sum(storage_path(free, 1:2)[2]) ≈ 0.2 atol = 1e-6
@@ -438,9 +440,9 @@ const PRICES = [10.0, 100.0, 50.0]
     @testset "the periods are what a cycle limit is per" begin
         # four steps, cheap-dear in each half, grouped into two days: the battery
         # gets its 0.1 pu·h of discharge in each of them rather than once
-        limited = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
-                          charge_rating = 0.2, discharge_rating = 0.2,
-                          max_cycles_per_period = 0.2)
+        limited = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
+                          p_chg_max = 0.2, p_dch_max = 0.2,
+                          k_cycl_max = 0.2)
         data = price_network([10.0, 100.0, 10.0, 100.0];
                              extra = Dict{Int,AbstractUnit}(3 => limited))
         dim_meta(dimension(data), :time)[:period_length] = 2
@@ -460,8 +462,8 @@ const PRICES = [10.0, 100.0, 50.0]
     end
 
     @testset "a storage unit says when it is free to cycle against negative prices" begin
-        plain = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.0,
-                        charge_rating = 0.2, discharge_rating = 0.2)
+        plain = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
+                        p_chg_max = 0.2, p_dch_max = 0.2)
 
         # nothing is priced below zero, so nothing is said
         @test_logs min_level = Logging.Warn instantiate_model(
@@ -473,15 +475,15 @@ const PRICES = [10.0, 100.0, 50.0]
             paid, OptimalPowerFlowProblem, LPFFormulation)
 
         # a cycle limit, a throughput price or a cycle price each settle it
-        for priced in (Storage(; id = 3, node = 2, energy_capacity = 0.5,
-                               charge_rating = 0.2, discharge_rating = 0.2,
-                               max_cycles_per_period = 1.0),
-                       Storage(; id = 3, node = 2, energy_capacity = 0.5,
-                               charge_rating = 0.2, discharge_rating = 0.2,
-                               cost_throughput = 1.0),
-                       Storage(; id = 3, node = 2, energy_capacity = 0.5,
-                               charge_rating = 0.2, discharge_rating = 0.2,
-                               cost_cycle = 1.0))
+        for priced in (Storage(; id = 3, node = 2, e_max = 0.5,
+                               p_chg_max = 0.2, p_dch_max = 0.2,
+                               k_cycl_max = 1.0),
+                       Storage(; id = 3, node = 2, e_max = 0.5,
+                               p_chg_max = 0.2, p_dch_max = 0.2,
+                               c_thru = 1.0),
+                       Storage(; id = 3, node = 2, e_max = 0.5,
+                               p_chg_max = 0.2, p_dch_max = 0.2,
+                               c_cycl = 1.0))
             @test_logs min_level = Logging.Warn instantiate_model(
                 price_network([-10.0, 100.0]; extra = Dict{Int,AbstractUnit}(3 => priced)),
                 OptimalPowerFlowProblem, LPFFormulation)
@@ -491,17 +493,17 @@ const PRICES = [10.0, 100.0, 50.0]
     @testset "energy may arrive from outside the model" begin
         # a plain battery has no inflow, and the hook says so
         nm = instantiate_model(arbitrage_network(
-                 Storage(; id = 3, node = 2, energy_capacity = 0.5,
-                         charge_rating = 0.2, discharge_rating = 0.2)),
+                 Storage(; id = 3, node = 2, e_max = 0.5,
+                         p_chg_max = 0.2, p_dch_max = 0.2)),
              OptimalPowerFlowProblem, LPFFormulation)
         @test inflow(unit(nm, 3; nw = 1), nm, 1) == 0.0
 
         # a subtype that overrides one line gets the whole balance for free:
         # 0.05 pu·h arrives every step, is held through the cheap one and given
         # back in the dear one
-        river = InflowStorage(; id = 3, node = 2, energy_capacity = 0.5,
-                              energy_initial = 0.0, charge_rating = 0.0,
-                              discharge_rating = 0.2, net_inflow = 0.05)
+        river = InflowStorage(; id = 3, node = 2, e_max = 0.5,
+                              e_init = 0.0, p_chg_max = 0.0,
+                              p_dch_max = 0.2, net_inflow = 0.05)
         data   = price_network(PRICES; extra = Dict{Int,AbstractUnit}(3 => river))
         result = quiet(() -> solve_model(data, OptimalPowerFlowProblem, LPFFormulation,
                                          OPTIMIZER))
@@ -518,8 +520,8 @@ const PRICES = [10.0, 100.0, 50.0]
     @testset "a horizon can be asked to end where it started" begin
         # the battery starts on 0.2 and may end wherever it likes: it charges in
         # the cheap step, sells in the dear one and sells the rest in the last
-        loose = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.2,
-                        charge_rating = 0.2, discharge_rating = 0.2)
+        loose = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.2,
+                        p_chg_max = 0.2, p_dch_max = 0.2)
         free   = quiet(() -> solve_model(price_network(PRICES;
                                              extra = Dict{Int,AbstractUnit}(3 => loose)),
                                          OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
@@ -528,8 +530,8 @@ const PRICES = [10.0, 100.0, 50.0]
 
         # asked to hand back 0.2, it stops one step short and pays for the step
         # it can no longer cover
-        pinned = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.2,
-                         energy_final = 0.2, charge_rating = 0.2, discharge_rating = 0.2)
+        pinned = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.2,
+                         e_fin = 0.2, p_chg_max = 0.2, p_dch_max = 0.2)
         held   = quiet(() -> solve_model(price_network(PRICES;
                                              extra = Dict{Int,AbstractUnit}(3 => pinned)),
                                          OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
@@ -550,31 +552,31 @@ const PRICES = [10.0, 100.0, 50.0]
     @testset "a target the ratings cannot reach has no answer" begin
         # 0.5 asked of a unit that starts empty and may charge 0.2 a step, over
         # two steps: a pin is a pin, and the honest answer is that there is none
-        unreachable = Storage(; id = 3, node = 2, energy_capacity = 0.5,
-                              energy_initial = 0.0, energy_final = 0.5,
-                              charge_rating = 0.2, discharge_rating = 0.2)
+        unreachable = Storage(; id = 3, node = 2, e_max = 0.5,
+                              e_init = 0.0, e_fin = 0.5,
+                              p_chg_max = 0.2, p_dch_max = 0.2)
         result = quiet(() -> solve_model(arbitrage_network(unreachable),
                                          OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
         @test result["termination_status"] != JuMP.LOCALLY_SOLVED
 
-        @test_throws ArgumentError Storage(; id = 3, node = 2, energy_final = -1.0)
-        @test isnan(Storage(; id = 3, node = 2).energy_final)
+        @test_throws ArgumentError Storage(; id = 3, node = 2, e_fin = -1.0)
+        @test isnan(Storage(; id = 3, node = 2).e_fin)
     end
 
     @testset "only the window that closes a horizon carries its target" begin
-        pinned = Storage(; id = 3, node = 2, energy_capacity = 0.5, energy_initial = 0.2,
-                         energy_final = 0.2, charge_rating = 0.2, discharge_rating = 0.2)
+        pinned = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.2,
+                         e_fin = 0.2, p_chg_max = 0.2, p_dch_max = 0.2)
 
         # the target is released, and nothing else about the unit is touched
         released = interior_state(pinned)
-        @test isnan(released.energy_final)
-        @test released.energy_initial == pinned.energy_initial
-        @test released.energy_capacity == pinned.energy_capacity
-        @test released.charge_rating == pinned.charge_rating
+        @test isnan(released.e_fin)
+        @test released.e_init == pinned.e_init
+        @test released.e_max == pinned.e_max
+        @test released.p_chg_max == pinned.p_chg_max
 
         # a unit with no target, and anything that is not a storage unit, is
         # returned as it is
-        loose = Storage(; id = 3, node = 2, energy_capacity = 0.5)
+        loose = Storage(; id = 3, node = 2, e_max = 0.5)
         @test interior_state(loose) === loose
         @test interior_state(Node(; id = 1)) isa Node
     end
@@ -589,7 +591,7 @@ const PRICES = [10.0, 100.0, 50.0]
     #   0.3 per day     : 0.3 in each half, 200 pays for 0.1 in each      = 64
     @testset "a generator can be given an energy limit per period" begin
         prices = [10.0, 100.0, 10.0, 100.0]
-        cheap(result) = [nw_solution(result, n)["unit"]["1"]["pg"] for n in 1:4]
+        cheap(result) = [nw_solution(result, n)["unit"]["1"]["p_gen"] for n in 1:4]
 
         free = quiet(() -> solve_model(allocation_network(prices, Inf),
                                        OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
@@ -627,20 +629,20 @@ const PRICES = [10.0, 100.0, 50.0]
         @test !haskey(_NMB.registered_constraints(open), (1, :generator_energy, 1))
 
         @test_throws ArgumentError Generator(; id = 1, node = 1,
-                                             max_energy_per_period = -1.0)
-        @test Generator(; id = 1, node = 1).max_energy_per_period == Inf
+                                             e_per_max = -1.0)
+        @test Generator(; id = 1, node = 1).e_per_max == Inf
     end
 
     @testset "a time coupled unit says so when there is no time" begin
-        for cmp in (FlexibleLoad(; id = 3, node = 2, pd_nominal = 0.1, pd_max = 0.2),
-                    Storage(; id = 3, node = 2, energy_capacity = 0.5,
-                            charge_rating = 0.2, discharge_rating = 0.2),
-                    Generator(; id = 3, node = 2, pmax = 1.0,
-                              max_energy_per_period = 0.5))
+        for cmp in (FlexibleLoad(; id = 3, node = 2, p_nom = 0.1, p_max = 0.2),
+                    Storage(; id = 3, node = 2, e_max = 0.5,
+                            p_chg_max = 0.2, p_dch_max = 0.2),
+                    Generator(; id = 3, node = 2, p_max = 1.0,
+                              e_per_max = 0.5))
             I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF), 2 => Node(; id = 2))
             E = Dict{Int,AbstractEdge}(1 => Branch(; id = 1, terminals = [1, 2],
                                                    r = 0.001, x = 0.01))
-            U = Dict{Int,AbstractUnit}(1 => Generator(; id = 1, node = 1, pmax = 5.0),
+            U = Dict{Int,AbstractUnit}(1 => Generator(; id = 1, node = 1, p_max = 5.0),
                                        3 => cmp)
             data = NetworkData(Network(I, E, U); name = "no time")
 

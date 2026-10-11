@@ -1,7 +1,7 @@
 # One nomenclature for constraints, functions and duals (B32)
 
-Status: decided (D63-D69), stages 0 and 1 done, the map awaits Tom; the map is confirmed by Tom at stage 1 · Author: Tom Van Acker (requested) · Date: 2026-10-11
-Decisions: D63-D69 recorded 2026-10-11 (next free after: D70)
+Status: decided (D63-D70), stages 0 and 1 done, the map confirmed by Tom; the map is confirmed by Tom at stage 1 · Author: Tom Van Acker (requested) · Date: 2026-10-11
+Decisions: D63-D70 recorded 2026-10-11 (next free after: D71)
 Priority: P2 · Effort: Large, in six stages. Branch `b32-constraint-names`, cut from `main` at v0.14.0; becomes v0.15.0 (a hard removal that renames exports and extension points is a minor bump, as D59 made v0.14.0).
 Follows `naming.md` (D55-D62). The names themselves are drafted in stage 1 into `../nomenclature.md`; this file is how to get there.
 
@@ -77,7 +77,8 @@ by two different hands, and a function and a dual took their name from the key t
    identical either way; a rolling horizon keeps the flag in every window it builds and an updated window keeps its names; every
    test that reads a name passes `debug_mode = true`. Do this first: the key rename then has no third place to keep in step.
 3. **Keys, ids and `con`.** The register keys, the `con` keys and the ids by the map, in `src/` and in the tests that read them (about 45
-   lines in 10 files); a miss is a `KeyError` or a failing `haskey`.
+   lines in 10 files); a miss is a `KeyError` or a failing `haskey`. `con[:cstr_node_balance][i]` is `(real, imag)` in IVR, which `nodal_prices` and
+   the solution builder destructure. A check that a built IVR and a built LPF model, on the fixtures, hold one id arity per key (D70).
 4. **Functions, duals and old letters.** `constraint_*` to `fnct_*` (methods, calls, exports, `docs/src`, `README.md`, the two test files
    that extend `constraint_edge`); `lambda*` to `dual_*` in the node solution builders, `test/price.jl` and three docs pages; `ctr cti vtr
    vti` and the other old letters to their key names (D57); the stale docstrings and docs snippets.
@@ -104,19 +105,18 @@ The testset "constraint nomenclature" has 99 checks: the 89 on the vocabulary an
 
 ## Decisions
 
-- **D63** a key is `<owner>_<role>`: the owner, then what the row states, words from closed lists, singular, no formulation in it; the
-  owner is the type, the family where several types write the row (D51), or the problem; a bound, a phasor part or a side goes in the id.
-  **D64** `con` takes the same keys, the register's where an entry holds the rows of one key; its ids stay component ids. **D65** an id is
-  the component's id or `(id, part...)`, parts spelled as the nomenclature spells them, no old variable key, one shape per key.
-  **D66** `constrain!` names the row `"$(nw)_$(key)[$id]"`. **D67** `set_string_name` covers constraints (amends D61), and **D69** replaces it: `debug_mode`, default false, one switch for the
-  names of every variable and constraint. **D68** the prefixes
-  `cstr_`, `fnct_` and `dual_` for a constraint, the function that writes it and its dual; with D63 a key is `cstr_<owner>_<role>`.
-  All Tom Van Acker, 2026-10-11; see `decisions.md`.
+- **D63** a key is `<owner>_<role>`: the owner, then what the row states, words from closed lists, singular, no formulation in it; the owner is the type, the family
+  where several types write the row (D51), or the problem; a bound, a phasor part or a side goes in the id. **D64** `con` takes the same keys, the register's where an
+  entry holds the rows of one key; its ids stay component ids. **D65** an id is the component's id or `(id, part...)`, parts spelled as the nomenclature spells them, no
+  old variable key. **D66** `constrain!` names the row `"$(nw)_$(key)[$id]"`. **D67** `set_string_name` covers constraints; **D69** replaces it: `debug_mode`, default false,
+  for the names of every variable and constraint. **D68** the prefixes `cstr_`, `fnct_` and `dual_` for a constraint, the function that writes it and its dual; with D63 a key
+  is `cstr_<owner>_<role>`. **D70** amends D64 and D65: an id has one shape per key within a formulation, and a `con` value is a row or a tuple of rows in the order of the
+  register's id parts. All Tom Van Acker, 2026-10-11; see `decisions.md`.
 
 ## Confirmed 2026-10-11
 
 One stem and three prefixes; `fnct_` for the `constraint_*` writers only (`variable_*`, `solution_*`, `objective_*` keep their names); the dual suffixes
-`p q real imag`; the π-section parameters `i_wind_*` and `v_wind_*`; v0.15.0 as D59 made v0.14.0. The map is in `../nomenclature.md`.
+`p q real imag`; the π-section parameters `i_wind_*` and `v_wind_*`; v0.15.0 as D59 made v0.14.0; owners as the descriptors of the quantities. The map is in `../nomenclature.md`.
 
 ## Verification
 

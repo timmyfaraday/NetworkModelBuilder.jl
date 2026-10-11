@@ -8,7 +8,7 @@ older ones: git has them). Next id: **B33**.
 
 ## Next
 
-- [ ] B32 · Name the constraints, the functions that write them and their duals: `cstr_<owner>_<role>` keys and ids, `fnct_*` functions, `dual_*` solution keys, names in JuMP behind `debug_mode`, the old letters B31 left (D63-D69) · Tom · 2026-10-11
+- [ ] B32 · Name the constraints, the functions that write them and their duals: `cstr_<owner>_<role>` keys and ids, `fnct_*` functions, `dual_*` solution keys, names in JuMP behind `debug_mode`, the old letters B31 left (D63-D70) · Tom · 2026-10-11
   - Decided 2026-10-11; spec `knowledge/plan/naming-constraints.md`. Stage 0 done: names off 1,706 ms and 764 MB, v0.14.0 1,948 ms and 1,003 MB, `debug_mode = true` 2,420 ms and 1,352 MB; stage 1 done on `b32-constraint-names` (the map in `nomenclature.md`, 10 of 99 new checks red); Tom confirms the map before stage 2.
 
 ## Later

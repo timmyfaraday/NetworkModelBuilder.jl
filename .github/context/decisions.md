@@ -4,7 +4,7 @@ The rules that still constrain NMB. Read the section for the area you are touchi
 changing it.
 
 How to use this file:
-- A new decision gets the next free id (**D70**), goes in the Log at the bottom, and is written by
+- A new decision gets the next free id (**D71**), goes in the Log at the bottom, and is written by
   the `record-decision` skill. `Decided by` is a person's username, never an agent.
 - A decision that changes a rule below edits the rule in place and cites the new id. The old
   wording goes to the archive line of the id it came from.
@@ -106,9 +106,9 @@ How to use this file:
   `knowledge/nomenclature.md`, singular, lowercase snake_case, with no formulation in it (as `:p_term` has none); the owner is the
   type, the family where several types write the row (D51), or the problem; a bound, a phasor part or a side goes in the id, never in
   the key.
-- **`con` takes the same keys, the register's where an entry holds the rows of one key, and its ids stay component ids** (D64).
-- **A constraint id is the component's id, or `(id, part...)`** (D65): parts spelled as the nomenclature spells them, no old variable
-  key, one shape per key.
+- **`con` takes the same keys, the register's where an entry holds the rows of one key, and its ids stay component ids; its value is a row, or a tuple of rows in the order of the register's id parts** (D64, D70).
+- **A constraint id is the component's id, or `(id, part...)`** (D65, D70): parts spelled as the nomenclature spells them, no old variable
+  key, one shape per key within a formulation.
 - **`constrain!` names the row `"$(nw)_$(key)[$id]"`, and `debug_mode` covers constraints as it covers variables** (D66, D69).
 - **A constraint, the function that writes it and the dual it gives share one stem and take one prefix each: `cstr_`, `fnct_`,
   `dual_`** (D68): `cstr_node_balance`, `fnct_node_balance`, `dual_node_balance_real`; the `constraint_*` functions and the `"lambda*"`
@@ -695,3 +695,8 @@ Changes: new rule in Code conventions. `cstr_` prefixes a constraint key, `fnct_
 Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
 Why: nothing reads a name back, so a name is a debugging aid, and D61 made it a default that costs 19 to 27 % of a cold build; Tom asked for one switch, off unless asked, across variables, constraints and whatever else JuMP names.
 Changes: `set_string_name` (D61, D67) is replaced by `debug_mode::Bool = false`, a hard removal (D59). True names every variable and constraint and sets `JuMP.set_string_names_on_creation(model, true)`; false builds no name and sets it to `false`. A `jump_model` handed in is set either way, which D61 left as it came with true.
+
+### D70 — An id has one shape per key within a formulation, and a `con` value is a row or a tuple of rows
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
+Why: 11 of 46 register keys have two id shapes, the LPF id and the IVR `(id, :real|:imag)` (`switch_cycle` puts the part before the bound), and D63 merges `linear_*` into `edge_*`: `cstr_edge_overload` is `(e, t)` in IVR and `(e, t, :pos|:neg)` in LPF, `cstr_edge_angle_difference` `(e, :max|:min)` against `e`. Splitting the LPF rows to match would change the model's rows. The IVR node balance is two `con` containers, `node_balance_real` and `node_balance_imag`, while D63 keeps a part out of a key.
+Changes: D65 edited in place: one shape per key within a formulation, and the fixed magnitude of a tap is `(a, :magn, :set)`, so that `cstr_tf_tap_setting` has 3-tuples only. D64 extended: a `con` value is a row, or a tuple of rows in the order of the register's id parts, `(real, imag)` for the IVR node balance; its ids stay component ids. A check of one id arity per key in a built IVR and LPF model comes with stage 3.

@@ -2,7 +2,7 @@
 
 Status: decided (D55-D62), the map confirmed by Tom 2026-10-11 · Owner: Tom Van Acker · Date: 2026-10-11
 Scope: quantities, i.e. component fields (the parameters, and the columns of a table), variable keys, solution keys, and the
-keywords and parameters that name one. Constraints, functions and duals are the last section (D63-D69, a draft until Tom confirms it); not covered: plain words.
+keywords and parameters that name one. Constraints, functions and duals are the last section (D63-D70, confirmed by Tom 2026-10-11); not covered: plain words.
 Plan: `plan/naming.md`. The docs page `docs/src/manual/nomenclature.md` is written from this file.
 
 ## Grammar (D55)
@@ -92,7 +92,7 @@ and its `"step"` `"z_step"`; every `*_market` `*_mkt`
 (`"pg_market"` `"p_gen_mkt"`, `"tm_market"` `"t_magn_mkt"`). The duals `"lambda*"`, the words and the dashboard names (D9) stay.
 `test/nomenclature.jl` holds this map as data.
 
-## Constraints, functions and duals (D63-D69, a draft until Tom confirms it)
+## Constraints, functions and duals (D63-D70, confirmed by Tom 2026-10-11)
 
 A constraint, the function that writes it and the dual it gives share one stem, `<owner>_<role>`, and take one prefix each: the key `cstr_<stem>`, the
 function `fnct_<stem>`, the dual `dual_<stem>`, as in `cstr_node_balance`, `fnct_node_balance`, `dual_node_balance_real`. `test/nomenclature.jl` is it as code.
@@ -104,9 +104,10 @@ function `fnct_<stem>`, the dual `dual_<stem>`, as in `cstr_node_balance`, `fnct
 - **No formulation in a key**, as `:p_term` has none: `cstr_edge_rating` is the rating in IVR and in LPF, with the id shape of its formulation. A function
   written for the linearized formulation only keeps `linear`: `fnct_edge_rating_linear`.
 - **Id:** the component's id, or `(id, part...)`, a part one of `real imag magn angl min max fr to ser set loss forward reverse pos neg side p q`.
-  A nested tuple of edges names a loop, `(family, sub, key)` a control.
+  A nested tuple of edges names a loop, `(family, sub, key)` a control. One shape per key within a formulation: an IVR row carries the phasor part where
+  an LPF row has none, and a row that is two-sided in one is a single row in the other (D70).
 - **`con`** takes the register's key where an entry holds the rows of one key; a bundle of several takes an owner and `equation` or `limit`
-  (`cstr_br_equation`, `cstr_sw_equation`, `cstr_edge_limit`). Its ids stay component ids, its value a tuple of rows where there are several:
+  (`cstr_br_equation`, `cstr_sw_equation`, `cstr_edge_limit`). Its ids stay component ids, its value a row, or a tuple of rows in the order of the register's id parts:
   `con[:cstr_node_balance][i]` is `(real, imag)` in IVR.
 
 New keys are `cstr_` and the stem shown; old keys are as written in `src/` today.
@@ -124,7 +125,7 @@ New keys are `cstr_` and the stem shown; old keys are as written in `src/` today
 `node_voltage_limits` `node_voltage_limit`; `edge_angle_difference`, `node_voltage_*` and the rest keep their stem.
 
 Ids that change: `:pi_section` `(e, :cr_fr)`, `:ci_fr`, `:cr_to`, `:ci_to`, `:v_real`, `:v_imag` become `(e, :fr, :real)`, `(e, :fr, :imag)`, `(e, :to, :real)`, `(e, :to, :imag)`,
-`(e, :ser, :real)`, `(e, :ser, :imag)`; `:tap_setting` `:magnitude_max`, `:magnitude_min`, `:magnitude`, `:max`, `:min` become `(a, :magn, :max)`, `(a, :magn, :min)`, `(a, :magn)`, `(a, :angl, :max)`,
+`(e, :ser, :real)`, `(e, :ser, :imag)`; `:tap_setting` `:magnitude_max`, `:magnitude_min`, `:magnitude`, `:max`, `:min` become `(a, :magn, :max)`, `(a, :magn, :min)`, `(a, :magn, :set)`, `(a, :angl, :max)`,
 `(a, :angl, :min)`; `:angle` `:angl`; `:from` `:fr`; `:setpoint` `:set`; `:active`, `:reactive` `:p`, `:q`. The shape of an id is fixed per key and formulation.
 
 Functions, old `constraint_` to `fnct_`: `edge` `edge`, `edge_limits` `edge_limit`, `edge_coupling`, `edge_rating`, `edge_angle_difference` keep their stem; `linear_flow` `edge_flow_linear`, `linear_ratings`
@@ -136,4 +137,4 @@ Duals: `"lambda"` `dual_node_balance_p`, `"lambda_q"` `dual_node_balance_q`, `"l
 `"dual_status"` is JuMP's own word and stays. Old letters of a parameter or a local: `ctr cti vtr vti` `i_wind_real i_wind_imag v_wind_real v_wind_imag`, `csr csi` `i_ser_real i_ser_imag`,
 `cru ciu` `i_unit_real i_unit_imag`, each where it does not clash with a container local of the same function.
 
-For Tom: owners are the descriptors of the quantities (`stor`, `sw`, `gen`); the other way is the type's own word (`storage`, `switch`, `generator`), which renames fewer keys and reads like the old ones.
+Owners are the descriptors of the quantities (`stor`, `sw`, `gen`), as Tom chose on 2026-10-11 over the type's own word (`storage`, `switch`, `generator`).

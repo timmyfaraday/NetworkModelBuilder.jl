@@ -15,6 +15,7 @@
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
 ################################################################################
 
 export AbstractGenerator, Generator
@@ -246,7 +247,7 @@ constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
 
 function _constraint_generator_power(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractGenerator}
     p_gen, q_gen = var(nm, :p_gen; nw), var(nm, :q_gen; nw)
-    power        = get!(() -> Dict{Int,Any}(), con(nm; nw), :generator_power)
+    power        = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_power)
 
     for u in ids(nm, T; nw)
         power[u] = constraint_unit_power!(nm, u, p_gen[u], q_gen[u]; nw)
@@ -299,7 +300,7 @@ function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
             g = unit(nm, u; nw = n)::T
             isfinite(g.e_per_max) || continue
 
-            constrain!(nm, :generator_energy, u, JuMP.@build_constraint(
+            constrain!(nm, :cstr_gen_energy, u, JuMP.@build_constraint(
                 sum(time_step(nm, m) * var(nm, :p_gen, u; nw = m)
                     for m in window if haskey(var(nm, :p_gen; nw = m), u); init = 0.0) <=
                 g.e_per_max); nw = n)
@@ -390,7 +391,7 @@ constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
 
 function _constraint_generator_active(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractGenerator}
     p_gen = var(nm, :p_gen; nw)
-    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :generator_power)
+    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_injection)
 
     for u in ids(nm, T; nw)
         power[u] = constraint_unit_injection!(nm, u, p_gen[u]; nw)
@@ -531,11 +532,11 @@ function _constraint_generator_redispatch(nm::NetworkModel, ::Type{T}, nw::Int
     p_gen    = var(nm, :p_gen;    nw)
     p_gen_up = var(nm, :p_gen_up; nw)
     p_gen_dn = var(nm, :p_gen_dn; nw)
-    split = get!(() -> Dict{Int,Any}(), con(nm; nw), :generator_redispatch)
+    split = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_gen_redispatch)
 
     for u in ids(nm, T; nw)
         g = unit(nm, u; nw)::T
-        split[u] = constrain!(nm, :generator_redispatch, u,
+        split[u] = constrain!(nm, :cstr_gen_redispatch, u,
                        JuMP.@build_constraint(p_gen[u] == g.p_set + p_gen_up[u] - p_gen_dn[u]); nw)
     end
 

@@ -14,6 +14,7 @@
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
 ################################################################################
 
 export AbstractStorage, Storage, inflow, storage_cycles
@@ -241,7 +242,7 @@ power flow it is the setpoint.
 """
 function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractPowerFlowProblem,F<:IVRFormulation,T<:AbstractStorage}
-    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :storage_power)
+    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_power)
 
     for u in ids(nm, T; nw)
         st = unit(nm, u; nw)::T
@@ -260,7 +261,7 @@ function _constraint_storage_power(nm::NetworkModel, ::Type{T}, nw::Int) where {
     isempty(ids(nm, T; nw)) && return nothing
 
     p_chg, p_dch, q_stor = var(nm, :p_chg; nw), var(nm, :p_dch; nw), var(nm, :q_stor; nw)
-    power                = get!(() -> Dict{Int,Any}(), con(nm; nw), :storage_power)
+    power                = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_power)
 
     for u in ids(nm, T; nw)
         p = JuMP.@expression(nm.model, p_dch[u] - p_chg[u])
@@ -305,7 +306,7 @@ function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
             start = is_first_id(nm, n, :time) ? st.e_init :
                                                 var(nm, :e_stor, u; nw = prev_id(nm, n, :time))
 
-            constrain!(nm, :storage_balance, u, JuMP.@build_constraint(
+            constrain!(nm, :cstr_stor_balance, u, JuMP.@build_constraint(
                 e_stor[u] == start + dt * (st.η_chg * p_chg[u] -
                                        p_dch[u] / st.η_dch +
                                        inflow(st, nm, n))); nw = n)
@@ -344,7 +345,7 @@ function constraint_storage_final_energy!(nm::NetworkModel, ::Type{T}) where {T<
             st = unit(nm, u; nw = n)::T
             isnan(st.e_fin) && continue
 
-            constrain!(nm, :storage_final, u, JuMP.@build_constraint(
+            constrain!(nm, :cstr_stor_final_energy, u, JuMP.@build_constraint(
                 var(nm, :e_stor, u; nw = n) == st.e_fin); nw = n)
         end
     end
@@ -427,7 +428,7 @@ function constraint_storage_cycles!(nm::NetworkModel, ::Type{T}) where {T<:Abstr
             isfinite(st.k_cycl_max) || continue
 
             capacity = nw_value(nm, st.e_max, n)
-            constrain!(nm, :storage_cycles, u, JuMP.@build_constraint(
+            constrain!(nm, :cstr_stor_cycle, u, JuMP.@build_constraint(
                 sum(time_step(nm, m) * var(nm, :p_dch, u; nw = m)
                     for m in window if haskey(var(nm, :p_dch; nw = m), u); init = 0.0) <=
                 st.k_cycl_max * capacity); nw = n)
@@ -565,7 +566,7 @@ discharges. Reactive power plays no part in a linearized formulation.
 """
 function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractPowerFlowProblem,F<:LPFFormulation,T<:AbstractStorage}
-    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :storage_power)
+    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_injection)
 
     for u in ids(nm, T; nw)
         power[u] = constraint_unit_injection!(nm, u, unit(nm, u; nw).p_set; nw)
@@ -583,7 +584,7 @@ function _constraint_storage_injection(nm::NetworkModel, ::Type{T}, nw::Int) whe
     isempty(ids(nm, T; nw)) && return nothing
 
     p_chg, p_dch = var(nm, :p_chg; nw), var(nm, :p_dch; nw)
-    power        = get!(() -> Dict{Int,Any}(), con(nm; nw), :storage_power)
+    power        = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_injection)
 
     for u in ids(nm, T; nw)
         power[u] = constraint_unit_injection!(nm, u,
@@ -683,11 +684,11 @@ function _constraint_storage_redispatch(nm::NetworkModel, ::Type{T}, nw::Int
                                        ) where {T<:AbstractStorage}
     p_chg, p_dch         = var(nm, :p_chg;     nw), var(nm, :p_dch;     nw)
     p_stor_up, p_stor_dn = var(nm, :p_stor_up; nw), var(nm, :p_stor_dn; nw)
-    split                = get!(() -> Dict{Int,Any}(), con(nm; nw), :storage_redispatch)
+    split                = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_stor_redispatch)
 
     for u in ids(nm, T; nw)
         st = unit(nm, u; nw)::T
-        split[u] = constrain!(nm, :storage_redispatch, u, JuMP.@build_constraint(
+        split[u] = constrain!(nm, :cstr_stor_redispatch, u, JuMP.@build_constraint(
             p_dch[u] - p_chg[u] == st.p_set + p_stor_up[u] - p_stor_dn[u]); nw)
     end
 

@@ -20,6 +20,7 @@
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.14.0 - the docstrings follow the nomenclature                             #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
 ################################################################################
 
 export AbstractTransformer, Transformer, TapMode, FIXED, CONTINUOUS, STEPPED
@@ -343,14 +344,14 @@ One position for every stepped winding of transformer `e`, `Σₛ zt = 1`, writt
 where the transformer is not held, see [`is_held`](@ref).
 """
 function _constraint_steps!(nm::NetworkModel, tf::Transformer, e::Int, A::Vector{Arc}; nw::Int)
-    step = get!(() -> Dict{Arc,Any}(), con(nm; nw), :tap_step)
+    step = get!(() -> Dict{Arc,Any}(), con(nm; nw), :cstr_tf_tap_step)
     is_held(nm, :edge, e; nw) && return nothing
 
     for (k, a) in enumerate(A)
         _stepped(nm, tf, k) || continue
 
         z_step = var(nm, :z_step; nw)
-        step[a] = constrain!(nm, :tap_step, a, JuMP.@build_constraint(
+        step[a] = constrain!(nm, :cstr_tf_tap_step, a, JuMP.@build_constraint(
             sum(z_step[(a, s)] for s in eachindex(_step_values(nm, tf, k))) == 1); nw)
     end
 
@@ -545,8 +546,8 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = n
                         ) where {P<:AbstractProblemType,F<:IVRFormulation}
     v_star_real, v_star_imag = var(nm, :v_star_real; nw), var(nm, :v_star_imag; nw)
 
-    winding = get!(() -> Dict{Int,Any}(), con(nm; nw), :winding)
-    star    = get!(() -> Dict{Int,Any}(), con(nm; nw), :star_balance)
+    winding = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_tf_winding)
+    star    = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_tf_star_balance)
 
     for e in ids(nm, Transformer; nw)
         tf  = edge(nm, e; nw)::Transformer
@@ -567,16 +568,16 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = n
             end
 
             zr, zx = tf.r[k], tf.x[k]
-            (constrain!(nm, :winding, (a, :real), JuMP.@build_constraint(
+            (constrain!(nm, :cstr_tf_winding, (a, :real), JuMP.@build_constraint(
                  vtr - v_star_real[e] == zr * csr[k] - zx * csi[k]); nw),
-             constrain!(nm, :winding, (a, :imag), JuMP.@build_constraint(
+             constrain!(nm, :cstr_tf_winding, (a, :imag), JuMP.@build_constraint(
                  vti - v_star_imag[e] == zr * csi[k] + zx * csr[k]); nw))
         end
 
         star[e] = (
-            constrain!(nm, :star_balance, (e, :real), JuMP.@build_constraint(
+            constrain!(nm, :cstr_tf_star_balance, (e, :real), JuMP.@build_constraint(
                 sum(csr) == tf.g_mgnt * v_star_real[e] - tf.b_mgnt * v_star_imag[e]); nw),
-            constrain!(nm, :star_balance, (e, :imag), JuMP.@build_constraint(
+            constrain!(nm, :cstr_tf_star_balance, (e, :imag), JuMP.@build_constraint(
                 sum(csi) == tf.g_mgnt * v_star_imag[e] + tf.b_mgnt * v_star_real[e]); nw))
     end
 
@@ -599,9 +600,9 @@ function _behind_ratio!(nm::NetworkModel, tf::Transformer, e::Int, k::Int, a::Ar
         tr, ti                   = tap_ratio(nm, tf, e, k; nw)
         v_wind_real, v_wind_imag = var(nm, :v_wind_real, a; nw), var(nm, :v_wind_imag, a; nw)
 
-        constrain!(nm, :transformer_ratio, (a, :real),
+        constrain!(nm, :cstr_tf_ratio, (a, :real),
                    JuMP.@build_constraint(v_real[i] == tr * v_wind_real - ti * v_wind_imag); nw)
-        constrain!(nm, :transformer_ratio, (a, :imag),
+        constrain!(nm, :cstr_tf_ratio, (a, :imag),
                    JuMP.@build_constraint(v_imag[i] == tr * v_wind_imag + ti * v_wind_real); nw)
 
         return (v_wind_real, v_wind_imag,
@@ -638,9 +639,9 @@ see [`is_held`](@ref).
 """
 function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_id_default(nm)
                                ) where {P<:AbstractDispatchProblem,F<:IVRFormulation}
-    rating = get!(() -> Dict{Int,Any}(), con(nm; nw), :edge_rating)
-    angle  = get!(() -> Dict{Int,Any}(), con(nm; nw), :edge_angle_difference)
-    tap    = get!(() -> Dict{Arc,Any}(), con(nm; nw), :tap_setting)
+    rating = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_edge_rating)
+    angle  = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_edge_angle_difference)
+    tap    = get!(() -> Dict{Arc,Any}(), con(nm; nw), :cstr_tf_tap_setting)
 
     for e in ids(nm, Transformer; nw)
         tf = edge(nm, e; nw)::Transformer
@@ -658,19 +659,19 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::
             t_real, t_imag = var(nm, :t_real, a; nw), var(nm, :t_imag, a; nw)
 
             magnitude = if _moves_magnitude(nm, tf, k)
-                (constrain!(nm, :tap_setting, (a, :magnitude_max),
+                (constrain!(nm, :cstr_tf_tap_setting, (a, :magn, :max),
                             JuMP.@build_constraint(t_real^2 + t_imag^2 <= tf.t_magn_max[k]^2); nw),
-                 constrain!(nm, :tap_setting, (a, :magnitude_min),
+                 constrain!(nm, :cstr_tf_tap_setting, (a, :magn, :min),
                             JuMP.@build_constraint(t_real^2 + t_imag^2 >= tf.t_magn_min[k]^2); nw))
             else
-                (constrain!(nm, :tap_setting, (a, :magnitude),
+                (constrain!(nm, :cstr_tf_tap_setting, (a, :magn, :set),
                             JuMP.@build_constraint(t_real^2 + t_imag^2 == tf.t_magn[k]^2); nw),)
             end
 
             tap[a] = (magnitude...,
-                constrain!(nm, :tap_setting, (a, :max),
+                constrain!(nm, :cstr_tf_tap_setting, (a, :angl, :max),
                            JuMP.@build_constraint(t_imag <= tan(tf.t_angl_max[k]) * t_real); nw),
-                constrain!(nm, :tap_setting, (a, :min),
+                constrain!(nm, :cstr_tf_tap_setting, (a, :angl, :min),
                            JuMP.@build_constraint(t_imag >= tan(tf.t_angl_min[k]) * t_real); nw))
         end
     end
@@ -781,9 +782,9 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = n
                         ) where {P<:AbstractProblemType,F<:LPFFormulation}
     v_angl, p_term = var(nm, :v_angl; nw), var(nm, :p_term; nw)
 
-    branch  = get!(() -> Dict{Int,Any}(), con(nm; nw), :branch)
-    winding = get!(() -> Dict{Int,Any}(), con(nm; nw), :winding)
-    star    = get!(() -> Dict{Int,Any}(), con(nm; nw), :star_balance)
+    branch  = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_br_equation)
+    winding = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_tf_winding)
+    star    = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_tf_star_balance)
 
     for e in ids(nm, Transformer; nw)
         tf = edge(nm, e; nw)::Transformer
@@ -804,11 +805,11 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = n
                                     "transformer with $(length(A)) windings cannot have in a " *
                                     "linearized formulation: its susceptance would be infinite"))
 
-            constrain!(nm, :winding, a, JuMP.@build_constraint(p_term[a] ==
+            constrain!(nm, :cstr_tf_winding, a, JuMP.@build_constraint(p_term[a] ==
                 -susceptance(tf.r[k], tf.x[k]) *
                 (v_angl[a.node] - phase_shift(nm, tf, e, k; nw) - v_star_angl[e])); nw)
         end
-        star[e] = constrain!(nm, :star_balance, e,
+        star[e] = constrain!(nm, :cstr_tf_star_balance, e,
                              JuMP.@build_constraint(sum(p_term[a] for a in A) == 0.0); nw)
     end
 
@@ -827,7 +828,7 @@ that steps takes exactly one of its positions, `Σₛ zt = 1`.
 """
 function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_id_default(nm)
                                ) where {P<:AbstractDispatchProblem,F<:LPFFormulation}
-    limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :edge_limits)
+    limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_edge_limit)
 
     for e in ids(nm, Transformer; nw)
         tf = edge(nm, e; nw)::Transformer

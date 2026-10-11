@@ -13,6 +13,7 @@
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
 ################################################################################
 
 export FlexibleLoad, power_factor_ratio
@@ -153,7 +154,7 @@ function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{FlexibleLoad}
                 sum(time_step(nm, m) * unit(nm, u; nw = m).p_nom for m in window) :
                 ld.e_set
 
-            constrain!(nm, :flexible_energy, u, JuMP.@build_constraint(
+            constrain!(nm, :cstr_flex_energy, u, JuMP.@build_constraint(
                 sum(time_step(nm, m) * var(nm, :p_flex, u; nw = m) for m in window) == target); nw = n)
         end
     end

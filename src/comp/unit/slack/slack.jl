@@ -12,6 +12,7 @@
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
 ################################################################################
 
 export AbstractSlackUnit, EnergyNotServed, Spill
@@ -214,7 +215,7 @@ flow it is zero.
 """
 function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractPowerFlowProblem,F<:IVRFormulation,T<:AbstractSlackUnit}
-    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :slack_power)
+    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_power)
 
     for u in ids(nm, T; nw)
         power[u] = constraint_unit_power!(nm, u, 0.0, 0.0; nw)
@@ -232,7 +233,7 @@ function _constraint_slack_power(nm::NetworkModel, ::Type{T}, nw::Int) where {T<
     isempty(ids(nm, T; nw)) && return nothing
 
     p_slk = var(nm, :p_slk; nw)
-    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :slack_power)
+    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_power)
 
     for u in ids(nm, T; nw)
         su = unit(nm, u; nw)::T
@@ -314,7 +315,7 @@ with.
 """
 function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractPowerFlowProblem,F<:LPFFormulation,T<:AbstractSlackUnit}
-    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :slack_power)
+    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_injection)
 
     for u in ids(nm, T; nw)
         power[u] = constraint_unit_injection!(nm, u, 0.0; nw)
@@ -332,7 +333,7 @@ function _constraint_slack_injection(nm::NetworkModel, ::Type{T}, nw::Int) where
     isempty(ids(nm, T; nw)) && return nothing
 
     p_slk = var(nm, :p_slk; nw)
-    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :slack_power)
+    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_injection)
 
     for u in ids(nm, T; nw)
         su = unit(nm, u; nw)::T

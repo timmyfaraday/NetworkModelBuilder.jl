@@ -11,6 +11,7 @@
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.14.0 - the docstrings follow the nomenclature                             #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
 ################################################################################
 
 export AbstractLoad, demand
@@ -71,7 +72,7 @@ usual assumption; a voltage dependent load is a different unit type.
 """
 function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractProblemType,F<:IVRFormulation,T<:AbstractLoad}
-    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :load_power)
+    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_power)
 
     for u in ids(nm, T; nw)
         ld           = unit(nm, u; nw)::T
@@ -115,7 +116,7 @@ formulation.
 """
 function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractLoad}
-    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :load_power)
+    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_injection)
 
     for u in ids(nm, T; nw)
         p_set = first(demand(nm, unit(nm, u; nw)::T, u; nw))

@@ -9,6 +9,7 @@
 # v0.1.0 - initial implementation                                              #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - constraint keys follow the nomenclature                            #
 ################################################################################
 
 @testset "problem and formulation dispatch" begin
@@ -82,10 +83,10 @@
         @test JuMP.upper_bound(_NMB.var(opf, :p_gen, 1)) ≈ unit(opf, 1).p_max
 
         # the PV magnitude setpoint exists only in a load flow, the limits only in a dispatch
-        @test haskey(_NMB.con(lf), :node_voltage_setpoint)
-        @test !haskey(_NMB.con(lf), :node_voltage_limits)
-        @test haskey(_NMB.con(opf), :node_voltage_limits)
-        @test !haskey(_NMB.con(opf), :node_voltage_setpoint)
+        @test haskey(_NMB.con(lf), :cstr_node_voltage_setpoint)
+        @test !haskey(_NMB.con(lf), :cstr_node_voltage_limit)
+        @test haskey(_NMB.con(opf), :cstr_node_voltage_limit)
+        @test !haskey(_NMB.con(opf), :cstr_node_voltage_setpoint)
 
         @test JuMP.objective_function(lf.model) == JuMP.AffExpr(0.0)
         @test JuMP.objective_function(opf.model) != JuMP.AffExpr(0.0)

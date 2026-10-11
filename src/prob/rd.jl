@@ -15,6 +15,7 @@
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
 ################################################################################
 
 ################################################################################
@@ -140,7 +141,7 @@ function constraint_redispatch_control(nm::NetworkModel)
                     x = _control_variable(nm, key, sub, n)
                     y = _control_variable(nm, key, sub, base)
                     (x === nothing || y === nothing) && continue
-                    constrain!(nm, :redispatch_control, (family, sub, key),
+                    constrain!(nm, :cstr_rd_control, (family, sub, key),
                                JuMP.@build_constraint(x == y); nw = n)
                 end
             end
@@ -226,7 +227,7 @@ function constraint_overload_peak(nm::NetworkModel)
                 s_ovl = var(nm, :s_ovl; nw = m)
                 haskey(s_ovl, e) || continue
 
-                constrain!(nm, :overload_peak, (e, m),
+                constrain!(nm, :cstr_edge_overload_peak, (e, m),
                            JuMP.@build_constraint(s_ovl[e] <= olp); nw = n)
             end
         end

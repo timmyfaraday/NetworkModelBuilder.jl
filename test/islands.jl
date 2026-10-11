@@ -9,6 +9,7 @@
 # v0.11.0 - the islands test                                                   #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - constraint keys follow the nomenclature                            #
 ################################################################################
 
 # Which nodes can exchange power, what a model does about an island that cannot
@@ -160,8 +161,8 @@
         for F in (IVRFormulation, LPFFormulation)
             nm = instantiate_model(data, OptimalPowerFlowProblem, F)
 
-            @test collect(keys(_NMB.con(nm)[:node_voltage_reference])) == [1]
-            @test collect(keys(_NMB.con(nm)[:node_voltage_anchor])) == [3]       # the lowest node
+            @test collect(keys(_NMB.con(nm)[:cstr_node_voltage_reference])) == [1]
+            @test collect(keys(_NMB.con(nm)[:cstr_node_voltage_anchor])) == [3]       # the lowest node
 
             result = quiet(() -> solve_opf(data, F, OPTIMIZER))
             sol    = nw_solution(result)["node"]
@@ -175,7 +176,7 @@
         whole = toy(edges = [br(1, 1, 2), br(2, 2, 3), br(3, 3, 4)],
                     units = [gen(1, 1), load(2, 2), load(3, 4)])
         nm    = instantiate_model(whole, OptimalPowerFlowProblem, LPFFormulation)
-        @test isempty(_NMB.con(nm)[:node_voltage_anchor])
+        @test isempty(_NMB.con(nm)[:cstr_node_voltage_anchor])
 
         # and a load flow anchors the same way
         lf = toy(edges = [br(1, 1, 2), br(2, 3, 4)],
@@ -238,7 +239,7 @@
 
         # so the load flow has an island with a source and no reference node, and anchors it
         nm = instantiate_model(data, LoadFlowProblem, LPFFormulation)
-        @test collect(keys(_NMB.con(nm)[:node_voltage_anchor])) == [3]
+        @test collect(keys(_NMB.con(nm)[:cstr_node_voltage_anchor])) == [3]
         r = quiet(() -> solve_lf(data, LPFFormulation, OPTIMIZER))
         @test r["termination_status"] == JuMP.LOCALLY_SOLVED
         @test nw_solution(r)["node"]["3"]["v_angl"] ≈ 0 atol = 1e-6

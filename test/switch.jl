@@ -9,6 +9,7 @@
 # v0.11.0 - the switch test                                                    #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - constraint keys follow the nomenclature                            #
 ################################################################################
 
 # What a switch is, before any model is built from one: the data it takes and
@@ -215,15 +216,15 @@ end
         # one angle equality for the pair, and a loop row for the other switch
         nm   = instantiate_model(data, OptimalPowerFlowProblem, LPFFormulation)
         rows = Set((key, id) for (_, key, id) in keys(registered_constraints(nm))
-                   if key in (:switch_angle, :switch_loop, :switch_open))
-        @test rows == Set([(:switch_angle, 2), (:switch_loop, 3)])
+                   if key in (:cstr_sw_angle, :cstr_sw_loop, :cstr_sw_open))
+        @test rows == Set([(:cstr_sw_angle, 2), (:cstr_sw_loop, 3)])
 
         # the same in current, a real row and an imaginary one for each
         nm   = instantiate_model(data, OptimalPowerFlowProblem, IVRFormulation)
         rows = Set((key, id) for (_, key, id) in keys(registered_constraints(nm))
-                   if key in (:switch_voltage, :switch_loop, :switch_open))
-        @test rows == Set([(:switch_voltage, (2, :real)), (:switch_voltage, (2, :imag)),
-                           (:switch_loop, (3, :real)), (:switch_loop, (3, :imag))])
+                   if key in (:cstr_sw_voltage, :cstr_sw_loop, :cstr_sw_open))
+        @test rows == Set([(:cstr_sw_voltage, (2, :real)), (:cstr_sw_voltage, (2, :imag)),
+                           (:cstr_sw_loop, (3, :real)), (:cstr_sw_loop, (3, :imag))])
     end
 
     @testset "three switches in a triangle split the flow by the length of the way" begin
@@ -249,12 +250,12 @@ end
     @testset "an open switch writes no angle row, and a closed one no flow row" begin
         data = toy([br(1, 1, 2), sw(2, 2, 3; position = 0)], [gen(1, 1), load(2, 2)])
 
-        for (F, equal) in ((LPFFormulation, :switch_angle), (IVRFormulation, :switch_voltage))
+        for (F, equal) in ((LPFFormulation, :cstr_sw_angle), (IVRFormulation, :cstr_sw_voltage))
             nm    = instantiate_model(data, OptimalPowerFlowProblem, F)
             keys_ = Set(key for (_, key, _) in keys(registered_constraints(nm)))
 
-            @test :switch_open in keys_ && :switch_flow in keys_
-            @test equal ∉ keys_ && :switch_loop ∉ keys_
+            @test :cstr_sw_open in keys_ && :cstr_sw_flow in keys_
+            @test equal ∉ keys_ && :cstr_sw_loop ∉ keys_
         end
     end
 
@@ -406,12 +407,12 @@ end
 
         # for each switch the flow row, the angle range twice and the flow range twice
         keys_ = [(key, id) for (_, key, id) in keys(registered_constraints(nm))]
-        @test count(==(:switch_flow), first.(keys_)) == 3
-        @test count(==(:switch_angle_range), first.(keys_)) == 6
-        @test count(==(:switch_flow_range), first.(keys_)) == 6
+        @test count(==(:cstr_sw_flow), first.(keys_)) == 3
+        @test count(==(:cstr_sw_angle_range), first.(keys_)) == 6
+        @test count(==(:cstr_sw_flow_range), first.(keys_)) == 6
 
         # and the one loop they make between them, which holds when all three are closed
-        @test count(==(:switch_cycle), first.(keys_)) == 2
+        @test count(==(:cstr_sw_cycle), first.(keys_)) == 2
 
         # a locked one has none of it
         nm = instantiate_model(locked((1, 1, 1)), OptimalPowerFlowProblem, LPFFormulation)
@@ -485,11 +486,11 @@ end
         @test JuMP.start_value.(zs) == [1.0, 0.0, 1.0]
 
         # for each switch two flow rows, four on the voltage, four on the current, one rating
-        @test count(==(:switch_flow), keys_) == 6
-        @test count(==(:switch_voltage_range), keys_) == 12
-        @test count(==(:switch_current_range), keys_) == 12
-        @test count(==(:switch_rating), keys_) == 3
-        @test count(==(:switch_cycle), keys_) == 4          # the loop, on each current twice
+        @test count(==(:cstr_sw_flow), keys_) == 6
+        @test count(==(:cstr_sw_voltage_range), keys_) == 12
+        @test count(==(:cstr_sw_current_range), keys_) == 12
+        @test count(==(:cstr_sw_rating), keys_) == 3
+        @test count(==(:cstr_sw_cycle), keys_) == 4          # the loop, on each current twice
 
         nm = instantiate_model(locked((1, 1, 1)), OptimalPowerFlowProblem, IVRFormulation)
         @test isempty(_NMB.var(nm)[:z_sw])
@@ -573,7 +574,7 @@ end
         nm    = instantiate_model(loop((FREE, FREE, LOCKED), (1, 1, 0)),
                                   OptimalPowerFlowProblem, LPFFormulation)
         keys_ = first.([(key, id) for (_, key, id) in keys(registered_constraints(nm))])
-        @test :switch_cycle ∉ keys_
+        @test :cstr_sw_cycle ∉ keys_
 
         # a switch of a loop that one can close has to have a finite rating, as the free one has
         err = try
@@ -667,7 +668,7 @@ end
         @test preventive["objective"] > corrective["objective"] + 1e-3
 
         # the tie is a row for the free switch under a preventive setup and none under a corrective one
-        ties(nm) = [id for (_, key, id) in keys(registered_constraints(nm)) if key == :redispatch_control]
+        ties(nm) = [id for (_, key, id) in keys(registered_constraints(nm)) if key == :cstr_rd_control]
         @test (:edge, 2, :z_sw) in ties(instantiate_model(data, RedispatchProblem, LPFFormulation))
         @test (:edge, 2, :z_sw) ∉ ties(instantiate_model(data, RedispatchProblem, LPFFormulation;
             ext = Dict{Symbol,Any}(:redispatch => Redispatch(; control = :corrective))))

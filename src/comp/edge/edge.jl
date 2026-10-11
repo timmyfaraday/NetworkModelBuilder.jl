@@ -20,6 +20,7 @@
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.14.0 - the docstrings follow the nomenclature                             #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
 ################################################################################
 
 export register_edge_type!, edge_types
@@ -286,7 +287,7 @@ function constraint_edge_rating!(nm::NetworkModel, e::Int, s_max::Union{Real,Abs
     price                    = overload_price(nm)
 
     price === nothing &&
-        return [constrain!(nm, :edge_rating, (e, t),
+        return [constrain!(nm, :cstr_edge_rating, (e, t),
                     JuMP.@build_constraint(
                         (v_real[a.node]^2 + v_imag[a.node]^2) * (i_term_real[a]^2 + i_term_imag[a]^2) <=
                         _rating_at(s_max, t)^2); nw)
@@ -294,7 +295,7 @@ function constraint_edge_rating!(nm::NetworkModel, e::Int, s_max::Union{Real,Abs
 
     ol = variable_edge_overload!(nm, e; nw)
 
-    return [constrain!(nm, :edge_overload, (e, t),
+    return [constrain!(nm, :cstr_edge_overload, (e, t),
                 JuMP.@build_constraint(
                     (v_real[a.node]^2 + v_imag[a.node]^2) * (i_term_real[a]^2 + i_term_imag[a]^2) <=
                     (_rating_at(s_max, t) + ol)^2); nw)
@@ -340,10 +341,10 @@ function constraint_edge_angle_difference!(nm::NetworkModel, a_fr::Arc, a_to::Ar
     i, j           = a_fr.node, a_to.node
 
     return (
-        constrain!(nm, :edge_angle, (a_fr.edge, :max),
+        constrain!(nm, :cstr_edge_angle_difference, (a_fr.edge, :max),
             JuMP.@build_constraint(v_imag[i] * v_real[j] - v_real[i] * v_imag[j] <=
                 tan(v_angl_max) * (v_real[i] * v_real[j] + v_imag[i] * v_imag[j])); nw),
-        constrain!(nm, :edge_angle, (a_fr.edge, :min),
+        constrain!(nm, :cstr_edge_angle_difference, (a_fr.edge, :min),
             JuMP.@build_constraint(v_imag[i] * v_real[j] - v_real[i] * v_imag[j] >=
                 tan(v_angl_min) * (v_real[i] * v_real[j] + v_imag[i] * v_imag[j])); nw),
     )
@@ -395,9 +396,9 @@ function constraint_linear_flow!(nm::NetworkModel, e::Int, a_fr::Arc, a_to::Arc,
     i, j = a_fr.node, a_to.node
 
     return (
-        constrain!(nm, :linear_flow, (e, :from),
+        constrain!(nm, :cstr_edge_flow, (e, :fr),
                    JuMP.@build_constraint(p_term[a_fr] == -b * (v_angl[i] - v_angl[j] - shift)); nw),
-        constrain!(nm, :linear_flow, (e, :to),
+        constrain!(nm, :cstr_edge_flow, (e, :to),
                    JuMP.@build_constraint(p_term[a_to] == -p_term[a_fr]); nw),
     )
 end
@@ -438,15 +439,15 @@ function constraint_linear_ratings!(nm::NetworkModel, e::Int, arcs,
     price  = overload_price(nm)
 
     price === nothing &&
-        return [constrain!(nm, :linear_rating, (e, t),
+        return [constrain!(nm, :cstr_edge_rating, (e, t),
                            JuMP.@build_constraint(-_rating_at(s_max, t) <= p_term[a] <= _rating_at(s_max, t)); nw)
                 for (t, a) in enumerate(arcs) if isfinite(_rating_at(s_max, t))]
 
     ol = variable_edge_overload!(nm, e; nw)
 
-    return [(constrain!(nm, :linear_overload, (e, t, :pos),
+    return [(constrain!(nm, :cstr_edge_overload, (e, t, :pos),
                         JuMP.@build_constraint(p_term[a] - ol <= _rating_at(s_max, t)); nw),
-             constrain!(nm, :linear_overload, (e, t, :neg),
+             constrain!(nm, :cstr_edge_overload, (e, t, :neg),
                         JuMP.@build_constraint(-p_term[a] - ol <= _rating_at(s_max, t)); nw))
             for (t, a) in enumerate(arcs) if isfinite(_rating_at(s_max, t))]
 end
@@ -471,7 +472,7 @@ function constraint_linear_angle_difference!(nm::NetworkModel, a_fr::Arc, a_to::
     v_angl = var(nm, :v_angl; nw)
     i, j   = a_fr.node, a_to.node
 
-    return constrain!(nm, :linear_angle, a_fr.edge,
+    return constrain!(nm, :cstr_edge_angle_difference, a_fr.edge,
                       JuMP.@build_constraint(v_angl_min <= v_angl[i] - v_angl[j] <= v_angl_max); nw)
 end
 

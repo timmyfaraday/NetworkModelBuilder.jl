@@ -11,6 +11,7 @@
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.14.0 - the docstrings follow the nomenclature                             #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
 ################################################################################
 
 export AbstractSwitch, Switch, SwitchLock, FREE, LOCKED
@@ -266,7 +267,7 @@ rating, which `M` is written with.
 """
 function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractProblemType,F<:_SwitchFormulation,T<:AbstractSwitch}
-    switch = get!(() -> Dict{Int,Any}(), con(nm; nw), :switch)
+    switch = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_sw_equation)
     cycles = _switch_cycles(nm; nw)
 
     for e in ids(nm, T; nw)
@@ -289,7 +290,7 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     end
 
     # a loop is written by the type of its lowest switch, so that no type writes it twice
-    loops = get!(() -> Dict{Any,Any}(), con(nm; nw), :switch_loop_free)
+    loops = get!(() -> Dict{Any,Any}(), con(nm; nw), :cstr_sw_cycle)
     for cycle in _free_switch_cycles(nm; nw)
         edge(nm, minimum(first, cycle); nw) isa T || continue
         loops[Tuple(sort!([e for (e, _) in cycle]))] = _switch_cycle_rows!(nm, cycle; nw)
@@ -313,14 +314,14 @@ function _switch_flow!(nm::NetworkModel{P,F}, e::Int, a_fr::Arc, a_to::Arc; nw::
                       ) where {P<:AbstractProblemType,F<:LPFFormulation}
     p_term = var(nm, :p_term; nw)
 
-    return constrain!(nm, :switch_flow, e, JuMP.@build_constraint(p_term[a_to] == -p_term[a_fr]); nw)
+    return constrain!(nm, :cstr_sw_flow, e, JuMP.@build_constraint(p_term[a_to] == -p_term[a_fr]); nw)
 end
 
 function _switch_open!(nm::NetworkModel{P,F}, e::Int, a_fr::Arc; nw::Int
                       ) where {P<:AbstractProblemType,F<:LPFFormulation}
     p_term = var(nm, :p_term; nw)
 
-    return constrain!(nm, :switch_open, e, JuMP.@build_constraint(p_term[a_fr] == 0.0); nw)
+    return constrain!(nm, :cstr_sw_open, e, JuMP.@build_constraint(p_term[a_fr] == 0.0); nw)
 end
 
 function _switch_equal!(nm::NetworkModel{P,F}, e::Int, a_fr::Arc, a_to::Arc; nw::Int
@@ -328,14 +329,14 @@ function _switch_equal!(nm::NetworkModel{P,F}, e::Int, a_fr::Arc, a_to::Arc; nw:
     v_angl = var(nm, :v_angl; nw)
     i, j   = a_fr.node, a_to.node
 
-    return constrain!(nm, :switch_angle, e, JuMP.@build_constraint(v_angl[i] == v_angl[j]); nw)
+    return constrain!(nm, :cstr_sw_angle, e, JuMP.@build_constraint(v_angl[i] == v_angl[j]); nw)
 end
 
 function _switch_loop!(nm::NetworkModel{P,F}, e::Int, loop; nw::Int
                       ) where {P<:AbstractProblemType,F<:LPFFormulation}
     p_term = var(nm, :p_term; nw)
 
-    return constrain!(nm, :switch_loop, e, JuMP.@build_constraint(
+    return constrain!(nm, :cstr_sw_loop, e, JuMP.@build_constraint(
         sum(σ * p_term[first(edge_arcs(nm, f; nw))] for (f, σ) in loop; init = 0.0) == 0.0); nw)
 end
 
@@ -348,13 +349,13 @@ function _free_switch_rows!(nm::NetworkModel{P,F}, e::Int, sw::AbstractSwitch,
     i, j                 = a_fr.node, a_to.node
 
     return (
-        constrain!(nm, :switch_angle_range, (e, :max), JuMP.@build_constraint(
+        constrain!(nm, :cstr_sw_angle_range, (e, :max), JuMP.@build_constraint(
             v_angl[i] - v_angl[j] <= sw.v_angl_max * (1 - z_sw)); nw),
-        constrain!(nm, :switch_angle_range, (e, :min), JuMP.@build_constraint(
+        constrain!(nm, :cstr_sw_angle_range, (e, :min), JuMP.@build_constraint(
             v_angl[i] - v_angl[j] >= sw.v_angl_min * (1 - z_sw)); nw),
-        constrain!(nm, :switch_flow_range, (e, :max), JuMP.@build_constraint(
+        constrain!(nm, :cstr_sw_flow_range, (e, :max), JuMP.@build_constraint(
             p_term[a_fr] <= sw.s_max * z_sw); nw),
-        constrain!(nm, :switch_flow_range, (e, :min), JuMP.@build_constraint(
+        constrain!(nm, :cstr_sw_flow_range, (e, :min), JuMP.@build_constraint(
             p_term[a_fr] >= -sw.s_max * z_sw); nw),
     )
 end
@@ -371,9 +372,9 @@ function _switch_cycle_rows!(nm::NetworkModel{P,F}, cycle; nw::Int
     around = sum(σ * p_term[first(edge_arcs(nm, e; nw))] for (e, σ) in cycle)
 
     return (
-        constrain!(nm, :switch_cycle, (key, :max),
+        constrain!(nm, :cstr_sw_cycle, (key, :max),
                    JuMP.@build_constraint(around <= M * slack); nw),
-        constrain!(nm, :switch_cycle, (key, :min),
+        constrain!(nm, :cstr_sw_cycle, (key, :min),
                    JuMP.@build_constraint(around >= -M * slack); nw),
     )
 end
@@ -389,14 +390,14 @@ no flow to limit.
 function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                                ) where {P<:AbstractDispatchProblem,F<:LPFFormulation,T<:AbstractSwitch}
     p_term = var(nm, :p_term; nw)
-    limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :switch_limits)
+    limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_sw_rating)
 
     for e in ids(nm, T; nw)
         sw = edge(nm, e; nw)::T
         (_held(nm, sw) && sw.position == 1 && isfinite(sw.s_max)) || continue
 
         a_fr = first(edge_arcs(nm, e; nw))
-        limits[e] = constrain!(nm, :switch_rating, e,
+        limits[e] = constrain!(nm, :cstr_sw_rating, e,
                                JuMP.@build_constraint(-sw.s_max <= p_term[a_fr] <= sw.s_max); nw)
     end
 
@@ -412,9 +413,9 @@ function _switch_flow!(nm::NetworkModel{P,F}, e::Int, a_fr::Arc, a_to::Arc; nw::
     i_term_real, i_term_imag = var(nm, :i_term_real; nw), var(nm, :i_term_imag; nw)
 
     return (
-        constrain!(nm, :switch_flow, (e, :real),
+        constrain!(nm, :cstr_sw_flow, (e, :real),
                    JuMP.@build_constraint(i_term_real[a_to] == -i_term_real[a_fr]); nw),
-        constrain!(nm, :switch_flow, (e, :imag),
+        constrain!(nm, :cstr_sw_flow, (e, :imag),
                    JuMP.@build_constraint(i_term_imag[a_to] == -i_term_imag[a_fr]); nw),
     )
 end
@@ -424,8 +425,8 @@ function _switch_open!(nm::NetworkModel{P,F}, e::Int, a_fr::Arc; nw::Int
     i_term_real, i_term_imag = var(nm, :i_term_real; nw), var(nm, :i_term_imag; nw)
 
     return (
-        constrain!(nm, :switch_open, (e, :real), JuMP.@build_constraint(i_term_real[a_fr] == 0.0); nw),
-        constrain!(nm, :switch_open, (e, :imag), JuMP.@build_constraint(i_term_imag[a_fr] == 0.0); nw),
+        constrain!(nm, :cstr_sw_open, (e, :real), JuMP.@build_constraint(i_term_real[a_fr] == 0.0); nw),
+        constrain!(nm, :cstr_sw_open, (e, :imag), JuMP.@build_constraint(i_term_imag[a_fr] == 0.0); nw),
     )
 end
 
@@ -435,8 +436,8 @@ function _switch_equal!(nm::NetworkModel{P,F}, e::Int, a_fr::Arc, a_to::Arc; nw:
     i, j           = a_fr.node, a_to.node
 
     return (
-        constrain!(nm, :switch_voltage, (e, :real), JuMP.@build_constraint(v_real[i] == v_real[j]); nw),
-        constrain!(nm, :switch_voltage, (e, :imag), JuMP.@build_constraint(v_imag[i] == v_imag[j]); nw),
+        constrain!(nm, :cstr_sw_voltage, (e, :real), JuMP.@build_constraint(v_real[i] == v_real[j]); nw),
+        constrain!(nm, :cstr_sw_voltage, (e, :imag), JuMP.@build_constraint(v_imag[i] == v_imag[j]); nw),
     )
 end
 
@@ -445,9 +446,9 @@ function _switch_loop!(nm::NetworkModel{P,F}, e::Int, loop; nw::Int
     i_term_real, i_term_imag = var(nm, :i_term_real; nw), var(nm, :i_term_imag; nw)
 
     return (
-        constrain!(nm, :switch_loop, (e, :real), JuMP.@build_constraint(
+        constrain!(nm, :cstr_sw_loop, (e, :real), JuMP.@build_constraint(
             sum(σ * i_term_real[first(edge_arcs(nm, f; nw))] for (f, σ) in loop; init = 0.0) == 0.0); nw),
-        constrain!(nm, :switch_loop, (e, :imag), JuMP.@build_constraint(
+        constrain!(nm, :cstr_sw_loop, (e, :imag), JuMP.@build_constraint(
             sum(σ * i_term_imag[first(edge_arcs(nm, f; nw))] for (f, σ) in loop; init = 0.0) == 0.0); nw),
     )
 end
@@ -467,21 +468,21 @@ function _free_switch_rows!(nm::NetworkModel{P,F}, e::Int, sw::AbstractSwitch,
     C = _current_bound(nm, e, sw, a_fr, a_to; nw)
 
     return (
-        constrain!(nm, :switch_voltage_range, (e, :real, :max), JuMP.@build_constraint(
+        constrain!(nm, :cstr_sw_voltage_range, (e, :real, :max), JuMP.@build_constraint(
             v_real[i] - v_real[j] <= M * (1 - z_sw)); nw),
-        constrain!(nm, :switch_voltage_range, (e, :real, :min), JuMP.@build_constraint(
+        constrain!(nm, :cstr_sw_voltage_range, (e, :real, :min), JuMP.@build_constraint(
             v_real[i] - v_real[j] >= -M * (1 - z_sw)); nw),
-        constrain!(nm, :switch_voltage_range, (e, :imag, :max), JuMP.@build_constraint(
+        constrain!(nm, :cstr_sw_voltage_range, (e, :imag, :max), JuMP.@build_constraint(
             v_imag[i] - v_imag[j] <= M * (1 - z_sw)); nw),
-        constrain!(nm, :switch_voltage_range, (e, :imag, :min), JuMP.@build_constraint(
+        constrain!(nm, :cstr_sw_voltage_range, (e, :imag, :min), JuMP.@build_constraint(
             v_imag[i] - v_imag[j] >= -M * (1 - z_sw)); nw),
-        constrain!(nm, :switch_current_range, (e, :real, :max), JuMP.@build_constraint(
+        constrain!(nm, :cstr_sw_current_range, (e, :real, :max), JuMP.@build_constraint(
             i_term_real[a_fr] <= C * z_sw); nw),
-        constrain!(nm, :switch_current_range, (e, :real, :min), JuMP.@build_constraint(
+        constrain!(nm, :cstr_sw_current_range, (e, :real, :min), JuMP.@build_constraint(
             i_term_real[a_fr] >= -C * z_sw); nw),
-        constrain!(nm, :switch_current_range, (e, :imag, :max), JuMP.@build_constraint(
+        constrain!(nm, :cstr_sw_current_range, (e, :imag, :max), JuMP.@build_constraint(
             i_term_imag[a_fr] <= C * z_sw); nw),
-        constrain!(nm, :switch_current_range, (e, :imag, :min), JuMP.@build_constraint(
+        constrain!(nm, :cstr_sw_current_range, (e, :imag, :min), JuMP.@build_constraint(
             i_term_imag[a_fr] >= -C * z_sw); nw),
     )
 end
@@ -515,13 +516,13 @@ function _switch_cycle_rows!(nm::NetworkModel{P,F}, cycle; nw::Int
     imag                     = sum(σ * i_term_imag[first(edge_arcs(nm, e; nw))] for (e, σ) in cycle)
 
     return (
-        constrain!(nm, :switch_cycle, (key, :real, :max),
+        constrain!(nm, :cstr_sw_cycle, (key, :real, :max),
                    JuMP.@build_constraint(real <= M * slack); nw),
-        constrain!(nm, :switch_cycle, (key, :real, :min),
+        constrain!(nm, :cstr_sw_cycle, (key, :real, :min),
                    JuMP.@build_constraint(real >= -M * slack); nw),
-        constrain!(nm, :switch_cycle, (key, :imag, :max),
+        constrain!(nm, :cstr_sw_cycle, (key, :imag, :max),
                    JuMP.@build_constraint(imag <= M * slack); nw),
-        constrain!(nm, :switch_cycle, (key, :imag, :min),
+        constrain!(nm, :cstr_sw_cycle, (key, :imag, :min),
                    JuMP.@build_constraint(imag >= -M * slack); nw),
     )
 end
@@ -548,14 +549,14 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_i
                                ) where {P<:AbstractDispatchProblem,F<:IVRFormulation,T<:AbstractSwitch}
     v_real, v_imag           = var(nm, :v_real;      nw), var(nm, :v_imag;      nw)
     i_term_real, i_term_imag = var(nm, :i_term_real; nw), var(nm, :i_term_imag; nw)
-    limits                   = get!(() -> Dict{Int,Any}(), con(nm; nw), :switch_limits)
+    limits                   = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_sw_rating)
 
     for e in ids(nm, T; nw)
         sw = edge(nm, e; nw)::T
         (isfinite(sw.s_max) && (!_held(nm, sw) || sw.position == 1)) || continue
 
         a = first(edge_arcs(nm, e; nw))
-        limits[e] = constrain!(nm, :switch_rating, e, JuMP.@build_constraint(
+        limits[e] = constrain!(nm, :cstr_sw_rating, e, JuMP.@build_constraint(
             (v_real[a.node]^2 + v_imag[a.node]^2) * (i_term_real[a]^2 + i_term_imag[a]^2) <= sw.s_max^2); nw)
     end
 

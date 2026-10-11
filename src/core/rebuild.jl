@@ -14,6 +14,7 @@
 # v0.12.9 - the register of constraints is a field of the model                #
 # v0.14.0 - a variable is named from its key and id, and may be unnamed        #
 # v0.15.0 - a constraint is named from its key and id in debug_mode            #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
 ################################################################################
 
 # A model built for one window of a rolling horizon is very nearly the model the
@@ -44,8 +45,8 @@ already registered there, replace its function and its set in place.
 reads as it did before:
 
 ```julia
-constrain!(nm, :node_balance, (i, :real),
-           JuMP.@build_constraint(sum(cr[a] for a in A) == sum(cru[u] for u in U)); nw)
+constrain!(nm, :cstr_node_balance, (i, :real),
+           JuMP.@build_constraint(sum(i_term_real[a] for a in A) == sum(i_unit_real[u] for u in U)); nw)
 ```
 
 Replacing rather than deleting and re-adding is the whole point. The row keeps

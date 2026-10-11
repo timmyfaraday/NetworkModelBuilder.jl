@@ -18,6 +18,7 @@
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.14.0 - the docstrings follow the nomenclature                             #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
 ################################################################################
 
 export AbstractBranch, Branch, impedance, shunt_admittance, dynamic_rating
@@ -285,17 +286,17 @@ function constraint_pi_section!(nm::NetworkModel, ctr, cti, vtr, vti, a_to::Arc,
     i_ser_real, i_ser_imag   = var(nm, :i_ser_real;  nw), var(nm, :i_ser_imag;  nw)
 
     return (
-        constrain!(nm, :pi_section, (e, :cr_fr),
+        constrain!(nm, :cstr_br_pi_section, (e, :fr, :real),
                    JuMP.@build_constraint(ctr == g_fr * vtr - b_fr * vti + i_ser_real[e]); nw),
-        constrain!(nm, :pi_section, (e, :ci_fr),
+        constrain!(nm, :cstr_br_pi_section, (e, :fr, :imag),
                    JuMP.@build_constraint(cti == g_fr * vti + b_fr * vtr + i_ser_imag[e]); nw),
-        constrain!(nm, :pi_section, (e, :cr_to),
+        constrain!(nm, :cstr_br_pi_section, (e, :to, :real),
                    JuMP.@build_constraint(i_term_real[a_to] == -i_ser_real[e] + g_to * v_real[j] - b_to * v_imag[j]); nw),
-        constrain!(nm, :pi_section, (e, :ci_to),
+        constrain!(nm, :cstr_br_pi_section, (e, :to, :imag),
                    JuMP.@build_constraint(i_term_imag[a_to] == -i_ser_imag[e] + g_to * v_imag[j] + b_to * v_real[j]); nw),
-        constrain!(nm, :pi_section, (e, :v_real),
+        constrain!(nm, :cstr_br_pi_section, (e, :ser, :real),
                    JuMP.@build_constraint(vtr - v_real[j] == r * i_ser_real[e] - x * i_ser_imag[e]); nw),
-        constrain!(nm, :pi_section, (e, :v_imag),
+        constrain!(nm, :cstr_br_pi_section, (e, :ser, :imag),
                    JuMP.@build_constraint(vti - v_imag[j] == r * i_ser_imag[e] + x * i_ser_real[e]); nw),
     )
 end
@@ -330,7 +331,7 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     v_real, v_imag           = var(nm, :v_real;      nw), var(nm, :v_imag;      nw)
     i_term_real, i_term_imag = var(nm, :i_term_real; nw), var(nm, :i_term_imag; nw)
 
-    branch = get!(() -> Dict{Int,Any}(), con(nm; nw), :branch)
+    branch = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_br_equation)
 
     for e in ids(nm, T; nw)
         br = edge(nm, e; nw)::T
@@ -380,16 +381,16 @@ function _constraint_sections!(nm::NetworkModel, br::AbstractBranch, e::Int, A; 
             push!(csi, JuMP.@expression(nm.model, i_term_imag[a] - (g * v_imag[i] + b * v_real[i])))
         end
 
-        (constrain!(nm, :branch_section, (a, :real), JuMP.@build_constraint(
+        (constrain!(nm, :cstr_br_section, (a, :real), JuMP.@build_constraint(
              v_real[i] - v_pnt_real == br.r[k] * csr[k] - br.x[k] * csi[k]); nw),
-         constrain!(nm, :branch_section, (a, :imag), JuMP.@build_constraint(
+         constrain!(nm, :cstr_br_section, (a, :imag), JuMP.@build_constraint(
              v_imag[i] - v_pnt_imag == br.r[k] * csi[k] + br.x[k] * csr[k]); nw))
     end
 
     g, b  = sum(br.g_shnt) / 2, sum(br.b_shnt) / 2
-    point = (constrain!(nm, :branch_point, (e, :real), JuMP.@build_constraint(
+    point = (constrain!(nm, :cstr_br_point, (e, :real), JuMP.@build_constraint(
                  sum(csr) == g * v_pnt_real - b * v_pnt_imag); nw),
-             constrain!(nm, :branch_point, (e, :imag), JuMP.@build_constraint(
+             constrain!(nm, :cstr_br_point, (e, :imag), JuMP.@build_constraint(
                  sum(csi) == g * v_pnt_imag + b * v_pnt_real); nw))
 
     return (sections, point)
@@ -403,8 +404,8 @@ voltage angle difference across it. Only a dispatch problem imposes them.
 """
 function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                                ) where {P<:AbstractDispatchProblem,F<:IVRFormulation,T<:AbstractBranch}
-    rating = get!(() -> Dict{Int,Any}(), con(nm; nw), :edge_rating)
-    angle  = get!(() -> Dict{Int,Any}(), con(nm; nw), :edge_angle_difference)
+    rating = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_edge_rating)
+    angle  = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_edge_angle_difference)
 
     for e in ids(nm, T; nw)
         br = edge(nm, e; nw)::T
@@ -469,7 +470,7 @@ with `v^a_e` the angle of the point.
 """
 function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractBranch}
-    branch = get!(() -> Dict{Int,Any}(), con(nm; nw), :branch)
+    branch = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_br_equation)
 
     for e in ids(nm, T; nw)
         br = edge(nm, e; nw)::T
@@ -479,10 +480,10 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
             v_angl, p_term, v_pnt_angl = var(nm, :v_angl; nw), var(nm, :p_term; nw), var(nm, :v_pnt_angl, e; nw)
 
             sections = map(enumerate(A)) do (k, a)
-                constrain!(nm, :branch_section, a, JuMP.@build_constraint(p_term[a] ==
+                constrain!(nm, :cstr_br_section, a, JuMP.@build_constraint(p_term[a] ==
                     -susceptance(br.r[k], br.x[k]) * (v_angl[a.node] - v_pnt_angl)); nw)
             end
-            point = constrain!(nm, :branch_point, e,
+            point = constrain!(nm, :cstr_br_point, e,
                                JuMP.@build_constraint(sum(p_term[a] for a in A) == 0.0); nw)
 
             branch[e] = (sections, point)
@@ -505,7 +506,7 @@ branch, see [`constraint_linear_ratings!`](@ref) and
 """
 function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                                ) where {P<:AbstractDispatchProblem,F<:LPFFormulation,T<:AbstractBranch}
-    limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :edge_limits)
+    limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_edge_limit)
 
     for e in ids(nm, T; nw)
         br = edge(nm, e; nw)::T

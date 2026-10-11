@@ -12,6 +12,7 @@
 # v0.13.0 - a branch holds one entry per terminal of a field                   #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - constraint keys follow the nomenclature                            #
 ################################################################################
 
 "case5 with edge 5, which has a turns ratio, rebuilt as a transformer carrying `extra`"
@@ -431,10 +432,10 @@ const PRICES = [10.0, 100.0, 50.0]
         # right hand side
         loose = instantiate_model(arbitrage_network(plain), OptimalPowerFlowProblem,
                                   LPFFormulation)
-        @test !haskey(_NMB.registered_constraints(loose), (1, :storage_cycles, 3))
+        @test !haskey(_NMB.registered_constraints(loose), (1, :cstr_stor_cycle, 3))
         tight = instantiate_model(arbitrage_network(limited), OptimalPowerFlowProblem,
                                   LPFFormulation)
-        @test haskey(_NMB.registered_constraints(tight), (1, :storage_cycles, 3))
+        @test haskey(_NMB.registered_constraints(tight), (1, :cstr_stor_cycle, 3))
     end
 
     @testset "the periods are what a cycle limit is per" begin
@@ -542,11 +543,11 @@ const PRICES = [10.0, 100.0, 50.0]
         open  = instantiate_model(price_network(PRICES;
                                       extra = Dict{Int,AbstractUnit}(3 => loose)),
                                   OptimalPowerFlowProblem, LPFFormulation)
-        @test !haskey(_NMB.registered_constraints(open), (3, :storage_final, 3))
+        @test !haskey(_NMB.registered_constraints(open), (3, :cstr_stor_final_energy, 3))
         shut  = instantiate_model(price_network(PRICES;
                                       extra = Dict{Int,AbstractUnit}(3 => pinned)),
                                   OptimalPowerFlowProblem, LPFFormulation)
-        @test haskey(_NMB.registered_constraints(shut), (3, :storage_final, 3))
+        @test haskey(_NMB.registered_constraints(shut), (3, :cstr_stor_final_energy, 3))
     end
 
     @testset "a target the ratings cannot reach has no answer" begin
@@ -618,15 +619,15 @@ const PRICES = [10.0, 100.0, 50.0]
         # one row per limited generator per period, and none for the others
         nm = instantiate_model(allocation_network(prices, 0.3; period = 2),
                                OptimalPowerFlowProblem, LPFFormulation)
-        @test haskey(_NMB.registered_constraints(nm), (1, :generator_energy, 1))
-        @test haskey(_NMB.registered_constraints(nm), (3, :generator_energy, 1))
-        @test !haskey(_NMB.registered_constraints(nm), (2, :generator_energy, 1))
-        @test !haskey(_NMB.registered_constraints(nm), (1, :generator_energy, 2))
+        @test haskey(_NMB.registered_constraints(nm), (1, :cstr_gen_energy, 1))
+        @test haskey(_NMB.registered_constraints(nm), (3, :cstr_gen_energy, 1))
+        @test !haskey(_NMB.registered_constraints(nm), (2, :cstr_gen_energy, 1))
+        @test !haskey(_NMB.registered_constraints(nm), (1, :cstr_gen_energy, 2))
 
         # an infinite limit is the absence of a row, not a row against infinity
         open = instantiate_model(allocation_network(prices, Inf), OptimalPowerFlowProblem,
                                  LPFFormulation)
-        @test !haskey(_NMB.registered_constraints(open), (1, :generator_energy, 1))
+        @test !haskey(_NMB.registered_constraints(open), (1, :cstr_gen_energy, 1))
 
         @test_throws ArgumentError Generator(; id = 1, node = 1,
                                              e_per_max = -1.0)

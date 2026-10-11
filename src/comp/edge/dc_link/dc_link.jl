@@ -12,6 +12,7 @@
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
 ################################################################################
 
 export AbstractDCLink, DCLink, transfer_loss, transfer_limits
@@ -350,16 +351,16 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     isempty(ids(nm, T; nw)) && return nothing
 
     p_term = var(nm, :p_term; nw)
-    link   = get!(() -> Dict{Int,Any}(), con(nm; nw), :dc_link)
+    link   = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_dcl_power)
 
     for e in ids(nm, T; nw)
         dl         = edge(nm, e; nw)::T
         a_fr, a_to = edge_arcs(nm, e; nw)
 
         # the transfer is `p_set` and the loss follows from it, both data
-        link[e] = (constrain!(nm, :dc_link, (e, :setpoint),
+        link[e] = (constrain!(nm, :cstr_dcl_power, (e, :set),
                               JuMP.@build_constraint(p_term[a_fr] == dl.p_set); nw),
-                   constrain!(nm, :dc_link, (e, :loss), JuMP.@build_constraint(
+                   constrain!(nm, :cstr_dcl_power, (e, :loss), JuMP.@build_constraint(
                        p_term[a_fr] + p_term[a_to] == transfer_loss(dl, abs(dl.p_set))); nw))
     end
 
@@ -369,14 +370,14 @@ end
 "the transfer and the loss of every in-service dc link"
 function _constraint_dc_link!(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractDCLink}
     p_term = var(nm, :p_term; nw)
-    link   = get!(() -> Dict{Int,Any}(), con(nm; nw), :dc_link)
+    link   = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_dcl_power)
 
     for e in ids(nm, T; nw)
         dl         = edge(nm, e; nw)::T
         a_fr, a_to = edge_arcs(nm, e; nw)
 
         if !_has_transfer_loss(dl)
-            link[e] = (constrain!(nm, :dc_link, (e, :loss), JuMP.@build_constraint(
+            link[e] = (constrain!(nm, :cstr_dcl_power, (e, :loss), JuMP.@build_constraint(
                            p_term[a_fr] + p_term[a_to] == dl.p_loss_fix); nw),)
             continue
         end
@@ -386,11 +387,11 @@ function _constraint_dc_link!(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:Ab
         # the transfer is at least what each end puts in, so it is at least what
         # the *sending* end puts in whichever end that turns out to be; the loss
         # equality is what settles it there rather than above it
-        forward = constrain!(nm, :dc_link, (e, :forward),
+        forward = constrain!(nm, :cstr_dcl_power, (e, :forward),
                              JuMP.@build_constraint(p_dcl_thru >= p_term[a_fr]); nw)
-        reverse = constrain!(nm, :dc_link, (e, :reverse),
+        reverse = constrain!(nm, :cstr_dcl_power, (e, :reverse),
                              JuMP.@build_constraint(p_dcl_thru >= p_term[a_to]); nw)
-        loss = constrain!(nm, :dc_link, (e, :loss), JuMP.@build_constraint(
+        loss = constrain!(nm, :cstr_dcl_power, (e, :loss), JuMP.@build_constraint(
                    p_term[a_fr] + p_term[a_to] == transfer_loss(dl, p_dcl_thru)); nw)
 
         link[e] = (forward, reverse, loss)
@@ -427,14 +428,14 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_i
     isempty(ids(nm, T; nw)) && return nothing
 
     p_term = var(nm, :p_term; nw)
-    limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :dc_link_limits)
+    limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_dcl_limit)
 
     for e in ids(nm, T; nw)
         dl         = edge(nm, e; nw)::T
         a_fr, a_to = edge_arcs(nm, e; nw)
         caps       = (a_fr => dl.s_max, a_to => dl.reverse ? dl.s_max : 0.0)
 
-        limits[e] = Tuple(constrain!(nm, :dc_link_limits, (e, a.terminal),
+        limits[e] = Tuple(constrain!(nm, :cstr_dcl_limit, (e, a.terminal),
                                      JuMP.@build_constraint(p_term[a] <= cap); nw)
                           for (a, cap) in caps if isfinite(cap))
     end
@@ -465,13 +466,13 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     p_term   = var(nm, :p_term;   nw)
     p_dcl_up = var(nm, :p_dcl_up; nw)
     p_dcl_dn = var(nm, :p_dcl_dn; nw)
-    split    = get!(() -> Dict{Int,Any}(), con(nm; nw), :dc_link_redispatch)
+    split    = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_dcl_redispatch)
 
     for e in ids(nm, T; nw)
         dl      = edge(nm, e; nw)::T
         a_fr, _ = edge_arcs(nm, e; nw)
 
-        split[e] = constrain!(nm, :dc_link_redispatch, e, JuMP.@build_constraint(
+        split[e] = constrain!(nm, :cstr_dcl_redispatch, e, JuMP.@build_constraint(
                        p_term[a_fr] == dl.p_set + p_dcl_up[e] - p_dcl_dn[e]); nw)
     end
 

@@ -13,6 +13,7 @@
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the docstrings follow the nomenclature                             #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
 ################################################################################
 
 export register_unit_type!, unit_types
@@ -171,9 +172,9 @@ function constraint_unit_power!(nm::NetworkModel, u::Int, p, q; nw::Int)
     i_unit_real, i_unit_imag = var(nm, :i_unit_real; nw), var(nm, :i_unit_imag; nw)
 
     return (
-        constrain!(nm, :unit_power, (u, :active),
+        constrain!(nm, :cstr_unit_power, (u, :p),
                    JuMP.@build_constraint(p == v_real[i] * i_unit_real[u] + v_imag[i] * i_unit_imag[u]); nw),
-        constrain!(nm, :unit_power, (u, :reactive),
+        constrain!(nm, :cstr_unit_power, (u, :q),
                    JuMP.@build_constraint(q == v_imag[i] * i_unit_real[u] - v_real[i] * i_unit_imag[u]); nw))
 end
 
@@ -185,7 +186,7 @@ of [`constraint_unit_power!`](@ref). `p` is an injection, so a load hands in the
 negative of what it withdraws.
 """
 constraint_unit_injection!(nm::NetworkModel, u::Int, p; nw::Int) =
-    constrain!(nm, :unit_injection, u,
+    constrain!(nm, :cstr_unit_injection, u,
                JuMP.@build_constraint(var(nm, :p_unit, u; nw) == p); nw)
 
 ################################################################################

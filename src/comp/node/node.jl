@@ -16,6 +16,7 @@
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.14.0 - the docstrings follow the nomenclature                             #
+# v0.14.0 - the ext keys of the voltage start follow the nomenclature          #
 ################################################################################
 
 export Node, NodeType, PQ, PV, REF, ISOLATED, reference_nodes
@@ -56,7 +57,7 @@ A node `i ∈ I` of the extended graph, i.e., an electrical busbar.
 - `v_base_kv`: the voltage base [kV].
 - `area`, `zone`: bookkeeping identifiers carried through from the input data.
 - `status`: whether the node is in service.
-- `ext`: free-form storage; `:vr_start` and `:vi_start` override the flat start.
+- `ext`: free-form storage; `:v_real_init` and `:v_imag_init` override the flat start.
 
 A node with `v_magn_min` below 0 or above `v_magn_max`, a `v_base_kv` below 0, or a setpoint or
 limit that is NaN, is refused: no model can use it. A `v_base_kv` of 0 stands for
@@ -130,9 +131,9 @@ function _variable_node_voltage_rectangular(nm::NetworkModel, nw::Int, bounded::
     I = ids(nm, Node; nw)
 
     vr = variables!(nm, :v_real, I; nw,
-                    start = i -> get(node(nm, i; nw).ext, :vr_start, 1.0))
+                    start = i -> get(node(nm, i; nw).ext, :v_real_init, 1.0))
     vi = variables!(nm, :v_imag, I; nw,
-                    start = i -> get(node(nm, i; nw).ext, :vi_start, 0.0))
+                    start = i -> get(node(nm, i; nw).ext, :v_imag_init, 0.0))
 
     for i in I
         v_magn_max = bounded ? node(nm, i; nw).v_magn_max : nothing
@@ -300,7 +301,7 @@ function variable_node_voltage(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm
     I = ids(nm, Node; nw)
 
     variables!(nm, :v_angl, I; nw,
-               start = i -> get(node(nm, i; nw).ext, :va_start, 0.0))
+               start = i -> get(node(nm, i; nw).ext, :v_angl_init, 0.0))
 
     return nothing
 end

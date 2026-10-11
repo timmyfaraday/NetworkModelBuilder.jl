@@ -1,6 +1,6 @@
 # Nomenclature for variables and parameters
 
-Status: decided (D55-D61), the map confirmed by Tom 2026-10-11 · Owner: Tom Van Acker · Date: 2026-10-11
+Status: decided (D55-D62), the map confirmed by Tom 2026-10-11 · Owner: Tom Van Acker · Date: 2026-10-11
 Scope: quantities, i.e. component fields (the parameters, and the columns of a table), variable keys, solution keys, and the
 keywords and parameters that name one. Not yet: constraints (their own step), function names, plain words.
 Plan: `plan/naming.md`. The docs page `docs/src/manual/nomenclature.md` is written from this file.
@@ -35,6 +35,8 @@ grammar as code.
   locals stay `br tf dl sw ld st`, the indices `i e u a t k n`. A scalar read out of such a container in a solution builder
   (`vr = JuMP.value(v_real[i])`) keeps its short name, the container has the key's.
 - Matpower, PowerModels and Zorba names live at the reader boundary only; inside the package the names below.
+- A key of `ext` the package reads for a quantity follows the grammar (D62): `:v_real_init`, `:v_imag_init`, `:v_angl_init` of a
+  node (old `:vr_start`, `:vi_start`, `:va_start`). Keys that are not quantities (`:source_id`, `:country`, `:zorba`) stay words.
 - `v_angl_min` and `v_angl_max` on an edge limit the voltage angle **difference** across it; the docs index says so.
 - `s_max` bounds apparent power, which is active power wherever no reactive power exists: a `DCLink`, and the linearized model.
 - In the docs mathematics current is `i` and cost is `c` (D56); the node index `i` keeps its letter.

@@ -4,7 +4,7 @@ The rules that still constrain NMB. Read the section for the area you are touchi
 changing it.
 
 How to use this file:
-- A new decision gets the next free id (**D62**), goes in the Log at the bottom, and is written by
+- A new decision gets the next free id (**D63**), goes in the Log at the bottom, and is written by
   the `record-decision` skill. `Decided by` is a person's username, never an agent.
 - A decision that changes a rule below edits the rule in place and cites the new id. The old
   wording goes to the archive line of the id it came from.
@@ -99,6 +99,9 @@ How to use this file:
 - **A solve takes `set_string_name::Bool = true`** (D61): false builds no variable names and calls
   `JuMP.set_string_names_on_creation(model, false)`; true leaves a `jump_model` given by the caller as it is. Constraints are named in a
   later step.
+- **A key of `ext` the package reads for a quantity follows the grammar** (D62): a node's `:v_real_init`, `:v_imag_init` and
+  `:v_angl_init` start the voltage (`init` is the qualifier of an initial value, as in `e_init`); an `ext` key that is not a quantity,
+  such as `:source_id`, `:country` or `:zorba`, stays a plain word.
 
 ## Concurrency
 
@@ -641,3 +644,8 @@ Changes: new rule in Documentation, applied with the rename; a test compares a t
 Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
 Why: names are built at 45 call sites and read by nothing. On the real step-3 window `instantiate_model` took 1,958 and 1,977 ms with JuMP's names off against 2,437 and 2,697 ms (19 to 27 %), about 0.5 s of a 125 s chunk since the pipeline then updates the model.
 Changes: new rule in Code conventions. A `jump_model` given by the caller is left as it is when the option is true. This step names variables only; constraints are named in the next.
+
+### D62 — A key of `ext` the package reads for a quantity follows the grammar
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
+Why: `:vr_start`, `:vi_start` and `:va_start` of a node's `ext` set the start of the voltage and are read by the package, so they are quantities that D55 left unnamed. Tom asked for them to follow the nomenclature; `init` is the qualifier of an initial value.
+Changes: new rule in Code conventions. `:vr_start` `:v_real_init`, `:vi_start` `:v_imag_init`, `:va_start` `:v_angl_init`, a hard removal (D59), checked by `test/nomenclature.jl`.

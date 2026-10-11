@@ -19,7 +19,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Va
   on 2026-10-11 B30 (v0.13.0).
 - `test-zorba-run` is merged into `main` and kept; the next Zorba change can start from `main`.
 - `b5-switch-edge`, `b11-unified-transformer` merged and deleted; `b21-topology-lookup`, `b22-build-solution`,
-  `b25-guard-rails`, `b23-validation`, `b24-typed-registers`, `b30-one-branch` merged, kept. Next free decision id: **D62**.
+  `b25-guard-rails`, `b23-validation`, `b24-typed-registers`, `b30-one-branch` merged, kept. Next free decision id: **D63**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 

@@ -29,7 +29,8 @@ against the per-file changelog comments the source already carries.
 ### Changed
 
 - **Breaking.** The fields, the variable keys, the solution keys and some keywords are renamed, with no
-  alias and no hint. The keys of `ext` are free-form and are not renamed. A solution key is the key of
+  alias and no hint. The keys of `ext` that the package reads are renamed too, and the others are free-form
+  and stay. A solution key is the key of
   its variable.
 - In the mathematics of the docs the current is `i`, as the code name is, the cost is `c` and the ratio
   of a winding is `t`: ``i^{\text{r}}_{a}``, ``c_{u,k}``, ``t^{\text{m}}_{a}``. A node is still `i` in an
@@ -72,6 +73,12 @@ difference across it. `r`, `x`, the words (`id`, `name`, `node`, `terminals`, `s
 | `Generator` | `:pg` → `:p_gen`, `:qg` → `:q_gen`, `:pgup` → `:p_gen_up`, `:pgdn` → `:p_gen_dn` |
 | `Storage` | `:psc` → `:p_chg`, `:psd` → `:p_dch`, `:es` → `:e_stor`, `:qs` → `:q_stor`, `:psup` → `:p_stor_up`, `:psdn` → `:p_stor_dn` |
 | other units | `:pdf` → `:p_flex`, `:psl` → `:p_slk` |
+
+#### Keys of `ext`
+
+| owner | renamed |
+|:------|:--------|
+| node | `:vr_start` → `:v_real_init`, `:vi_start` → `:v_imag_init`, `:va_start` → `:v_angl_init`, where the solver starts the voltage |
 
 #### Solution keys
 

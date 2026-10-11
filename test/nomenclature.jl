@@ -85,6 +85,9 @@ const NOM_KEYS = [
     "psup" => "p_stor_up", "psdn" => "p_stor_dn",
     "pdf" => "p_flex", "psl" => "p_slk"]
 
+"a key of `ext` the package reads, old and new"
+const NOM_EXT = ["vr_start" => "v_real_init", "vi_start" => "v_imag_init", "va_start" => "v_angl_init"]
+
 "a solution key, old and new"
 const NOM_SOLUTION = [
     "vr" => "v_real", "vi" => "v_imag", "va" => "v_angl", "vm" => "v_magn",
@@ -167,6 +170,21 @@ function nom_variable_keys()
     return found
 end
 
+"the keys of the `ext` of a component the package reads as literals: `get(x.ext, :key, default)`"
+function nom_ext_keys()
+    found = Set{String}()
+    for path in nom_files("src", ".jl")
+        nom_walk(Meta.parseall(read(path, String))) do ex
+            ex isa Expr && ex.head === :call && ex.args[1] === :get && length(ex.args) >= 3 || return nothing
+            from = ex.args[2]
+            from isa Expr && from.head === :. && from.args[end] == QuoteNode(:ext) || return nothing
+            ex.args[3] isa QuoteNode && push!(found, String(ex.args[3].value))
+        end
+    end
+
+    return found
+end
+
 "the name a method definition is for, or `nothing` where it is not a plain function"
 function nom_function_name(sig)
     sig isa Expr || return nothing
@@ -216,8 +234,8 @@ const NOM_EXEMPT = Set([("test/rd.jl", "overload"),                         # a 
 "where the old names of the map are still written: `(file, line, name)`"
 function nom_stragglers()
     longer(names) = sort!(filter(n -> length(n) > 1 && !(n in NOM_SHARED), unique(names)); by = length, rev = true)
-    alt = join(longer(first.(vcat(NOM_FIELDS, NOM_KEYS, NOM_SOLUTION))), "|")
-    sym = join(longer(first.(vcat(NOM_FIELDS, NOM_KEYS))), "|")   # a solution key is a string
+    alt = join(longer(first.(vcat(NOM_FIELDS, NOM_KEYS, NOM_SOLUTION, NOM_EXT))), "|")
+    sym = join(longer(first.(vcat(NOM_FIELDS, NOM_KEYS, NOM_EXT))), "|")   # a solution key is a string
 
     code = [Regex("(?<=[\\w\\)\\]])\\.($alt)(?![\\w!])"),
             Regex("(?<![\\w:\\]\\)]):($sym)(?![\\w!])"),
@@ -291,7 +309,7 @@ end
     end
 
     @testset "the map is made of new names that follow it, and of old ones that do not" begin
-        for map in (NOM_FIELDS, NOM_KEYS, NOM_SOLUTION)
+        for map in (NOM_FIELDS, NOM_KEYS, NOM_SOLUTION, NOM_EXT)
             @test allunique(first.(map))
             @test all(nom_follows, last.(map))
             @test isempty(intersect(first.(map), last.(map)))
@@ -332,6 +350,36 @@ end
 
         @test length(keys) >= 40
         @test nom_none("solution keys", filter(k -> !nom_key_follows(k, NOM_ECHOED) && !(k in NOM_KEPT), keys))
+    end
+
+    @testset "an ext key the package reads follows the grammar" begin
+        keys = nom_ext_keys()
+
+        @test length(keys) >= 3
+        @test nom_none("ext keys", filter(!nom_key_follows, keys))
+    end
+
+    @testset "a node starts its voltage where its ext says, under the new keys only" begin
+        start(nm, key, i) = JuMP.start_value(_NMB.var(nm, key; nw = 1)[i])
+
+        data  = quiet(() -> parse_file(case("case5")))
+        nd    = nodes(network(data))
+        i     = first(sort!(collect(keys(nd))))
+        extra = nd[i].ext
+
+        nm = instantiate_model(data, LoadFlowProblem, IVRFormulation)
+        @test start(nm, :v_real, i) == 1.0 && start(nm, :v_imag, i) == 0.0
+
+        extra[:v_real_init], extra[:v_imag_init], extra[:v_angl_init] = 0.9, -0.1, 0.2
+        nm = instantiate_model(data, LoadFlowProblem, IVRFormulation)
+        @test start(nm, :v_real, i) == 0.9 && start(nm, :v_imag, i) == -0.1
+        @test start(instantiate_model(data, LoadFlowProblem, LPFFormulation), :v_angl, i) == 0.2
+
+        for (old, _) in NOM_EXT
+            extra[Symbol(old)] = 5.0
+        end
+        nm = instantiate_model(data, LoadFlowProblem, IVRFormulation)
+        @test start(nm, :v_real, i) == 0.9 && start(nm, :v_imag, i) == -0.1
     end
 
     @testset "no old name is left where a reader would look" begin

@@ -22,7 +22,7 @@ NodeType
 | | `v_base_kv` | voltage base | kV |
 | | `area`, `zone` | bookkeeping identifiers | |
 | | `status` | in service | |
-| | `ext` | free-form storage; `:vr_start`, `:vi_start` and `:va_start` set where the solver starts the voltage | |
+| | `ext` | free-form storage; `:v_real_init`, `:v_imag_init` and `:v_angl_init` set where the solver starts the voltage | |
 
 Every field but `id`, `name`, `v_base_kv`, `area`, `zone` and `ext` may be a
 [`NetworkVector`](@ref).

@@ -116,6 +116,10 @@ Two fields deserve a note, because their names say less than they mean:
 The names of Matpower, PowerModels and Zorba are kept in their readers and nowhere
 else: the package reads the base power of a Matpower case and calls it `s_base_mva`.
 
+The keys of `ext` that the package reads for a quantity follow the grammar too: a
+[`Node`](@ref) starts its voltage at `ext[:v_real_init]` and `ext[:v_imag_init]`,
+or its angle at `ext[:v_angl_init]`. The other keys of `ext` are free-form.
+
 ## In the mathematics
 
 The code name column of the tables on the component pages joins a name in the code

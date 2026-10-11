@@ -9,6 +9,7 @@
 # v0.7.0 - energy not served and spill                                         #
 # v0.8.0 - a slack unit takes a side in the preventive-corrective split        #
 # v0.10.1 - exports its own public names                                       #
+# v0.14.0 - a variable is named by the model, not at the call site             #
 ################################################################################
 
 export AbstractSlackUnit, EnergyNotServed, Spill
@@ -187,7 +188,7 @@ function variable_slack_volume!(nm::NetworkModel, ::Type{T}; nw::Int) where {T<:
 
     for u in ids(nm, T; nw)
         su = unit(nm, u; nw)::T
-        variable!(nm, :psl, u; nw, base_name = "$(nw)_psl[$u]", start = 0.0,
+        variable!(nm, :psl, u; nw, start = 0.0,
                   lower = 0.0, upper = su.pmax)
     end
 

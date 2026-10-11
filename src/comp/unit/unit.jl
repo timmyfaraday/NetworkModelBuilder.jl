@@ -10,6 +10,7 @@
 # v0.9.4 - registering a unit type is safe from concurrent threads             #
 # v0.10.1 - exports its own public names                                       #
 # v0.12.6 - the solution builders are cheaper and hold what is asked           #
+# v0.14.0 - a variable is named by the model, not at the call site             #
 ################################################################################
 
 export register_unit_type!, unit_types
@@ -63,8 +64,8 @@ function variable_unit_injection_current(nm::NetworkModel{P,F}; nw::Int = nw_id_
                                         ) where {P<:AbstractProblemType,F<:IVRFormulation}
     U = ids(nm, AbstractUnit; nw)
 
-    variables!(nm, :cru, U; nw, base_name = "$(nw)_cru")
-    variables!(nm, :ciu, U; nw, base_name = "$(nw)_ciu")
+    variables!(nm, :cru, U; nw)
+    variables!(nm, :ciu, U; nw)
 
     return nothing
 end
@@ -98,7 +99,7 @@ function variable_unit_injection_power(nm::NetworkModel{P,F}; nw::Int = nw_id_de
                                       ) where {P<:AbstractProblemType,F<:LPFFormulation}
     U = ids(nm, AbstractUnit; nw)
 
-    variables!(nm, :pu, U; nw, base_name = "$(nw)_pu")
+    variables!(nm, :pu, U; nw)
 
     return nothing
 end

@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.11.0 - initial implementation                                             #
+# v0.14.0 - a variable is named by the model, not at the call site             #
 ################################################################################
 
 export AbstractSwitch, Switch, SwitchLock, FREE, LOCKED
@@ -180,7 +181,7 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default
         sw = edge(nm, e; nw)::T
         sw.lock === FREE || continue
 
-        variable!(nm, :zsw, e; nw, base_name = "$(nw)_zsw[$e]",
+        variable!(nm, :zsw, e; nw,
                   start = float(sw.position), binary = true)
     end
 

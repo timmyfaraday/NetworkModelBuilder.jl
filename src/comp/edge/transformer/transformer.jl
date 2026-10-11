@@ -16,6 +16,7 @@
 # v0.13.0 - its per-winding data is normalised in edge.jl                      #
 # v0.13.0 - a table may give a scalar where it takes an entry per winding      #
 # v0.13.0 - the docstring says what g_sh is, against a branch's                #
+# v0.14.0 - a variable is named by the model, not at the call site             #
 ################################################################################
 
 export AbstractTransformer, Transformer, TapMode, FIXED, CONTINUOUS, STEPPED
@@ -322,7 +323,7 @@ function _variable_steps!(nm::NetworkModel, tf::Transformer, a::Arc, k::Int; nw:
     zt = variable_container!(nm, :zt; nw, idtype = Tuple{Arc,Int})
     for s in eachindex(_step_values(nm, tf, k))
         if base === nothing
-            variable!(nm, :zt, (a, s); nw, base_name = "$(nw)_zt[$(a.edge),$k,$s]",
+            variable!(nm, :zt, (a, s); nw,
                       start = s == start ? 1.0 : 0.0, binary = true)
         else
             zt[(a, s)] = var(nm, :zt, (a, s); nw = base)
@@ -414,8 +415,8 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_
         tf = edge(nm, e; nw)::Transformer
 
         vs0 = _referred_start(tf, 1)
-        variable!(nm, :vsr, e; nw, base_name = "$(nw)_vsr[$e]", start = vs0[1])
-        variable!(nm, :vsi, e; nw, base_name = "$(nw)_vsi[$e]", start = vs0[2])
+        variable!(nm, :vsr, e; nw, start = vs0[1])
+        variable!(nm, :vsi, e; nw, start = vs0[2])
 
         for (k, a) in enumerate(edge_arcs(nm, e; nw))
             _moves(nm, tf, k) || continue
@@ -435,12 +436,11 @@ end
 
 "the variables of winding `k`, whose ratio the problem chooses"
 function _variable_winding!(nm::NetworkModel, tf::Transformer, a::Arc, k::Int; nw::Int)
-    name(key) = "$(nw)_$(key)[$(a.edge),$k]"
-    tm, ta    = tf.tm[k], tf.ta[k]
+    tm, ta = tf.tm[k], tf.ta[k]
 
     vtr0, vti0 = _referred_start(tf, k)
-    variable!(nm, :vtr, a; nw, base_name = name(:vtr), start = vtr0)
-    variable!(nm, :vti, a; nw, base_name = name(:vti), start = vti0)
+    variable!(nm, :vtr, a; nw, start = vtr0)
+    variable!(nm, :vti, a; nw, start = vti0)
 
     if _stepped(nm, tf, k)
         _variable_steps!(nm, tf, a, k; nw)
@@ -449,13 +449,13 @@ function _variable_winding!(nm::NetworkModel, tf::Transformer, a::Arc, k::Int; n
         mlo, mhi = _moves_magnitude(nm, tf, k) ? (tf.tm_min[k], tf.tm_max[k]) : (tm, tm)
         ms       = clamp(tm, mlo, mhi)
 
-        variable!(nm, :tr, a; nw, base_name = name(:tr), start = ms * cos(ta),
+        variable!(nm, :tr, a; nw, start = ms * cos(ta),
                   lower = mlo * cos(max(abs(lo), abs(hi))), upper = mhi)
-        variable!(nm, :ti, a; nw, base_name = name(:ti), start = ms * sin(ta),
+        variable!(nm, :ti, a; nw, start = ms * sin(ta),
                   lower = min(mlo * sin(lo), mhi * sin(lo)),
                   upper = max(mlo * sin(hi), mhi * sin(hi)))
     else
-        variable!(nm, :tm, a; nw, base_name = name(:tm),
+        variable!(nm, :tm, a; nw,
                   start = clamp(tm, tf.tm_min[k], tf.tm_max[k]),
                   lower = tf.tm_min[k], upper = tf.tm_max[k])
     end
@@ -707,7 +707,7 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_
         tf = edge(nm, e; nw)::Transformer
         A  = edge_arcs(nm, e; nw)
 
-        length(A) > 2 && variable!(nm, :vas, e; nw, base_name = "$(nw)_vas[$e]", start = 0.0)
+        length(A) > 2 && variable!(nm, :vas, e; nw, start = 0.0)
 
         for (k, a) in enumerate(A)
             if _stepped(nm, tf, k)
@@ -716,7 +716,7 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_
             end
 
             _moves_angle(nm, tf, k) || continue
-            variable!(nm, :ta, a; nw, base_name = "$(nw)_ta[$e,$k]",
+            variable!(nm, :ta, a; nw,
                       start = clamp(tf.ta[k], tf.ta_min[k], tf.ta_max[k]),
                       lower = tf.ta_min[k], upper = tf.ta_max[k])
         end

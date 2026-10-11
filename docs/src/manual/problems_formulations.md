@@ -72,6 +72,16 @@ and what that costs.
 Asking for a combination that has no builder reports what is available rather
 than building a wrong model.
 
+## Variable names
+
+Every variable is built with a name made of the network index, its key and its
+id, which is what a solver log or an LP file shows. A name costs a string per
+variable and a call into the solver to store it: on a large model that is a good
+part of the time [`instantiate_model`](@ref) takes. Every solve takes
+`set_string_name = false` to build without them; the default is `true`. A
+`jump_model` that is handed in keeps its own setting when names are asked for,
+and is switched to unnamed when they are not.
+
 ## The pipeline
 
 ```@docs

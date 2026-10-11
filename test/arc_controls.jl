@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.12.0 - initial implementation                                             #
 # v0.12.9 - the held controls are read through held_controls                   #
+# v0.14.0 - a variable is named by the model, not by its caller                #
 ################################################################################
 
 # A control that belongs to one terminal of an edge rather than to the edge, such
@@ -40,7 +41,7 @@ function _NMB.variable_edge(nm::NetworkModel{P,F}, ::Type{ArcShifter};
 
     for e in ids(nm, ArcShifter; nw), a in edge_arcs(nm, e; nw)
         sh = edge(nm, e; nw)::ArcShifter
-        variable!(nm, :shift, a; nw, base_name = "$(nw)_shift[$(a.edge),$(a.terminal)]",
+        variable!(nm, :shift, a; nw,
                   start = 0.0, lower = -sh.limit, upper = sh.limit)
     end
 
@@ -102,7 +103,7 @@ end
         @test keytype(variable_container!(nm, :nothing_here; nw = 1, idtype = Arc)) === Arc
 
         # created on first sight, returned and brought up to date on second
-        v = variable!(nm, :probe, a; nw = 1, base_name = "probe", lower = 0.0, upper = 1.0)
+        v = variable!(nm, :probe, a; nw = 1, lower = 0.0, upper = 1.0)
         @test keytype(_NMB.var(nm, :probe; nw = 1)) === Arc
         @test variable!(nm, :probe, a; nw = 1, lower = 0.0, upper = 2.0) === v
         @test JuMP.upper_bound(v) == 2.0

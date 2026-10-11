@@ -12,6 +12,7 @@
 # v0.11.0 - an island without a reference node is anchored                     #
 # v0.12.6 - the solution builders are cheaper and hold what is asked           #
 # v0.12.8 - a node refuses limits and setpoints no model can use               #
+# v0.14.0 - a variable is named by the model, not at the call site             #
 ################################################################################
 
 export Node, NodeType, PQ, PV, REF, ISOLATED, reference_nodes
@@ -125,9 +126,9 @@ variable_node_voltage(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
 function _variable_node_voltage_rectangular(nm::NetworkModel, nw::Int, bounded::Bool)
     I = ids(nm, Node; nw)
 
-    vr = variables!(nm, :vr, I; nw, base_name = "$(nw)_vr",
+    vr = variables!(nm, :vr, I; nw,
                     start = i -> get(node(nm, i; nw).ext, :vr_start, 1.0))
-    vi = variables!(nm, :vi, I; nw, base_name = "$(nw)_vi",
+    vi = variables!(nm, :vi, I; nw,
                     start = i -> get(node(nm, i; nw).ext, :vi_start, 0.0))
 
     for i in I
@@ -295,7 +296,7 @@ function variable_node_voltage(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm
                               ) where {P<:AbstractProblemType,F<:LPFFormulation}
     I = ids(nm, Node; nw)
 
-    variables!(nm, :va, I; nw, base_name = "$(nw)_va",
+    variables!(nm, :va, I; nw,
                start = i -> get(node(nm, i; nw).ext, :va_start, 0.0))
 
     return nothing

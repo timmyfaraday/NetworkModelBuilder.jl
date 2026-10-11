@@ -12,6 +12,7 @@
 # v0.10.1 - exports its own public names                                       #
 # v0.12.8 - a generator refuses limits and setpoints no model can use          #
 # v0.12.9 - the energy rows are registered by constrain! alone                 #
+# v0.14.0 - a variable is named by the model, not at the call site             #
 ################################################################################
 
 export AbstractGenerator, Generator
@@ -194,9 +195,9 @@ function _variable_generator_power(nm::NetworkModel, ::Type{T}, nw::Int, bounded
 
     for u in ids(nm, T; nw)
         g = unit(nm, u; nw)::T
-        variable!(nm, :pg, u; nw, base_name = "$(nw)_pg[$u]", start = g.pg,
+        variable!(nm, :pg, u; nw, start = g.pg,
                   lower = bounded ? g.pmin : nothing, upper = bounded ? g.pmax : nothing)
-        variable!(nm, :qg, u; nw, base_name = "$(nw)_qg[$u]", start = g.qg,
+        variable!(nm, :qg, u; nw, start = g.qg,
                   lower = bounded ? g.qmin : nothing, upper = bounded ? g.qmax : nothing)
     end
 
@@ -352,7 +353,7 @@ function _variable_generator_active(nm::NetworkModel, ::Type{T}, nw::Int, bounde
 
     for u in ids(nm, T; nw)
         g = unit(nm, u; nw)::T
-        variable!(nm, :pg, u; nw, base_name = "$(nw)_pg[$u]", start = g.pg,
+        variable!(nm, :pg, u; nw, start = g.pg,
                   lower = bounded ? g.pmin : nothing, upper = bounded ? g.pmax : nothing)
     end
 
@@ -479,9 +480,9 @@ function _variable_generator_redispatch(nm::NetworkModel, ::Type{T}, nw::Int
     for u in ids(nm, T; nw)
         g = unit(nm, u; nw)::T
 
-        variable!(nm, :pgup, u; nw, base_name = "$(nw)_pgup[$u]", start = 0.0,
+        variable!(nm, :pgup, u; nw, start = 0.0,
                   lower = 0.0, upper = isfinite(g.pmax) ? max(g.pmax - g.pg, 0.0) : nothing)
-        variable!(nm, :pgdn, u; nw, base_name = "$(nw)_pgdn[$u]", start = 0.0,
+        variable!(nm, :pgdn, u; nw, start = 0.0,
                   lower = 0.0, upper = isfinite(g.pmin) ? max(g.pg - g.pmin, 0.0) : nothing)
     end
 

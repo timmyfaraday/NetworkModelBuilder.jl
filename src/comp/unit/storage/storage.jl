@@ -11,6 +11,7 @@
 # v0.7.0 - cycle limits, the throughput cost, the inflow hook and the end target#
 # v0.10.1 - exports its own public names                                       #
 # v0.12.9 - the balance, cycle and end rows are registered by constrain! alone #
+# v0.14.0 - a variable is named by the model, not at the call site             #
 ################################################################################
 
 export AbstractStorage, Storage, inflow, storage_cycles
@@ -184,11 +185,11 @@ function variable_storage_active!(nm::NetworkModel, ::Type{T}; nw::Int) where {T
     for u in ids(nm, T; nw)
         st = unit(nm, u; nw)::T
 
-        variable!(nm, :psc, u; nw, base_name = "$(nw)_psc[$u]", start = 0.0,
+        variable!(nm, :psc, u; nw, start = 0.0,
                   lower = 0.0, upper = st.charge_rating)
-        variable!(nm, :psd, u; nw, base_name = "$(nw)_psd[$u]", start = 0.0,
+        variable!(nm, :psd, u; nw, start = 0.0,
                   lower = 0.0, upper = st.discharge_rating)
-        variable!(nm, :es, u; nw, base_name = "$(nw)_es[$u]", start = st.energy_initial,
+        variable!(nm, :es, u; nw, start = st.energy_initial,
                   lower = 0.0, upper = st.energy_capacity)
     end
 
@@ -218,7 +219,7 @@ function variable_storage_reactive!(nm::NetworkModel, ::Type{T}; nw::Int) where 
 
     for u in ids(nm, T; nw)
         st = unit(nm, u; nw)::T
-        variable!(nm, :qs, u; nw, base_name = "$(nw)_qs[$u]", start = 0.0,
+        variable!(nm, :qs, u; nw, start = 0.0,
                   lower = st.qmin, upper = st.qmax)
     end
 
@@ -632,9 +633,9 @@ function _variable_storage_redispatch(nm::NetworkModel, ::Type{T}, nw::Int) wher
     for u in ids(nm, T; nw)
         st = unit(nm, u; nw)::T
 
-        variable!(nm, :psup, u; nw, base_name = "$(nw)_psup[$u]", start = 0.0,
+        variable!(nm, :psup, u; nw, start = 0.0,
                   lower = 0.0, upper = max(st.discharge_rating - st.ps, 0.0))
-        variable!(nm, :psdn, u; nw, base_name = "$(nw)_psdn[$u]", start = 0.0,
+        variable!(nm, :psdn, u; nw, start = 0.0,
                   lower = 0.0, upper = max(st.ps + st.charge_rating, 0.0))
     end
 

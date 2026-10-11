@@ -15,6 +15,7 @@
 # v0.12.1 - a limit past pi/2 does not change the shape of a model             #
 # v0.12.6 - a window builds only what it commits, and what is reported         #
 # v0.12.9 - the held controls are read through held_controls                   #
+# v0.14.0 - a variable is named by the model, not by its caller                #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The
@@ -1550,10 +1551,10 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         data = rolling_network()
         nm   = instantiate_model(window(data, :time, 1:2), RedispatchProblem, LPFFormulation)
 
-        z = variable!(nm, :z, 7; nw = 1, base_name = "1_z[7]", start = 1.0, binary = true)
+        z = variable!(nm, :z, 7; nw = 1, start = 1.0, binary = true)
         @test JuMP.is_binary(z)
         @test JuMP.start_value(z) == 1.0
-        @test !JuMP.is_binary(variable!(nm, :w, 7; nw = 1, base_name = "1_w[7]"))
+        @test !JuMP.is_binary(variable!(nm, :w, 7; nw = 1))
 
         # asked for again it is the same variable, not a second one
         count = JuMP.num_variables(nm.model)

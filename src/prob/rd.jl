@@ -12,6 +12,7 @@
 # v0.12.0 - a measure held at the base case builds no rows of its own          #
 # v0.12.6 - a window builds the solution of what it commits                    #
 # v0.12.9 - the control and peak rows are registered by constrain! alone       #
+# v0.14.0 - a variable is named by the model, not at the call site             #
 ################################################################################
 
 ################################################################################
@@ -216,7 +217,7 @@ function constraint_overload_peak(nm::NetworkModel)
 
         variable_container!(nm, :olp; nw = n)
         for e in monitored
-            olp = variable!(nm, :olp, e; nw = n, base_name = "$(n)_olp[$e]",
+            olp = variable!(nm, :olp, e; nw = n,
                             start = 0.0, lower = 0.0)
             for m in window
                 haskey(var(nm; nw = m), :ol) || continue

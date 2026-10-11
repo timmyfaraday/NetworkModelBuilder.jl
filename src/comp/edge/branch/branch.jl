@@ -14,6 +14,7 @@
 # v0.13.0 - a branch is limited by its ratings and its angle limit, apart      #
 # v0.13.0 - a branch has one entry per terminal, and two or more terminals     #
 # v0.13.0 - checking plain data allocates nothing                              #
+# v0.14.0 - a variable is named by the model, not at the call site             #
 ################################################################################
 
 export AbstractBranch, Branch, impedance, shunt_admittance, dynamic_rating
@@ -211,8 +212,8 @@ function variable_edge_series_current(nm::NetworkModel, E; nw::Int)
     variable_container!(nm, :csr, :csi; nw)
 
     for e in E
-        variable!(nm, :csr, e; nw, base_name = "$(nw)_csr[$e]", start = 0.0)
-        variable!(nm, :csi, e; nw, base_name = "$(nw)_csi[$e]", start = 0.0)
+        variable!(nm, :csr, e; nw, start = 0.0)
+        variable!(nm, :csi, e; nw, start = 0.0)
     end
 
     return nothing
@@ -235,8 +236,8 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default
 
     for e in E
         _is_pi(nm, e) && continue
-        variable!(nm, :vpr, e; nw, base_name = "$(nw)_vpr[$e]", start = 1.0)
-        variable!(nm, :vpi, e; nw, base_name = "$(nw)_vpi[$e]", start = 0.0)
+        variable!(nm, :vpr, e; nw, start = 1.0)
+        variable!(nm, :vpi, e; nw, start = 0.0)
     end
 
     return nothing
@@ -430,7 +431,7 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default
                       ) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractBranch}
     for e in ids(nm, T; nw)
         _is_pi(nm, e) && continue
-        variable!(nm, :vap, e; nw, base_name = "$(nw)_vap[$e]", start = 0.0)
+        variable!(nm, :vap, e; nw, start = 0.0)
     end
 
     return nothing

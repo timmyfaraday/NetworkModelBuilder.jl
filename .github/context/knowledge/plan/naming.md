@@ -1,6 +1,6 @@
 # One nomenclature for variables and parameters (B31)
 
-Status: decided (D55-D61), the map confirmed by Tom 2026-10-11; stage 1 done, red · Author: Tom Van Acker (requested) · Date: 2026-10-11
+Status: decided (D55-D61), the map confirmed by Tom 2026-10-11; stages 1 (red) and 2 (`set_string_name`) done · Author: Tom Van Acker (requested) · Date: 2026-10-11
 Decisions: D55-D61 recorded 2026-10-11 (next free after: D62)
 Priority: P2 · Effort: Large, in six stages. Branch `b31-nomenclature`, cut from `main` at `c493901` (v0.13.0); becomes v0.14.0.
 The names themselves are in `../nomenclature.md`; this file is how to get there.

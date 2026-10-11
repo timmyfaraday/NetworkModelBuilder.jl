@@ -47,7 +47,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Va
 - B24 done (v0.12.9, D49, tagged): `registered` a field of `NetworkModel`, seven write-only `nm.ext` registers deleted, a
   reused variable key and a twice-written constraint id raise; a held model 7.3 MB smaller (not 56.5, `lessons.md`).
 - B30 done (v0.13.0, D50-D54, tagged): one `Branch`, shared fragments in `edge.jl`; suite 3351, chunk byte-identical (`one-branch-terminals.md`).
-- B31 in progress (D55-D61) on `b31-nomenclature`, v0.14.0: stage 1 done, `test/nomenclature.jl` red on purpose (1,639 old names); next `set_string_name` (`knowledge/plan/naming.md`).
+- B31 in progress (D55-D61) on `b31-nomenclature`, v0.14.0: stage 1 (red `test/nomenclature.jl`) and stage 2 (`set_string_name`, names on +2-4 % accepted by Tom, off 26 % faster) committed; next stage 3, the keys layer (`knowledge/plan/naming.md`).
 - Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
 - B11 merged, tagged `v0.12.0` (`unified-transformer.md`, D28-D36); Zorba flows are not unique without a phase shifter price (D34).
 - B12 done: `scripts/` run on `Transformer`; week 1 beside a same-day pre-B11 control (`runs/_b12*`): 14 of 14 chunks

@@ -16,6 +16,7 @@
 # v0.13.0 - the per-terminal data of an edge is normalised here                #
 # v0.13.0 - an edge type says whether a table may give a scalar for it         #
 # v0.13.0 - a Float64 vector is kept, so a window rebuilds a branch cheaply    #
+# v0.14.0 - a variable is named by the model, not at the call site             #
 ################################################################################
 
 export register_edge_type!, edge_types
@@ -120,8 +121,8 @@ function variable_edge_terminal_current(nm::NetworkModel{P,F}; nw::Int = nw_id_d
                                        ) where {P<:AbstractProblemType,F<:IVRFormulation}
     A = arcs(nm; nw)
 
-    variables!(nm, :cr, A; nw, base_name = "$(nw)_cr")
-    variables!(nm, :ci, A; nw, base_name = "$(nw)_ci")
+    variables!(nm, :cr, A; nw)
+    variables!(nm, :ci, A; nw)
 
     return nothing
 end
@@ -155,7 +156,7 @@ function variable_edge_terminal_power(nm::NetworkModel{P,F}; nw::Int = nw_id_def
                                      ) where {P<:AbstractProblemType,F<:LPFFormulation}
     A = arcs(nm; nw)
 
-    variables!(nm, :p, A; nw, base_name = "$(nw)_p")
+    variables!(nm, :p, A; nw)
 
     return nothing
 end
@@ -319,7 +320,7 @@ rating means in each.
 function variable_edge_overload!(nm::NetworkModel, e::Int; nw::Int)
     variable_container!(nm, :ol; nw)
 
-    return variable!(nm, :ol, e; nw, base_name = "$(nw)_ol[$e]", start = 0.0, lower = 0.0)
+    return variable!(nm, :ol, e; nw, start = 0.0, lower = 0.0)
 end
 
 """

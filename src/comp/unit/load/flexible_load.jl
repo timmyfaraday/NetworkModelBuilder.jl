@@ -10,6 +10,7 @@
 # v0.6.0 - the energy balance runs per period                                  #
 # v0.10.1 - exports its own public names                                       #
 # v0.12.9 - the energy rows are registered by constrain! alone                 #
+# v0.14.0 - a variable is named by the model, not at the call site             #
 ################################################################################
 
 export FlexibleLoad, power_factor_ratio
@@ -98,7 +99,7 @@ function variable_unit(nm::NetworkModel{P,F}, ::Type{FlexibleLoad}; nw::Int = nw
 
     for u in ids(nm, FlexibleLoad; nw)
         ld = unit(nm, u; nw)::FlexibleLoad
-        variable!(nm, :pdf, u; nw, base_name = "$(nw)_pdf[$u]", start = ld.pd_nominal,
+        variable!(nm, :pdf, u; nw, start = ld.pd_nominal,
                   lower = ld.pd_min, upper = ld.pd_max)
     end
 

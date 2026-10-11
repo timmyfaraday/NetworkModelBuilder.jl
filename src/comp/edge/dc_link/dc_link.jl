@@ -9,6 +9,7 @@
 # v0.6.0 - initial implementation                                              #
 # v0.10.1 - exports its own public names                                       #
 # v0.12.0 - names the transformer, not the phase shifter                       #
+# v0.14.0 - a variable is named by the model, not at the call site             #
 ################################################################################
 
 export AbstractDCLink, DCLink, transfer_loss, transfer_limits
@@ -216,7 +217,7 @@ function _variable_dc_link!(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:Abst
         dl = edge(nm, e; nw)::T
         _has_transfer_loss(dl) || continue
 
-        variable!(nm, :pdct, e; nw, base_name = "$(nw)_pdct[$e]", start = abs(dl.pdc),
+        variable!(nm, :pdct, e; nw, start = abs(dl.pdc),
                   lower = 0.0, upper = dl.rate_a)
     end
 
@@ -245,9 +246,9 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default
         dl         = edge(nm, e; nw)::T
         down, up   = transfer_limits(dl)
 
-        variable!(nm, :pdcup, e; nw, base_name = "$(nw)_pdcup[$e]", start = 0.0,
+        variable!(nm, :pdcup, e; nw, start = 0.0,
                   lower = 0.0, upper = isfinite(up) ? max(up - dl.pdc, 0.0) : nothing)
-        variable!(nm, :pdcdn, e; nw, base_name = "$(nw)_pdcdn[$e]", start = 0.0,
+        variable!(nm, :pdcdn, e; nw, start = 0.0,
                   lower = 0.0, upper = isfinite(down) ? max(dl.pdc - down, 0.0) : nothing)
     end
 

@@ -38,6 +38,9 @@ The repo carries its own memory. Use it instead of re-deriving things from the c
 7. Docstrings say what and why. No decision ids, no phase names, in comments.
 8. **A question, observation or open idea is not a go-ahead to edit.** "What do you think?" or a
    described problem with no explicit "do it" means state the plan first; edit only once confirmed.
+9. **Edit a CRLF file with several lines through a script that matches its anchor exactly once**
+   (UTF-8, no BOM, line endings kept): `replace_string_in_file` keeps `\"` literal and has landed
+   two lines as one.
 
 ## Decisions
 

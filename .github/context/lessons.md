@@ -149,9 +149,6 @@ again get retired.
 - **A docs table that names fields or keys is a claim: test it against `fieldnames` and the registered keys.** `test/docs_tables.jl` found 23
   fields missing from 12 of 12 Parameters tables (`ext` in all, five fields of `Transformer`, `c_up` and `c_dn`) and six variable keys on
   no component page, in pages read twice before. (unconfirmed)
-- **A scripted edit of many pages refuses unless its anchor matches exactly once.** The `edit` helper of `scratch/nom_docs_tables.jl`
-  (`count(old, text) == 1 || error`, `\n` mapped to the file's line end) stopped 4 of about 30 edits whose anchor was off (a trailing
-  newline, text on two lines) instead of writing them wrong, and left 0 mixed line ends in 44 files. (unconfirmed)
 
 ## Performance
 

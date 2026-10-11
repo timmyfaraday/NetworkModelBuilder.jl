@@ -2,22 +2,14 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B32**.
+older ones: git has them). Next id: **B33**.
 
 ## Now
 
-- [ ] B31 · One nomenclature for variables and parameters (`symbol_primary_secondary`), applied to fields, variable keys and solution keys;
-  `set_string_name` on every solve; per-type parameter and variable tables in the docs · Tom · 2026-10-11 · branch `b31-nomenclature`
-  - Spec `knowledge/plan/naming.md`, names in `knowledge/nomenclature.md`, D55-D61; v0.14.0, a hard removal; the map confirmed.
-    Stage 1 done: `test/nomenclature.jl` is red on purpose (1,639 old names written). Stage 2 done: `set_string_name` (D61), names on
-    +2-4 % against the control (accepted by Tom), names off 26 % faster. Stage 3 done: variable keys, solution keys and the locals
-    that hold a key's variables (438 identifiers, by syntax tree), 24 h chunk byte-identical; old names written 1,639 to 776, the
-    variable-key and solution-key checks green. Stage 4 done: the fields (struct, constructors, `_check_*`, keywords, accesses, symbols,
-    prose; about 2,000 identifiers by syntax tree), `baseMVA` to `s_base_mva` as field, accessor and keyword, tables, Matpower and Zorba
-    at their boundary; suite 3,447 pass, only the old-names check red (183 in `docs/src`), 24 h chunk byte-identical. Next: stage 5, docs.
-    Constraints and their names are the next item.
-
 ## Next
+
+- [ ] B32 · Name the constraints: the keys and ids of constraints, and the names JuMP shows, follow one grammar as variables do (D55-D62); a `set_string_name` reach for them · Tom · 2026-10-11
+  - D55 left constraints, function names and plain words out; D61 named variables only. A decision first: what a constraint's key names (its owner, as a variable's key does, or its role), and whether `con` keys and ids change.
 
 ## Later
 
@@ -71,11 +63,17 @@ older ones: git has them). Next id: **B32**.
 
 ## Done
 
-- [x] B30 · One `Branch` (`length_km`, NaN by default) instead of `Branch`, `Cable` and `OverheadLine`; `pi_model.jl` split by who
+- [x] B31 · One nomenclature for variables and parameters (`symbol_primary_secondary[_unit]`): fields, variable keys, solution keys, keywords and a node's `ext` start keys; `set_string_name` on every solve; per-type tables in the docs (D55-D62) · Tom · 2026-10-11
+  - v0.14.0, merged into `main` and tagged `v0.14.0` on 2026-10-11; spec `knowledge/plan/naming.md`, names `knowledge/nomenclature.md`, a hard removal.
+    Test first: `test/nomenclature.jl` red on 1,639 old names, green at the end; `test/docs_tables.jl` found fields missing from 12 of 12 tables
+    (23 in all) and 6 variable keys on no component page. Suite 3551 (3351 at v0.13.0); names on cost 2-4 %, off 19-27 % faster in `instantiate_model`;
+    a 24 h chunk byte-identical to v0.13.0 at stages 3 and 4. Left: `scripts/NMinusOneScreen.jl` (untracked) had its field accesses renamed only.
+
+- [x] B30 · One `Branch` (`l_km`, NaN by default) instead of `Branch`, `Cable` and `OverheadLine`; `pi_model.jl` split by who
   uses what; a rating and an angle limit apart; then a branch of two or more terminals (D50-D54) · Tom · 2026-10-10
   - v0.13.0, merged into `main` and tagged `v0.13.0` on 2026-10-11; plans `knowledge/plan/one-branch.md` and `one-branch-terminals.md`.
     Suite 3351, a 24 h chunk byte-identical to v0.12.7, window cut 7.7-7.8 ms against a control's 7.7-8.0, a lossy transformer
-    gives v0.12.9's objectives to 9 digits. Left: `scripts/NMinusOneScreen.jl` (untracked) reads a branch's `r`, `x`, `rate_a` as numbers.
+    gives v0.12.9's objectives to 9 digits. Left: `scripts/NMinusOneScreen.jl` (untracked) reads a branch's `r`, `x`, `s_max` as numbers.
 
 - [x] B24 · The package's own registers are fields of `NetworkModel`, not keys of `nm.ext`; a `var`/`con` key is not
   reused with another index set, nor a constraint id in a build (D49) · Tom · 2026-10-08
@@ -86,7 +84,7 @@ older ones: git has them). Next id: **B32**.
 - [x] B23 · A constructor refuses input a model cannot use: `Node`, `Generator`, `FixedLoad`, `Shunt` and the branch
   family (D48) · Tom · 2026-10-08
   - v0.12.8, merged into `main` and tagged `v0.12.8` on 2026-10-10; plan `knowledge/plan/validation.md`. 19 of 19 invalid inputs built
-    before; the Zorba year (8,760 h) loads in 36 s and breaks none of the rules, case14's `base_kv` 0 is allowed.
+    before; the Zorba year (8,760 h) loads in 36 s and breaks none of the rules, case14's `v_base_kv` 0 is allowed.
     Cutting a real step-3 window 7.5 ms (was 7.7; stop rule 16), a 24 h chunk byte-identical to v0.12.7, suite 3295.
 
 - [x] B25 · Guard rails for the measure step: an allocation test that reproduces B6's defect, a `benchmark/`

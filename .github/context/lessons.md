@@ -138,6 +138,20 @@ again get retired.
   (-0.34 %), but 1,382 rows only in the old run (median 2e-5 pu, 47.7 pu in all) and 218 only in the
   new (47.4 pu); total overload +0.010 %. A row is any overload above 1e-6 pu, and alternative optima
   trade many tiny rows for a few larger. B10 predicted rows within 0.1 %. (unconfirmed)
+- **Rename by role with the syntax tree, and use a regex only for strings, comments and docs.** B31 renamed about 2,000 field identifiers and
+  438 locals by role (JuliaSyntax, with a lookup of what each name is: field, key, local, keyword); a regex over the same names would have
+  hit `rate_a` in Matpower's reader and `cost` in Zorba's table, which stay. A pass that realigns columns compares with `HEAD`, and
+  `git diff -U0 | Select-String '^@@ -1[ ,]'` finds a file rewritten whole (expect 0). (unconfirmed)
+- **List every channel a name travels through before the scope of a rename is fixed.** B31 started from fields, variable keys and solution
+  keys; the keys a node reads from its `ext` (`:vr_start`, now `:v_real_init`) and a CSV column (`energy_capacity` of the steering plan,
+  renamed by mistake and found by a crash) came late. `test/nomenclature.jl` now scans `get(x.ext, :key, ...)`. Confirmed Tom Van Acker,
+  2026-10-11 (asked for the `ext` keys).
+- **A docs table that names fields or keys is a claim: test it against `fieldnames` and the registered keys.** `test/docs_tables.jl` found 23
+  fields missing from 12 of 12 Parameters tables (`ext` in all, five fields of `Transformer`, `c_up` and `c_dn`) and six variable keys on
+  no component page, in pages read twice before. (unconfirmed)
+- **A scripted edit of many pages refuses unless its anchor matches exactly once.** The `edit` helper of `scratch/nom_docs_tables.jl`
+  (`count(old, text) == 1 || error`, `\n` mapped to the file's line end) stopped 4 of about 30 edits whose anchor was off (a trailing
+  newline, text on two lines) instead of writing them wrong, and left 0 mixed line ends in 44 files. (unconfirmed)
 
 ## Performance
 

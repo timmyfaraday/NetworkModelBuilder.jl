@@ -1,30 +1,30 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Van Acker (B30 merged and tagged v0.13.0; B31 stages 1 to 4 done).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Van Acker (B31 merged and tagged v0.14.0).
 
 ## Where NMB stands
 
-- v0.12.1-v0.13.0 (B6, B8, B21, B22, B25, B23, B24, B30; v0.12.5-v0.13.0 tagged, the others not): rolling-horizon reuse,
-  cheaper per-window work, guard rails, validation, typed registers, one `Branch` of two or more terminals. v0.12.0 (D28-D36, tagged): one `Transformer`.
+- v0.12.1-v0.14.0 (B6, B8, B21, B22, B25, B23, B24, B30, B31; v0.12.5-v0.14.0 tagged, the others not): rolling-horizon reuse,
+  cheaper per-window work, guard rails, validation, typed registers, one `Branch` of two or more terminals, one nomenclature (D55-D62). v0.12.0 (D28-D36, tagged): one `Transformer`.
   v0.11.0 (D13, D15-D27): the `Switch` edge. v0.10.2 (D11): `solution_tables`,
   `docs/src/manual/concepts.md`. v0.10.1 (D10): `src/comp/` is walked, not listed, each file exports its names.
 - Gap-closure items #1-9 of `context/knowledge/plan/GAP_CLOSURE_PLAN.md` are closed; #10-11 are open
-  (`backlog.md`). Tags: `v0.6.0`, `v0.9.1`-`v0.9.7`, `v0.12.0`, `v0.12.5`-`v0.12.9`, `v0.13.0`; not v0.10.x, v0.11.0, v0.12.1-4.
+  (`backlog.md`). Tags: `v0.6.0`, `v0.9.1`-`v0.9.7`, `v0.12.0`, `v0.12.5`-`v0.12.9`, `v0.13.0`, `v0.14.0`; not v0.10.x, v0.11.0, v0.12.1-4.
 
 ## Branches
 
 - `main` carries B5 and B11 (`--no-ff`), tagged `v0.12.0`, the setup commits D37-D41 and, merged `--no-ff`
   on 2026-10-07, all of `test-zorba-run`: `scripts/` (the Zorba pipeline), B9, B10, B12, B6, B8 (v0.12.4);
   on 2026-10-09 B21 (v0.12.5), the Julia guide review and B22 (v0.12.6); on 2026-10-10 B25 (v0.12.7), B23 (v0.12.8), B24 (v0.12.9);
-  on 2026-10-11 B30 (v0.13.0).
+  on 2026-10-11 B30 (v0.13.0) and B31 (v0.14.0).
 - `test-zorba-run` is merged into `main` and kept; the next Zorba change can start from `main`.
 - `b5-switch-edge`, `b11-unified-transformer` merged and deleted; `b21-topology-lookup`, `b22-build-solution`,
-  `b25-guard-rails`, `b23-validation`, `b24-typed-registers`, `b30-one-branch` merged, kept. Next free decision id: **D63**.
+  `b25-guard-rails`, `b23-validation`, `b24-typed-registers`, `b30-one-branch`, `b31-nomenclature` merged, kept. Next free decision id: **D63**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
 - A `Switch` has a `lock` (`SwitchLock`, free or locked) and a `position` (D15, D25); a locked one
-  writes exact rows, a free one a binary `zsw` and big-M rows, so a dispatch with free switches is
+  writes exact rows, a free one a binary `z_sw` and big-M rows, so a dispatch with free switches is
   mixed-integer with no duals (D16, D17, D23). Both formulations; Juniper is a test dependency.
   Closed locked switches in a loop share the flow, and a loop free switches can close gets a
   loop row, at most 1000 (D21, D26). A free switch is preventive or corrective, non-costly (D18).
@@ -47,7 +47,8 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Va
 - B24 done (v0.12.9, D49, tagged): `registered` a field of `NetworkModel`, seven write-only `nm.ext` registers deleted, a
   reused variable key and a twice-written constraint id raise; a held model 7.3 MB smaller (not 56.5, `lessons.md`).
 - B30 done (v0.13.0, D50-D54, tagged): one `Branch`, shared fragments in `edge.jl`; suite 3351, chunk byte-identical (`one-branch-terminals.md`).
-- B31 in progress (D55-D61) on `b31-nomenclature`, v0.14.0: stages 1 to 4 (red test, `set_string_name`, keys and locals, fields) committed; suite 3,447 pass, only the old-names check of `test/nomenclature.jl` red (183 names in `docs/src`); next stage 5, docs (`knowledge/plan/naming.md`).
+- B31 done (v0.14.0, D55-D62, tagged): one nomenclature for fields, variable keys, solution keys, keywords and a node's `ext` start keys
+  (`knowledge/nomenclature.md`), `set_string_name` on every solve, per-type tables in the docs; suite 3551 (3351 at v0.13.0), a 24 h chunk byte-identical (stages 3, 4).
 - Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
 - B11 merged, tagged `v0.12.0` (`unified-transformer.md`, D28-D36); Zorba flows are not unique without a phase shifter price (D34).
 - B12 done: `scripts/` run on `Transformer`; week 1 beside a same-day pre-B11 control (`runs/_b12*`): 14 of 14 chunks
@@ -68,7 +69,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Va
 
 ## Next
 
-1. B31 (decided, `knowledge/plan/naming.md`), then B26, B27 (the review's order); then B20, B7, B3, B4, B13, B19, B28, B29, see `backlog.md`.
+1. B32 (constraint names, to decide), then B26, B27 (the review's order); then B20, B7, B3, B4, B13, B19, B28, B29, see `backlog.md`.
 
 ## Blocked / waiting
 

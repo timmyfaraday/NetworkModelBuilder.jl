@@ -73,8 +73,8 @@ How to use this file:
   the defect it is meant to catch.
 - **A constructor refuses input a model cannot use, in service or not** (D48): `Node`, `Generator`,
   `FixedLoad`, `Shunt` and the branch family check ordered limits, finite setpoints and impedances,
-  `r² + x² > 0`, `rate_a >= 0` and a `length_km` that is NaN (unknown) or `>= 0` (D50), with `all_nw` so that a `NetworkVector` is checked at
-  every index, and raise an `ArgumentError` naming the component. `base_kv` may be 0, which means
+  `r² + x² > 0`, `s_max >= 0` and an `l_km` that is NaN (unknown) or `>= 0` (D50), with `all_nw` so that a `NetworkVector` is checked at
+  every index, and raise an `ArgumentError` naming the component. `v_base_kv` may be 0, which means
   unknown. The signs of `r` and `x`, and `pg` against its limits, are not checked.
 - **The package's own state is fields, not keys of `nm.ext`, and a key is not reused** (D49):
   `registered` is a field of `NetworkModel`; the registers that only repeated what
@@ -157,8 +157,8 @@ How to use this file:
   (D16). Such a model has no duals, so nodal prices are `nothing`; tests that solve one use HiGHS.
 - **A closed switch is an equality of the voltage at its two nodes with a free flow, an open one a
   zero flow; nodes are not merged** (D17). A locked switch writes exact rows chosen by its
-  position. A free one writes big-M rows, needs a finite `rate_a`, which is an equipment limit in
-  every dispatch problem whether or not the edge is monitored, and takes `angmin`/`angmax` as the
+  position. A free one writes big-M rows, needs a finite `s_max`, which is an equipment limit in
+  every dispatch problem whether or not the edge is monitored, and takes `v_angl_min`/`v_angl_max` as the
   angle difference allowed across it when open. To be revisited with network reduction (B7).
 - **A free switch can be a preventive or a corrective measure, and is non-costly** (D18).
 - **`BusbarSwitch` and `CircuitBreaker` are added later than `AbstractSwitch` and `Switch`** (D19).
@@ -200,18 +200,18 @@ How to use this file:
   it reuses the base case's, and nothing is tied; its continuous ratio stays tied. A corrective one
   keeps a set per contingency** (D36).
 - **A structure gate asks what the model's own guard asks of that field** (D43): `isfinite` of a limit,
-  the ±π/2 test of an angle limit, `iszero` of a `DCLink`'s `loss_prop`. A generator limit that crosses
+  the ±π/2 test of an angle limit, `iszero` of a `DCLink`'s `p_loss_prop`. A generator limit that crosses
   1.571 pu is not a change of the shape of the model, and was read as one, so a rolling horizon with
   `reuse = true` rebuilt almost every window.
 - **A repeated `topology` lookup is answered from the last answer, held in one atomic slot on the
   `Network`: a cache of a derivation, one entry however many network indices, not a table** (D45).
   Two entries if, after B21, `topology` is still above 3 % of the pipeline profile.
-- **A cable and an overhead line are a `Branch` with another `length_km`, not types: `Cable` and `OverheadLine`
-  are removed with no shim, `Branch` carries `length_km`, NaN meaning unknown and being the default** (D50). `AbstractBranch`
+- **A cable and an overhead line are a `Branch` with another `l_km`, not types: `Cable` and `OverheadLine`
+  are removed with no shim, `Branch` carries `l_km`, NaN meaning unknown and being the default** (D50). `AbstractBranch`
   stays as the extension hook. Planned as v0.13.0; spec `knowledge/plan/one-branch.md`.
 - **A `Branch` has two or more terminals: `n` π-sections coupled at one point with the shunts there aggregated, two
   terminals being the single π as before; its fields are vectors with one entry per terminal, as a transformer's, and the
-  shunt of a section, `g_sh` and `b_sh`, is split equally between its two ends** (D53).
+  shunt of a section, `g_shnt` and `b_shnt`, is split equally between its two ends** (D53).
   Spec `knowledge/plan/one-branch-terminals.md`.
 
 ## Zorba pipeline (`scripts/`)

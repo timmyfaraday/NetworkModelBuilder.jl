@@ -4,7 +4,7 @@ The rules that still constrain NMB. Read the section for the area you are touchi
 changing it.
 
 How to use this file:
-- A new decision gets the next free id (**D63**), goes in the Log at the bottom, and is written by
+- A new decision gets the next free id (**D70**), goes in the Log at the bottom, and is written by
   the `record-decision` skill. `Decided by` is a person's username, never an agent.
 - A decision that changes a rule below edits the rule in place and cites the new id. The old
   wording goes to the archive line of the id it came from.
@@ -96,12 +96,23 @@ How to use this file:
   live in their readers (D58).
 - **A rename is a hard removal: no alias, no hint, every layer tested** (D59): the old name fails, and a test finds none left in
   `src`, `test`, `docs/src`, `scripts` and `benchmark`.
-- **A solve takes `set_string_name::Bool = true`** (D61): false builds no variable names and calls
-  `JuMP.set_string_names_on_creation(model, false)`; true leaves a `jump_model` given by the caller as it is. Constraints are named in a
-  later step.
+- **A solve takes `debug_mode::Bool = false`** (D69, from D61 and D67): true names every variable and constraint and calls
+  `JuMP.set_string_names_on_creation(model, true)`; false builds no name and calls it with `false`, on a `jump_model` given by the caller too.
 - **A key of `ext` the package reads for a quantity follows the grammar** (D62): a node's `:v_real_init`, `:v_imag_init` and
   `:v_angl_init` start the voltage (`init` is the qualifier of an initial value, as in `e_init`); an `ext` key that is not a quantity,
   such as `:source_id`, `:country` or `:zorba`, stays a plain word.
+
+- **A constraint key is `cstr_<owner>_<role>`: the owner, then what the row states** (D63, D68): words from the closed lists of
+  `knowledge/nomenclature.md`, singular, lowercase snake_case, with no formulation in it (as `:p_term` has none); the owner is the
+  type, the family where several types write the row (D51), or the problem; a bound, a phasor part or a side goes in the id, never in
+  the key.
+- **`con` takes the same keys, the register's where an entry holds the rows of one key, and its ids stay component ids** (D64).
+- **A constraint id is the component's id, or `(id, part...)`** (D65): parts spelled as the nomenclature spells them, no old variable
+  key, one shape per key.
+- **`constrain!` names the row `"$(nw)_$(key)[$id]"`, and `debug_mode` covers constraints as it covers variables** (D66, D69).
+- **A constraint, the function that writes it and the dual it gives share one stem and take one prefix each: `cstr_`, `fnct_`,
+  `dual_`** (D68): `cstr_node_balance`, `fnct_node_balance`, `dual_node_balance_real`; the `constraint_*` functions and the `"lambda*"`
+  solution keys are renamed by a hard removal (D59). Planned as v0.15.0, spec `knowledge/plan/naming-constraints.md`.
 
 ## Concurrency
 
@@ -649,3 +660,38 @@ Changes: new rule in Code conventions. A `jump_model` given by the caller is lef
 Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
 Why: `:vr_start`, `:vi_start` and `:va_start` of a node's `ext` set the start of the voltage and are read by the package, so they are quantities that D55 left unnamed. Tom asked for them to follow the nomenclature; `init` is the qualifier of an initial value.
 Changes: new rule in Code conventions. `:vr_start` `:v_real_init`, `:vi_start` `:v_imag_init`, `:va_start` `:v_angl_init`, a hard removal (D59), checked by `test/nomenclature.jl`.
+
+### D63 — A constraint key names the owner, then the role
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
+Why: constraint keys were chosen where each row was written: some begin with an owner (`:node_balance`, `:storage_final`), others name a role or a part alone (`:winding`, `:pi_section`, `:star_balance`), and one rating has two keys by formulation (`:linear_rating`, `:edge_rating`). Ids are per kind (node 1, edge 1 and unit 1 coexist), so a role alone cannot be unique; `:redispatch_control` already carries its family in its id.
+Changes: new rule in Code conventions, as D57 is for variables. Tom answered B32's open question: the owner, then the role, over the role alone and over a key that names the formulation, which a variable key does not either (`:p_term`).
+
+### D64 — `con` takes the same keys as the register
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
+Why: the node rows are `:node_voltage_reference` in `con` and `:node_reference` in the register, and `src/` reads `con` only for the node balance.
+Changes: new rule in Code conventions. An entry that bundles the rows of several keys (`:edge_limits`, `:switch`) takes an owner and a role; its ids stay component ids. Whether `con` earns its keep is its own item.
+
+### D65 — A constraint id is the component's id or `(id, part...)`
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
+Why: the ids of `:pi_section` still read `:cr_fr`, `:ci_fr`, `:cr_to`, `:ci_to`, variable keys from before D55, and `:tap_setting` has `:magnitude_max` next to a bare `:max` that is the angle bound.
+Changes: new rule in Code conventions. Parts use the nomenclature's words (`real imag magn angl min max up dn`), one id shape per key.
+
+### D66 — `constrain!` names the row
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
+Why: every row passes through `constrain!` and none is named; a name built there needs no string at the 100 call sites, and the second sight of a row, an update, never builds it.
+Changes: new rule in Code conventions. A row is named `"$(nw)_$(key)[$id]"` as a variable is, an `Arc` and a nested tuple flattened, the names unique over a model.
+
+### D67 — `set_string_name` covers constraints
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
+Why: D61 named variables only and said constraints were next; one switch for the names JuMP shows is simpler than two.
+Changes: D61's rule edited in place. The default stays true, subject to the measurement of stage 0 of `knowledge/plan/naming-constraints.md`.
+
+### D68 — A constraint, its function and its dual take the prefixes `cstr_`, `fnct_` and `dual_`
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
+Why: D55 left function names and duals out. Tom asked that they follow and that a name say what it is, a constraint, a function or a dual.
+Changes: new rule in Code conventions. `cstr_` prefixes a constraint key, `fnct_` the function that writes it, `dual_` the dual it gives (`constraint_node_balance` `fnct_node_balance`, `"lambda_real"` `dual_node_balance_real`), a hard removal (D59) that includes the two exported `constraint_*` names. The reading of one stem for the three, the entry points and the dual suffixes is confirmed with the map at stage 1.
+
+### D69 — A solve takes `debug_mode`, default false, for the names of every variable and constraint
+Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
+Why: nothing reads a name back, so a name is a debugging aid, and D61 made it a default that costs 19 to 27 % of a cold build; Tom asked for one switch, off unless asked, across variables, constraints and whatever else JuMP names.
+Changes: `set_string_name` (D61, D67) is replaced by `debug_mode::Bool = false`, a hard removal (D59). True names every variable and constraint and sets `JuMP.set_string_names_on_creation(model, true)`; false builds no name and sets it to `false`. A `jump_model` handed in is set either way, which D61 left as it came with true.

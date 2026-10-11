@@ -1,6 +1,6 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Van Acker (B31 merged and tagged v0.14.0).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Van Acker (B31 merged and tagged v0.14.0; B32 decided, D63-D69).
 
 ## Where NMB stands
 
@@ -19,7 +19,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Va
   on 2026-10-11 B30 (v0.13.0) and B31 (v0.14.0).
 - `test-zorba-run` is merged into `main` and kept; the next Zorba change can start from `main`.
 - `b5-switch-edge`, `b11-unified-transformer` merged and deleted; `b21-topology-lookup`, `b22-build-solution`,
-  `b25-guard-rails`, `b23-validation`, `b24-typed-registers`, `b30-one-branch`, `b31-nomenclature` merged, kept. Next free decision id: **D63**.
+  `b25-guard-rails`, `b23-validation`, `b24-typed-registers`, `b30-one-branch`, `b31-nomenclature` merged, kept. Next free decision id: **D70**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -69,7 +69,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Va
 
 ## Next
 
-1. B32 (constraint names, to decide), then B26, B27 (the review's order); then B20, B7, B3, B4, B13, B19, B28, B29, see `backlog.md`.
+1. B32 (constraint, function and dual names, D63-D69, `knowledge/plan/naming-constraints.md`, stage 0 done), then B26, B27 (the review's order); then B20, B7, B3, B4, B13, B19, B28, B29, see `backlog.md`.
 
 ## Blocked / waiting
 

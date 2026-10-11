@@ -11,6 +11,8 @@
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.14.0 - the docstrings follow the nomenclature                             #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 export AbstractLoad, demand
@@ -56,7 +58,7 @@ function demand end
 ################################################################################
 
 """
-    constraint_unit(nm, T; nw)
+    fnct_unit(nm, T; nw)
 
 Fix the power a load injects into its node at minus its withdrawal,
 
@@ -69,14 +71,14 @@ v^{\\text{i}}_{i} i^{\\text{r}}_{u} - v^{\\text{r}}_{i} i^{\\text{i}}_{u} = -q^{
 Written this way the load draws a constant power at any voltage, which is the
 usual assumption; a voltage dependent load is a different unit type.
 """
-function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractProblemType,F<:IVRFormulation,T<:AbstractLoad}
-    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :load_power)
+    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_power)
 
     for u in ids(nm, T; nw)
         ld           = unit(nm, u; nw)::T
         p_set, q_set = demand(nm, ld, u; nw)
-        power[u] = constraint_unit_power!(nm, u, -p_set, -q_set; nw)
+        power[u] = fnct_unit_power!(nm, u, -p_set, -q_set; nw)
     end
 
     return nothing
@@ -107,19 +109,19 @@ end
 ################################################################################
 
 """
-    constraint_unit(nm, T; nw)
+    fnct_unit(nm, T; nw)
 
 Fix the active power a load injects at minus its withdrawal,
 `p_{u} = -p^{\\text{d}}_{u}`. The reactive demand plays no part in a linearized
 formulation.
 """
-function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractLoad}
-    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :load_power)
+    power = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_injection)
 
     for u in ids(nm, T; nw)
         p_set = first(demand(nm, unit(nm, u; nw)::T, u; nw))
-        power[u] = constraint_unit_injection!(nm, u, -p_set; nw)
+        power[u] = fnct_unit_injection!(nm, u, -p_set; nw)
     end
 
     return nothing

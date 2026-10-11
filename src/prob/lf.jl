@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 ################################################################################
@@ -26,7 +27,7 @@ file.
 
 | stage      | what is added                                                     |
 |:-----------|:------------------------------------------------------------------|
-| variables  | node voltages `vr, vi`; terminal currents `cr, ci` and the internal variables of each edge type; injection currents `cru, ciu` and the internal variables of each unit type |
+| variables  | node voltages `v_real, v_imag`; terminal currents `i_term_real, i_term_imag` and the internal variables of each edge type; injection currents `i_unit_real, i_unit_imag` and the internal variables of each unit type |
 | constraints| the voltage anchor at the reference nodes, the magnitude setpoint at the `PV` nodes, Kirchhoff's current law at every node, the physics of every edge, the behaviour of every unit |
 | objective  | zero, the problem is a feasibility problem                        |
 """
@@ -47,15 +48,15 @@ function _build_load_flow!(nm::NetworkModel)
         variable_edge(nm; nw = n)
         variable_unit(nm; nw = n)
 
-        constraint_node_voltage_reference(nm; nw = n)
-        constraint_node_voltage_setpoint(nm; nw = n)
-        constraint_node_balance(nm; nw = n)
-        constraint_edge(nm; nw = n)
-        constraint_unit(nm; nw = n)
+        fnct_node_voltage_reference(nm; nw = n)
+        fnct_node_voltage_setpoint(nm; nw = n)
+        fnct_node_balance(nm; nw = n)
+        fnct_edge(nm; nw = n)
+        fnct_unit(nm; nw = n)
     end
 
-    constraint_edge_coupling(nm)
-    constraint_unit_coupling(nm)
+    fnct_edge_coupling(nm)
+    fnct_unit_coupling(nm)
 
     objective(nm)
 

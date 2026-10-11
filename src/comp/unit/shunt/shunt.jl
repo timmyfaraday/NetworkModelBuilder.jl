@@ -12,6 +12,8 @@
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.14.0 - the docstrings follow the nomenclature                             #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 export AbstractShunt, Shunt
@@ -74,7 +76,7 @@ register_unit_type!(Shunt)
 ################################################################################
 
 """
-    constraint_unit(nm, T; nw)
+    fnct_unit(nm, T; nw)
 
 Fix the current a shunt injects into its node at `c_u = -y^{\\text{s}}_u v_i`,
 i.e.,
@@ -85,19 +87,19 @@ i^{\\text{r}}_{u} = -\\left(g^{\\text{s}}_{u} v^{\\text{r}}_{i} - b^{\\text{s}}_
 i^{\\text{i}}_{u} = -\\left(g^{\\text{s}}_{u} v^{\\text{i}}_{i} + b^{\\text{s}}_{u} v^{\\text{r}}_{i}\\right).
 ```
 """
-function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractProblemType,F<:IVRFormulation,T<:AbstractShunt}
     v_real, v_imag           = var(nm, :v_real;      nw), var(nm, :v_imag;      nw)
     i_unit_real, i_unit_imag = var(nm, :i_unit_real; nw), var(nm, :i_unit_imag; nw)
-    current                  = get!(() -> Dict{Int,Any}(), con(nm; nw), :shunt_current)
+    current                  = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_shnt_current)
 
     for u in ids(nm, T; nw)
         sh = unit(nm, u; nw)::T
         i  = sh.node
         current[u] = (
-            constrain!(nm, :shunt_current, (u, :real),
+            constrain!(nm, :cstr_shnt_current, (u, :real),
                        JuMP.@build_constraint(i_unit_real[u] == -(sh.g * v_real[i] - sh.b * v_imag[i])); nw),
-            constrain!(nm, :shunt_current, (u, :imag),
+            constrain!(nm, :cstr_shnt_current, (u, :imag),
                        JuMP.@build_constraint(i_unit_imag[u] == -(sh.g * v_imag[i] + sh.b * v_real[i])); nw))
     end
 
@@ -122,7 +124,7 @@ end
 ################################################################################
 
 """
-    constraint_unit(nm, T; nw)
+    fnct_unit(nm, T; nw)
 
 A shunt withdraws a constant active power under a [`LPFFormulation`](@ref),
 
@@ -138,12 +140,12 @@ real active withdrawal, and keeping it costs nothing, since it is a constant in
 the node balance. Note that `Gs` is zero throughout the Matpower cases in the
 test suite, so this choice makes no difference there.
 """
-function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractShunt}
-    current = get!(() -> Dict{Int,Any}(), con(nm; nw), :shunt_current)
+    current = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_injection)
 
     for u in ids(nm, T; nw)
-        current[u] = constraint_unit_injection!(nm, u, -(unit(nm, u; nw)::T).g; nw)
+        current[u] = fnct_unit_injection!(nm, u, -(unit(nm, u; nw)::T).g; nw)
     end
 
     return nothing

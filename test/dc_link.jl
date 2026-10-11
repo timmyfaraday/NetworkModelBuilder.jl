@@ -10,6 +10,7 @@
 # v0.12.1 - a loss that depends on the transfer is another shape               #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - constraint keys follow the nomenclature                            #
 ################################################################################
 
 # Two nodes with no alternating current path between them, joined only by a dc
@@ -168,13 +169,13 @@ link(result, n = 1) = nw_solution(result, n)["edge"]["1"]
 
         # an unlimited two-way link writes no limit row at all
         loose = instantiate_model(island_network(), OptimalPowerFlowProblem, LPFFormulation)
-        @test isempty(_NMB.con(loose, :dc_link_limits)[1])
+        @test isempty(_NMB.con(loose, :cstr_dcl_limit)[1])
 
         # a one-way link writes one even when it is unlimited: the cap that says
         # it may not send is a rating of zero, not a missing rating
         oneway = instantiate_model(island_network(; reverse = false),
                                    OptimalPowerFlowProblem, LPFFormulation)
-        @test length(_NMB.con(oneway, :dc_link_limits)[1]) == 1
+        @test length(_NMB.con(oneway, :cstr_dcl_limit)[1]) == 1
     end
 
     @testset "it decouples the nodes it joins" begin
@@ -183,8 +184,8 @@ link(result, n = 1) = nw_solution(result, n)["edge"]["1"]
         nm = instantiate_model(island_network(), OptimalPowerFlowProblem, LPFFormulation)
 
         @test length(reference_nodes(nm)) == 2
-        @test !haskey(_NMB.con(nm), :linear_angle)
-        @test !any(k -> k[2] === :linear_angle, keys(_NMB.registered_constraints(nm)))
+        @test !haskey(_NMB.con(nm), :cstr_edge_angle_difference)
+        @test !any(k -> k[2] === :cstr_edge_angle_difference, keys(_NMB.registered_constraints(nm)))
 
         result = quiet(() -> solve_opf(island_network(), LPFFormulation, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED

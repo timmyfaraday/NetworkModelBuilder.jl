@@ -8,9 +8,6 @@ older ones: git has them). Next id: **B33**.
 
 ## Next
 
-- [ ] B32 · Name the constraints: the keys and ids of constraints, and the names JuMP shows, follow one grammar as variables do (D55-D62); a `set_string_name` reach for them · Tom · 2026-10-11
-  - D55 left constraints, function names and plain words out; D61 named variables only. A decision first: what a constraint's key names (its owner, as a variable's key does, or its role), and whether `con` keys and ids change.
-
 ## Later
 
 - [ ] B15 · Plugin PR: make `new-spec`, `new-run-prompt`, `review-run-report`, `probe-environment` and
@@ -63,6 +60,9 @@ older ones: git has them). Next id: **B33**.
 
 ## Done
 
+- [x] B32 · Name the constraints, the functions that write them and their duals: `cstr_<owner>_<role>` keys and ids, `fnct_*` functions, `dual_*` solution keys, names in JuMP behind `debug_mode`, the old letters B31 left (D63-D70) · Tom · 2026-10-11
+  - v0.15.0, merged and tagged; spec `knowledge/plan/naming-constraints.md`, map `knowledge/nomenclature.md`, a hard removal. Red then green: the testset "constraint nomenclature" of `test/nomenclature.jl` (89 of 99 passed on v0.14.0, 680 old names written); suite 3,686; `debug_mode = false` builds the step-3 window in 1,707 ms and 764 MB, `true` in 2,401 ms and 1,372 MB; a 24 h chunk byte-identical to v0.12.7.
+  - Left: the 14 private `_constraint_*` helpers keep their names; `variables!` names an arc `[Arc(1, 1, 1)]` where `variable!` flattens it; the `julia.instructions.md` line is in (SC9); the vocabulary note for `domain-invariants` (B31's plan) still waits for Tom's OK.
 - [x] B31 · One nomenclature for variables and parameters (`symbol_primary_secondary[_unit]`): fields, variable keys, solution keys, keywords and a node's `ext` start keys; `set_string_name` on every solve; per-type tables in the docs (D55-D62) · Tom · 2026-10-11
   - v0.14.0, merged into `main` and tagged `v0.14.0` on 2026-10-11; spec `knowledge/plan/naming.md`, names `knowledge/nomenclature.md`, a hard removal.
     Test first: `test/nomenclature.jl` red on 1,639 old names, green at the end; `test/docs_tables.jl` found fields missing from 12 of 12 tables

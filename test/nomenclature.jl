@@ -7,6 +7,8 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.14.0 - initial implementation                                             #
+# v0.15.0 - constraints, functions and duals follow a grammar                  #
+# v0.15.0 - the duals follow the grammar of constraints                        #
 ################################################################################
 
 # The names of fields, variable keys and solution keys follow one grammar
@@ -41,9 +43,6 @@ const NOM_WORDS = Set(["id", "name", "node", "terminals", "status", "ext", "type
 
 "an old name that is also a word elsewhere, so only the grammar check looks for it"
 const NOM_SHARED = Set(["step"])
-
-"the duals keep the names they have until the step that names constraints"
-const NOM_KEPT = Set(["lambda", "lambda_q", "lambda_real", "lambda_imag"])
 
 "a field, old and new"
 const NOM_FIELDS = [
@@ -278,17 +277,217 @@ function nom_none(what, offenders)
     return isempty(offenders)
 end
 
+# The names of constraints, of the functions that write them and of the duals
+# they give follow a second grammar (`nomenclature.md`, "Constraints, functions
+# and duals"): one stem, `<owner>_<role>`, and one prefix each, `cstr_`, `fnct_`
+# and `dual_`. What follows is that grammar as data, the map from the old names,
+# and the checks that read the package for them.
+
+"who writes a row: a family or a type of component, or the problem"
+const CST_OWNERS = Set(["node", "edge", "unit", "br", "tf", "dcl", "sw", "gen", "stor", "flex", "shnt", "rd"])
+
+"what a row states: a role is one or two of these"
+const CST_WORDS = Set(["balance", "reference", "setpoint", "anchor", "limit", "range", "rating", "overload",
+                       "peak", "angle", "difference", "voltage", "current", "flow", "power", "injection",
+                       "energy", "final", "cycle", "redispatch", "control", "equation", "open", "loop",
+                       "winding", "ratio", "tap", "step", "setting", "star", "pi", "section", "point"])
+
+"a part of the id of a row, after the id of its component"
+const CST_IDS = Set(["real", "imag", "magn", "angl", "min", "max", "fr", "to", "ser", "set", "loss",
+                     "forward", "reverse", "pos", "neg", "side", "p", "q"])
+
+"a key `con` publishes that bundles the rows of several keys, so no row is registered under it"
+const CST_BUNDLES = Set(["cstr_br_equation", "cstr_edge_limit", "cstr_sw_equation"])
+
+"a function that walks the registry of a family and writes the rows of every type of it"
+const CST_ENTRIES = Set(["edge", "unit", "edge_limit", "edge_coupling", "unit_coupling"])
+
+"a key a row is registered under, old and new; two old keys may be one row in two formulations"
+const CST_KEYS = [
+    "node_balance" => "cstr_node_balance", "node_reference" => "cstr_node_voltage_reference",
+    "node_setpoint" => "cstr_node_voltage_setpoint", "node_limits" => "cstr_node_voltage_limit",
+    "node_anchor" => "cstr_node_voltage_anchor",
+    "edge_rating" => "cstr_edge_rating", "linear_rating" => "cstr_edge_rating",
+    "edge_overload" => "cstr_edge_overload", "linear_overload" => "cstr_edge_overload",
+    "edge_angle" => "cstr_edge_angle_difference", "linear_angle" => "cstr_edge_angle_difference",
+    "linear_flow" => "cstr_edge_flow", "overload_peak" => "cstr_edge_overload_peak",
+    "pi_section" => "cstr_br_pi_section", "branch_section" => "cstr_br_section", "branch_point" => "cstr_br_point",
+    "winding" => "cstr_tf_winding", "star_balance" => "cstr_tf_star_balance", "transformer_ratio" => "cstr_tf_ratio",
+    "tap_step" => "cstr_tf_tap_step", "tap_setting" => "cstr_tf_tap_setting",
+    "dc_link" => "cstr_dcl_power", "dc_link_limits" => "cstr_dcl_limit", "dc_link_redispatch" => "cstr_dcl_redispatch",
+    "switch_flow" => "cstr_sw_flow", "switch_open" => "cstr_sw_open", "switch_angle" => "cstr_sw_angle",
+    "switch_loop" => "cstr_sw_loop", "switch_angle_range" => "cstr_sw_angle_range",
+    "switch_flow_range" => "cstr_sw_flow_range", "switch_cycle" => "cstr_sw_cycle", "switch_rating" => "cstr_sw_rating",
+    "switch_voltage" => "cstr_sw_voltage", "switch_voltage_range" => "cstr_sw_voltage_range",
+    "switch_current_range" => "cstr_sw_current_range",
+    "unit_power" => "cstr_unit_power", "unit_injection" => "cstr_unit_injection",
+    "generator_energy" => "cstr_gen_energy", "generator_redispatch" => "cstr_gen_redispatch",
+    "flexible_energy" => "cstr_flex_energy", "shunt_current" => "cstr_shnt_current",
+    "storage_balance" => "cstr_stor_balance", "storage_final" => "cstr_stor_final_energy",
+    "storage_cycles" => "cstr_stor_cycle", "storage_redispatch" => "cstr_stor_redispatch",
+    "redispatch_control" => "cstr_rd_control"]
+
+"a key of `con`, old and new; the four unit keys hold `cstr_unit_injection` in the linearized formulation"
+const CST_CON = [
+    "branch" => "cstr_br_equation", "dc_link" => "cstr_dcl_power", "dc_link_limits" => "cstr_dcl_limit",
+    "dc_link_redispatch" => "cstr_dcl_redispatch", "edge_angle_difference" => "cstr_edge_angle_difference",
+    "edge_limits" => "cstr_edge_limit", "edge_rating" => "cstr_edge_rating",
+    "generator_power" => "cstr_unit_power", "load_power" => "cstr_unit_power",
+    "slack_power" => "cstr_unit_power", "storage_power" => "cstr_unit_power",
+    "generator_redispatch" => "cstr_gen_redispatch",
+    "node_balance" => "cstr_node_balance", "node_balance_real" => "cstr_node_balance",
+    "node_balance_imag" => "cstr_node_balance",
+    "node_voltage_anchor" => "cstr_node_voltage_anchor", "node_voltage_limits" => "cstr_node_voltage_limit",
+    "node_voltage_reference" => "cstr_node_voltage_reference", "node_voltage_setpoint" => "cstr_node_voltage_setpoint",
+    "shunt_current" => "cstr_shnt_current", "star_balance" => "cstr_tf_star_balance",
+    "storage_redispatch" => "cstr_stor_redispatch",
+    "switch" => "cstr_sw_equation", "switch_limits" => "cstr_sw_rating", "switch_loop_free" => "cstr_sw_cycle",
+    "tap_setting" => "cstr_tf_tap_setting", "tap_step" => "cstr_tf_tap_step", "winding" => "cstr_tf_winding"]
+
+"a function that writes rows, old and new"
+const CST_FUNCTIONS = [
+    "constraint_edge" => "fnct_edge", "constraint_edge_limits" => "fnct_edge_limit",
+    "constraint_edge_coupling" => "fnct_edge_coupling", "constraint_edge_rating" => "fnct_edge_rating",
+    "constraint_edge_angle_difference" => "fnct_edge_angle_difference",
+    "constraint_linear_flow" => "fnct_edge_flow_linear", "constraint_linear_ratings" => "fnct_edge_rating_linear",
+    "constraint_linear_angle_difference" => "fnct_edge_angle_difference_linear",
+    "constraint_node_balance" => "fnct_node_balance", "constraint_node_voltage_reference" => "fnct_node_voltage_reference",
+    "constraint_node_voltage_setpoint" => "fnct_node_voltage_setpoint", "constraint_node_voltage_limits" => "fnct_node_voltage_limit",
+    "constraint_node_voltage_anchor" => "fnct_node_voltage_anchor",
+    "constraint_pi_section" => "fnct_br_pi_section", "constraint_overload_peak" => "fnct_edge_overload_peak",
+    "constraint_redispatch_control" => "fnct_rd_control",
+    "constraint_storage_final_energy" => "fnct_stor_final_energy", "constraint_storage_cycles" => "fnct_stor_cycle",
+    "constraint_unit" => "fnct_unit", "constraint_unit_coupling" => "fnct_unit_coupling",
+    "constraint_unit_power" => "fnct_unit_power", "constraint_unit_injection" => "fnct_unit_injection"]
+
+"a dual of a node, old and new"
+const CST_DUALS = ["lambda" => "dual_node_balance_p", "lambda_q" => "dual_node_balance_q",
+                   "lambda_real" => "dual_node_balance_real", "lambda_imag" => "dual_node_balance_imag"]
+
+"a variable that is still a parameter or a local of a function that writes rows under an old letter, old and new"
+const CST_LETTERS = ["ctr" => "i_wind_real", "cti" => "i_wind_imag", "vtr" => "v_wind_real", "vti" => "v_wind_imag",
+                     "csr" => "i_ser_real", "csi" => "i_ser_imag", "cru" => "i_real", "ciu" => "i_imag"]
+
+"whether a constraint key is `cstr_<owner>_<role>`, the role one or two words of the list"
+function cst_key_follows(key::AbstractString)
+    startswith(key, "cstr_") || return false
+
+    parts = String.(split(key[6:end], '_'))
+    length(parts) >= 2 && parts[1] in CST_OWNERS || return false
+    role = parts[2:end]
+
+    return length(role) <= 2 && all(in(CST_WORDS), role)
+end
+
+"the calls of `constrain!` with a literal key: `(key, the words of its id)`"
+function cst_rows()
+    found = Tuple{String,Vector{String}}[]
+    for path in nom_files("src", ".jl")
+        nom_walk(Meta.parseall(read(path, String))) do ex
+            ex isa Expr && ex.head === :call && ex.args[1] === :constrain! || return nothing
+
+            args = [a for a in ex.args[2:end] if !(a isa Expr && a.head === :parameters)]
+            length(args) >= 3 && args[2] isa QuoteNode || return nothing
+
+            id    = args[3]
+            words = id isa Expr && id.head === :tuple ? [String(a.value) for a in id.args if a isa QuoteNode] : String[]
+            push!(found, (String(args[2].value), words))
+        end
+    end
+
+    return found
+end
+
+"the keys of `con` the package writes and reads as literals: `get!(f, con(nm; nw), :key)`, `get(con(nm; nw), :key, d)`"
+function cst_con_keys()
+    found = Set{String}()
+    for path in nom_files("src", ".jl")
+        nom_walk(Meta.parseall(read(path, String))) do ex
+            ex isa Expr && ex.head === :call && ex.args[1] in (:get, :get!) || return nothing
+
+            for k in 2:length(ex.args) - 1
+                c = ex.args[k]
+                c isa Expr && c.head === :call && c.args[1] === :con && ex.args[k + 1] isa QuoteNode &&
+                    push!(found, String(ex.args[k + 1].value))
+            end
+        end
+    end
+
+    return found
+end
+
+"the names of the functions `src/` and `ext/` define, with a method or without (`function f end`)"
+function cst_defined()
+    found = Set{String}()
+    for dir in ("src", "ext"), path in nom_files(dir, ".jl")
+        nom_walk(Meta.parseall(read(path, String))) do ex
+            ex isa Expr && ex.head in (:function, :(=)) && length(ex.args) >= 1 || return nothing
+
+            name = ex.args[1] isa Symbol && ex.head === :function ? ex.args[1] : nom_function_name(ex.args[1])
+            name === nothing || push!(found, rstrip(String(name), '!'))
+        end
+    end
+
+    return found
+end
+
+"where an old key, function, dual or letter of the maps is still written: `(file, line, name)`"
+function cst_stragglers()
+    longer(names) = sort!(unique(names); by = length, rev = true)
+    ambiguous = ("branch", "switch", "winding")     # plain words elsewhere; the checks of the keys find them
+    keys  = join(longer(filter(!in(ambiguous), first.(vcat(CST_KEYS, CST_CON)))), "|")
+    funcs = join(longer(first.(CST_FUNCTIONS)), "|")
+    duals = join(longer(first.(CST_DUALS)), "|")
+    named = join(longer(filter(n -> length(n) > 1, first.(NOM_KEYS))), "|")
+
+    symbol = Regex("(?<![\\w:\\]\\)]):($keys)(?![\\w!])")          # `:node_limits`, not in a comment
+    others = [Regex("\\b($funcs)\\b"),                              # `constraint_unit`
+              Regex("[\"`]($duals)[\"`]"),                          # `"lambda_real"`
+              Regex("\\b($(join(first.(CST_LETTERS), "|")))\\b"),   # `ctr`, `csr`
+              Regex("\\b\\d_($named)\\["),                          # `1_pg[3]`
+              r"\b(cr|cru|ciu)\["]                               # a container under its old key
+
+    skip = (joinpath(BASE_DIR, "test", "nomenclature.jl"), joinpath(BASE_DIR, "CHANGELOG.md"),
+            joinpath(BASE_DIR, "test", "powermodels.jl"))
+
+    found = Tuple{String,Int,String}[]
+    for (dir, exts) in (("src", (".jl",)), ("ext", (".jl",)), ("test", (".jl",)), ("scripts", (".jl",)),
+                        ("benchmark", (".jl",)), ("docs/src", (".md",)))
+        for path in nom_files(dir, exts...)
+            path in skip && continue
+            rel     = replace(relpath(path, BASE_DIR), '\\' => '/')
+            isjulia = endswith(path, ".jl")
+            for (n, line) in enumerate(readlines(path))
+                code = isjulia ? replace(line, r"(^|\s)#.*$" => "") : line
+                for m in eachmatch(symbol, code)
+                    push!(found, (rel, n, m.captures[1]))
+                end
+                for rx in others, m in eachmatch(rx, line)
+                    push!(found, (rel, n, m.captures[1]))
+                end
+            end
+        end
+    end
+    for (n, line) in enumerate(readlines(joinpath(BASE_DIR, "README.md")))
+        for rx in (symbol, others...), m in eachmatch(rx, line)
+            push!(found, ("README.md", n, m.captures[1]))
+        end
+    end
+
+    return found
+end
+
 @testset "nomenclature" begin
 
     @testset "the vocabulary is closed, short and has no word in two lists" begin
-        lists = (NOM_WHAT, NOM_PART, NOM_QUALIFIER, NOM_UNIT, NOM_WORDS, NOM_KEPT)
+        lists = (NOM_WHAT, NOM_PART, NOM_QUALIFIER, NOM_UNIT, NOM_WORDS)
         for (k, a) in enumerate(lists), b in lists[k + 1:end]
             @test isempty(intersect(a, b))
         end
 
         @test all(d -> 2 <= length(d) <= 4, union(NOM_WHAT, NOM_PART, NOM_QUALIFIER, NOM_UNIT))
         @test all(s -> length(s) == 1, NOM_SYMBOLS)
-        @test all(isascii, union(NOM_WHAT, NOM_PART, NOM_QUALIFIER, NOM_UNIT, NOM_WORDS, NOM_KEPT))
+        @test all(isascii, union(NOM_WHAT, NOM_PART, NOM_QUALIFIER, NOM_UNIT, NOM_WORDS))
         @test count(!isascii, join(NOM_SYMBOLS)) == 1
     end
 
@@ -326,7 +525,7 @@ end
 
         @test all(known(NOM_FIELDS), String(f) for T in types for f in fieldnames(T))
         @test all(known(NOM_KEYS), nom_variable_keys())
-        @test all(k -> known(NOM_SOLUTION)(k) || k in NOM_KEPT, nom_solution_keys())
+        @test all(k -> known(NOM_SOLUTION)(k) || k in last.(CST_DUALS), nom_solution_keys())
     end
 
     @testset "a field is a word or follows the grammar" begin
@@ -349,7 +548,7 @@ end
         keys = nom_solution_keys()
 
         @test length(keys) >= 40
-        @test nom_none("solution keys", filter(k -> !nom_key_follows(k, NOM_ECHOED) && !(k in NOM_KEPT), keys))
+        @test nom_none("solution keys", filter(k -> !nom_key_follows(k, NOM_ECHOED) && !(k in last.(CST_DUALS)), keys))
     end
 
     @testset "an ext key the package reads follows the grammar" begin
@@ -390,6 +589,111 @@ end
             by_folder = Dict(d => count(f -> startswith(f[1], d), found)
                              for d in ("src", "test", "docs", "scripts", "benchmark", "README", "ext"))
             @info "$(length(found)) old names are still written" by_folder by_name = sort!(collect(by_name); by = last, rev = true)
+        end
+
+        @test isempty(found)
+    end
+end
+
+@testset "constraint nomenclature" begin
+
+    @testset "the vocabulary of constraints is closed and has no word in two lists" begin
+        lists = (CST_OWNERS, CST_WORDS, CST_IDS)
+        for (k, a) in enumerate(lists), b in lists[k + 1:end]
+            @test isempty(intersect(a, b))
+        end
+
+        @test all(isascii, union(CST_OWNERS, CST_WORDS, CST_IDS))
+        @test all(o -> 2 <= length(o) <= 4, CST_OWNERS)
+    end
+
+    @testset "what the grammar of a key allows and refuses" begin
+        for key in ("cstr_node_balance", "cstr_node_voltage_limit", "cstr_stor_final_energy", "cstr_sw_flow_range")
+            @test cst_key_follows(key)
+        end
+
+        for key in ("node_balance", "cstr_balance", "cstr_node", "cstr_foo_balance", "cstr_node_foo",
+                    "cstr_node_voltage_limit_range", "cstr_node__balance", "fnct_node_balance", "")
+            @test !cst_key_follows(key)
+        end
+    end
+
+    @testset "the maps are made of new names that follow the grammar and old ones that do not" begin
+        for map in (CST_KEYS, CST_CON, CST_FUNCTIONS, CST_DUALS, CST_LETTERS)
+            @test allunique(first.(map))
+            @test isempty(intersect(first.(map), last.(map)))
+        end
+
+        registered = Set(last.(CST_KEYS))
+        @test all(cst_key_follows, last.(CST_KEYS))
+        @test all(cst_key_follows, last.(CST_CON))
+        @test all(k -> k in registered || k in CST_BUNDLES, last.(CST_CON))
+        @test all(k -> cst_key_follows(k) && !(k in registered), CST_BUNDLES)
+        @test all(nom_follows, last.(CST_LETTERS))
+    end
+
+    @testset "a function and a dual are named after the row they write and price" begin
+        stems = Set(k[6:end] for k in union(Set(last.(CST_KEYS)), CST_BUNDLES))
+
+        for new in last.(CST_FUNCTIONS)
+            @test startswith(new, "fnct_")
+            stem = replace(new[6:end], r"_linear$" => "")
+            @test stem in stems || stem in CST_ENTRIES
+        end
+
+        for new in last.(CST_DUALS)
+            @test startswith(new, "dual_")
+            @test replace(new[6:end], r"_(p|q|real|imag)$" => "") in stems
+        end
+    end
+
+    @testset "a key a row is registered under follows the grammar" begin
+        rows = cst_rows()
+
+        @test length(rows) >= 90
+        @test length(unique(first.(rows))) >= 40
+        @test nom_none("register keys", Set(key for (key, _) in rows if !cst_key_follows(key)))
+    end
+
+    @testset "a key of con follows it, and is a key of the register or a bundle" begin
+        con        = cst_con_keys()
+        registered = Set(first.(cst_rows()))
+
+        @test length(con) >= 20
+        @test nom_none("con keys", Set(k for k in con if !cst_key_follows(k)))
+        @test nom_none("con keys that no row is registered under", Set(k for k in con if !(k in registered) && !(k in CST_BUNDLES)))
+    end
+
+    @testset "the id of a row is its component and words of the lists" begin
+        words = Set(w for (_, ws) in cst_rows() for w in ws)
+
+        @test !isempty(words)
+        @test nom_none("id words", filter(w -> !(w in CST_IDS), words))
+    end
+
+    @testset "a function that writes rows is fnct_, and none is constraint_" begin
+        defined = cst_defined()
+
+        @test nom_none("functions still named constraint_*", Set(filter(startswith("constraint_"), defined)))
+        @test Set(filter(startswith("fnct_"), defined)) == Set(last.(CST_FUNCTIONS))
+        @test isempty(filter(n -> startswith(String(n), "constraint_"), names(NetworkModelBuilder)))
+    end
+
+    @testset "a dual is dual_ and the stem of the row it prices" begin
+        solution = nom_solution_keys()
+
+        @test nom_none("duals still named lambda*", Set(filter(startswith("lambda"), solution)))
+        @test Set(filter(startswith("dual_"), solution)) == Set(last.(CST_DUALS))
+    end
+
+    @testset "no old key, function, dual or letter is left where a reader would look" begin
+        found = cst_stragglers()
+
+        if !isempty(found)
+            by_name   = Dict(n => count(f -> f[3] == n, found) for n in unique(last.(found)))
+            by_folder = Dict(d => count(f -> startswith(f[1], d), found)
+                             for d in ("src", "test", "docs", "scripts", "benchmark", "README", "ext"))
+            @info "$(length(found)) old constraint names are still written" by_folder by_name = sort!(collect(by_name); by = last, rev = true)
         end
 
         @test isempty(found)

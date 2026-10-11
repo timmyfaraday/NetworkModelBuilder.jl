@@ -13,6 +13,7 @@
 # v0.12.0 - a held measure may reuse the binaries of the base case             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 ################################################################################
@@ -109,7 +110,7 @@ is set before anything happens and cannot be changed once it has. A
 **corrective** measure is free per contingency: it is what the operator would do
 *after* the outage, and it is the cheaper of the two precisely because it never
 has to pay for a contingency that does not occur. See
-[`constraint_redispatch_control`](@ref) for what the distinction adds to the
+[`fnct_rd_control`](@ref) for what the distinction adds to the
 model.
 
 Both are silent in a problem without a `:contingency` dimension: with a single
@@ -256,7 +257,7 @@ takes in the base case: it is preventive, `nw` is not itself the base case, and
 the component is in service in the base case too. Always `false` where there is
 no redispatch, or only one contingency.
 
-A held measure is tied to the base case by [`constraint_redispatch_control`](@ref),
+A held measure is tied to the base case by [`fnct_rd_control`](@ref),
 so every row that only restricts its setting is already implied there. A
 component builds none of them again at a network index where this is `true`:
 written twice, such rows are dependent, which a solver can stop on.
@@ -283,7 +284,7 @@ The variable keys of component type `T` that a **preventive** measure holds
 equal across the contingencies, as a tuple of symbols, and `()` for a type that
 is no measure at all.
 
-This is the single dispatch point [`constraint_redispatch_control`](@ref) walks,
+This is the single dispatch point [`fnct_rd_control`](@ref) walks,
 so an extension package that adds a controllable component gets it into the
 preventive-corrective split by giving it one method. The keys depend on the
 formulation as well as on the type: a [`Transformer`](@ref) carries the ratio of a

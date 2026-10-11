@@ -55,11 +55,11 @@ that span them.
 
 | name | applies to | problem |
 |:-----|:-----------|:--------|
-| [`constraint_node_balance`](@ref) | every node | all |
-| [`constraint_node_voltage_reference`](@ref) | `REF` nodes | all |
-| [`constraint_node_voltage_anchor`](@ref) | the lowest node of an island with a source and no `REF` node | all |
-| [`constraint_node_voltage_setpoint`](@ref) | `PV` nodes | power flow |
-| [`constraint_node_voltage_limits`](@ref) | every node | dispatch |
+| [`fnct_node_balance`](@ref) | every node | all |
+| [`fnct_node_voltage_reference`](@ref) | `REF` nodes | all |
+| [`fnct_node_voltage_anchor`](@ref) | the lowest node of an island with a source and no `REF` node | all |
+| [`fnct_node_voltage_setpoint`](@ref) | `PV` nodes | power flow |
+| [`fnct_node_voltage_limit`](@ref) | every node | dispatch |
 
 ### Current balance
 
@@ -132,11 +132,11 @@ The magnitude setpoint and the magnitude limits have nothing to act on and are
 no-ops.
 
 ```@docs
-constraint_node_balance
-constraint_node_voltage_reference
-constraint_node_voltage_anchor
-constraint_node_voltage_setpoint
-constraint_node_voltage_limits
+fnct_node_balance
+fnct_node_voltage_reference
+fnct_node_voltage_anchor
+fnct_node_voltage_setpoint
+fnct_node_voltage_limit
 variable_node_voltage
 reference_nodes
 ```
@@ -145,11 +145,11 @@ reference_nodes
 
 The balance is the row a nodal price is the dual of, so a solved model already
 holds one per node and per network index. It is a price per per-unit-hour and
-reaches the solution as `lambda`:
+reaches the solution as `dual_node_balance_p`:
 
 ```julia
 result = solve_opf(data, LPFFormulation, HiGHS.Optimizer)
-result["solution"]["nw"]["1"]["node"]["2"]["lambda"]
+result["solution"]["nw"]["1"]["node"]["2"]["dual_node_balance_p"]
 active_nodal_price(nm, 2)                       # the same number, from the model
 ```
 
@@ -176,7 +176,7 @@ leaving the caller to.
 
 ### When there is none
 
-The `lambda` entry is **absent**, and `active_nodal_price` returns `nothing`, wherever
+The `dual_node_balance_p` entry is **absent**, and `active_nodal_price` returns `nothing`, wherever
 the solve gave the model no duals: an unsolved model, a failed solve, or a
 mixed integer program, which has no duals at all. `result["dual_status"]` says
 which case a result is in, and an absent price reads as *not available* rather
@@ -207,15 +207,15 @@ The node solution therefore carries four numbers under an `IVRFormulation`:
 
 | key | what it is | unit |
 |:----|:-----------|:-----|
-| `lambda_real` | the dual of the real current row | currency/pu of current |
-| `lambda_imag` | the dual of the imaginary current row | currency/pu of current |
-| `lambda` | the active power price behind them | currency/pu/h |
-| `lambda_q` | the reactive power price behind them | currency/pu/h |
+| `dual_node_balance_real` | the dual of the real current row | currency/pu of current |
+| `dual_node_balance_imag` | the dual of the imaginary current row | currency/pu of current |
+| `dual_node_balance_p` | the active power price behind them | currency/pu/h |
+| `dual_node_balance_q` | the reactive power price behind them | currency/pu/h |
 
-!!! warning "`lambda_real` is not the nodal price"
+!!! warning "`dual_node_balance_real` is not the nodal price"
     It is the price scaled by the real part of the voltage with a bleed of the
     reactive price, so at a magnitude near one it lands *near* the right answer
     without being it — which is what makes reading it as the price a plausible
     mistake rather than an obvious one. On the two node case in `test/price.jl`
-    the congested node prices at 100 and its `lambda_real` reads 109.94. Take
-    `lambda`, or [`nodal_prices`](@ref) for both halves at once.
+    the congested node prices at 100 and its `dual_node_balance_real` reads 109.94. Take
+    `dual_node_balance_p`, or [`nodal_prices`](@ref) for both halves at once.

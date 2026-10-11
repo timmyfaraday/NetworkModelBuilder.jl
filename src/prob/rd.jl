@@ -15,6 +15,8 @@
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 ################################################################################
@@ -48,7 +50,7 @@ build_model!(nm::NetworkModel{P,F}) where {P<:RedispatchProblem,F<:LPFFormulatio
     _build_redispatch!(nm)
 
 The body both formulations share, the optimal power flow builder plus
-[`constraint_redispatch_control`](@ref) and [`constraint_overload_peak`](@ref).
+[`fnct_rd_control`](@ref) and [`fnct_edge_overload_peak`](@ref).
 
 Every call in it is a dispatch point, so the definition of the problem says
 nothing about the formulation it is being built in, and nothing about which
@@ -61,18 +63,18 @@ function _build_redispatch!(nm::NetworkModel)
         variable_edge(nm; nw = n)
         variable_unit(nm; nw = n)
 
-        constraint_node_voltage_reference(nm; nw = n)
-        constraint_node_voltage_limits(nm; nw = n)
-        constraint_node_balance(nm; nw = n)
-        constraint_edge(nm; nw = n)
-        constraint_edge_limits(nm; nw = n)
-        constraint_unit(nm; nw = n)
+        fnct_node_voltage_reference(nm; nw = n)
+        fnct_node_voltage_limit(nm; nw = n)
+        fnct_node_balance(nm; nw = n)
+        fnct_edge(nm; nw = n)
+        fnct_edge_limit(nm; nw = n)
+        fnct_unit(nm; nw = n)
     end
 
-    constraint_edge_coupling(nm)
-    constraint_unit_coupling(nm)
-    constraint_redispatch_control(nm)
-    constraint_overload_peak(nm)
+    fnct_edge_coupling(nm)
+    fnct_unit_coupling(nm)
+    fnct_rd_control(nm)
+    fnct_edge_overload_peak(nm)
 
     objective(nm)
 
@@ -87,7 +89,7 @@ register_model!(RedispatchProblem, LPFFormulation)
 ################################################################################
 
 """
-    constraint_redispatch_control(nm)
+    fnct_rd_control(nm)
 
 Hold every **preventive** measure equal across the contingencies,
 
@@ -121,7 +123,7 @@ Which measures are tied is [`is_held`](@ref). A component does not write again,
 at a network index where its measure is held, the rows that only restrict the
 measure: the base case's imply them.
 """
-function constraint_redispatch_control(nm::NetworkModel)
+function fnct_rd_control(nm::NetworkModel)
     has_dim(nm, :contingency) || return nothing
     dim_length(nm, :contingency) > 1 || return nothing
 
@@ -140,7 +142,7 @@ function constraint_redispatch_control(nm::NetworkModel)
                     x = _control_variable(nm, key, sub, n)
                     y = _control_variable(nm, key, sub, base)
                     (x === nothing || y === nothing) && continue
-                    constrain!(nm, :redispatch_control, (family, sub, key),
+                    constrain!(nm, :cstr_rd_control, (family, sub, key),
                                JuMP.@build_constraint(x == y); nw = n)
                 end
             end
@@ -177,7 +179,7 @@ end
 ################################################################################
 
 """
-    constraint_overload_peak(nm)
+    fnct_edge_overload_peak(nm)
 
 Bound the peak overload of every monitored edge over every period from below by
 the overload it carries at each network index of that period,
@@ -201,7 +203,7 @@ A no-op unless the setup carries an [`OverloadPrice`](@ref) with a non-zero
 `c_peak`, since a peak nothing pays for is a free variable and a row per index
 for nothing.
 """
-function constraint_overload_peak(nm::NetworkModel)
+function fnct_edge_overload_peak(nm::NetworkModel)
     price = overload_price(nm)
     price === nothing && return nothing
     iszero(price.c_peak) && return nothing
@@ -226,7 +228,7 @@ function constraint_overload_peak(nm::NetworkModel)
                 s_ovl = var(nm, :s_ovl; nw = m)
                 haskey(s_ovl, e) || continue
 
-                constrain!(nm, :overload_peak, (e, m),
+                constrain!(nm, :cstr_edge_overload_peak, (e, m),
                            JuMP.@build_constraint(s_ovl[e] <= olp); nw = n)
             end
         end

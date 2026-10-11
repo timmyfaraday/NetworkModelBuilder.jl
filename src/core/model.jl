@@ -16,6 +16,7 @@
 # v0.14.0 - set_string_name leaves the variables of a model unnamed            #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - debug_mode names variables and constraints, off by default         #
 ################################################################################
 
 ################################################################################
@@ -49,7 +50,7 @@ minimized — and `F` decides *in which variables the physics are written*.
 - `building`: whether [`instantiate_model`](@ref) is building the model for the
   first time, which is when [`constrain!`](@ref) refuses an id it has already
   been given.
-- `string_names`: whether the variables are given names, see `set_string_name` of
+- `debug_mode`: whether the variables and the constraints are given names, see
   [`instantiate_model`](@ref).
 """
 mutable struct NetworkModel{P<:AbstractProblemType,F<:AbstractFormulationType}
@@ -63,7 +64,7 @@ mutable struct NetworkModel{P<:AbstractProblemType,F<:AbstractFormulationType}
     ext  ::Dict{Symbol,Any}
     registered::Dict{Tuple{Int,Symbol,Any},Tuple{JuMP.ConstraintRef,JuMP.ScalarConstraint}}
     building::Bool
-    string_names::Bool
+    debug_mode::Bool
 end
 
 "the problem type of a network model"
@@ -209,7 +210,7 @@ _value(x) = JuMP.value(x)
 
 """
     instantiate_model(data, P, F; jump_model = JuMP.Model(), build = true,
-                      ext = Dict{Symbol,Any}(), islanding = :error, set_string_name = true)
+                      ext = Dict{Symbol,Any}(), islanding = :error, debug_mode = false)
 
 Create a [`NetworkModel`](@ref) for problem type `P` and formulation type `F`,
 and build it unless `build = false`.
@@ -227,14 +228,15 @@ does, and two models handed the same dictionary would write over each other.
 That is not hypothetical; it is what a rolling horizon does, building one model
 per window from one setup.
 
-The variables are named from their key and id (`1_pg[3]`), which a solver log
-and `print(model)` show. `set_string_name = false` builds no names, and calls
-`JuMP.set_string_names_on_creation(jump_model, false)`; on a real step-3 window of
-a rolling redispatch, 249,118 variables, that is a fifth to a quarter off the
-time to build the model. With `true` a `jump_model` is left as it came, so one
-that was given with names off stays so. Every solve takes it, as it takes
-`jump_model`: `solve_model`, `solve_lf`, `solve_opf`, `solve_rd`,
-`solve_rolling_horizon` and `solve_zorba`. Constraints are not named.
+In `debug_mode` the variables and the constraints are named from their network
+index, key and id, `1_p_gen[3]` and `2_i_term_real[4,1]`, an id that is a tuple
+flattened, which a solver log, `print(model)` and an LP file show. By default
+nothing is named and `jump_model` is set to build no names, whatever it was
+given with: on a real step-3 window of a rolling redispatch, 249,118 variables and
+274,523 constraints, that is 29 % off the time to build the model and 44 % off what
+it allocates. `debug_mode = true` sets it to build them. Every solve takes it, as it
+takes `jump_model`: `solve_model`, `solve_lf`, `solve_opf`, `solve_rd`,
+`solve_rolling_horizon` and `solve_zorba`.
 
 # Examples
 ```julia
@@ -246,10 +248,10 @@ function instantiate_model(data::NetworkData, ::Type{P}, ::Type{F};
                            build::Bool = true,
                            ext::Dict{Symbol,Any} = Dict{Symbol,Any}(),
                            islanding::Symbol = :error,
-                           set_string_name::Bool = true
+                           debug_mode::Bool = false
                           ) where {P<:AbstractProblemType,F<:AbstractFormulationType}
     build && check_islands(data; islanding, decide = _decides(P))
-    set_string_name || JuMP.set_string_names_on_creation(jump_model, false)
+    JuMP.set_string_names_on_creation(jump_model, debug_mode)
 
     nws = nw_ids(data)
     nm  = NetworkModel{P,F}(data, jump_model,
@@ -259,7 +261,7 @@ function instantiate_model(data::NetworkData, ::Type{P}, ::Type{F};
                             Dict{String,Any}(), nws, copy(ext),
                             Dict{Tuple{Int,Symbol,Any},
                                  Tuple{JuMP.ConstraintRef,JuMP.ScalarConstraint}}(), false,
-                            set_string_name)
+                            debug_mode)
     if build
         nm.building = true
         try

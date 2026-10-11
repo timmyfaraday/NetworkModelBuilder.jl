@@ -44,7 +44,7 @@ A network dependent cost is a `NetworkVector{Vector{Float64}}` — the plain
 | ``p^{\uparrow}_{u}``, ``p^{\downarrow}_{u}`` | `:p_gen_up`, `:p_gen_dn` | unit | moved up and down from the market schedule, redispatch only | pu |
 
 The injection currents are shared by every unit type. `:p_gen` and `:q_gen` are free in
-a power flow, where [`constraint_unit`](@ref) fixes them at their setpoint
+a power flow, where [`fnct_unit`](@ref) fixes them at their setpoint
 instead, and bounded by the operating limits in a dispatch problem.
 
 ### In the `LPFFormulation`

@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.11.0 - the supply of an island, and the check a model makes of it         #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 ################################################################################
@@ -36,7 +37,7 @@ _has_source(net::Network, island, n::Int) =
 
 The lowest node of every island at network index `nw` that has a source but no
 reference node, sorted. These are the nodes
-[`constraint_node_voltage_anchor`](@ref) pins.
+[`fnct_node_voltage_anchor`](@ref) pins.
 """
 function anchor_nodes(net::Network, n::Int; decide::Bool = true)
     return [first(part) for part in islands(net; nw = n, decide)
@@ -75,7 +76,7 @@ Two things are refused, both with an `ArgumentError` that names the nodes:
   supplied by, so the problem over it is infeasible or, worse, solved with
   the load silently dropped. An island without units, such as an empty busbar
   section, is fine, and so is an island with a source but no reference node,
-  which is anchored instead, see [`constraint_node_voltage_anchor`](@ref).
+  which is anchored instead, see [`fnct_node_voltage_anchor`](@ref).
 - unless `islanding = :allow`, an edge that the problem may open, see
   [`can_open`](@ref), when opening all of them would split an island. A model
   that chooses which switches to open is entitled to open one that leaves a

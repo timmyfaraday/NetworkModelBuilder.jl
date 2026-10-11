@@ -30,4 +30,5 @@ Verification per item — the shape `GAP_CLOSURE_PLAN.md` already uses).
 | `typed-registers.md` | implemented, merged and tagged `v0.12.9`; seven registers gone, a held model 7.3 MB smaller | D49 |
 | `one-branch.md` | implemented, merged and tagged `v0.13.0`: one `Branch`, `pi_model.jl` split, rating and angle apart | D50-D52 |
 | `one-branch-terminals.md` | implemented, merged and tagged `v0.13.0`: a branch of two or more terminals, n π-sections at a point | D53, D54 |
-| `naming.md` | decided, not started; B31 on `b31-nomenclature`, v0.14.0: `symbol_primary_secondary` names, `set_string_name` | D55-D61 |
+| `naming.md` | implemented, merged and tagged `v0.14.0`: `symbol_primary_secondary` names, `set_string_name` | D55-D62 |
+| `naming-constraints.md` | implemented, merged and tagged `v0.15.0` (B32): `cstr_`, `fnct_`, `dual_` names, `debug_mode`, constraint names in JuMP | D63-D70 |

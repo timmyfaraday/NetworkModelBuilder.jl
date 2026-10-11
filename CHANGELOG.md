@@ -8,7 +8,131 @@ Versions before 0.9.1 were never tagged in git; the version numbers and dates
 below are reconstructed from `Project.toml`'s own history, cross-referenced
 against the per-file changelog comments the source already carries.
 
-## [Unreleased]
+## [0.15.0] - 2026-10-11
+
+### Added
+
+- One grammar for the names of constraints, of the functions that write them and of the duals they give: a
+  stem, `owner_role`, and one prefix each, `cstr_`, `fnct_` and `dual_`, as `cstr_node_balance`,
+  `fnct_node_balance` and `dual_node_balance_real`. The manual's page `Nomenclature` has the rules.
+- `test/nomenclature.jl` holds the maps and fails for a key, an id, a function or a dual that breaks the
+  grammar, and for an old name written anywhere in `src`, `test`, `docs` or the README, the old letters
+  of a parameter or a local included. `test/registers.jl` checks that a built model,
+  current based or linearized, holds one id shape per key.
+- Every solve takes `debug_mode = false`. With `true` every variable and every constraint is named from its
+  network index, its key and its id, `1_p_gen[3]` and `1_cstr_node_balance[3,real]`, and
+  `JuMP.set_string_names_on_creation` is switched on; by default nothing is named and it is switched off,
+  whichever way the `jump_model` handed in was set. On the real step-3 window of the Zorba pipeline,
+  249,118 variables and 274,523 constraints, `instantiate_model` takes 1,707 ms and 764 MB by default and
+  2,401 ms and 1,372 MB in debug mode; the 274,523 names are distinct.
+
+### Changed
+
+- **Breaking.** The keys a constraint is registered under and the keys of `con` are `cstr_<owner>_<role>`,
+  the functions that write constraints are `fnct_*` and the duals of a node are `dual_*`, with no alias and
+  no hint. The tables below list every one. A key does not name the formulation, so the rating, the
+  overload and the angle rows of the linearized formulation are written under the keys of the current
+  based ones, with the id shape of their formulation.
+- **Breaking.** Some words of a constraint id are spelled as the nomenclature spells a part: see the table
+  of ids below.
+- **Breaking.** The node balance of the current based formulation is one entry of `con`,
+  `con(nm)[:cstr_node_balance][i]`, the pair of rows `(real, imag)`, where it was two entries,
+  `:node_balance_real` and `:node_balance_imag`. The units of every type share `con[:cstr_unit_power]`, or
+  `con[:cstr_unit_injection]` in the linearized formulation, where each type had a key of its own.
+- **Breaking.** Variable names are off by default: `set_string_name = true` of 0.14.0 is `debug_mode = true`,
+  with the default reversed. A `NetworkModel` has `debug_mode` where it had `string_names`.
+- The parameters and locals that still carried an old letter are named as their key: `ctr`, `cti`, `vtr`,
+  `vti` of the π-section are `i_wind_real`, `i_wind_imag`, `v_wind_real`, `v_wind_imag`, `csr` and `csi` are
+  `i_ser_real` and `i_ser_imag`, and a scalar read out of `i_unit_real` is `i_real`.
+
+### Removed
+
+- **Breaking.** `set_string_name`, for `debug_mode`, and the `constraint_*` functions and the `"lambda*"`
+  solution keys of the tables below.
+
+### Migrating
+
+#### Constraint keys
+
+| owner | renamed |
+|:------|:--------|
+| node | `:node_balance` → `:cstr_node_balance`, `:node_reference` → `:cstr_node_voltage_reference`, `:node_setpoint` → `:cstr_node_voltage_setpoint`, `:node_limits` → `:cstr_node_voltage_limit`, `:node_anchor` → `:cstr_node_voltage_anchor` |
+| edge | `:edge_rating` → `:cstr_edge_rating`, `:linear_rating` → `:cstr_edge_rating`, `:edge_overload` → `:cstr_edge_overload`, `:linear_overload` → `:cstr_edge_overload`, `:edge_angle` → `:cstr_edge_angle_difference`, `:linear_angle` → `:cstr_edge_angle_difference`, `:linear_flow` → `:cstr_edge_flow`, `:overload_peak` → `:cstr_edge_overload_peak` |
+| unit | `:unit_power` → `:cstr_unit_power`, `:unit_injection` → `:cstr_unit_injection` |
+| `br` | `:pi_section` → `:cstr_br_pi_section`, `:branch_section` → `:cstr_br_section`, `:branch_point` → `:cstr_br_point` |
+| `tf` | `:winding` → `:cstr_tf_winding`, `:star_balance` → `:cstr_tf_star_balance`, `:transformer_ratio` → `:cstr_tf_ratio`, `:tap_step` → `:cstr_tf_tap_step`, `:tap_setting` → `:cstr_tf_tap_setting` |
+| `dcl` | `:dc_link` → `:cstr_dcl_power`, `:dc_link_limits` → `:cstr_dcl_limit`, `:dc_link_redispatch` → `:cstr_dcl_redispatch` |
+| `sw` | `:switch_flow` → `:cstr_sw_flow`, `:switch_open` → `:cstr_sw_open`, `:switch_angle` → `:cstr_sw_angle`, `:switch_loop` → `:cstr_sw_loop`, `:switch_angle_range` → `:cstr_sw_angle_range`, `:switch_flow_range` → `:cstr_sw_flow_range`, `:switch_cycle` → `:cstr_sw_cycle`, `:switch_rating` → `:cstr_sw_rating`, `:switch_voltage` → `:cstr_sw_voltage`, `:switch_voltage_range` → `:cstr_sw_voltage_range`, `:switch_current_range` → `:cstr_sw_current_range` |
+| `gen` | `:generator_energy` → `:cstr_gen_energy`, `:generator_redispatch` → `:cstr_gen_redispatch` |
+| `stor` | `:storage_balance` → `:cstr_stor_balance`, `:storage_final` → `:cstr_stor_final_energy`, `:storage_cycles` → `:cstr_stor_cycle`, `:storage_redispatch` → `:cstr_stor_redispatch` |
+| `flex` | `:flexible_energy` → `:cstr_flex_energy` |
+| `shnt` | `:shunt_current` → `:cstr_shnt_current` |
+| `rd` | `:redispatch_control` → `:cstr_rd_control` |
+
+#### Keys of `con`
+
+| owner | renamed |
+|:------|:--------|
+| node | `:node_balance` → `:cstr_node_balance`, `:node_balance_real` → `:cstr_node_balance`, `:node_balance_imag` → `:cstr_node_balance`, `:node_voltage_anchor` → `:cstr_node_voltage_anchor`, `:node_voltage_limits` → `:cstr_node_voltage_limit`, `:node_voltage_reference` → `:cstr_node_voltage_reference`, `:node_voltage_setpoint` → `:cstr_node_voltage_setpoint` |
+| edge | `:edge_angle_difference` → `:cstr_edge_angle_difference`, `:edge_limits` → `:cstr_edge_limit`, `:edge_rating` → `:cstr_edge_rating` |
+| unit | `:generator_power` → `:cstr_unit_power`, `:load_power` → `:cstr_unit_power`, `:slack_power` → `:cstr_unit_power`, `:storage_power` → `:cstr_unit_power` |
+| `br` | `:branch` → `:cstr_br_equation` |
+| `tf` | `:star_balance` → `:cstr_tf_star_balance`, `:tap_setting` → `:cstr_tf_tap_setting`, `:tap_step` → `:cstr_tf_tap_step`, `:winding` → `:cstr_tf_winding` |
+| `dcl` | `:dc_link` → `:cstr_dcl_power`, `:dc_link_limits` → `:cstr_dcl_limit`, `:dc_link_redispatch` → `:cstr_dcl_redispatch` |
+| `sw` | `:switch` → `:cstr_sw_equation`, `:switch_limits` → `:cstr_sw_rating`, `:switch_loop_free` → `:cstr_sw_cycle` |
+| `gen` | `:generator_redispatch` → `:cstr_gen_redispatch` |
+| `stor` | `:storage_redispatch` → `:cstr_stor_redispatch` |
+| `shnt` | `:shunt_current` → `:cstr_shnt_current` |
+
+Several old keys give one new one: `:cstr_node_balance` for the two node balances of the current based
+formulation, `:cstr_unit_power` for the four unit types, and the bundles `:cstr_edge_limit`,
+`:cstr_br_equation` and `:cstr_sw_equation`, each of which holds the rows of several register keys.
+
+#### Ids
+
+| key | renamed |
+|:----|:--------|
+| `cstr_br_pi_section` | `(e, :cr_fr)` → `(e, :fr, :real)`, `(e, :ci_fr)` → `(e, :fr, :imag)`, `(e, :cr_to)` → `(e, :to, :real)`, `(e, :ci_to)` → `(e, :to, :imag)`, `(e, :v_real)` → `(e, :ser, :real)`, `(e, :v_imag)` → `(e, :ser, :imag)` |
+| `cstr_tf_tap_setting` | `(a, :magnitude_max)` → `(a, :magn, :max)`, `(a, :magnitude_min)` → `(a, :magn, :min)`, `(a, :magnitude)` → `(a, :magn, :set)`, `(a, :max)` → `(a, :angl, :max)`, `(a, :min)` → `(a, :angl, :min)` |
+| `cstr_node_voltage_reference`, `cstr_node_voltage_anchor` | `(i, :angle)` → `(i, :angl)` |
+| `cstr_edge_flow` | `(e, :from)` → `(e, :fr)` |
+| `cstr_dcl_power` | `(e, :setpoint)` → `(e, :set)` |
+| `cstr_unit_power` | `(u, :active)` → `(u, :p)`, `(u, :reactive)` → `(u, :q)` |
+
+#### Functions
+
+A name that ended in `!` still does: `constraint_pi_section!` is `fnct_br_pi_section!`.
+
+| family | renamed |
+|:-------|:--------|
+| node | `constraint_node_balance` → `fnct_node_balance`, `constraint_node_voltage_reference` → `fnct_node_voltage_reference`, `constraint_node_voltage_setpoint` → `fnct_node_voltage_setpoint`, `constraint_node_voltage_limits` → `fnct_node_voltage_limit`, `constraint_node_voltage_anchor` → `fnct_node_voltage_anchor` |
+| edge | `constraint_edge` → `fnct_edge`, `constraint_edge_limits` → `fnct_edge_limit`, `constraint_edge_coupling` → `fnct_edge_coupling`, `constraint_edge_rating` → `fnct_edge_rating`, `constraint_edge_angle_difference` → `fnct_edge_angle_difference`, `constraint_linear_flow` → `fnct_edge_flow_linear`, `constraint_linear_ratings` → `fnct_edge_rating_linear`, `constraint_linear_angle_difference` → `fnct_edge_angle_difference_linear`, `constraint_overload_peak` → `fnct_edge_overload_peak` |
+| unit | `constraint_unit` → `fnct_unit`, `constraint_unit_coupling` → `fnct_unit_coupling`, `constraint_unit_power` → `fnct_unit_power`, `constraint_unit_injection` → `fnct_unit_injection` |
+| `br` | `constraint_pi_section` → `fnct_br_pi_section` |
+| `stor` | `constraint_storage_final_energy` → `fnct_stor_final_energy`, `constraint_storage_cycles` → `fnct_stor_cycle` |
+| `rd` | `constraint_redispatch_control` → `fnct_rd_control` |
+
+#### Duals
+
+`"lambda"` → `"dual_node_balance_p"`, `"lambda_q"` → `"dual_node_balance_q"`, `"lambda_real"` → `"dual_node_balance_real"`, `"lambda_imag"` → `"dual_node_balance_imag"`.
+
+#### Other
+
+| before | now |
+|:-------|:----|
+| `instantiate_model(data, P, F; set_string_name = false)` | the default; `debug_mode = true` for the names |
+| `function NetworkModelBuilder.constraint_edge(nm, ::Type{MyEdge}; nw)` | `function NetworkModelBuilder.fnct_edge(nm, ::Type{MyEdge}; nw)` |
+| `result["solution"]["nw"]["1"]["node"]["2"]["lambda"]` | `result["solution"]["nw"]["1"]["node"]["2"]["dual_node_balance_p"]` |
+| `con(nm)[:node_balance_real][i]` | `real, imag = con(nm)[:cstr_node_balance][i]` |
+| `nm.string_names` | `nm.debug_mode` |
+
+### Verified
+
+- The full suite passes with four threads, 3,686 checks. A 24 h chunk of the Zorba pipeline is byte-identical to
+  the same chunk of 0.12.7, objectives 317686796.800330 and 308105792.250268 equal.
+- The docs build is clean, with every `@docs` entry under its new name.
+
+## [0.14.0] - 2026-10-11
 
 ### Added
 

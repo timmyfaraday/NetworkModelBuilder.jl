@@ -15,6 +15,7 @@
 # v0.13.0 - a lossy transformer is rated at each terminal                      #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - constraint keys follow the nomenclature                            #
 ################################################################################
 
 # What a transformer does, written so that it does not depend on how one is
@@ -342,8 +343,8 @@ end
             nm = instantiate_model(data, RedispatchProblem, IVRFormulation;
                                    ext = Dict{Symbol,Any}(:redispatch => Redispatch(; control)))
 
-            @test haskey(_NMB.con(nm; nw = 1)[:tap_setting], Arc(2, 1, 1))
-            @test haskey(_NMB.con(nm; nw = 2)[:tap_setting], Arc(2, 1, 1)) == !held
+            @test haskey(_NMB.con(nm; nw = 1)[:cstr_tf_tap_setting], Arc(2, 1, 1))
+            @test haskey(_NMB.con(nm; nw = 2)[:cstr_tf_tap_setting], Arc(2, 1, 1)) == !held
         end
     end
 
@@ -409,7 +410,7 @@ end
             @test length(zt) == 7 && all(JuMP.is_binary, values(zt))
             @test [JuMP.start_value(zt[(Arc(2, 1, 1), s)]) for s in 1:7] == [0, 0, 0, 1, 0, 0, 0]
             @test !haskey(_NMB.var(nm), :t_angl)
-            @test count(==(:tap_step), first.([(key, id) for (_, key, id) in
+            @test count(==(:cstr_tf_tap_step), first.([(key, id) for (_, key, id) in
                                                keys(registered_constraints(nm))])) == 1
 
             quiet(() -> optimize_model!(nm, exact))
@@ -505,8 +506,8 @@ end
                 @test all((_NMB.var(nm, :z_step, (arc, s); nw = 2) === _NMB.var(nm, :z_step, (arc, s); nw = 1))
                           == held for s in 1:7)
                 @test !any(key[3] === :z_step for key in held_controls(nm))
-                @test haskey(_NMB.con(nm; nw = 1)[:tap_step], arc)
-                @test haskey(_NMB.con(nm; nw = 2)[:tap_step], arc) == !held
+                @test haskey(_NMB.con(nm; nw = 1)[:cstr_tf_tap_step], arc)
+                @test haskey(_NMB.con(nm; nw = 2)[:cstr_tf_tap_step], arc) == !held
             end
         end
     end
@@ -524,8 +525,8 @@ end
 
         nm, unequal = solved(network([0.5, 0.8]), OptimalPowerFlowProblem, LPFFormulation)
         rows        = registered_constraints(nm)
-        @test rows[(1, :linear_rating, (1, 1))][2].set == JuMP.MOI.Interval(-0.5, 0.5)
-        @test rows[(1, :linear_rating, (1, 2))][2].set == JuMP.MOI.Interval(-0.8, 0.8)
+        @test rows[(1, :cstr_edge_rating, (1, 1))][2].set == JuMP.MOI.Interval(-0.5, 0.5)
+        @test rows[(1, :cstr_edge_rating, (1, 2))][2].set == JuMP.MOI.Interval(-0.8, 0.8)
 
         # without losses what leaves one terminal arrives at the other, so the tighter rating is the one that binds
         _, tight = solved(network(0.5), OptimalPowerFlowProblem, LPFFormulation)

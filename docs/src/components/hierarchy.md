@@ -39,7 +39,7 @@ AbstractComponent
 **The three families** are structural. A node has a voltage, an edge connects an
 ordered list of nodes and carries a flow at each terminal, a unit hangs off one
 node and injects into it. Nothing else in the package needs to know more than
-that: [`constraint_node_balance`](@ref) sums the arcs incident to a node against
+that: [`fnct_node_balance`](@ref) sums the arcs incident to a node against
 the units connected to it without knowing what kinds of either exist.
 
 **The abstract middle** is where an implementation lives. Every
@@ -83,8 +83,8 @@ register_unit_type!(Storage)
 ```
 
 A problem builder never names a component type. It calls the dispatchers —
-[`variable_edge`](@ref), [`constraint_edge`](@ref), [`constraint_unit`](@ref),
-[`constraint_unit_coupling`](@ref) — and those walk the registries. Adding a
+[`variable_edge`](@ref), [`fnct_edge`](@ref), [`fnct_unit`](@ref),
+[`fnct_unit_coupling`](@ref) — and those walk the registries. Adding a
 component therefore touches one file and no problem definition.
 
 Where a component type is present in the data but no method exists for the

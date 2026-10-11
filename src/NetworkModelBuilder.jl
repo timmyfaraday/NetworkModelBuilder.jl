@@ -21,6 +21,7 @@
 # v0.11.0 - islands, and the check a model makes of them                       #
 # v0.12.0 - exports is_held                                                    #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 module NetworkModelBuilder
@@ -141,7 +142,7 @@ module NetworkModelBuilder
     export is_monitored, monitored_edges, overload_price, overload_cost
     export control_mode, is_preventive, is_corrective, is_held
     export redispatch_controls, redispatch_cost
-    export constraint_redispatch_control, constraint_overload_peak
+    export fnct_rd_control, fnct_edge_overload_peak
     export solution_overload_peak
 
     # export — the rolling horizon

@@ -18,10 +18,12 @@
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.14.0 - the docstrings follow the nomenclature                             #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 export AbstractBranch, Branch, impedance, shunt_admittance, dynamic_rating
-export constraint_pi_section!, variable_edge_series_current
+export fnct_br_pi_section!, variable_edge_series_current
 
 ################################################################################
 # Branch — data                                                                #
@@ -251,16 +253,16 @@ end
 ################################################################################
 
 # A branch is a π-equivalent: a series impedance `z = r + jx` between two shunt
-# admittances `y = g + jb`. `csr, csi` is the series current, defined positive
+# admittances `y = g + jb`. `i_ser_real, i_ser_imag` is the series current, defined positive
 # from the from side to the to side.
 
 """
-    constraint_pi_section!(nm, ctr, cti, vtr, vti, a_to, e, z, y_fr, y_to; nw)
+    fnct_br_pi_section!(nm, i_wind_real, i_wind_imag, v_wind_real, v_wind_imag, a_to, e, z, y_fr, y_to; nw)
 
 Add the equations of a π-equivalent whose from side sees the current
-`ctr + j·cti` at the voltage `vtr + j·vti`, and whose to side is the arc `a_to`.
+`i_wind_real + j·i_wind_imag` at the voltage `v_wind_real + j·v_wind_imag`, and whose to side is the arc `a_to`.
 
-`ctr`, `cti`, `vtr` and `vti` may be variables or expressions, which is what lets
+`i_wind_real`, `i_wind_imag`, `v_wind_real` and `v_wind_imag` may be variables or expressions, which is what lets
 a transformer hand in the quantities behind its ideal ratio.
 
 ```math
@@ -271,7 +273,7 @@ v^{\\text{t}} - v_{j} &= z \\, i^{\\text{s}}.
 \\end{aligned}
 ```
 """
-function constraint_pi_section!(nm::NetworkModel, ctr, cti, vtr, vti, a_to::Arc, e::Int,
+function fnct_br_pi_section!(nm::NetworkModel, i_wind_real, i_wind_imag, v_wind_real, v_wind_imag, a_to::Arc, e::Int,
                                 z::Tuple{<:Real,<:Real},
                                 y_fr::Tuple{<:Real,<:Real},
                                 y_to::Tuple{<:Real,<:Real}; nw::Int)
@@ -285,23 +287,23 @@ function constraint_pi_section!(nm::NetworkModel, ctr, cti, vtr, vti, a_to::Arc,
     i_ser_real, i_ser_imag   = var(nm, :i_ser_real;  nw), var(nm, :i_ser_imag;  nw)
 
     return (
-        constrain!(nm, :pi_section, (e, :cr_fr),
-                   JuMP.@build_constraint(ctr == g_fr * vtr - b_fr * vti + i_ser_real[e]); nw),
-        constrain!(nm, :pi_section, (e, :ci_fr),
-                   JuMP.@build_constraint(cti == g_fr * vti + b_fr * vtr + i_ser_imag[e]); nw),
-        constrain!(nm, :pi_section, (e, :cr_to),
+        constrain!(nm, :cstr_br_pi_section, (e, :fr, :real),
+                   JuMP.@build_constraint(i_wind_real == g_fr * v_wind_real - b_fr * v_wind_imag + i_ser_real[e]); nw),
+        constrain!(nm, :cstr_br_pi_section, (e, :fr, :imag),
+                   JuMP.@build_constraint(i_wind_imag == g_fr * v_wind_imag + b_fr * v_wind_real + i_ser_imag[e]); nw),
+        constrain!(nm, :cstr_br_pi_section, (e, :to, :real),
                    JuMP.@build_constraint(i_term_real[a_to] == -i_ser_real[e] + g_to * v_real[j] - b_to * v_imag[j]); nw),
-        constrain!(nm, :pi_section, (e, :ci_to),
+        constrain!(nm, :cstr_br_pi_section, (e, :to, :imag),
                    JuMP.@build_constraint(i_term_imag[a_to] == -i_ser_imag[e] + g_to * v_imag[j] + b_to * v_real[j]); nw),
-        constrain!(nm, :pi_section, (e, :v_real),
-                   JuMP.@build_constraint(vtr - v_real[j] == r * i_ser_real[e] - x * i_ser_imag[e]); nw),
-        constrain!(nm, :pi_section, (e, :v_imag),
-                   JuMP.@build_constraint(vti - v_imag[j] == r * i_ser_imag[e] + x * i_ser_real[e]); nw),
+        constrain!(nm, :cstr_br_pi_section, (e, :ser, :real),
+                   JuMP.@build_constraint(v_wind_real - v_real[j] == r * i_ser_real[e] - x * i_ser_imag[e]); nw),
+        constrain!(nm, :cstr_br_pi_section, (e, :ser, :imag),
+                   JuMP.@build_constraint(v_wind_imag - v_imag[j] == r * i_ser_imag[e] + x * i_ser_real[e]); nw),
     )
 end
 
 """
-    constraint_edge(nm, T; nw)
+    fnct_edge(nm, T; nw)
 
 The physics of every in-service branch: how the terminal currents split over the
 series and shunt admittances of the π-equivalent, and the voltage drop that
@@ -325,12 +327,12 @@ to node, and the series currents balance there against the aggregated shunt,
 i^{\\text{s}}_{k} = i_{a_k} - \\tfrac{1}{2} y^{\\text{sh}}_{k} v_{i_k}.
 ```
 """
-function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractProblemType,F<:IVRFormulation,T<:AbstractBranch}
     v_real, v_imag           = var(nm, :v_real;      nw), var(nm, :v_imag;      nw)
     i_term_real, i_term_imag = var(nm, :i_term_real; nw), var(nm, :i_term_imag; nw)
 
-    branch = get!(() -> Dict{Int,Any}(), con(nm; nw), :branch)
+    branch = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_br_equation)
 
     for e in ids(nm, T; nw)
         br = edge(nm, e; nw)::T
@@ -345,7 +347,7 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
         i          = a_fr.node
         y          = (br.g_shnt[1] / 2, br.b_shnt[1] / 2)
 
-        branch[e] = constraint_pi_section!(nm, i_term_real[a_fr], i_term_imag[a_fr], v_real[i], v_imag[i],
+        branch[e] = fnct_br_pi_section!(nm, i_term_real[a_fr], i_term_imag[a_fr], v_real[i], v_imag[i],
                                            a_to, e, (br.r[1], br.x[1]), y, y; nw)
     end
 
@@ -365,54 +367,54 @@ function _constraint_sections!(nm::NetworkModel, br::AbstractBranch, e::Int, A; 
     i_term_real, i_term_imag = var(nm, :i_term_real;   nw), var(nm, :i_term_imag;   nw)
     v_pnt_real, v_pnt_imag   = var(nm, :v_pnt_real, e; nw), var(nm, :v_pnt_imag, e; nw)
 
-    csr = Any[]
-    csi = Any[]
+    i_ser_real = Any[]
+    i_ser_imag = Any[]
 
     sections = map(enumerate(A)) do (k, a)
         i    = a.node
         g, b = br.g_shnt[k] / 2, br.b_shnt[k] / 2
 
         if iszero(g) && iszero(b)
-            push!(csr, i_term_real[a])
-            push!(csi, i_term_imag[a])
+            push!(i_ser_real, i_term_real[a])
+            push!(i_ser_imag, i_term_imag[a])
         else
-            push!(csr, JuMP.@expression(nm.model, i_term_real[a] - (g * v_real[i] - b * v_imag[i])))
-            push!(csi, JuMP.@expression(nm.model, i_term_imag[a] - (g * v_imag[i] + b * v_real[i])))
+            push!(i_ser_real, JuMP.@expression(nm.model, i_term_real[a] - (g * v_real[i] - b * v_imag[i])))
+            push!(i_ser_imag, JuMP.@expression(nm.model, i_term_imag[a] - (g * v_imag[i] + b * v_real[i])))
         end
 
-        (constrain!(nm, :branch_section, (a, :real), JuMP.@build_constraint(
-             v_real[i] - v_pnt_real == br.r[k] * csr[k] - br.x[k] * csi[k]); nw),
-         constrain!(nm, :branch_section, (a, :imag), JuMP.@build_constraint(
-             v_imag[i] - v_pnt_imag == br.r[k] * csi[k] + br.x[k] * csr[k]); nw))
+        (constrain!(nm, :cstr_br_section, (a, :real), JuMP.@build_constraint(
+             v_real[i] - v_pnt_real == br.r[k] * i_ser_real[k] - br.x[k] * i_ser_imag[k]); nw),
+         constrain!(nm, :cstr_br_section, (a, :imag), JuMP.@build_constraint(
+             v_imag[i] - v_pnt_imag == br.r[k] * i_ser_imag[k] + br.x[k] * i_ser_real[k]); nw))
     end
 
     g, b  = sum(br.g_shnt) / 2, sum(br.b_shnt) / 2
-    point = (constrain!(nm, :branch_point, (e, :real), JuMP.@build_constraint(
-                 sum(csr) == g * v_pnt_real - b * v_pnt_imag); nw),
-             constrain!(nm, :branch_point, (e, :imag), JuMP.@build_constraint(
-                 sum(csi) == g * v_pnt_imag + b * v_pnt_real); nw))
+    point = (constrain!(nm, :cstr_br_point, (e, :real), JuMP.@build_constraint(
+                 sum(i_ser_real) == g * v_pnt_real - b * v_pnt_imag); nw),
+             constrain!(nm, :cstr_br_point, (e, :imag), JuMP.@build_constraint(
+                 sum(i_ser_imag) == g * v_pnt_imag + b * v_pnt_real); nw))
 
     return (sections, point)
 end
 
 """
-    constraint_edge_limits(nm, T; nw)
+    fnct_edge_limit(nm, T; nw)
 
 The apparent power rating at every terminal of a branch and the limits on the
 voltage angle difference across it. Only a dispatch problem imposes them.
 """
-function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_edge_limit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                                ) where {P<:AbstractDispatchProblem,F<:IVRFormulation,T<:AbstractBranch}
-    rating = get!(() -> Dict{Int,Any}(), con(nm; nw), :edge_rating)
-    angle  = get!(() -> Dict{Int,Any}(), con(nm; nw), :edge_angle_difference)
+    rating = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_edge_rating)
+    angle  = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_edge_angle_difference)
 
     for e in ids(nm, T; nw)
         br = edge(nm, e; nw)::T
         A  = edge_arcs(nm, e; nw)
 
-        rating[e] = constraint_edge_rating!(nm, e, br.s_max; nw)
+        rating[e] = fnct_edge_rating!(nm, e, br.s_max; nw)
         length(A) == 2 &&
-            (angle[e] = constraint_edge_angle_difference!(nm, A[1], A[2], br.v_angl_min, br.v_angl_max; nw))
+            (angle[e] = fnct_edge_angle_difference!(nm, A[1], A[2], br.v_angl_min, br.v_angl_max; nw))
     end
 
     return nothing
@@ -441,7 +443,7 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default
 end
 
 """
-    constraint_edge(nm, T; nw)
+    fnct_edge(nm, T; nw)
 
 The linearized flow of every in-service branch,
 
@@ -467,9 +469,9 @@ p_{a_k} = -b_{k} \\left(v^{\\text{a}}_{i_k} - v^{\\text{a}}_{e}\\right),
 
 with `v^a_e` the angle of the point.
 """
-function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractBranch}
-    branch = get!(() -> Dict{Int,Any}(), con(nm; nw), :branch)
+    branch = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_br_equation)
 
     for e in ids(nm, T; nw)
         br = edge(nm, e; nw)::T
@@ -479,17 +481,17 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
             v_angl, p_term, v_pnt_angl = var(nm, :v_angl; nw), var(nm, :p_term; nw), var(nm, :v_pnt_angl, e; nw)
 
             sections = map(enumerate(A)) do (k, a)
-                constrain!(nm, :branch_section, a, JuMP.@build_constraint(p_term[a] ==
+                constrain!(nm, :cstr_br_section, a, JuMP.@build_constraint(p_term[a] ==
                     -susceptance(br.r[k], br.x[k]) * (v_angl[a.node] - v_pnt_angl)); nw)
             end
-            point = constrain!(nm, :branch_point, e,
+            point = constrain!(nm, :cstr_br_point, e,
                                JuMP.@build_constraint(sum(p_term[a] for a in A) == 0.0); nw)
 
             branch[e] = (sections, point)
             continue
         end
 
-        branch[e] = constraint_linear_flow!(nm, e, A[1], A[2],
+        branch[e] = fnct_edge_flow_linear!(nm, e, A[1], A[2],
                                             susceptance(sum(br.r), sum(br.x)), 0.0; nw)
     end
 
@@ -497,24 +499,24 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
 end
 
 """
-    constraint_edge_limits(nm, T; nw)
+    fnct_edge_limit(nm, T; nw)
 
 The rating at every terminal and the angle difference limit of every in-service
-branch, see [`constraint_linear_ratings!`](@ref) and
-[`constraint_linear_angle_difference!`](@ref).
+branch, see [`fnct_edge_rating_linear!`](@ref) and
+[`fnct_edge_angle_difference_linear!`](@ref).
 """
-function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_edge_limit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                                ) where {P<:AbstractDispatchProblem,F<:LPFFormulation,T<:AbstractBranch}
-    limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :edge_limits)
+    limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_edge_limit)
 
     for e in ids(nm, T; nw)
         br = edge(nm, e; nw)::T
         A  = edge_arcs(nm, e; nw)
 
         limits[e] = length(A) == 2 ?
-            (constraint_linear_ratings!(nm, e, A, br.s_max; nw),
-             constraint_linear_angle_difference!(nm, A[1], A[2], br.v_angl_min, br.v_angl_max; nw)) :
-            constraint_linear_ratings!(nm, e, A, br.s_max; nw)
+            (fnct_edge_rating_linear!(nm, e, A, br.s_max; nw),
+             fnct_edge_angle_difference_linear!(nm, A[1], A[2], br.v_angl_min, br.v_angl_max; nw)) :
+            fnct_edge_rating_linear!(nm, e, A, br.s_max; nw)
     end
 
     return nothing

@@ -26,6 +26,7 @@
 # v0.14.0 - the string names test is included                                  #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.14.0 - the docs tables test is included                                   #
+# v0.15.0 - constraint keys follow the nomenclature                            #
 ################################################################################
 
 using Test
@@ -60,7 +61,7 @@ rating_at(ed, k::Int) = ed.s_max isa AbstractVector ? ed.s_max[k] : ed.s_max
 
 "the `(family, id, key, nw)` of every control a model holds equal to its base case"
 held_controls(nm) = Set((id..., nw) for ((nw, key, id), _) in registered_constraints(nm)
-                                    if key === :redispatch_control)
+                                    if key === :cstr_rd_control)
 
 @testset "NetworkModelBuilder" begin
     include("dimension.jl")

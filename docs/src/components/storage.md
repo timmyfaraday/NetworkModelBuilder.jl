@@ -104,7 +104,7 @@ which is the honest answer to a question that has none. `NaN`, the default, is
 the absence of a row rather than a row against `NaN`.
 
 ```@docs
-constraint_storage_final_energy!
+fnct_stor_final_energy!
 interior_state
 ```
 
@@ -138,7 +138,7 @@ with an infinite right hand side.
 
 ```@docs
 storage_cycles
-constraint_storage_cycles!
+fnct_stor_cycle!
 ```
 
 !!! note "Why the discharge side"

@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.12.9 - a variable key is not reused, nor a constraint id in a build       #
+# v0.15.0 - a built model holds one id shape per key                           #
 ################################################################################
 
 # `var` and `con` are keyed by `Symbol`, shared by the package and every
@@ -116,6 +117,36 @@ end
         other = instantiate_model(mn, LoadFlowProblem, LPFFormulation)
         @test other.registered !== nm.registered
         @test length(other.registered) == length(nm.registered)
+    end
+
+    @testset "a built model holds one id shape per key" begin
+        arity(id) = id isa Tuple ? length(id) : 1
+
+        "the keys of a model whose rows are written under ids of more than one shape"
+        function mixed(nm)
+            seen = Dict{Symbol,Set{Int}}()
+            for (_, key, id) in keys(registered_constraints(nm))
+                push!(get!(() -> Set{Int}(), seen, key), arity(id))
+            end
+
+            return sort!([key for (key, shapes) in seen if length(shapes) > 1])
+        end
+
+        priced = Dict{Symbol,Any}(:redispatch => Redispatch(; overload = 500.0))
+        moving = (oltc = true, t_magn_min = 0.9, t_magn_max = 1.1)
+
+        for F in (IVRFormulation, LPFFormulation)
+            for P in (LoadFlowProblem, OptimalPowerFlowProblem, RedispatchProblem), d in (mn, radial_network())
+                @test mixed(instantiate_model(d, P, F)) == Symbol[]
+            end
+
+            for P in (OptimalPowerFlowProblem, RedispatchProblem),
+                d in (meshed_network(), meshed_network(; star = true), meshed_network(; tap = moving))
+                @test mixed(instantiate_model(d, P, F)) == Symbol[]
+            end
+
+            @test mixed(instantiate_model(radial_network(), RedispatchProblem, F; ext = priced)) == Symbol[]
+        end
     end
 
 end

@@ -2,7 +2,7 @@
 
 Every change to the setup (instructions, skills, hooks, settings), newest at the bottom.
 Format: `- SC<n> · YYYY-MM-DD · approved by <user> · <what changed> · why: <feedback ids or reason>`.
-Next id: **SC8**.
+Next id: **SC10**.
 
 - SC1 · 2026-09-30 · approved by Tom Van Acker · Initial setup, ported from a colleague's
   FlowBasedDomains (fbd) repo and adapted for Julia/GitHub/solo maintainer: `copilot-instructions`,
@@ -37,3 +37,8 @@ Next id: **SC8**.
   `Cable` and `OverheadLine`; the load-order example is `load/load.jl`, not `branch/`; one bullet added: what
   several types of a family share lives in the family file, what one type uses in its own file · why: D50, D51
   (B30); the bullet adds two lines and the edit cuts two type names and an example that stops being true.
+- SC8 · 2026-10-11 · approved by Tom Van Acker · `copilot-instructions.md` rule 9: a CRLF file edited over several
+  lines goes through a script that matches its anchor exactly once · why: F8, F9 (a second incident, three calls and
+  a repair each); the rule adds one line and cuts the lesson "A scripted edit of many pages refuses unless its anchor
+  matches exactly once" from `lessons.md`, which an agent reads only after an edit has failed.
+- SC9 · 2026-10-11 · approved by Tom Van Acker · `julia.instructions.md`: one bullet, names follow `knowledge/nomenclature.md` and `test/nomenclature.jl` checks them · why: B31 and B32 (D55-D70) made the grammar a rule for every new name, and it sat only in a knowledge file an agent opens after the fact; the bullet adds three lines and cuts nothing, the file is 28 of 60 lines.

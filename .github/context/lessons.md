@@ -110,6 +110,9 @@ again get retired.
   `test/multinetwork.jl` turned every `∈`, `∉` and `≈` into mojibake and added a BOM; `git diff --stat`
   showed 14 deletions where 0 were expected. `git checkout -- <file>` and the edit tool put it right. A
   one-line change of a test goes through the edit tool, however small. (unconfirmed)
+- **A multi-line anchor in a Julia `"""` string loses its common indentation.** Two edit scripts of B32 matched 0 times on
+  an anchor whose first line had no indent and whose others had two; the exact-once check wrote nothing. Spell such an anchor with `\n` in a
+  plain string, or read it from a file. (unconfirmed)
 - **A restriction written in every state, plus a tie of the state to the base case, makes rows
   dependent, and Ipopt can stop on it at the first iteration.** B14: a preventive three-winding phase
   shifter set at exactly zero gave `OTHER_ERROR` (restoration failed) under every Ipopt setting tried,
@@ -149,9 +152,6 @@ again get retired.
 - **A docs table that names fields or keys is a claim: test it against `fieldnames` and the registered keys.** `test/docs_tables.jl` found 23
   fields missing from 12 of 12 Parameters tables (`ext` in all, five fields of `Transformer`, `c_up` and `c_dn`) and six variable keys on
   no component page, in pages read twice before. (unconfirmed)
-- **A scripted edit of many pages refuses unless its anchor matches exactly once.** The `edit` helper of `scratch/nom_docs_tables.jl`
-  (`count(old, text) == 1 || error`, `\n` mapped to the file's line end) stopped 4 of about 30 edits whose anchor was off (a trailing
-  newline, text on two lines) instead of writing them wrong, and left 0 mixed line ends in 44 files. (unconfirmed)
 
 ## Performance
 

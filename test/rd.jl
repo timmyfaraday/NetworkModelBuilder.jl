@@ -18,6 +18,7 @@
 # v0.14.0 - a variable is named by the model, not by its caller                #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - constraint keys follow the nomenclature                            #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The
@@ -110,7 +111,7 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["p_gen_
         # pg splits into the setpoint plus what was moved, and nothing else
         @test haskey(_NMB.var(nm), :p_gen_up)
         @test haskey(_NMB.var(nm), :p_gen_dn)
-        @test haskey(_NMB.con(nm), :generator_redispatch)
+        @test haskey(_NMB.con(nm), :cstr_gen_redispatch)
         @test JuMP.lower_bound(_NMB.var(nm, :p_gen_up, 1)) == 0.0
         @test JuMP.lower_bound(_NMB.var(nm, :p_gen_dn, 1)) == 0.0
 
@@ -188,7 +189,7 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["p_gen_
                                ext = Dict{Symbol,Any}(:redispatch => Redispatch(; monitored = Int[])))
         @test !is_monitored(nm, 1)
         @test isempty(monitored_edges(nm))
-        rating, angle = _NMB.con(nm, :edge_limits)[1]
+        rating, angle = _NMB.con(nm, :cstr_edge_limit)[1]
         @test rating === nothing          # the congestion limit is gone
         @test angle !== nothing           # the angle difference limit is not
 
@@ -547,7 +548,7 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["p_gen_
         hard = instantiate_model(data, RedispatchProblem, LPFFormulation)
         @test overload_price(hard) === nothing
         @test !haskey(_NMB.var(hard), :s_ovl)
-        @test haskey(_NMB.registered_constraints(hard), (1, :linear_rating, (1, 1)))
+        @test haskey(_NMB.registered_constraints(hard), (1, :cstr_edge_rating, (1, 1)))
 
         rd = Redispatch(; overload = 500.0)
         soft = instantiate_model(data, RedispatchProblem, LPFFormulation;
@@ -557,9 +558,9 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["p_gen_
 
         # the hard row is gone and the pair that replaced it is under its own key,
         # since a range constraint cannot be updated in place into a one-sided one
-        @test !haskey(_NMB.registered_constraints(soft), (1, :linear_rating, (1, 1)))
-        @test haskey(_NMB.registered_constraints(soft), (1, :linear_overload, (1, 1, :pos)))
-        @test haskey(_NMB.registered_constraints(soft), (1, :linear_overload, (1, 1, :neg)))
+        @test !haskey(_NMB.registered_constraints(soft), (1, :cstr_edge_rating, (1, 1)))
+        @test haskey(_NMB.registered_constraints(soft), (1, :cstr_edge_overload, (1, 1, :pos)))
+        @test haskey(_NMB.registered_constraints(soft), (1, :cstr_edge_overload, (1, 1, :neg)))
 
         # one overload per edge, shared by its terminals, and non-negative
         @test length(_NMB.var(soft, :s_ovl)) == 1
@@ -613,8 +614,8 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["p_gen_
         # and it is the AC rating that was relaxed, under its own key
         nm = instantiate_model(data, RedispatchProblem, IVRFormulation;
                                ext = Dict{Symbol,Any}(:redispatch => Redispatch(; overload = 1.0)))
-        @test !haskey(_NMB.registered_constraints(nm), (1, :edge_rating, (1, 1)))
-        @test haskey(_NMB.registered_constraints(nm), (1, :edge_overload, (1, 1)))
+        @test !haskey(_NMB.registered_constraints(nm), (1, :cstr_edge_rating, (1, 1)))
+        @test haskey(_NMB.registered_constraints(nm), (1, :cstr_edge_overload, (1, 1)))
     end
 
     @testset "an overload is a per-index cost like any other" begin
@@ -710,8 +711,8 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["p_gen_
         @test !JuMP.has_upper_bound(_NMB.var(nm, :s_ovl_peak, 1; nw = 1))
 
         # and one row per index of the period, bounding the peak from below
-        @test haskey(_NMB.registered_constraints(nm), (1, :overload_peak, (1, 1)))
-        @test haskey(_NMB.registered_constraints(nm), (1, :overload_peak, (1, 2)))
+        @test haskey(_NMB.registered_constraints(nm), (1, :cstr_edge_overload_peak, (1, 1)))
+        @test haskey(_NMB.registered_constraints(nm), (1, :cstr_edge_overload_peak, (1, 2)))
 
         # and the solution reads it back under the same key
         quiet(() -> optimize_model!(nm, OPTIMIZER))

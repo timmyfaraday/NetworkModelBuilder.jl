@@ -30,8 +30,8 @@ unit_types
 ### If it couples network indices
 
 Constraints that span network indices cannot be written from inside the loop
-over them. Put them in a [`constraint_unit_coupling`](@ref) or
-[`constraint_edge_coupling`](@ref) method, which every problem builder calls once
+over them. Put them in a [`fnct_unit_coupling`](@ref) or
+[`fnct_edge_coupling`](@ref) method, which every problem builder calls once
 after that loop, and guard them with [`require_time_dimension`](@ref).
 
 ### If it has more than two terminals
@@ -51,7 +51,7 @@ abstract type ACPFormulation <: AbstractPowerFormulation end
 
 function variable_node_voltage(nm::NetworkModel{P,F}; nw = nw_id_default(nm)
                               ) where {P<:AbstractProblemType,F<:ACPFormulation}
-    # vm, va instead of vr, vi
+    # v_magn, v_angl instead of v_real, v_imag
 end
 ```
 
@@ -78,13 +78,15 @@ see [`update_model!`](@ref).
 A new component type has nothing to do differently: write the equations as they
 read, hand them over with a key that says which constraint they are, and give
 each one an `id` that distinguishes it from the others the same component
-writes. A variable is not named by the component: [`variable!`](@ref) and
-[`variables!`](@ref) name it from its key and its `id`, and leave it unnamed when
-the solve asked for `set_string_name = false`.
+writes. A component names neither a variable nor a constraint: [`variable!`](@ref),
+[`variables!`](@ref) and [`constrain!`](@ref) name it from its key and its `id` when
+the solve asked for `debug_mode = true`, and leave it unnamed otherwise.
 
 A key is not a private name. `var` and `con` are shared by the package and by
 every extension, so an extension **prefixes its keys with its own name**, as
-`:star_vr` rather than `:v_star_real`, which a [`Transformer`](@ref) already uses.
+`:star_vr` rather than `:v_star_real`, which a [`Transformer`](@ref) already uses. A constraint key
+is `cstr_<owner>_<role>`, see [Nomenclature](@ref), with the extension as its own owner,
+`:cstr_star_balance`, and the function that writes it is `fnct_star_balance`.
 Where a key is asked for again with an index set or a type of `id` other than
 the one it holds, [`variable!`](@ref), [`variables!`](@ref) and
 [`variable_container!`](@ref) raise an `ArgumentError` naming the key and the
@@ -106,14 +108,14 @@ registered_constraints
 Physics that several components share lives in a fragment rather than being
 written twice:
 
-- [`constraint_pi_section!`](@ref) — the π-equivalent, used by every branch;
-- [`constraint_unit_power!`](@ref) — the injection of a unit against its current,
+- [`fnct_br_pi_section!`](@ref) — the π-equivalent, used by every branch;
+- [`fnct_unit_power!`](@ref) — the injection of a unit against its current,
   used by every generator, load and storage unit;
-- [`constraint_edge_rating!`](@ref) and
-  [`constraint_edge_angle_difference!`](@ref) — the operating limits of an edge.
+- [`fnct_edge_rating!`](@ref) and
+  [`fnct_edge_angle_difference!`](@ref) — the operating limits of an edge.
 
 ```@docs
-constraint_unit_power!
+fnct_unit_power!
 ```
 
 ## Dispatchers
@@ -123,16 +125,16 @@ variable_edge_terminal_flow
 variable_edge_terminal_power
 variable_unit_injection
 variable_unit_injection_power
-constraint_unit_injection!
+fnct_unit_injection!
 variable_storage_active!
 variable_storage_reactive!
 variable_slack_volume!
 variable_edge
-constraint_edge
-constraint_edge_limits
-constraint_edge_coupling
+fnct_edge
+fnct_edge_limit
+fnct_edge_coupling
 variable_unit
-constraint_unit
+fnct_unit
 variable_edge_terminal_current
 variable_unit_injection_current
 solution_node

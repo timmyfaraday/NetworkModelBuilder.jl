@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 ################################################################################
@@ -49,16 +50,16 @@ function _build_optimal_power_flow!(nm::NetworkModel)
         variable_edge(nm; nw = n)
         variable_unit(nm; nw = n)
 
-        constraint_node_voltage_reference(nm; nw = n)
-        constraint_node_voltage_limits(nm; nw = n)
-        constraint_node_balance(nm; nw = n)
-        constraint_edge(nm; nw = n)
-        constraint_edge_limits(nm; nw = n)
-        constraint_unit(nm; nw = n)
+        fnct_node_voltage_reference(nm; nw = n)
+        fnct_node_voltage_limit(nm; nw = n)
+        fnct_node_balance(nm; nw = n)
+        fnct_edge(nm; nw = n)
+        fnct_edge_limit(nm; nw = n)
+        fnct_unit(nm; nw = n)
     end
 
-    constraint_edge_coupling(nm)
-    constraint_unit_coupling(nm)
+    fnct_edge_coupling(nm)
+    fnct_unit_coupling(nm)
 
     objective(nm)
 

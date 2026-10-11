@@ -13,13 +13,15 @@
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the docstrings follow the nomenclature                             #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 export register_unit_type!, unit_types
 export variable_unit, variable_unit_injection
 export variable_unit_injection_current, variable_unit_injection_power
-export constraint_unit, constraint_unit_coupling
-export constraint_unit_injection!, constraint_unit_power!
+export fnct_unit, fnct_unit_coupling
+export fnct_unit_injection!, fnct_unit_power!
 export solution_unit, solution_unit!
 export time_step, require_time_dimension
 
@@ -34,7 +36,7 @@ const _UNIT_TYPES_LOCK = ReentrantLock()
     register_unit_type!(T)
 
 Record the concrete unit type `T` so that [`variable_unit`](@ref),
-[`constraint_unit`](@ref) and [`solution_unit`](@ref) visit it. See
+[`fnct_unit`](@ref) and [`solution_unit`](@ref) visit it. See
 [`register_edge_type!`](@ref) for the rationale.
 """
 function register_unit_type!(::Type{T}) where {T<:AbstractUnit}
@@ -59,7 +61,7 @@ shared by every unit type.
 
 A generator injects, a load and a shunt withdraw; the sign lives in the
 constraints of the individual unit type, not in the node balance. That is what
-lets [`constraint_node_balance`](@ref) sum over `U(i)` without knowing what kind
+lets [`fnct_node_balance`](@ref) sum over `U(i)` without knowing what kind
 of unit each `u` is.
 """
 function variable_unit_injection_current(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
@@ -95,7 +97,7 @@ variable_unit_injection(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
 The active power a unit injects into its node, one variable per in-service unit,
 shared by every unit type. The linearized counterpart of
 [`variable_unit_injection_current`](@ref), and what makes
-[`constraint_node_balance`](@ref) a sum over `U(i)` here too.
+[`fnct_node_balance`](@ref) a sum over `U(i)` here too.
 """
 function variable_unit_injection_power(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
                                       ) where {P<:AbstractProblemType,F<:LPFFormulation}
@@ -130,27 +132,27 @@ variable_unit(nm::NetworkModel, ::Type{T}; nw::Int = nw_id_default(nm)) where {T
 ################################################################################
 
 """
-    constraint_unit(nm; nw)
-    constraint_unit(nm, T; nw)
+    fnct_unit(nm; nw)
+    fnct_unit(nm, T; nw)
 
 The behaviour of every registered unit type at network index `nw`.
 """
-function constraint_unit(nm::NetworkModel; nw::Int = nw_id_default(nm))
+function fnct_unit(nm::NetworkModel; nw::Int = nw_id_default(nm))
     for T in _UNIT_TYPES
-        constraint_unit(nm, T; nw)
+        fnct_unit(nm, T; nw)
     end
 
     return nothing
 end
 
-function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P,F,T<:AbstractUnit}
     isempty(ids(nm, T; nw)) && return nothing
     error("no constraints are defined for unit type `$T` under problem `$P` with formulation `$F`")
 end
 
 """
-    constraint_unit_power!(nm, u, p, q; nw)
+    fnct_unit_power!(nm, u, p, q; nw)
 
 Link the power a unit exchanges with its node to the current it injects,
 
@@ -165,27 +167,27 @@ withdraws. They may be numbers, variables or expressions, which is what lets one
 implementation serve a generator whose power is a decision, a fixed load whose
 power is data, and a flexible load whose power is a decision within an envelope.
 """
-function constraint_unit_power!(nm::NetworkModel, u::Int, p, q; nw::Int)
+function fnct_unit_power!(nm::NetworkModel, u::Int, p, q; nw::Int)
     i                        = node(unit(nm, u; nw))
     v_real, v_imag           = var(nm, :v_real;      nw), var(nm, :v_imag;      nw)
     i_unit_real, i_unit_imag = var(nm, :i_unit_real; nw), var(nm, :i_unit_imag; nw)
 
     return (
-        constrain!(nm, :unit_power, (u, :active),
+        constrain!(nm, :cstr_unit_power, (u, :p),
                    JuMP.@build_constraint(p == v_real[i] * i_unit_real[u] + v_imag[i] * i_unit_imag[u]); nw),
-        constrain!(nm, :unit_power, (u, :reactive),
+        constrain!(nm, :cstr_unit_power, (u, :q),
                    JuMP.@build_constraint(q == v_imag[i] * i_unit_real[u] - v_real[i] * i_unit_imag[u]); nw))
 end
 
 """
-    constraint_unit_injection!(nm, u, p; nw)
+    fnct_unit_injection!(nm, u, p; nw)
 
 Fix the active power unit `u` injects into its node, the linearized counterpart
-of [`constraint_unit_power!`](@ref). `p` is an injection, so a load hands in the
+of [`fnct_unit_power!`](@ref). `p` is an injection, so a load hands in the
 negative of what it withdraws.
 """
-constraint_unit_injection!(nm::NetworkModel, u::Int, p; nw::Int) =
-    constrain!(nm, :unit_injection, u,
+fnct_unit_injection!(nm::NetworkModel, u::Int, p; nw::Int) =
+    constrain!(nm, :cstr_unit_injection, u,
                JuMP.@build_constraint(var(nm, :p_unit, u; nw) == p); nw)
 
 ################################################################################
@@ -193,8 +195,8 @@ constraint_unit_injection!(nm::NetworkModel, u::Int, p; nw::Int) =
 ################################################################################
 
 """
-    constraint_unit_coupling(nm)
-    constraint_unit_coupling(nm, T)
+    fnct_unit_coupling(nm)
+    fnct_unit_coupling(nm, T)
 
 The constraints of every registered unit type that tie network indices to one
 another, rather than holding within one.
@@ -205,15 +207,15 @@ energy balance of a [`Storage`](@ref) and the energy envelope of a
 [`FlexibleLoad`](@ref) live here; a unit without such a constraint needs no
 method.
 """
-function constraint_unit_coupling(nm::NetworkModel)
+function fnct_unit_coupling(nm::NetworkModel)
     for T in _UNIT_TYPES
-        constraint_unit_coupling(nm, T)
+        fnct_unit_coupling(nm, T)
     end
 
     return nothing
 end
 
-constraint_unit_coupling(::NetworkModel, ::Type{T}) where {T<:AbstractUnit} = nothing
+fnct_unit_coupling(::NetworkModel, ::Type{T}) where {T<:AbstractUnit} = nothing
 
 """
     time_step(nm, n)
@@ -272,16 +274,16 @@ function solution_unit(nm::NetworkModel{P,F}, nw::Int; only::Union{Bool,Set{Int}
             i   = node(unit(nm, u; nw))
             vr  = JuMP.value(v_real[i])
             vi  = JuMP.value(v_imag[i])
-            cru = JuMP.value(i_unit_real[u])
-            ciu = JuMP.value(i_unit_imag[u])
+            i_real = JuMP.value(i_unit_real[u])
+            i_imag = JuMP.value(i_unit_imag[u])
 
             entry         = Dict{String,Any}()
             entry["type"] = type
             entry["node"] = i
-            entry["i_unit_real"]  = cru
-            entry["i_unit_imag"]  = ciu
-            entry["p_unit"]    = vr * cru + vi * ciu
-            entry["q_unit"]    = vi * cru - vr * ciu
+            entry["i_unit_real"]  = i_real
+            entry["i_unit_imag"]  = i_imag
+            entry["p_unit"]    = vr * i_real + vi * i_imag
+            entry["q_unit"]    = vi * i_real - vr * i_imag
             solution_unit!(entry, nm, T, u, nw)
             sol[string(u)] = entry
         end

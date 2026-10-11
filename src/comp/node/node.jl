@@ -17,14 +17,16 @@
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.14.0 - the docstrings follow the nomenclature                             #
 # v0.14.0 - the ext keys of the voltage start follow the nomenclature          #
+# v0.15.0 - constraint keys and ids follow the nomenclature                    #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 export Node, NodeType, PQ, PV, REF, ISOLATED, reference_nodes
 export active_nodal_price, reactive_nodal_price, nodal_prices
 export variable_node_voltage
-export constraint_node_balance, constraint_node_voltage_reference
-export constraint_node_voltage_anchor
-export constraint_node_voltage_setpoint, constraint_node_voltage_limits
+export fnct_node_balance, fnct_node_voltage_reference
+export fnct_node_voltage_anchor
+export fnct_node_voltage_setpoint, fnct_node_voltage_limit
 export solution_node
 
 ################################################################################
@@ -115,7 +117,7 @@ coordinates, `:v_real` and `:v_imag`. Whether they are bounded is decided by the
 type: a load flow has a determinate solution and is left unbounded so that the
 solver is not steered away from it, whereas a dispatch problem bounds each
 component by the voltage magnitude limit of its node and adds the magnitude
-limits themselves in [`constraint_node_voltage_limits`](@ref).
+limits themselves in [`fnct_node_voltage_limit`](@ref).
 """
 function variable_node_voltage end
 
@@ -149,7 +151,7 @@ end
 ################################################################################
 
 """
-    constraint_node_balance(nm; nw)
+    fnct_node_balance(nm; nw)
 
 Kirchhoff's current law at every in-service node `i ∈ I`,
 
@@ -165,28 +167,28 @@ Every unit — generator, load or shunt — contributes to the same sum through 
 shared `:i_unit_real` and `:i_unit_imag` variables, so the balance does not need to know which
 kinds of unit exist. This is what makes the extended graph worth having.
 """
-function constraint_node_balance(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+function fnct_node_balance(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
                                 ) where {P<:AbstractProblemType,F<:IVRFormulation}
     i_term_real, i_term_imag = var(nm, :i_term_real; nw), var(nm, :i_term_imag; nw)
     i_unit_real, i_unit_imag = var(nm, :i_unit_real; nw), var(nm, :i_unit_imag; nw)
 
-    real = get!(() -> Dict{Int,Any}(), con(nm; nw), :node_balance_real)
-    imag = get!(() -> Dict{Int,Any}(), con(nm; nw), :node_balance_imag)
+    balance = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_node_balance)
 
     for i in ids(nm, Node; nw)
         A, U = node_arcs(nm, i; nw), node_units(nm, i; nw)
 
-        real[i] = constrain!(nm, :node_balance, (i, :real), JuMP.@build_constraint(
-            sum(i_term_real[a] for a in A; init = 0.0) == sum(i_unit_real[u] for u in U; init = 0.0)); nw)
-        imag[i] = constrain!(nm, :node_balance, (i, :imag), JuMP.@build_constraint(
-            sum(i_term_imag[a] for a in A; init = 0.0) == sum(i_unit_imag[u] for u in U; init = 0.0)); nw)
+        balance[i] = (
+            constrain!(nm, :cstr_node_balance, (i, :real), JuMP.@build_constraint(
+                sum(i_term_real[a] for a in A; init = 0.0) == sum(i_unit_real[u] for u in U; init = 0.0)); nw),
+            constrain!(nm, :cstr_node_balance, (i, :imag), JuMP.@build_constraint(
+                sum(i_term_imag[a] for a in A; init = 0.0) == sum(i_unit_imag[u] for u in U; init = 0.0)); nw))
     end
 
     return nothing
 end
 
 """
-    constraint_node_voltage_reference(nm; nw)
+    fnct_node_voltage_reference(nm; nw)
 
 Anchor the voltage at every reference node.
 
@@ -196,64 +198,64 @@ dispatch problem fixes the angle only, leaving the magnitude free within its
 limits.
 
 An island that has a source but no reference node is anchored as well, see
-[`constraint_node_voltage_anchor`](@ref).
+[`fnct_node_voltage_anchor`](@ref).
 """
-function constraint_node_voltage_reference end
+function fnct_node_voltage_reference end
 
-function constraint_node_voltage_reference(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+function fnct_node_voltage_reference(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
                                           ) where {P<:AbstractPowerFlowProblem,F<:IVRFormulation}
     v_real, v_imag = var(nm, :v_real; nw), var(nm, :v_imag; nw)
 
-    reference = get!(() -> Dict{Int,Any}(), con(nm; nw), :node_voltage_reference)
+    reference = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_node_voltage_reference)
     for i in reference_nodes(nm; nw)
         nd = node(nm, i; nw)
         reference[i] = (
-            constrain!(nm, :node_reference, (i, :real),
+            constrain!(nm, :cstr_node_voltage_reference, (i, :real),
                        JuMP.@build_constraint(v_real[i] == nd.v_magn_set * cos(nd.v_angl_set)); nw),
-            constrain!(nm, :node_reference, (i, :imag),
+            constrain!(nm, :cstr_node_voltage_reference, (i, :imag),
                        JuMP.@build_constraint(v_imag[i] == nd.v_magn_set * sin(nd.v_angl_set)); nw))
     end
 
-    constraint_node_voltage_anchor(nm; nw)
+    fnct_node_voltage_anchor(nm; nw)
 
     return nothing
 end
 
-function constraint_node_voltage_reference(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+function fnct_node_voltage_reference(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
                                           ) where {P<:AbstractDispatchProblem,F<:IVRFormulation}
     v_real, v_imag = var(nm, :v_real; nw), var(nm, :v_imag; nw)
 
-    reference = get!(() -> Dict{Int,Any}(), con(nm; nw), :node_voltage_reference)
+    reference = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_node_voltage_reference)
     for i in reference_nodes(nm; nw)
         v_angl_set = node(nm, i; nw).v_angl_set
         reference[i] = (
-            constrain!(nm, :node_reference, (i, :angle),
+            constrain!(nm, :cstr_node_voltage_reference, (i, :angl),
                        JuMP.@build_constraint(sin(v_angl_set) * v_real[i] - cos(v_angl_set) * v_imag[i] == 0.0); nw),
-            constrain!(nm, :node_reference, (i, :side),
+            constrain!(nm, :cstr_node_voltage_reference, (i, :side),
                        JuMP.@build_constraint(cos(v_angl_set) * v_real[i] + sin(v_angl_set) * v_imag[i] >= 0.0); nw))
     end
 
-    constraint_node_voltage_anchor(nm; nw)
+    fnct_node_voltage_anchor(nm; nw)
 
     return nothing
 end
 
 """
-    constraint_node_voltage_setpoint(nm; nw)
+    fnct_node_voltage_setpoint(nm; nw)
 
 Fix the voltage magnitude of every `PV` node, `(v^{\\text{r}}_i)^2 +
 (v^{\\text{i}}_i)^2 = (v^{\\text{m}}_i)^2`. Only a load flow has such a
 setpoint; a dispatch problem lets the magnitude float within its limits.
 """
-function constraint_node_voltage_setpoint(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+function fnct_node_voltage_setpoint(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
                                          ) where {P<:AbstractPowerFlowProblem,F<:IVRFormulation}
     v_real, v_imag = var(nm, :v_real; nw), var(nm, :v_imag; nw)
 
-    setpoint = get!(() -> Dict{Int,Any}(), con(nm; nw), :node_voltage_setpoint)
+    setpoint = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_node_voltage_setpoint)
     for i in ids(nm, Node; nw)
         nd = node(nm, i; nw)
         nd.type == PV || continue
-        setpoint[i] = constrain!(nm, :node_setpoint, i,
+        setpoint[i] = constrain!(nm, :cstr_node_voltage_setpoint, i,
                        JuMP.@build_constraint(v_real[i]^2 + v_imag[i]^2 == nd.v_magn_set^2); nw)
     end
 
@@ -261,21 +263,21 @@ function constraint_node_voltage_setpoint(nm::NetworkModel{P,F}; nw::Int = nw_id
 end
 
 """
-    constraint_node_voltage_limits(nm; nw)
+    fnct_node_voltage_limit(nm; nw)
 
 Bound the voltage magnitude of every node between `v_magn_min` and `v_magn_max`.
 """
-function constraint_node_voltage_limits(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+function fnct_node_voltage_limit(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
                                        ) where {P<:AbstractDispatchProblem,F<:IVRFormulation}
     v_real, v_imag = var(nm, :v_real; nw), var(nm, :v_imag; nw)
 
-    limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :node_voltage_limits)
+    limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_node_voltage_limit)
     for i in ids(nm, Node; nw)
         nd = node(nm, i; nw)
         limits[i] = (
-            constrain!(nm, :node_limits, (i, :min),
+            constrain!(nm, :cstr_node_voltage_limit, (i, :min),
                        JuMP.@build_constraint(v_real[i]^2 + v_imag[i]^2 >= nd.v_magn_min^2); nw),
-            constrain!(nm, :node_limits, (i, :max),
+            constrain!(nm, :cstr_node_voltage_limit, (i, :max),
                        JuMP.@build_constraint(v_real[i]^2 + v_imag[i]^2 <= nd.v_magn_max^2); nw))
     end
 
@@ -307,7 +309,7 @@ function variable_node_voltage(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm
 end
 
 """
-    constraint_node_balance(nm; nw)
+    fnct_node_balance(nm; nw)
 
 Active power balance at every in-service node,
 
@@ -319,15 +321,15 @@ The same statement as in the current based formulation, in active power alone:
 the arcs incident to a node against the units connected to it, with neither side
 needing to know what the other contains.
 """
-function constraint_node_balance(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+function fnct_node_balance(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
                                 ) where {P<:AbstractProblemType,F<:LPFFormulation}
     p_term, p_unit = var(nm, :p_term; nw), var(nm, :p_unit; nw)
 
-    balance = get!(() -> Dict{Int,Any}(), con(nm; nw), :node_balance)
+    balance = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_node_balance)
     for i in ids(nm, Node; nw)
         A, U = node_arcs(nm, i; nw), node_units(nm, i; nw)
 
-        balance[i] = constrain!(nm, :node_balance, i, JuMP.@build_constraint(
+        balance[i] = constrain!(nm, :cstr_node_balance, i, JuMP.@build_constraint(
             sum(p_term[a] for a in A; init = 0.0) == sum(p_unit[u] for u in U; init = 0.0)); nw)
     end
 
@@ -335,7 +337,7 @@ function constraint_node_balance(nm::NetworkModel{P,F}; nw::Int = nw_id_default(
 end
 
 """
-    constraint_node_voltage_reference(nm; nw)
+    fnct_node_voltage_reference(nm; nw)
 
 Fix the angle of every reference node, `v^{\\text{a}}_{i} = v^{\\text{a,set}}_{i}`.
 
@@ -343,23 +345,23 @@ Unlike the current based formulation this does not depend on the problem: the
 angle is the only thing a reference node has to give, so a power flow and a
 dispatch problem anchor it the same way.
 """
-function constraint_node_voltage_reference(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+function fnct_node_voltage_reference(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
                                           ) where {P<:AbstractProblemType,F<:LPFFormulation}
     v_angl = var(nm, :v_angl; nw)
 
-    reference = get!(() -> Dict{Int,Any}(), con(nm; nw), :node_voltage_reference)
+    reference = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_node_voltage_reference)
     for i in reference_nodes(nm; nw)
-        reference[i] = constrain!(nm, :node_reference, i,
+        reference[i] = constrain!(nm, :cstr_node_voltage_reference, i,
             JuMP.@build_constraint(v_angl[i] == node(nm, i; nw).v_angl_set); nw)
     end
 
-    constraint_node_voltage_anchor(nm; nw)
+    fnct_node_voltage_anchor(nm; nw)
 
     return nothing
 end
 
 """
-    constraint_node_voltage_anchor(nm; nw)
+    fnct_node_voltage_anchor(nm; nw)
 
 Fix the angle of the lowest node of every island that has a source but no
 reference node, see [`islands`](@ref).
@@ -373,31 +375,31 @@ island without a source is refused when the model is instantiated.
 
 The angle is set to zero: only differences matter inside the island.
 """
-function constraint_node_voltage_anchor end
+function fnct_node_voltage_anchor end
 
-function constraint_node_voltage_anchor(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+function fnct_node_voltage_anchor(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
                                        ) where {P<:AbstractProblemType,F<:IVRFormulation}
     v_real, v_imag = var(nm, :v_real; nw), var(nm, :v_imag; nw)
 
-    anchor = get!(() -> Dict{Int,Any}(), con(nm; nw), :node_voltage_anchor)
+    anchor = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_node_voltage_anchor)
     for i in anchor_nodes(nm; nw)
         anchor[i] = (
-            constrain!(nm, :node_anchor, (i, :angle),
+            constrain!(nm, :cstr_node_voltage_anchor, (i, :angl),
                        JuMP.@build_constraint(v_imag[i] == 0.0); nw),
-            constrain!(nm, :node_anchor, (i, :side),
+            constrain!(nm, :cstr_node_voltage_anchor, (i, :side),
                        JuMP.@build_constraint(v_real[i] >= 0.0); nw))
     end
 
     return nothing
 end
 
-function constraint_node_voltage_anchor(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
+function fnct_node_voltage_anchor(nm::NetworkModel{P,F}; nw::Int = nw_id_default(nm)
                                        ) where {P<:AbstractProblemType,F<:LPFFormulation}
     v_angl = var(nm, :v_angl; nw)
 
-    anchor = get!(() -> Dict{Int,Any}(), con(nm; nw), :node_voltage_anchor)
+    anchor = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_node_voltage_anchor)
     for i in anchor_nodes(nm; nw)
-        anchor[i] = constrain!(nm, :node_anchor, i,
+        anchor[i] = constrain!(nm, :cstr_node_voltage_anchor, i,
             JuMP.@build_constraint(v_angl[i] == 0.0); nw)
     end
 
@@ -405,17 +407,17 @@ function constraint_node_voltage_anchor(nm::NetworkModel{P,F}; nw::Int = nw_id_d
 end
 
 """
-    constraint_node_voltage_setpoint(nm; nw)
-    constraint_node_voltage_limits(nm; nw)
+    fnct_node_voltage_setpoint(nm; nw)
+    fnct_node_voltage_limit(nm; nw)
 
 Nothing to do: a linearized formulation has no voltage magnitude to hold at a
 setpoint or between limits. The methods exist so that a problem builder can call
 them without asking which formulation it is building.
 """
-constraint_node_voltage_setpoint(::NetworkModel{P,F}; nw::Int = 0
+fnct_node_voltage_setpoint(::NetworkModel{P,F}; nw::Int = 0
                                 ) where {P<:AbstractPowerFlowProblem,F<:LPFFormulation} = nothing
 
-constraint_node_voltage_limits(::NetworkModel{P,F}; nw::Int = 0
+fnct_node_voltage_limit(::NetworkModel{P,F}; nw::Int = 0
                               ) where {P<:AbstractDispatchProblem,F<:LPFFormulation} = nothing
 
 ################################################################################
@@ -437,7 +439,7 @@ anything about either.
 
 # The sign
 
-[`constraint_node_balance`](@ref) is written as *what leaves the node equals
+[`fnct_node_balance`](@ref) is written as *what leaves the node equals
 what its units inject into it*, so raising the right hand side of that row by one
 is one more per unit **injected** at the node — and an extra per unit injected
 *lowers* the cost by the price of the node. The dual the solver reports is
@@ -470,7 +472,7 @@ function active_nodal_price(nm::NetworkModel{P,F}, i::Int; nw::Int = nw_id_defau
                            ) where {P,F<:LPFFormulation}
     JuMP.has_duals(nm.model) || return nothing
 
-    balance = get(con(nm; nw), :node_balance, nothing)
+    balance = get(con(nm; nw), :cstr_node_balance, nothing)
     (balance === nothing || !haskey(balance, i)) && return nothing
 
     return _balance_price(balance[i])
@@ -534,7 +536,7 @@ p = v^{\\text{r}} i^{\\text{r}} + v^{\\text{i}} i^{\\text{i}},
 q = v^{\\text{i}} i^{\\text{r}} - v^{\\text{r}} i^{\\text{i}},
 ```
 
-see [`constraint_unit_power!`](@ref), so the two current prices are the two power
+see [`fnct_unit_power!`](@ref), so the two current prices are the two power
 prices projected onto the current axes,
 
 ```math
@@ -566,12 +568,11 @@ function nodal_prices(nm::NetworkModel{P,F}, i::Int; nw::Int = nw_id_default(nm)
                      ) where {P,F<:IVRFormulation}
     (JuMP.has_duals(nm.model) && JuMP.has_values(nm.model)) || return nothing
 
-    real = get(con(nm; nw), :node_balance_real, nothing)
-    imag = get(con(nm; nw), :node_balance_imag, nothing)
-    (real === nothing || imag === nothing) && return nothing
-    (haskey(real, i) && haskey(imag, i)) || return nothing
+    balance = get(con(nm; nw), :cstr_node_balance, nothing)
+    (balance === nothing || !haskey(balance, i)) && return nothing
+    real, imag = balance[i]
 
-    return _rotate_price(_balance_price(real[i]), _balance_price(imag[i]),
+    return _rotate_price(_balance_price(real), _balance_price(imag),
                          JuMP.value(var(nm, :v_real, i; nw)), JuMP.value(var(nm, :v_imag, i; nw)))
 end
 
@@ -620,9 +621,8 @@ function solution_node(nm::NetworkModel{P,F}, nw::Int; only::Union{Bool,Set{Int}
                       ) where {P<:AbstractProblemType,F<:IVRFormulation}
     sol   = Dict{String,Any}()
     only === false && return sol
-    real  = get(con(nm; nw), :node_balance_real, nothing)
-    imag  = get(con(nm; nw), :node_balance_imag, nothing)
-    duals = JuMP.has_duals(nm.model) && real !== nothing && imag !== nothing
+    balance = get(con(nm; nw), :cstr_node_balance, nothing)
+    duals   = JuMP.has_duals(nm.model) && balance !== nothing
 
     is = _asked(ids(nm, Node; nw), only)
     isempty(is) && return sol
@@ -639,18 +639,19 @@ function solution_node(nm::NetworkModel{P,F}, nw::Int; only::Union{Bool,Set{Int}
         entry["v_angl"] = atan(vi, vr)
         sol[string(i)] = entry
 
-        # the balance is in current here, so `lambda_real` and `lambda_imag` price
-        # a per unit of current; `lambda` and `lambda_q` are the power prices
+        # the balance is in current here, so `dual_node_balance_real` and `dual_node_balance_imag` price
+        # a per unit of current; `dual_node_balance_p` and `dual_node_balance_q` are the power prices
         # behind them, see `nodal_prices`
-        duals && haskey(real, i) || continue
-        lr, li = _balance_price(real[i]), _balance_price(imag[i])
-        entry["lambda_real"] = lr
-        entry["lambda_imag"] = li
+        duals && haskey(balance, i) || continue
+        real, imag = balance[i]
+        lr, li = _balance_price(real), _balance_price(imag)
+        entry["dual_node_balance_real"] = lr
+        entry["dual_node_balance_imag"] = li
 
         λ = _rotate_price(lr, li, vr, vi)
         λ === nothing && continue
-        entry["lambda"]   = first(λ)
-        entry["lambda_q"] = last(λ)
+        entry["dual_node_balance_p"]   = first(λ)
+        entry["dual_node_balance_q"] = last(λ)
     end
 
     return sol
@@ -661,7 +662,7 @@ function solution_node(nm::NetworkModel{P,F}, nw::Int; only::Union{Bool,Set{Int}
                       ) where {P<:AbstractProblemType,F<:LPFFormulation}
     sol     = Dict{String,Any}()
     only === false && return sol
-    balance = get(con(nm; nw), :node_balance, nothing)
+    balance = get(con(nm; nw), :cstr_node_balance, nothing)
     duals   = JuMP.has_duals(nm.model) && balance !== nothing
 
     is = _asked(ids(nm, Node; nw), only)
@@ -676,7 +677,7 @@ function solution_node(nm::NetworkModel{P,F}, nw::Int; only::Union{Bool,Set{Int}
         sol[string(i)] = entry
 
         duals && haskey(balance, i) || continue
-        entry["lambda"] = _balance_price(balance[i])
+        entry["dual_node_balance_p"] = _balance_price(balance[i])
     end
 
     return sol

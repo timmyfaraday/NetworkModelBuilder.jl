@@ -2,7 +2,7 @@
 
 Status: decided (D55-D62), the map confirmed by Tom 2026-10-11 · Owner: Tom Van Acker · Date: 2026-10-11
 Scope: quantities, i.e. component fields (the parameters, and the columns of a table), variable keys, solution keys, and the
-keywords and parameters that name one. Not yet: constraints (their own step), function names, plain words.
+keywords and parameters that name one. Constraints, functions and duals are the last section (D63-D70, confirmed by Tom 2026-10-11); not covered: plain words.
 Plan: `plan/naming.md`. The docs page `docs/src/manual/nomenclature.md` is written from this file.
 
 ## Grammar (D55)
@@ -89,5 +89,52 @@ A solution key is the variable key where there is one: `"vr"` `"v_real"`, `"pg"`
 `"p"`, `"q"` `"p_unit"`, `"q_unit"`; an echoed parameter takes its field name (`"pd"` `"p_set"`, `"gs"` `"g"`); `"overload"`
 `"s_ovl"`, `"loss"` `"p_loss"`; a DC link's `"pdc"` `"p_dcl"`; the tap `"tr" "ti" "tm" "ta"` `"t_real" "t_imag" "t_magn" "t_angl"`
 and its `"step"` `"z_step"`; every `*_market` `*_mkt`
-(`"pg_market"` `"p_gen_mkt"`, `"tm_market"` `"t_magn_mkt"`). The duals `"lambda*"`, the words and the dashboard names (D9) stay.
+(`"pg_market"` `"p_gen_mkt"`, `"tm_market"` `"t_magn_mkt"`). The duals are `dual_node_balance_*` (D68); the words and the dashboard names (D9) stay.
 `test/nomenclature.jl` holds this map as data.
+
+## Constraints, functions and duals (D63-D70, confirmed by Tom 2026-10-11)
+
+A constraint, the function that writes it and the dual it gives share one stem, `<owner>_<role>`, and take one prefix each: the key `cstr_<stem>`, the
+function `fnct_<stem>`, the dual `dual_<stem>`, as in `cstr_node_balance`, `fnct_node_balance`, `dual_node_balance_real`. `test/nomenclature.jl` is it as code.
+
+- **Owner:** who writes the row: a family `node edge unit`, a type `br tf dcl sw gen stor flex shnt` (the descriptors of the quantities where there is
+  one, the component locals `br tf` where not), or the problem `rd`. The family where several types write the row (D51), the type where one does.
+- **Role:** what the row states, one or two of `balance reference setpoint anchor limit range rating overload peak angle difference voltage current
+  flow power injection energy final cycle redispatch control equation open loop winding ratio tap step setting star pi section point`.
+- **No formulation in a key**, as `:p_term` has none: `cstr_edge_rating` is the rating in IVR and in LPF, with the id shape of its formulation. A function
+  written for the linearized formulation only keeps `linear`: `fnct_edge_rating_linear`.
+- **Id:** the component's id, or `(id, part...)`, a part one of `real imag magn angl min max fr to ser set loss forward reverse pos neg side p q`.
+  A nested tuple of edges names a loop, `(family, sub, key)` a control. One shape per key within a formulation: an IVR row carries the phasor part where
+  an LPF row has none, and a row that is two-sided in one is a single row in the other (D70).
+- **`con`** takes the register's key where an entry holds the rows of one key; a bundle of several takes an owner and `equation` or `limit`
+  (`cstr_br_equation`, `cstr_sw_equation`, `cstr_edge_limit`). Its ids stay component ids, its value a row, or a tuple of rows in the order of the register's id parts:
+  `con[:cstr_node_balance][i]` is `(real, imag)` in IVR.
+
+New keys are `cstr_` and the stem shown; old keys are as written in `src/` today.
+
+| owner | register key, old `new stem` |
+|:--|:--|
+| `node` | `node_balance` `node_balance`, `node_reference` `node_voltage_reference`, `node_setpoint` `node_voltage_setpoint`, `node_limits` `node_voltage_limit`, `node_anchor` `node_voltage_anchor` |
+| `edge` | `edge_rating`, `linear_rating` `edge_rating`; `edge_overload`, `linear_overload` `edge_overload`; `edge_angle`, `linear_angle` `edge_angle_difference`; `linear_flow` `edge_flow`; `overload_peak` `edge_overload_peak` |
+| `br`, `tf`, `dcl` | `pi_section` `br_pi_section`, `branch_section` `br_section`, `branch_point` `br_point`; `winding` `tf_winding`, `star_balance` `tf_star_balance`, `transformer_ratio` `tf_ratio`, `tap_step` `tf_tap_step`, `tap_setting` `tf_tap_setting`; `dc_link` `dcl_power`, `dc_link_limits` `dcl_limit`, `dc_link_redispatch` `dcl_redispatch` |
+| `sw` | `switch_flow`, `_open`, `_angle`, `_loop`, `_cycle`, `_rating`, `_voltage`, `_angle_range`, `_flow_range`, `_voltage_range`, `_current_range`: `switch_` becomes `sw_` |
+| `unit`, `gen`, `flex`, `shnt`, `stor`, `rd` | `unit_power`, `unit_injection` stay; `generator_energy` `gen_energy`, `generator_redispatch` `gen_redispatch`, `flexible_energy` `flex_energy`, `shunt_current` `shnt_current`, `storage_balance` `stor_balance`, `storage_final` `stor_final_energy`, `storage_cycles` `stor_cycle`, `storage_redispatch` `stor_redispatch`, `redispatch_control` `rd_control` |
+
+`con` keys that are not a register key: `branch` `br_equation`, `switch` `sw_equation`, `edge_limits` `edge_limit`, `switch_limits` `sw_rating`, `switch_loop_free` `sw_cycle`,
+`generator_power`, `load_power`, `slack_power`, `storage_power` `unit_power` (`unit_injection` in LPF), `node_balance_real`, `node_balance_imag` `node_balance`,
+`node_voltage_limits` `node_voltage_limit`; `edge_angle_difference`, `node_voltage_*` and the rest keep their stem.
+
+Ids that change: `:pi_section` `(e, :cr_fr)`, `:ci_fr`, `:cr_to`, `:ci_to`, `:v_real`, `:v_imag` become `(e, :fr, :real)`, `(e, :fr, :imag)`, `(e, :to, :real)`, `(e, :to, :imag)`,
+`(e, :ser, :real)`, `(e, :ser, :imag)`; `:tap_setting` `:magnitude_max`, `:magnitude_min`, `:magnitude`, `:max`, `:min` become `(a, :magn, :max)`, `(a, :magn, :min)`, `(a, :magn, :set)`, `(a, :angl, :max)`,
+`(a, :angl, :min)`; `:angle` `:angl`; `:from` `:fr`; `:setpoint` `:set`; `:active`, `:reactive` `:p`, `:q`. The shape of an id is fixed per key and formulation.
+
+Functions, old `constraint_` to `fnct_`: `edge` `edge`, `edge_limits` `edge_limit`, `edge_coupling`, `edge_rating`, `edge_angle_difference` keep their stem; `linear_flow` `edge_flow_linear`, `linear_ratings`
+`edge_rating_linear`, `linear_angle_difference` `edge_angle_difference_linear`; `node_balance`, `node_voltage_reference`, `_setpoint`, `_anchor` keep theirs, `node_voltage_limits` `node_voltage_limit`;
+`pi_section` `br_pi_section`; `overload_peak` `edge_overload_peak`; `redispatch_control` `rd_control`; `storage_final_energy` `stor_final_energy`, `storage_cycles` `stor_cycle`; `unit`, `unit_coupling`,
+`unit_power`, `unit_injection` keep theirs. `edge`, `unit` and the `*_coupling` and `edge_limit` ones walk a registry and write the rows of every type.
+
+Duals: `"lambda"` `dual_node_balance_p`, `"lambda_q"` `dual_node_balance_q`, `"lambda_real"` `dual_node_balance_real`, `"lambda_imag"` `dual_node_balance_imag`; the sign stays (a price is minus the dual).
+`"dual_status"` is JuMP's own word and stays. Old letters of a parameter or a local: `ctr cti vtr vti` `i_wind_real i_wind_imag v_wind_real v_wind_imag`, `csr csi` `i_ser_real i_ser_imag`,
+`cru ciu` `i_real i_imag` (scalars read out of the containers `i_unit_real`, `i_unit_imag`), each where it does not clash with a container local of the same function.
+
+Owners are the descriptors of the quantities (`stor`, `sw`, `gen`), as Tom chose on 2026-10-11 over the type's own word (`storage`, `switch`, `generator`).

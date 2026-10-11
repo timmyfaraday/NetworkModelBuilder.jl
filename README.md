@@ -17,8 +17,8 @@ NetworkModel{LoadFlowProblem, IVRFormulation}
 
 # a load flow pins the complex voltage at the reference node,
 # a dispatch problem pins the angle only and lets the magnitude float
-constraint_node_voltage_reference(nm::NetworkModel{<:AbstractPowerFlowProblem,<:IVRFormulation}; nw)
-constraint_node_voltage_reference(nm::NetworkModel{<:AbstractDispatchProblem,<:IVRFormulation}; nw)
+fnct_node_voltage_reference(nm::NetworkModel{<:AbstractPowerFlowProblem,<:IVRFormulation}; nw)
+fnct_node_voltage_reference(nm::NetworkModel{<:AbstractDispatchProblem,<:IVRFormulation}; nw)
 ```
 
 Every tag in both hierarchies is abstract, so an extension specialises one by
@@ -145,7 +145,7 @@ PowerModels.jl v0.21 in `test/`, to `1e-6` on `case14`, `case5` and `case3`.
 ## Extending
 
 A **new edge or unit type** is one file — the struct, its `variable_*` and
-`constraint_*` methods, and a `register_edge_type!`/`register_unit_type!` call;
+`fnct_*` methods, and a `register_edge_type!`/`register_unit_type!` call;
 the problem builders walk those registries, so `src/prob/` never changes
 (`test/multiterminal.jl` is a worked example). A **new formulation** is a tag in
 `src/core/types.jl` plus a method per component file, and nothing outside those

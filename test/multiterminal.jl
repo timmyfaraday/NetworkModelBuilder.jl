@@ -11,6 +11,7 @@
 # v0.13.0 - a three-terminal Branch against a Transformer and the split point  #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 # An edge with more than two terminals is the reason the extended graph carries
@@ -48,7 +49,7 @@ function _NMB.variable_edge(nm::NetworkModel{P,F}, ::Type{StarEdge};
 end
 
 "the voltage drop from every terminal to the star point, and the balance at the star point"
-function _NMB.constraint_edge(nm::NetworkModel{P,F}, ::Type{StarEdge};
+function _NMB.fnct_edge(nm::NetworkModel{P,F}, ::Type{StarEdge};
                               nw::Int = nw_id_default(nm)
                              ) where {P<:AbstractProblemType,F<:IVRFormulation}
     v_real, v_imag           = _NMB.var(nm, :v_real;      nw), _NMB.var(nm, :v_imag;      nw)

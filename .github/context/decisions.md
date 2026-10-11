@@ -84,12 +84,12 @@ How to use this file:
   of a model. An extension prefixes its keys.
 - **What several types of a family share lives in the family file, and what one type alone uses lives in that
   type's file** (D51): `edge/edge.jl` and `unit/unit.jl`, not a file of fragments of their own.
-- **A rating and an angle limit are separate constraints, and `constraint_linear_ratings!` is the one linear rating, for
+- **A rating and an angle limit are separate constraints, and `fnct_edge_rating_linear!` is the one linear rating, for
   two terminals as for more** (D52); `constraint_linear_limits!` is removed.
 - **A quantity is named `symbol_primary_secondary[_unit]`** (D55): lowercase snake_case, singular, a descriptor of at most
   4 letters from the closed lists of `knowledge/nomenclature.md`, empty slots dropped, the lists disjoint and used in a fixed
   order (what, part, qualifier, unit), a key with at least one descriptor; what is not a quantity is a plain word. The symbols are `v i p q s r x g b e t c l z k η`: current is `i` and cost
-  is `c`, in the docs mathematics too, and `η` is the one non-ASCII symbol (D56). Planned as v0.14.0, spec `knowledge/plan/naming.md`.
+  is `c`, in the docs mathematics too, and `η` is the one non-ASCII symbol (D56). In v0.14.0, spec `knowledge/plan/naming.md`.
 - **A variable key names the owner, a field does not, and a local equals its key** (D57): `:p_gen` and `Generator.p_max`; a role
   only one owner has takes the owner's place (`:p_chg`). Inside the package `rate_a` is `s_max`, `angmin` and `angmax` are `v_angl_min`
   and `v_angl_max`, `base_kv` is `v_base_kv`, `baseMVA` is `s_base_mva`, `length_km` is `l_km`; Matpower, PowerModels and Zorba names
@@ -112,7 +112,7 @@ How to use this file:
 - **`constrain!` names the row `"$(nw)_$(key)[$id]"`, and `debug_mode` covers constraints as it covers variables** (D66, D69).
 - **A constraint, the function that writes it and the dual it gives share one stem and take one prefix each: `cstr_`, `fnct_`,
   `dual_`** (D68): `cstr_node_balance`, `fnct_node_balance`, `dual_node_balance_real`; the `constraint_*` functions and the `"lambda*"`
-  solution keys are renamed by a hard removal (D59). Planned as v0.15.0, spec `knowledge/plan/naming-constraints.md`.
+  solution keys are renamed by a hard removal (D59). In v0.15.0, spec `knowledge/plan/naming-constraints.md`.
 
 ## Concurrency
 

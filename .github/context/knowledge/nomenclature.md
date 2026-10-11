@@ -89,7 +89,7 @@ A solution key is the variable key where there is one: `"vr"` `"v_real"`, `"pg"`
 `"p"`, `"q"` `"p_unit"`, `"q_unit"`; an echoed parameter takes its field name (`"pd"` `"p_set"`, `"gs"` `"g"`); `"overload"`
 `"s_ovl"`, `"loss"` `"p_loss"`; a DC link's `"pdc"` `"p_dcl"`; the tap `"tr" "ti" "tm" "ta"` `"t_real" "t_imag" "t_magn" "t_angl"`
 and its `"step"` `"z_step"`; every `*_market` `*_mkt`
-(`"pg_market"` `"p_gen_mkt"`, `"tm_market"` `"t_magn_mkt"`). The duals `"lambda*"`, the words and the dashboard names (D9) stay.
+(`"pg_market"` `"p_gen_mkt"`, `"tm_market"` `"t_magn_mkt"`). The duals are `dual_node_balance_*` (D68); the words and the dashboard names (D9) stay.
 `test/nomenclature.jl` holds this map as data.
 
 ## Constraints, functions and duals (D63-D70, confirmed by Tom 2026-10-11)

@@ -1,6 +1,6 @@
 # One nomenclature for constraints, functions and duals (B32)
 
-Status: decided (D63-D70), stages 0 to 4 done, the map confirmed by Tom; the map is confirmed by Tom at stage 1 · Author: Tom Van Acker (requested) · Date: 2026-10-11
+Status: implemented on `b32-constraint-names` (v0.15.0), not merged; the map confirmed by Tom (D63-D70) · Author: Tom Van Acker (requested) · Date: 2026-10-11
 Decisions: D63-D70 recorded 2026-10-11 (next free after: D71)
 Priority: P2 · Effort: Large, in six stages. Branch `b32-constraint-names`, cut from `main` at v0.14.0; becomes v0.15.0 (a hard removal that renames exports and extension points is a minor bump, as D59 made v0.14.0).
 Follows `naming.md` (D55-D62). The names themselves are drafted in stage 1 into `../nomenclature.md`; this file is how to get there.
@@ -90,20 +90,20 @@ by two different hands, and a function and a dual took their name from the key t
 
 ## Results (2026-10-11)
 
-**Stage 0** (`scratch/b32_names.jl`): the real step-3 window, 249,118 variables and 274,523 rows, min of 3 over four rounds. Off 1,706 ms, 764 MB; variable names only
-(v0.14.0) 1,948 ms, 1,003 MB; both 2,420 ms, 1,352 MB. The default off against v0.14.0: -12 % time, -24 % memory; debug mode against off: +42 % time, +77 % memory.
+**Stage 0** (`scratch/b32_names.jl`, step-3 window, 249,118 variables, 274,523 rows, min of 3): off 1,706 ms, 764 MB; variable names only (v0.14.0) 1,948 ms, 1,003 MB; both 2,420 ms, 1,352 MB.
 
-**Stage 1:** the map is in `../nomenclature.md` and as data in `test/nomenclature.jl`; of 99 checks 89 passed and 10 were red on v0.14.0: 46 register keys, 28 `con` keys,
-14 id words, 22 `constraint_*` functions and 2 exports, 4 `lambda*` duals, 680 old names written.
+**Stage 1:** the map is in `../nomenclature.md` and as data in `test/nomenclature.jl`; of 99 checks 89 passed and 10 were red on v0.14.0, 680 old names written.
 
 **Stage 2** (`scratch/b32_stage2_names.jl`): `debug_mode = false` 1,707 ms, 764 MB; `true` 2,401 ms, 1,372 MB, all 274,523 row names distinct. MPS carries the names, the LP
 writer rewrites them (`_1_node_balance_1_`), IVR cannot be written either way. Found, not changed: `variables!` names `1_p_term[Arc(1, 1, 1)]`, `variable!` flattens an `Arc`.
 
-**Stage 3:** suite 3,685 passed, 6 failed (the checks of stage 4); no old key written; 26 built models, IVR and LPF, hold one id arity per key.
-
-**Stage 4:** suite 3,686 passed, the docs build clean, no old name written. A 24 h chunk (`runs/_b32_check`, `scratch/b23_chunk_compare.jl`) is byte-identical to
+**Stages 3 and 4:** after the keys and ids, suite 3,685 passed, 6 failed (the checks of stage 4), 26 built models, IVR and LPF, hold one id arity per key; after the rest,
+suite 3,686 passed, the docs build clean, no old name written. A 24 h chunk (`runs/_b32_check`, `scratch/b23_chunk_compare.jl`) is byte-identical to
 `runs/_b25_proc/chunks/h00001-00024` in all seven files, objectives 317,686,796.800330 and 308,105,792.250268 equal. A scalar read out of `i_unit_real` is `i_real`,
 not the container's own name; the 14 private `_constraint_*` helpers keep theirs.
+
+**Stage 5:** the Nomenclature page ("Constraints, functions and duals"), the extension note, `CHANGELOG.md` with the migration tables (0.14.0's heading was still `[Unreleased]`),
+`Project.toml` 0.15.0, the live decisions edited in place. Open: one line in `julia.instructions.md`, Tom's OK.
 
 ## Decisions
 

@@ -130,13 +130,62 @@ descriptor**, see [Notation](@ref). A letter that is an index keeps its meaning:
 ``i`` is also a node, as in ``v^{\text{r}}_{i}``, and ``i^{\text{r}}_{u}`` is the
 current a unit injects.
 
+## Constraints, functions and duals
+
+A constraint, the function that writes it and the dual it gives share one **stem**,
+`owner_role`, and take one prefix each, which says which of the three a name is:
+
+| kind | name | for the node balance |
+|:--|:-----|:---------------------|
+| the constraint | `cstr_` and the stem | `cstr_node_balance` |
+| the function that writes it | `fnct_` and the stem | [`fnct_node_balance`](@ref) |
+| its dual | `dual_` and the stem, then the part it prices | `dual_node_balance_real` |
+
+The **owner** is whoever writes the row: a family, `node`, `edge` or `unit`, where
+several types write it; a type, `br` for a branch, `tf` for a transformer, `dcl`,
+`sw`, `gen`, `stor`, `flex` or `shnt`; or the problem, `rd` for a redispatch. The
+**role** is what the row states, one or two words from a closed list: `balance`,
+`voltage_reference`, `angle_difference`, `final_energy`, `tap_setting`. A key never
+names the formulation, as `:p_term` does not: `cstr_edge_rating` is the rating of an
+edge in the current based and in the linearized formulation. A function written for
+the linearized formulation alone keeps that word, as
+[`fnct_edge_rating_linear!`](@ref) does, and those that walk a registry and write the
+rows of every type of a family take the family as the stem: [`fnct_edge`](@ref) and
+[`fnct_unit`](@ref).
+
+A row is registered under its key and an **id**: the identifier of its component, or
+a tuple of it and its parts, `(i, :real)`, `(e, :fr, :imag)`, `(a, :magn, :max)`. A
+part is `real`, `imag`, `magn` or `angl`; a bound, `min` or `max`; a side, `fr` or
+`to`; `ser` for the series element and `set` for a setpoint; or one of `loss`,
+`forward`, `reverse`, `pos`, `neg`, `side`, `p` and `q`. The current based
+formulation writes a row for each part where the linearized one writes one, so an id
+has one shape per key within a formulation, not across the two.
+
+In [debug mode](@ref "Debug mode") a row is named from its network index, its key
+and its id, a tuple flattened, which is what a solver log or an LP file shows:
+
+```@example nomenclature
+using JuMP
+
+nm = instantiate_model("case14.m", OptimalPowerFlowProblem, IVRFormulation; debug_mode = true)
+
+rows = registered_constraints(nm)
+(keys   = sort!(unique(String(key) for (_, key, _) in keys(rows))),
+ names  = sort!([JuMP.name(first(row)) for ((_, key, _), row) in rows if key === :cstr_node_balance])[1:4])
+```
+
+The duals a node reports are named for the balance they price. `dual_node_balance_p`
+and `dual_node_balance_q` are the price of active and of reactive power, and in the
+current based formulation `dual_node_balance_real` and `dual_node_balance_imag` are
+the prices of a unit of current they are recovered from, see [`nodal_prices`](@ref).
+
 ## What is not covered
 
-The duals are `dual_node_balance_p`, `dual_node_balance_q`, `dual_node_balance_real` and
-`dual_node_balance_imag`, named for the node balance they price. The names of constraints
-and of functions are not yet part of this grammar.
+The functions of the families `variable_*`, `solution_*` and `objective_*`, and the plain words, are
+not part of the grammar. `"dual_status"` is JuMP's own word, the status of the solve, not a dual.
 
 `test/nomenclature.jl` holds the grammar as code and checks every field, every
-variable key and every solution key of the package against it; `test/docs_tables.jl`
+variable key, every solution key, every constraint key and id, every function that writes
+rows and every dual of the package against it; `test/docs_tables.jl`
 checks that the tables of the component pages list exactly the fields and the
 variable keys that exist.

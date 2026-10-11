@@ -22,4 +22,7 @@ applyTo: "src/**/*.jl,test/**/*.jl"
   a solver) is `import`ed and called qualified (`PowerModels.parse_file`), never `using`d.
 - Docstrings: what the function does, its inputs/outputs, why when non-obvious. No decision ids or
   phase names in comments.
+- Names follow `.github/context/knowledge/nomenclature.md`: a quantity `symbol_primary_secondary`;
+  a constraint `cstr_<owner>_<role>`, the function that writes it `fnct_` and its dual `dual_` with
+  the same stem. `test/nomenclature.jl` checks it.
 - Before editing a module, check `.github/context/decisions.md` for the section that governs it.

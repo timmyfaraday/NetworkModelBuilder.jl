@@ -2,7 +2,7 @@
 
 Every change to the setup (instructions, skills, hooks, settings), newest at the bottom.
 Format: `- SC<n> · YYYY-MM-DD · approved by <user> · <what changed> · why: <feedback ids or reason>`.
-Next id: **SC9**.
+Next id: **SC10**.
 
 - SC1 · 2026-09-30 · approved by Tom Van Acker · Initial setup, ported from a colleague's
   FlowBasedDomains (fbd) repo and adapted for Julia/GitHub/solo maintainer: `copilot-instructions`,
@@ -41,3 +41,4 @@ Next id: **SC9**.
   lines goes through a script that matches its anchor exactly once · why: F8, F9 (a second incident, three calls and
   a repair each); the rule adds one line and cuts the lesson "A scripted edit of many pages refuses unless its anchor
   matches exactly once" from `lessons.md`, which an agent reads only after an edit has failed.
+- SC9 · 2026-10-11 · approved by Tom Van Acker · `julia.instructions.md`: one bullet, names follow `knowledge/nomenclature.md` and `test/nomenclature.jl` checks them · why: B31 and B32 (D55-D70) made the grammar a rule for every new name, and it sat only in a knowledge file an agent opens after the fact; the bullet adds three lines and cuts nothing, the file is 28 of 60 lines.

@@ -1,6 +1,6 @@
 # One nomenclature for constraints, functions and duals (B32)
 
-Status: implemented on `b32-constraint-names` (v0.15.0), not merged; the map confirmed by Tom (D63-D70) · Author: Tom Van Acker (requested) · Date: 2026-10-11
+Status: implemented, merged and tagged `v0.15.0`; the map confirmed by Tom (D63-D70) · Author: Tom Van Acker (requested) · Date: 2026-10-11
 Decisions: D63-D70 recorded 2026-10-11 (next free after: D71)
 Priority: P2 · Effort: Large, in six stages. Branch `b32-constraint-names`, cut from `main` at v0.14.0; becomes v0.15.0 (a hard removal that renames exports and extension points is a minor bump, as D59 made v0.14.0).
 Follows `naming.md` (D55-D62). The names themselves are drafted in stage 1 into `../nomenclature.md`; this file is how to get there.
@@ -103,7 +103,7 @@ suite 3,686 passed, the docs build clean, no old name written. A 24 h chunk (`ru
 not the container's own name; the 14 private `_constraint_*` helpers keep theirs.
 
 **Stage 5:** the Nomenclature page ("Constraints, functions and duals"), the extension note, `CHANGELOG.md` with the migration tables (0.14.0's heading was still `[Unreleased]`),
-`Project.toml` 0.15.0, the live decisions edited in place. Open: one line in `julia.instructions.md`, Tom's OK.
+`Project.toml` 0.15.0, the live decisions edited in place. `julia.instructions.md` has the line (SC9).
 
 ## Decisions
 

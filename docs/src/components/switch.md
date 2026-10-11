@@ -82,8 +82,8 @@ in the data.
 
 | name | problem |
 |:-----|:--------|
-| [`constraint_edge`](@ref) | all |
-| [`constraint_edge_limits`](@ref) | dispatch |
+| [`fnct_edge`](@ref) | all |
+| [`fnct_edge_limit`](@ref) | dispatch |
 
 What leaves one terminal arrives at the other, ``p_{a^{\text{t}}} =
 -p_{a^{\text{f}}}``, and in the `IVRFormulation` the same on the real and the
@@ -325,8 +325,8 @@ priced    = solve_opf(ring(LOCKED, positions), LPFFormulation, optimizer)
 (locked       = locked["objective"],
  free         = free["objective"],
  positions    = positions,
- price_free   = get(nw_solution(free)["node"]["2"], "lambda", nothing),
- price_locked = nw_solution(priced)["node"]["2"]["lambda"],
+ price_free   = get(nw_solution(free)["node"]["2"], "dual_node_balance_p", nothing),
+ price_locked = nw_solution(priced)["node"]["2"]["dual_node_balance_p"],
  same_cost    = priced["objective"] ≈ free["objective"])
 ```
 

@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.14.0 - initial implementation                                             #
 # v0.15.0 - constraints, functions and duals follow a grammar                  #
+# v0.15.0 - the duals follow the grammar of constraints                        #
 ################################################################################
 
 # The names of fields, variable keys and solution keys follow one grammar
@@ -42,9 +43,6 @@ const NOM_WORDS = Set(["id", "name", "node", "terminals", "status", "ext", "type
 
 "an old name that is also a word elsewhere, so only the grammar check looks for it"
 const NOM_SHARED = Set(["step"])
-
-"the duals keep the names they have until the step that names constraints"
-const NOM_KEPT = Set(["lambda", "lambda_q", "lambda_real", "lambda_imag"])
 
 "a field, old and new"
 const NOM_FIELDS = [
@@ -368,7 +366,7 @@ const CST_DUALS = ["lambda" => "dual_node_balance_p", "lambda_q" => "dual_node_b
 
 "a variable that is still a parameter or a local of a function that writes rows under an old letter, old and new"
 const CST_LETTERS = ["ctr" => "i_wind_real", "cti" => "i_wind_imag", "vtr" => "v_wind_real", "vti" => "v_wind_imag",
-                     "csr" => "i_ser_real", "csi" => "i_ser_imag", "cru" => "i_unit_real", "ciu" => "i_unit_imag"]
+                     "csr" => "i_ser_real", "csi" => "i_ser_imag", "cru" => "i_real", "ciu" => "i_imag"]
 
 "whether a constraint key is `cstr_<owner>_<role>`, the role one or two words of the list"
 function cst_key_follows(key::AbstractString)
@@ -426,7 +424,7 @@ function cst_defined()
             ex isa Expr && ex.head in (:function, :(=)) && length(ex.args) >= 1 || return nothing
 
             name = ex.args[1] isa Symbol && ex.head === :function ? ex.args[1] : nom_function_name(ex.args[1])
-            name === nothing || push!(found, String(name))
+            name === nothing || push!(found, rstrip(String(name), '!'))
         end
     end
 
@@ -447,7 +445,7 @@ function cst_stragglers()
               Regex("[\"`]($duals)[\"`]"),                          # `"lambda_real"`
               Regex("\\b($(join(first.(CST_LETTERS), "|")))\\b"),   # `ctr`, `csr`
               Regex("\\b\\d_($named)\\["),                          # `1_pg[3]`
-              r"\b(cr|ci|cru|ciu)\["]                               # a container under its old key
+              r"\b(cr|cru|ciu)\["]                               # a container under its old key
 
     skip = (joinpath(BASE_DIR, "test", "nomenclature.jl"), joinpath(BASE_DIR, "CHANGELOG.md"),
             joinpath(BASE_DIR, "test", "powermodels.jl"))
@@ -482,14 +480,14 @@ end
 @testset "nomenclature" begin
 
     @testset "the vocabulary is closed, short and has no word in two lists" begin
-        lists = (NOM_WHAT, NOM_PART, NOM_QUALIFIER, NOM_UNIT, NOM_WORDS, NOM_KEPT)
+        lists = (NOM_WHAT, NOM_PART, NOM_QUALIFIER, NOM_UNIT, NOM_WORDS)
         for (k, a) in enumerate(lists), b in lists[k + 1:end]
             @test isempty(intersect(a, b))
         end
 
         @test all(d -> 2 <= length(d) <= 4, union(NOM_WHAT, NOM_PART, NOM_QUALIFIER, NOM_UNIT))
         @test all(s -> length(s) == 1, NOM_SYMBOLS)
-        @test all(isascii, union(NOM_WHAT, NOM_PART, NOM_QUALIFIER, NOM_UNIT, NOM_WORDS, NOM_KEPT))
+        @test all(isascii, union(NOM_WHAT, NOM_PART, NOM_QUALIFIER, NOM_UNIT, NOM_WORDS))
         @test count(!isascii, join(NOM_SYMBOLS)) == 1
     end
 
@@ -527,7 +525,7 @@ end
 
         @test all(known(NOM_FIELDS), String(f) for T in types for f in fieldnames(T))
         @test all(known(NOM_KEYS), nom_variable_keys())
-        @test all(k -> known(NOM_SOLUTION)(k) || k in NOM_KEPT, nom_solution_keys())
+        @test all(k -> known(NOM_SOLUTION)(k) || k in last.(CST_DUALS), nom_solution_keys())
     end
 
     @testset "a field is a word or follows the grammar" begin
@@ -550,7 +548,7 @@ end
         keys = nom_solution_keys()
 
         @test length(keys) >= 40
-        @test nom_none("solution keys", filter(k -> !nom_key_follows(k, NOM_ECHOED) && !(k in NOM_KEPT), keys))
+        @test nom_none("solution keys", filter(k -> !nom_key_follows(k, NOM_ECHOED) && !(k in last.(CST_DUALS)), keys))
     end
 
     @testset "an ext key the package reads follows the grammar" begin

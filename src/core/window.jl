@@ -12,6 +12,7 @@
 # v0.12.1 - a structure gate asks what the model's own guard asks              #
 # v0.13.0 - the docstring names the linearized ratings, not the limits         #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 ################################################################################
@@ -257,9 +258,9 @@ conditionally needs a method here, or the answers [`same_structure`](@ref) gives
 about it will be wrong.
 
 The methods in this package correspond one for one to the guards in the model:
-the `isfinite` tests in `constraint_edge_rating!`, `constraint_linear_ratings!`,
+the `isfinite` tests in `fnct_edge_rating!`, `fnct_edge_rating_linear!`,
 `_variable_generator_power`, `_variable_generator_active` and the flexible load,
-the `±π/2` test in `constraint_edge_angle_difference!`, and the `iszero` test of a
+the `±π/2` test in `fnct_edge_angle_difference!`, and the `iszero` test of a
 DC link's `p_loss_prop`, which decides whether the link has a transfer variable.
 """
 structure_gates(::AbstractComponent) = ()

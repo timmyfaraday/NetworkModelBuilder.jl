@@ -31,15 +31,15 @@ function _build_load_flow!(nm::NetworkModel)
         variable_edge(nm; nw = n)
         variable_unit(nm; nw = n)
 
-        constraint_node_voltage_reference(nm; nw = n)
-        constraint_node_voltage_setpoint(nm; nw = n)
-        constraint_node_balance(nm; nw = n)
-        constraint_edge(nm; nw = n)
-        constraint_unit(nm; nw = n)
+        fnct_node_voltage_reference(nm; nw = n)
+        fnct_node_voltage_setpoint(nm; nw = n)
+        fnct_node_balance(nm; nw = n)
+        fnct_edge(nm; nw = n)
+        fnct_unit(nm; nw = n)
     end
 
-    constraint_edge_coupling(nm)
-    constraint_unit_coupling(nm)
+    fnct_edge_coupling(nm)
+    fnct_unit_coupling(nm)
     objective(nm)
 end
 ```
@@ -47,8 +47,8 @@ end
 Every name in it is a dispatch point, so the definition of a problem says nothing
 about the formulation it is being built in, and nothing about which component
 types exist. The two loops that matter are implicit: `variable_edge` and
-`constraint_edge` walk the registry of edge types, `variable_unit` and
-`constraint_unit` the registry of unit types.
+`fnct_edge` walk the registry of edge types, `variable_unit` and
+`fnct_unit` the registry of unit types.
 
 The two calls outside the loop over network indices are for constraints that
 *span* indices — a storage state of charge, a flexible load's energy — which

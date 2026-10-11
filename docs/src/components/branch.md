@@ -90,8 +90,8 @@ current left to carry once the model is lossless.
 
 | name | problem |
 |:-----|:--------|
-| [`constraint_edge`](@ref) | all |
-| [`constraint_edge_limits`](@ref) | dispatch |
+| [`fnct_edge`](@ref) | all |
+| [`fnct_edge_limit`](@ref) | dispatch |
 
 ### The π-equivalent
 
@@ -184,24 +184,24 @@ p_{a_k} = -b_{e,k} \left(v^{\text{a}}_{i_k} - v^{\text{ap}}_{e}\right),
 
 The shunt admittance plays no part. The rating of every terminal becomes a bound,
 ``-s^{\text{max}}_{e,k} \le p_{a_k} \le s^{\text{max}}_{e,k}``, written by
-[`constraint_linear_ratings!`](@ref), and the angle difference limit of a branch
-with two terminals, written by [`constraint_linear_angle_difference!`](@ref), is
+[`fnct_edge_rating_linear!`](@ref), and the angle difference limit of a branch
+with two terminals, written by [`fnct_edge_angle_difference_linear!`](@ref), is
 linear already. The two are separate rows: a rating and an angle limit are not
 one constraint.
 
 ```@docs
 susceptance
-constraint_linear_flow!
-constraint_linear_ratings!
-constraint_linear_angle_difference!
+fnct_edge_flow_linear!
+fnct_edge_rating_linear!
+fnct_edge_angle_difference_linear!
 ```
 
 ```@docs
 impedance
 shunt_admittance
-constraint_pi_section!
-constraint_edge_rating!
-constraint_edge_angle_difference!
+fnct_br_pi_section!
+fnct_edge_rating!
+fnct_edge_angle_difference!
 variable_edge_series_current
 dynamic_rating
 ```

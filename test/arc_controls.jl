@@ -11,6 +11,7 @@
 # v0.14.0 - a variable is named by the model, not by its caller                #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 # A control that belongs to one terminal of an edge rather than to the edge, such
@@ -50,7 +51,7 @@ function _NMB.variable_edge(nm::NetworkModel{P,F}, ::Type{ArcShifter};
     return nothing
 end
 
-function _NMB.constraint_edge(nm::NetworkModel{P,F}, ::Type{ArcShifter};
+function _NMB.fnct_edge(nm::NetworkModel{P,F}, ::Type{ArcShifter};
                               nw::Int = nw_id_default(nm)
                              ) where {P<:AbstractProblemType,F<:LPFFormulation}
     shift = _NMB.var(nm, :shift; nw)
@@ -59,7 +60,7 @@ function _NMB.constraint_edge(nm::NetworkModel{P,F}, ::Type{ArcShifter};
         sh         = edge(nm, e; nw)::ArcShifter
         a_fr, a_to = edge_arcs(nm, e; nw)
 
-        constraint_linear_flow!(nm, e, a_fr, a_to, susceptance(0.0, sh.x),
+        fnct_edge_flow_linear!(nm, e, a_fr, a_to, susceptance(0.0, sh.x),
                                 shift[a_fr] - shift[a_to]; nw)
     end
 

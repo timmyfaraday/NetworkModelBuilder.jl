@@ -12,6 +12,7 @@
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.14.0 - the docstrings follow the nomenclature                             #
 # v0.15.0 - constraint keys and ids follow the nomenclature                    #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 export AbstractSwitch, Switch, SwitchLock, FREE, LOCKED
@@ -193,7 +194,7 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default
 end
 
 """
-    constraint_edge(nm, T; nw)
+    fnct_edge(nm, T; nw)
 
 The physics of every in-service switch. What leaves one terminal arrives at the
 other, `p_{a^t} = -p_{a^f}` in the linearized formulation and the same on both
@@ -265,7 +266,7 @@ which is exponential in the worst case: building refuses a network that has more
 `1000` loops of this kind, and one in which a switch of such a loop has no finite
 rating, which `M` is written with.
 """
-function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractProblemType,F<:_SwitchFormulation,T<:AbstractSwitch}
     switch = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_sw_equation)
     cycles = _switch_cycles(nm; nw)
@@ -380,14 +381,14 @@ function _switch_cycle_rows!(nm::NetworkModel{P,F}, cycle; nw::Int
 end
 
 """
-    constraint_edge_limits(nm, T; nw)
+    fnct_edge_limit(nm, T; nw)
 
 The rating of every in-service switch that is closed, `-s^max_e ≤ p_{a^f} ≤
 s^max_e`, where it is finite. It is an equipment limit, so it holds whether or not
 the switch is monitored for congestion, and it is never priced: an open switch has
 no flow to limit.
 """
-function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_edge_limit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                                ) where {P<:AbstractDispatchProblem,F<:LPFFormulation,T<:AbstractSwitch}
     p_term = var(nm, :p_term; nw)
     limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_sw_rating)
@@ -528,7 +529,7 @@ function _switch_cycle_rows!(nm::NetworkModel{P,F}, cycle; nw::Int
 end
 
 """
-    constraint_edge_limits(nm, T; nw)
+    fnct_edge_limit(nm, T; nw)
 
 The rating of every in-service switch that is closed or free, where it is finite,
 
@@ -545,7 +546,7 @@ make `s^max` a big-M, so a model with one is nonconvex as well as mixed-integer.
 It is an equipment limit, so it holds whether or not the switch is monitored for
 congestion, and it is never priced.
 """
-function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_edge_limit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                                ) where {P<:AbstractDispatchProblem,F<:IVRFormulation,T<:AbstractSwitch}
     v_real, v_imag           = var(nm, :v_real;      nw), var(nm, :v_imag;      nw)
     i_term_real, i_term_imag = var(nm, :i_term_real; nw), var(nm, :i_term_imag; nw)

@@ -124,7 +124,7 @@ contingency a self-contained day rather than a shared one.
 
 ```@docs
 power_factor_ratio
-constraint_unit_coupling
+fnct_unit_coupling
 time_step
 require_time_dimension
 ```

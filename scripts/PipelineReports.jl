@@ -106,7 +106,7 @@ Redispatch volumes of every generator and storage unit, one row per (unit,
 hour), at the base case only.
 
 Every measure here is preventive, so its volumes are identical across every
-contingency (`constraint_redispatch_control`); the base case is the whole story
+contingency (`fnct_rd_control`); the base case is the whole story
 and reporting only it keeps this from being one row per (unit, hour,
 contingency) — except a load-shedding generator, which is corrective: its row
 here is only its base-case volume, see [`load_shedding_report`](@ref) for what

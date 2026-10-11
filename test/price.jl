@@ -9,6 +9,7 @@
 # v0.7.0 - nodal prices from the duals of the node balance                     #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 # Two nodes, a cheap generator on one and a dear one on the other, and a branch
@@ -33,7 +34,7 @@ function priced_network(; rate = Inf, pd = 1.0, dim::Dimension = Dimension())
 end
 
 "the nodal price of every node of a result at network index `n`"
-prices(result, n = 1) = [nw_solution(result, n)["node"]["$i"]["lambda"] for i in 1:2]
+prices(result, n = 1) = [nw_solution(result, n)["node"]["$i"]["dual_node_balance_p"] for i in 1:2]
 
 @testset "nodal prices" begin
 
@@ -99,7 +100,7 @@ prices(result, n = 1) = [nw_solution(result, n)["node"]["$i"]["lambda"] for i in
         @test active_nodal_price(nm, 1) ≈ 10.0  atol = 1e-4
         @test active_nodal_price(nm, 2) ≈ 100.0 atol = 1e-4
         @test active_nodal_price(nm, 2; nw = 1) ≈
-              nw_solution(nm.sol)["node"]["2"]["lambda"]
+              nw_solution(nm.sol)["node"]["2"]["dual_node_balance_p"]
 
         # and a node the model does not hold has no price rather than an error
         @test active_nodal_price(nm, 99) === nothing
@@ -112,7 +113,7 @@ prices(result, n = 1) = [nw_solution(result, n)["node"]["$i"]["lambda"] for i in
         result = quiet(() -> solve_rd(priced_network(; rate = 0.4), LPFFormulation,
                                       OPTIMIZER))
         @test result["dual_status"] == JuMP.FEASIBLE_POINT
-        @test haskey(nw_solution(result)["node"]["1"], "lambda")
+        @test haskey(nw_solution(result)["node"]["1"], "dual_node_balance_p")
     end
 
     @testset "a roll reports the prices of the steps it committed" begin
@@ -126,7 +127,7 @@ prices(result, n = 1) = [nw_solution(result, n)["node"]["$i"]["lambda"] for i in
         # has no duals while carrying a price at every node it committed
         @test result["dual_status"] == JuMP.FEASIBLE_POINT
         for n in 1:4, i in ("1", "2")
-            @test haskey(nw_solution(result, n)["node"][i], "lambda")
+            @test haskey(nw_solution(result, n)["node"][i], "dual_node_balance_p")
         end
     end
 
@@ -140,7 +141,7 @@ prices(result, n = 1) = [nw_solution(result, n)["node"]["$i"]["lambda"] for i in
     end
 
     # The current based balance prices a per unit of *current*, which is the two
-    # power prices rotated by the voltage. Reading `lambda_real` as the nodal
+    # power prices rotated by the voltage. Reading `dual_node_balance_real` as the nodal
     # price is the mistake worth guarding: on the congested case below it reads
     # 109.94 against a true price of 100, which is wrong in the direction that
     # looks plausible.
@@ -151,18 +152,18 @@ prices(result, n = 1) = [nw_solution(result, n)["node"]["$i"]["lambda"] for i in
 
         # the raw duals are reported, and so are the power prices behind them
         for i in ("1", "2")
-            for key in ("lambda_real", "lambda_imag", "lambda", "lambda_q")
+            for key in ("dual_node_balance_real", "dual_node_balance_imag", "dual_node_balance_p", "dual_node_balance_q")
                 @test haskey(node[i], key)
             end
         end
 
-        # `lambda_real` is the price scaled by the real part of the voltage, and
+        # `dual_node_balance_real` is the price scaled by the real part of the voltage, and
         # is emphatically not the price
-        @test node["2"]["lambda_real"] ≈ 109.9399 atol = 1e-3
-        @test !isapprox(node["2"]["lambda_real"], 100.0; atol = 1.0)
-        @test node["2"]["lambda_real"] ≈
-              node["2"]["v_real"] * node["2"]["lambda"] +
-              node["2"]["v_imag"] * node["2"]["lambda_q"] atol = 1e-6
+        @test node["2"]["dual_node_balance_real"] ≈ 109.9399 atol = 1e-3
+        @test !isapprox(node["2"]["dual_node_balance_real"], 100.0; atol = 1.0)
+        @test node["2"]["dual_node_balance_real"] ≈
+              node["2"]["v_real"] * node["2"]["dual_node_balance_p"] +
+              node["2"]["v_imag"] * node["2"]["dual_node_balance_q"] atol = 1e-6
     end
 
     @testset "the rotation recovers the price the linearization gives" begin
@@ -174,14 +175,14 @@ prices(result, n = 1) = [nw_solution(result, n)["node"]["$i"]["lambda"] for i in
             ivr = quiet(() -> solve_opf(priced_network(; rate), IVRFormulation, OPTIMIZER))
 
             for i in ("1", "2")
-                @test ivr["solution"]["nw"]["1"]["node"][i]["lambda"] ≈
-                      lpf["solution"]["nw"]["1"]["node"][i]["lambda"] atol = 1e-4
+                @test ivr["solution"]["nw"]["1"]["node"][i]["dual_node_balance_p"] ≈
+                      lpf["solution"]["nw"]["1"]["node"][i]["dual_node_balance_p"] atol = 1e-4
 
                 # nothing pays for reactive power here, so its price is zero —
-                # even where `lambda_imag` is not, the angle alone putting it there
-                @test ivr["solution"]["nw"]["1"]["node"][i]["lambda_q"] ≈ 0.0 atol = 1e-6
+                # even where `dual_node_balance_imag` is not, the angle alone putting it there
+                @test ivr["solution"]["nw"]["1"]["node"][i]["dual_node_balance_q"] ≈ 0.0 atol = 1e-6
             end
-            @test abs(ivr["solution"]["nw"]["1"]["node"]["2"]["lambda_imag"]) > 1e-3
+            @test abs(ivr["solution"]["nw"]["1"]["node"]["2"]["dual_node_balance_imag"]) > 1e-3
         end
     end
 
@@ -198,7 +199,7 @@ prices(result, n = 1) = [nw_solution(result, n)["node"]["$i"]["lambda"] for i in
         @test active_nodal_price(nm, 1) ≈ 10.0  atol = 1e-4
         @test active_nodal_price(nm, 2) ≈ 100.0 atol = 1e-4
         @test reactive_nodal_price(nm, 2) ≈ 0.0 atol = 1e-6
-        @test nodal_prices(nm, 2) == (node["2"]["lambda"], node["2"]["lambda_q"])
+        @test nodal_prices(nm, 2) == (node["2"]["dual_node_balance_p"], node["2"]["dual_node_balance_q"])
         @test active_nodal_price(nm, 99) === nothing
 
         # a linearized formulation has no reactive power to price, and says so

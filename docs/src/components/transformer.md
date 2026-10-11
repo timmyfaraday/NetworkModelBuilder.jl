@@ -289,8 +289,8 @@ corridor_flow(result) = nw_solution(result)["edge"]["1"]["terminal"]["1"]["p_ter
  free    = free["objective"],
  stepped = stepped["objective"],
  within_rating = all(abs(corridor_flow(r)) <= 0.5 + 1e-9 for r in (free, stepped)),
- prices  = (free = get(nw_solution(free)["node"]["3"], "lambda", nothing),
-            stepped = get(nw_solution(stepped)["node"]["3"], "lambda", nothing)))
+ prices  = (free = get(nw_solution(free)["node"]["3"], "dual_node_balance_p", nothing),
+            stepped = get(nw_solution(stepped)["node"]["3"], "dual_node_balance_p", nothing)))
 ```
 
 Held, the transformer costs `32.5`; free or stepped it brings the cost down to `10.0`,

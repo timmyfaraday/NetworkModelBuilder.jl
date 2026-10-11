@@ -40,8 +40,8 @@ reference node: a load flow pins its complex voltage, a dispatch problem pins
 only its angle. Same call site, different method:
 
 ```julia
-constraint_node_voltage_reference(nm::NetworkModel{<:AbstractPowerFlowProblem,<:IVRFormulation}; nw)
-constraint_node_voltage_reference(nm::NetworkModel{<:AbstractDispatchProblem,<:IVRFormulation}; nw)
+fnct_node_voltage_reference(nm::NetworkModel{<:AbstractPowerFlowProblem,<:IVRFormulation}; nw)
+fnct_node_voltage_reference(nm::NetworkModel{<:AbstractDispatchProblem,<:IVRFormulation}; nw)
 ```
 
 The same axis decides whether a generator holds a setpoint or moves within its

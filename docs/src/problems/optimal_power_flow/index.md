@@ -24,9 +24,9 @@ resolve to.
 | objective | zero | the generation cost |
 
 Two calls appear in this builder that do not appear in a load flow —
-[`constraint_node_voltage_limits`](@ref) and
-[`constraint_edge_limits`](@ref) — and one disappears,
-[`constraint_node_voltage_setpoint`](@ref).
+[`fnct_node_voltage_limit`](@ref) and
+[`fnct_edge_limit`](@ref) — and one disappears,
+[`fnct_node_voltage_setpoint`](@ref).
 
 ## Everything controllable becomes a decision
 

@@ -30,8 +30,8 @@ unit_types
 ### If it couples network indices
 
 Constraints that span network indices cannot be written from inside the loop
-over them. Put them in a [`constraint_unit_coupling`](@ref) or
-[`constraint_edge_coupling`](@ref) method, which every problem builder calls once
+over them. Put them in a [`fnct_unit_coupling`](@ref) or
+[`fnct_edge_coupling`](@ref) method, which every problem builder calls once
 after that loop, and guard them with [`require_time_dimension`](@ref).
 
 ### If it has more than two terminals
@@ -51,7 +51,7 @@ abstract type ACPFormulation <: AbstractPowerFormulation end
 
 function variable_node_voltage(nm::NetworkModel{P,F}; nw = nw_id_default(nm)
                               ) where {P<:AbstractProblemType,F<:ACPFormulation}
-    # vm, va instead of vr, vi
+    # v_magn, v_angl instead of v_real, v_imag
 end
 ```
 
@@ -106,14 +106,14 @@ registered_constraints
 Physics that several components share lives in a fragment rather than being
 written twice:
 
-- [`constraint_pi_section!`](@ref) — the π-equivalent, used by every branch;
-- [`constraint_unit_power!`](@ref) — the injection of a unit against its current,
+- [`fnct_br_pi_section!`](@ref) — the π-equivalent, used by every branch;
+- [`fnct_unit_power!`](@ref) — the injection of a unit against its current,
   used by every generator, load and storage unit;
-- [`constraint_edge_rating!`](@ref) and
-  [`constraint_edge_angle_difference!`](@ref) — the operating limits of an edge.
+- [`fnct_edge_rating!`](@ref) and
+  [`fnct_edge_angle_difference!`](@ref) — the operating limits of an edge.
 
 ```@docs
-constraint_unit_power!
+fnct_unit_power!
 ```
 
 ## Dispatchers
@@ -123,16 +123,16 @@ variable_edge_terminal_flow
 variable_edge_terminal_power
 variable_unit_injection
 variable_unit_injection_power
-constraint_unit_injection!
+fnct_unit_injection!
 variable_storage_active!
 variable_storage_reactive!
 variable_slack_volume!
 variable_edge
-constraint_edge
-constraint_edge_limits
-constraint_edge_coupling
+fnct_edge
+fnct_edge_limit
+fnct_edge_coupling
 variable_unit
-constraint_unit
+fnct_unit
 variable_edge_terminal_current
 variable_unit_injection_current
 solution_node

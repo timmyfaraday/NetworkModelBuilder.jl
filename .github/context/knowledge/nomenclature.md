@@ -135,6 +135,6 @@ Functions, old `constraint_` to `fnct_`: `edge` `edge`, `edge_limits` `edge_limi
 
 Duals: `"lambda"` `dual_node_balance_p`, `"lambda_q"` `dual_node_balance_q`, `"lambda_real"` `dual_node_balance_real`, `"lambda_imag"` `dual_node_balance_imag`; the sign stays (a price is minus the dual).
 `"dual_status"` is JuMP's own word and stays. Old letters of a parameter or a local: `ctr cti vtr vti` `i_wind_real i_wind_imag v_wind_real v_wind_imag`, `csr csi` `i_ser_real i_ser_imag`,
-`cru ciu` `i_unit_real i_unit_imag`, each where it does not clash with a container local of the same function.
+`cru ciu` `i_real i_imag` (scalars read out of the containers `i_unit_real`, `i_unit_imag`), each where it does not clash with a container local of the same function.
 
 Owners are the descriptors of the quantities (`stor`, `sw`, `gen`), as Tom chose on 2026-10-11 over the type's own word (`storage`, `switch`, `generator`).

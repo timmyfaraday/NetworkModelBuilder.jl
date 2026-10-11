@@ -15,11 +15,12 @@
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.15.0 - constraint keys and ids follow the nomenclature                    #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 export AbstractStorage, Storage, inflow, storage_cycles
 export variable_storage_active!, variable_storage_reactive!
-export constraint_storage_cycles!, constraint_storage_final_energy!
+export fnct_stor_cycle!, fnct_stor_final_energy!
 
 ################################################################################
 # Storage — data                                                               #
@@ -51,7 +52,7 @@ and the rolling horizon by declaring them:
 | `e_max`, `e_init`, `e_fin` | the state of charge and its ends |
 | `p_chg_max`, `p_dch_max` | the bounds on the charge and discharge |
 | `η_chg`, `η_dch` | the balance |
-| `k_cycl_max` | [`constraint_storage_cycles!`](@ref) |
+| `k_cycl_max` | [`fnct_stor_cycle!`](@ref) |
 | `c_thru`, `c_cycl` | [`dispatch_cost`](@ref), [`period_cost`](@ref) |
 | `c_up`, `c_dn` | [`redispatch_cost`](@ref) |
 | `q_min`, `q_max` | the reactive power, where the formulation has any |
@@ -234,25 +235,25 @@ end
 ################################################################################
 
 """
-    constraint_unit(nm, T; nw)
+    fnct_unit(nm, T; nw)
 
 Link the injection of every in-service storage unit to the current it injects.
 In a dispatch problem the injection is `p^{\\text{sd}} - p^{\\text{sc}}`; in a
 power flow it is the setpoint.
 """
-function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractPowerFlowProblem,F<:IVRFormulation,T<:AbstractStorage}
     power = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_power)
 
     for u in ids(nm, T; nw)
         st = unit(nm, u; nw)::T
-        power[u] = constraint_unit_power!(nm, u, st.p_set, st.q_set; nw)
+        power[u] = fnct_unit_power!(nm, u, st.p_set, st.q_set; nw)
     end
 
     return nothing
 end
 
-constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                ) where {P<:AbstractDispatchProblem,F<:IVRFormulation,T<:AbstractStorage} =
     _constraint_storage_power(nm, T, nw)
 
@@ -265,14 +266,14 @@ function _constraint_storage_power(nm::NetworkModel, ::Type{T}, nw::Int) where {
 
     for u in ids(nm, T; nw)
         p = JuMP.@expression(nm.model, p_dch[u] - p_chg[u])
-        power[u] = constraint_unit_power!(nm, u, p, q_stor[u]; nw)
+        power[u] = fnct_unit_power!(nm, u, p, q_stor[u]; nw)
     end
 
     return nothing
 end
 
 """
-    constraint_unit_coupling(nm, T)
+    fnct_unit_coupling(nm, T)
 
 The state of charge of every storage unit, carried from one time step to the
 next,
@@ -289,9 +290,9 @@ fixed, so a problem with a contingency dimension gives each contingency its own
 trajectory from the same starting energy.
 
 The cycle limit of every unit that carries one is written here too, once per
-period, see [`constraint_storage_cycles!`](@ref).
+period, see [`fnct_stor_cycle!`](@ref).
 """
-function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
+function fnct_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
                                  ) where {P<:AbstractDispatchProblem,F<:AbstractFormulationType,
                                           T<:AbstractStorage}
     isempty(ids(nm, T; nw = nw_id_default(nm))) && return nothing
@@ -313,15 +314,15 @@ function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
         end
     end
 
-    constraint_storage_cycles!(nm, T)
-    constraint_storage_final_energy!(nm, T)
+    fnct_stor_cycle!(nm, T)
+    fnct_stor_final_energy!(nm, T)
     _warn_free_cycling(nm, T)
 
     return nothing
 end
 
 """
-    constraint_storage_final_energy!(nm, T)
+    fnct_stor_final_energy!(nm, T)
 
 Pin every storage unit that carries an `e_fin` to it at the last `:time`
 coordinate,
@@ -337,7 +338,7 @@ It is a **pin**, not a floor: a target the ratings cannot reach makes the proble
 infeasible, which is the honest answer to a question that has none. A unit
 without a target — `NaN`, the default — gets no row.
 """
-function constraint_storage_final_energy!(nm::NetworkModel, ::Type{T}) where {T<:AbstractStorage}
+function fnct_stor_final_energy!(nm::NetworkModel, ::Type{T}) where {T<:AbstractStorage}
     for n in nw_ids(nm)
         is_last_id(nm, n, :time) || continue
 
@@ -400,7 +401,7 @@ function storage_cycles(nm::NetworkModel, st::AbstractStorage, u::Int, window)
 end
 
 """
-    constraint_storage_cycles!(nm, T)
+    fnct_stor_cycle!(nm, T)
 
 Hold every storage unit that carries one to its cycle limit, once per period,
 
@@ -418,7 +419,7 @@ Written only for a unit whose `k_cycl_max` is finite. A limit of
 infinity is not a row with an infinite right hand side; it is the absence of a
 row, and a solver handed the first would be given a constraint it can never use.
 """
-function constraint_storage_cycles!(nm::NetworkModel, ::Type{T}) where {T<:AbstractStorage}
+function fnct_stor_cycle!(nm::NetworkModel, ::Type{T}) where {T<:AbstractStorage}
     for n in nw_ids(nm)
         is_first_period_id(nm, n, :time) || continue
         window = period_ids(nm, n, :time)
@@ -559,23 +560,23 @@ end
 ################################################################################
 
 """
-    constraint_unit(nm, T; nw)
+    fnct_unit(nm, T; nw)
 
 Link the injection of every in-service storage unit to what it charges and
 discharges. Reactive power plays no part in a linearized formulation.
 """
-function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractPowerFlowProblem,F<:LPFFormulation,T<:AbstractStorage}
     power = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_injection)
 
     for u in ids(nm, T; nw)
-        power[u] = constraint_unit_injection!(nm, u, unit(nm, u; nw).p_set; nw)
+        power[u] = fnct_unit_injection!(nm, u, unit(nm, u; nw).p_set; nw)
     end
 
     return nothing
 end
 
-constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                ) where {P<:AbstractDispatchProblem,F<:LPFFormulation,T<:AbstractStorage} =
     _constraint_storage_injection(nm, T, nw)
 
@@ -587,7 +588,7 @@ function _constraint_storage_injection(nm::NetworkModel, ::Type{T}, nw::Int) whe
     power        = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_injection)
 
     for u in ids(nm, T; nw)
-        power[u] = constraint_unit_injection!(nm, u,
+        power[u] = fnct_unit_injection!(nm, u,
                        JuMP.@expression(nm.model, p_dch[u] - p_chg[u]); nw)
     end
 
@@ -646,7 +647,7 @@ function _variable_storage_redispatch(nm::NetworkModel, ::Type{T}, nw::Int) wher
 end
 
 """
-    constraint_unit(nm, T; nw)
+    fnct_unit(nm, T; nw)
 
 Link the injection of every in-service storage unit to what it injects, and
 split that injection into the market schedule and the volumes moved away from
@@ -662,7 +663,7 @@ varies over `:time` it is a whole schedule; where it is a plain zero — the
 default — the unit was not scheduled by the market at all and every per unit it
 moves counts as redispatch.
 """
-function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:RedispatchProblem,F<:IVRFormulation,T<:AbstractStorage}
     isempty(ids(nm, T; nw)) && return nothing
     _constraint_storage_power(nm, T, nw)
@@ -671,7 +672,7 @@ function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     return nothing
 end
 
-function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:RedispatchProblem,F<:LPFFormulation,T<:AbstractStorage}
     isempty(ids(nm, T; nw)) && return nothing
     _constraint_storage_injection(nm, T, nw)

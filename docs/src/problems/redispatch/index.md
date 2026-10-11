@@ -210,7 +210,7 @@ declared there is one period spanning the horizon, and the charge is on the
 worst overload of the problem.
 
 ```@docs
-constraint_overload_peak
+fnct_edge_overload_peak
 solution_overload_peak
 ```
 
@@ -275,7 +275,7 @@ The whole difference in the model is one family of equalities.
 ```@docs
 Redispatch
 redispatch_setup
-constraint_redispatch_control
+fnct_rd_control
 redispatch_controls
 control_mode
 is_preventive

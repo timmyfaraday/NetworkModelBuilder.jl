@@ -13,6 +13,7 @@
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.15.0 - constraint keys and ids follow the nomenclature                    #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 export AbstractSlackUnit, EnergyNotServed, Spill
@@ -203,7 +204,7 @@ end
 ################################################################################
 
 """
-    constraint_unit(nm, T; nw)
+    fnct_unit(nm, T; nw)
 
 Link the injection of every in-service slack unit to the current it injects.
 
@@ -213,18 +214,18 @@ served or not placed, and neither has a reactive counterpart. Its injection is
 `\\sigma_{u} p^{\\text{sl}}_{u}`, with `\\sigma` the sign of the unit; in a power
 flow it is zero.
 """
-function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractPowerFlowProblem,F<:IVRFormulation,T<:AbstractSlackUnit}
     power = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_power)
 
     for u in ids(nm, T; nw)
-        power[u] = constraint_unit_power!(nm, u, 0.0, 0.0; nw)
+        power[u] = fnct_unit_power!(nm, u, 0.0, 0.0; nw)
     end
 
     return nothing
 end
 
-constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                ) where {P<:AbstractDispatchProblem,F<:IVRFormulation,T<:AbstractSlackUnit} =
     _constraint_slack_power(nm, T, nw)
 
@@ -238,7 +239,7 @@ function _constraint_slack_power(nm::NetworkModel, ::Type{T}, nw::Int) where {T<
     for u in ids(nm, T; nw)
         su = unit(nm, u; nw)::T
         p  = JuMP.@expression(nm.model, slack_sign(su) * p_slk[u])
-        power[u] = constraint_unit_power!(nm, u, p, 0.0; nw)
+        power[u] = fnct_unit_power!(nm, u, p, 0.0; nw)
     end
 
     return nothing
@@ -307,24 +308,24 @@ end
 ################################################################################
 
 """
-    constraint_unit(nm, T; nw)
+    fnct_unit(nm, T; nw)
 
 Link the injection of every in-service slack unit to its volume. Reactive power
 plays no part in a linearized formulation, and a slack unit had none to begin
 with.
 """
-function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractPowerFlowProblem,F<:LPFFormulation,T<:AbstractSlackUnit}
     power = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_injection)
 
     for u in ids(nm, T; nw)
-        power[u] = constraint_unit_injection!(nm, u, 0.0; nw)
+        power[u] = fnct_unit_injection!(nm, u, 0.0; nw)
     end
 
     return nothing
 end
 
-constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                ) where {P<:AbstractDispatchProblem,F<:LPFFormulation,T<:AbstractSlackUnit} =
     _constraint_slack_injection(nm, T, nw)
 
@@ -337,7 +338,7 @@ function _constraint_slack_injection(nm::NetworkModel, ::Type{T}, nw::Int) where
 
     for u in ids(nm, T; nw)
         su = unit(nm, u; nw)::T
-        power[u] = constraint_unit_injection!(nm, u,
+        power[u] = fnct_unit_injection!(nm, u,
                        JuMP.@expression(nm.model, slack_sign(su) * p_slk[u]); nw)
     end
 

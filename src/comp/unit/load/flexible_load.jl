@@ -14,6 +14,7 @@
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.15.0 - constraint keys and ids follow the nomenclature                    #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 export FlexibleLoad, power_factor_ratio
@@ -123,7 +124,7 @@ end
 ################################################################################
 
 """
-    constraint_unit_coupling(nm, FlexibleLoad; nw)
+    fnct_unit_coupling(nm, FlexibleLoad; nw)
 
 One energy balance per flexible load per period,
 
@@ -139,7 +140,7 @@ than a shared one; a `:time` dimension with no grouping gives one period
 spanning the whole horizon, which is the behaviour this had before periods
 existed.
 """
-function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{FlexibleLoad}
+function fnct_unit_coupling(nm::NetworkModel{P,F}, ::Type{FlexibleLoad}
                                  ) where {P<:AbstractDispatchProblem,F<:AbstractFormulationType}
     isempty(ids(nm, FlexibleLoad; nw = nw_id_default(nm))) && return nothing
     require_time_dimension(nm, FlexibleLoad)

@@ -132,9 +132,9 @@ current a unit injects.
 
 ## What is not covered
 
-The duals keep the names they have, `lambda`, `lambda_q`, `lambda_real` and
-`lambda_imag`. The names of constraints and of functions are not part of this
-grammar.
+The duals are `dual_node_balance_p`, `dual_node_balance_q`, `dual_node_balance_real` and
+`dual_node_balance_imag`, named for the node balance they price. The names of constraints
+and of functions are not yet part of this grammar.
 
 `test/nomenclature.jl` holds the grammar as code and checks every field, every
 variable key and every solution key of the package against it; `test/docs_tables.jl`

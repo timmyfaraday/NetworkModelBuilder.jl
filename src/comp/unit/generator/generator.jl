@@ -16,6 +16,7 @@
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.15.0 - constraint keys and ids follow the nomenclature                    #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 export AbstractGenerator, Generator
@@ -178,7 +179,7 @@ dispatch_cost(nm::NetworkModel, ::Type{T}, u::Int; nw::Int) where {T<:AbstractGe
 The active and reactive power of every in-service generator.
 
 Whether they are bounded is decided by the problem type: a load flow fixes them
-at their setpoint in [`constraint_unit`](@ref) and leaves them free where the
+at their setpoint in [`fnct_unit`](@ref) and leaves them free where the
 network has to determine them, whereas a dispatch problem bounds them by the
 operating limits of the generator.
 """
@@ -212,7 +213,7 @@ end
 ################################################################################
 
 """
-    constraint_unit(nm, T; nw)
+    fnct_unit(nm, T; nw)
 
 Link the power of every in-service generator to the current it injects, and, for
 a load flow only, fix that power at its setpoint.
@@ -224,9 +225,9 @@ magnitude setpoint. At a `PQ` node both are fixed. Where several generators
 share a `PV` or `REF` node their split of the free quantity is not determined by
 the model; the solver returns one of the admissible splits.
 """
-function constraint_unit end
+function fnct_unit end
 
-function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractPowerFlowProblem,F<:IVRFormulation,T<:AbstractGenerator}
     _constraint_generator_power(nm, T, nw)
 
@@ -241,7 +242,7 @@ function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     return nothing
 end
 
-constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                ) where {P<:AbstractDispatchProblem,F<:IVRFormulation,T<:AbstractGenerator} =
     _constraint_generator_power(nm, T, nw)
 
@@ -250,7 +251,7 @@ function _constraint_generator_power(nm::NetworkModel, ::Type{T}, nw::Int) where
     power        = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_power)
 
     for u in ids(nm, T; nw)
-        power[u] = constraint_unit_power!(nm, u, p_gen[u], q_gen[u]; nw)
+        power[u] = fnct_unit_power!(nm, u, p_gen[u], q_gen[u]; nw)
     end
 
     return nothing
@@ -261,7 +262,7 @@ end
 ################################################################################
 
 """
-    constraint_unit_coupling(nm, T)
+    fnct_unit_coupling(nm, T)
 
 Hold every generator that carries one to its energy limit, once per period,
 
@@ -285,7 +286,7 @@ The sum is over the net output, so a generator with a negative `p_min` has what 
 absorbs counted against what it produced. A limit of infinity — the default — is
 the absence of a row rather than a row with an infinite right hand side.
 """
-function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
+function fnct_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
                                  ) where {P<:AbstractDispatchProblem,F<:AbstractFormulationType,
                                           T<:AbstractGenerator}
     any(c -> c isa T && isfinite(c.e_per_max), values(units(network(nm)))) ||
@@ -364,7 +365,7 @@ function _variable_generator_active(nm::NetworkModel, ::Type{T}, nw::Int, bounde
 end
 
 """
-    constraint_unit(nm, T; nw)
+    fnct_unit(nm, T; nw)
 
 Link the active power of every in-service generator to what it injects, and, for
 a load flow, fix it at its setpoint everywhere but the reference node.
@@ -372,7 +373,7 @@ a load flow, fix it at its setpoint everywhere but the reference node.
 The `PV` and `PQ` distinction disappears here: with no reactive power and no
 voltage magnitude, both hold their active setpoint and nothing else.
 """
-function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractPowerFlowProblem,F<:LPFFormulation,T<:AbstractGenerator}
     _constraint_generator_active(nm, T, nw)
 
@@ -385,7 +386,7 @@ function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     return nothing
 end
 
-constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                ) where {P<:AbstractDispatchProblem,F<:LPFFormulation,T<:AbstractGenerator} =
     _constraint_generator_active(nm, T, nw)
 
@@ -394,7 +395,7 @@ function _constraint_generator_active(nm::NetworkModel, ::Type{T}, nw::Int) wher
     power = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_injection)
 
     for u in ids(nm, T; nw)
-        power[u] = constraint_unit_injection!(nm, u, p_gen[u]; nw)
+        power[u] = fnct_unit_injection!(nm, u, p_gen[u]; nw)
     end
 
     return nothing
@@ -493,7 +494,7 @@ function _variable_generator_redispatch(nm::NetworkModel, ::Type{T}, nw::Int
 end
 
 """
-    constraint_unit(nm, T; nw)
+    fnct_unit(nm, T; nw)
 
 Link the power of every in-service generator to what it injects, and split that
 power into the market dispatch and the volumes moved away from it,
@@ -511,7 +512,7 @@ The two volumes are separate non-negative variables because they are priced
 separately. Nothing forbids both from being non-zero at once, and with positive
 prices on both it is never worth doing.
 """
-function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:RedispatchProblem,F<:IVRFormulation,T<:AbstractGenerator}
     _constraint_generator_power(nm, T, nw)
     _constraint_generator_redispatch(nm, T, nw)
@@ -519,7 +520,7 @@ function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
     return nothing
 end
 
-function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:RedispatchProblem,F<:LPFFormulation,T<:AbstractGenerator}
     _constraint_generator_active(nm, T, nw)
     _constraint_generator_redispatch(nm, T, nw)

@@ -73,8 +73,8 @@ None. A DC link has no model there at all.
 
 | name | problem |
 |:-----|:--------|
-| [`constraint_edge`](@ref) | all |
-| [`constraint_edge_limits`](@ref) | dispatch |
+| [`fnct_edge`](@ref) | all |
+| [`fnct_edge_limit`](@ref) | dispatch |
 
 ### The transfer, and why it is a variable
 

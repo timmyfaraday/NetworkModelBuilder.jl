@@ -13,6 +13,7 @@
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.15.0 - constraint keys and ids follow the nomenclature                    #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 export AbstractDCLink, DCLink, transfer_loss, transfer_limits
@@ -157,7 +158,7 @@ The range the flow at the from terminal of a dc link may take, resolved at one
 network index.
 
 Not quite the rating, which caps what each end *sends*, see
-[`constraint_edge_limits`](@ref): a receiving end takes in less than the sending
+[`fnct_edge_limit`](@ref): a receiving end takes in less than the sending
 end put out, so this is a range the flow certainly lies in rather than the
 tightest one. That is all the redispatch volumes need it for.
 """
@@ -180,7 +181,7 @@ variable is needed to hold it. What is needed, and only where `p_loss_prop` is
 non-zero, is the **transfer** `t`: the magnitude of that flow, which the loss is
 charged on. It is bounded below by the flow in each direction, so it is at least
 the magnitude, and the loss equality then pushes it down onto it — see
-[`constraint_edge`](@ref).
+[`fnct_edge`](@ref).
 
 A link with no proportional loss gets no such variable: its loss is a constant,
 and a variable nothing pushes on would be free to take any value its bounds
@@ -286,7 +287,7 @@ end
 ################################################################################
 
 """
-    constraint_edge(nm, T; nw)
+    fnct_edge(nm, T; nw)
 
 The physics of every in-service DC link: what leaves one end arrives at the
 other, less the loss of the pair of stations,
@@ -296,7 +297,7 @@ p_{a^{\\text{f}}} + p_{a^{\\text{t}}} = \\ell^{0}_{e} + \\ell^{1}_{e} t_{e} ,
 \\qquad t_{e} \\ge p_{a^{\\text{f}}}, \\qquad t_{e} \\ge p_{a^{\\text{t}}} .
 ```
 
-Compare [`constraint_linear_flow!`](@ref), where the same statement is
+Compare [`fnct_edge_flow_linear!`](@ref), where the same statement is
 `p_{a^{t}} = -p_{a^{f}}`: a branch is lossless in this formulation and a DC link
 is not, and there is no angle difference here at all.
 
@@ -326,7 +327,7 @@ the loss to a signed flow — `p_{a^{t}} = -\\eta \\, p_{a^{f}}` — is right in
 direction and creates energy in the other, since with `η < 1` a reversed flow
 would deliver more than it took.
 """
-function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractDispatchProblem,F<:LPFFormulation,T<:AbstractDCLink}
     isempty(ids(nm, T; nw)) && return nothing
 
@@ -336,7 +337,7 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
 end
 
 """
-    constraint_edge(nm, T; nw)
+    fnct_edge(nm, T; nw)
 
 The physics of every in-service DC link, and its flow held at the market
 schedule it carries.
@@ -346,7 +347,7 @@ is held at its `p_set`, and the transfer is `p_set` whatever the rest of the net
 does. Both the flow and the loss are therefore read off the data, with no
 transfer variable and no relaxation between them.
 """
-function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractPowerFlowProblem,F<:LPFFormulation,T<:AbstractDCLink}
     isempty(ids(nm, T; nw)) && return nothing
 
@@ -401,7 +402,7 @@ function _constraint_dc_link!(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:Ab
 end
 
 """
-    constraint_edge_limits(nm, T; nw)
+    fnct_edge_limit(nm, T; nw)
 
 The transfer limit of every in-service DC link: a cap on what each of its ends
 may put in,
@@ -422,7 +423,7 @@ congestion and so does not follow the monitored set, and an
 rating and pay for the risk, but a converter that is asked for more than it was
 built for does not deliver it.
 """
-function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_edge_limit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                                ) where {P<:AbstractDispatchProblem,F<:LPFFormulation,
                                         T<:AbstractDCLink}
     isempty(ids(nm, T; nw)) && return nothing
@@ -444,7 +445,7 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_i
 end
 
 """
-    constraint_edge(nm, T; nw)
+    fnct_edge(nm, T; nw)
 
 The physics of every in-service DC link, and its transfer split into the market
 schedule and the volumes moved away from it,
@@ -457,7 +458,7 @@ The same statement a generator makes about its dispatch, and for the same
 reason: what a redispatch prices is the move, not the transfer. A link left at
 its schedule costs nothing however much it carries.
 """
-function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
+function fnct_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:RedispatchProblem,F<:LPFFormulation,T<:AbstractDCLink}
     isempty(ids(nm, T; nw)) && return nothing
 

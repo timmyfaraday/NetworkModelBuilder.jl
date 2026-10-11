@@ -69,7 +69,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Va
 
 ## Next
 
-1. B32 (constraint, function and dual names, D63-D70, `knowledge/plan/naming-constraints.md`, stages 0 to 3 done), then B26, B27 (the review's order); then B20, B7, B3, B4, B13, B19, B28, B29, see `backlog.md`.
+1. B32 (constraint, function and dual names, D63-D70, `knowledge/plan/naming-constraints.md`, stages 0 to 4 done), then B26, B27 (the review's order); then B20, B7, B3, B4, B13, B19, B28, B29, see `backlog.md`.
 
 ## Blocked / waiting
 

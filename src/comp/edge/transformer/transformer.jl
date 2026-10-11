@@ -21,6 +21,7 @@
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.14.0 - the docstrings follow the nomenclature                             #
 # v0.15.0 - constraint keys and ids follow the nomenclature                    #
+# v0.15.0 - functions that write rows, duals and letters follow the map        #
 ################################################################################
 
 export AbstractTransformer, Transformer, TapMode, FIXED, CONTINUOUS, STEPPED
@@ -516,7 +517,7 @@ end
 ################################################################################
 
 """
-    constraint_edge(nm, Transformer; nw)
+    fnct_edge(nm, Transformer; nw)
 
 The physics of every in-service transformer: the ideal ratio of each winding, the
 drop from each winding to the star point, and the current balance there.
@@ -542,7 +543,7 @@ y^{\\text{sh}}_{k} v^{\\text{t}}_{k} \\right),
 = y^{\\text{m}}_{e} \\, v^{\\text{s}}_{e}.
 ```
 """
-function constraint_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_id_default(nm)
+function fnct_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractProblemType,F<:IVRFormulation}
     v_star_real, v_star_imag = var(nm, :v_star_real; nw), var(nm, :v_star_imag; nw)
 
@@ -551,34 +552,34 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = n
 
     for e in ids(nm, Transformer; nw)
         tf  = edge(nm, e; nw)::Transformer
-        csr = Any[]
-        csi = Any[]
+        i_ser_real = Any[]
+        i_ser_imag = Any[]
 
         winding[e] = map(enumerate(edge_arcs(nm, e; nw))) do (k, a)
-            vtr, vti, ctr, cti = _behind_ratio!(nm, tf, e, k, a; nw)
+            v_wind_real, v_wind_imag, i_wind_real, i_wind_imag = _behind_ratio!(nm, tf, e, k, a; nw)
 
             # what leaves the winding's own shunt reaches the star point
             gsh, bsh = tf.g_shnt[k], tf.b_shnt[k]
             if iszero(gsh) && iszero(bsh)
-                push!(csr, ctr)
-                push!(csi, cti)
+                push!(i_ser_real, i_wind_real)
+                push!(i_ser_imag, i_wind_imag)
             else
-                push!(csr, JuMP.@expression(nm.model, ctr - (gsh * vtr - bsh * vti)))
-                push!(csi, JuMP.@expression(nm.model, cti - (gsh * vti + bsh * vtr)))
+                push!(i_ser_real, JuMP.@expression(nm.model, i_wind_real - (gsh * v_wind_real - bsh * v_wind_imag)))
+                push!(i_ser_imag, JuMP.@expression(nm.model, i_wind_imag - (gsh * v_wind_imag + bsh * v_wind_real)))
             end
 
             zr, zx = tf.r[k], tf.x[k]
             (constrain!(nm, :cstr_tf_winding, (a, :real), JuMP.@build_constraint(
-                 vtr - v_star_real[e] == zr * csr[k] - zx * csi[k]); nw),
+                 v_wind_real - v_star_real[e] == zr * i_ser_real[k] - zx * i_ser_imag[k]); nw),
              constrain!(nm, :cstr_tf_winding, (a, :imag), JuMP.@build_constraint(
-                 vti - v_star_imag[e] == zr * csi[k] + zx * csr[k]); nw))
+                 v_wind_imag - v_star_imag[e] == zr * i_ser_imag[k] + zx * i_ser_real[k]); nw))
         end
 
         star[e] = (
             constrain!(nm, :cstr_tf_star_balance, (e, :real), JuMP.@build_constraint(
-                sum(csr) == tf.g_mgnt * v_star_real[e] - tf.b_mgnt * v_star_imag[e]); nw),
+                sum(i_ser_real) == tf.g_mgnt * v_star_real[e] - tf.b_mgnt * v_star_imag[e]); nw),
             constrain!(nm, :cstr_tf_star_balance, (e, :imag), JuMP.@build_constraint(
-                sum(csi) == tf.g_mgnt * v_star_imag[e] + tf.b_mgnt * v_star_real[e]); nw))
+                sum(i_ser_imag) == tf.g_mgnt * v_star_imag[e] + tf.b_mgnt * v_star_real[e]); nw))
     end
 
     return nothing
@@ -588,7 +589,7 @@ end
     _behind_ratio!(nm, tf, e, k, a; nw)
 
 The voltage and the current of arc `a`, winding `k`, behind its ratio, as
-`(vtr, vti, ctr, cti)`, writing the rows of the ideal ratio where the problem
+`(v_wind_real, v_wind_imag, i_wind_real, i_wind_imag)`, writing the rows of the ideal ratio where the problem
 chooses it.
 """
 function _behind_ratio!(nm::NetworkModel, tf::Transformer, e::Int, k::Int, a::Arc; nw::Int)
@@ -622,7 +623,7 @@ function _behind_ratio!(nm::NetworkModel, tf::Transformer, e::Int, k::Int, a::Ar
 end
 
 """
-    constraint_edge_limits(nm, Transformer; nw)
+    fnct_edge_limit(nm, Transformer; nw)
 
 The limits of every in-service transformer: the apparent power rating at each
 terminal, where the problem watches the transformer for congestion, see
@@ -637,7 +638,7 @@ In a redispatch the ratio of a preventive winding is tied to the base case, whos
 rows already restrict it, so the other network indices do not write them again,
 see [`is_held`](@ref).
 """
-function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_id_default(nm)
+function fnct_edge_limit(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_id_default(nm)
                                ) where {P<:AbstractDispatchProblem,F<:IVRFormulation}
     rating = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_edge_rating)
     angle  = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_edge_angle_difference)
@@ -647,9 +648,9 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::
         tf = edge(nm, e; nw)::Transformer
         A  = edge_arcs(nm, e; nw)
 
-        rating[e] = constraint_edge_rating!(nm, e, tf.s_max; nw)
+        rating[e] = fnct_edge_rating!(nm, e, tf.s_max; nw)
         length(A) == 2 &&
-            (angle[e] = constraint_edge_angle_difference!(nm, A[1], A[2], tf.v_angl_min, tf.v_angl_max; nw))
+            (angle[e] = fnct_edge_angle_difference!(nm, A[1], A[2], tf.v_angl_min, tf.v_angl_max; nw))
 
         _constraint_steps!(nm, tf, e, A; nw)
         is_held(nm, :edge, e; nw) && continue
@@ -752,7 +753,7 @@ _step_start(::NetworkModel{P,F}, tf::Transformer, k::Int
     _position(tf.t_angl[k], tf.t_angl_min[k], tf.t_angl_max[k], tf.t_angl_step[k])
 
 """
-    constraint_edge(nm, Transformer; nw)
+    fnct_edge(nm, Transformer; nw)
 
 The linearized flow of every in-service transformer. With `va^t_k = va_{i_k} -
 ta_k` the angle behind the ratio of winding `k`, a transformer with two windings
@@ -778,7 +779,7 @@ which is what makes a winding that is `pst` a real control in this formulation
 and one that is `oltc` an inert one. The magnetising branch and the shunts play no
 part, for the same reason a branch's shunt does not.
 """
-function constraint_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_id_default(nm)
+function fnct_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractProblemType,F<:LPFFormulation}
     v_angl, p_term = var(nm, :v_angl; nw), var(nm, :p_term; nw)
 
@@ -794,7 +795,7 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = n
             shift = phase_shift(nm, tf, e, 1; nw) - phase_shift(nm, tf, e, 2; nw)
             b     = susceptance(sum(tf.r), sum(tf.x))
 
-            branch[e] = constraint_linear_flow!(nm, e, A[1], A[2], b, shift; nw)
+            branch[e] = fnct_edge_flow_linear!(nm, e, A[1], A[2], b, shift; nw)
             continue
         end
 
@@ -817,7 +818,7 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = n
 end
 
 """
-    constraint_edge_limits(nm, Transformer; nw)
+    fnct_edge_limit(nm, Transformer; nw)
 
 The rating and the angle difference limits of every in-service transformer. With
 no losses, what leaves one terminal of a two-winding transformer arrives at the
@@ -826,7 +827,7 @@ more windings is rated at each terminal. The rating is skipped where the problem
 does not watch the transformer for congestion, see [`is_monitored`](@ref). A winding
 that steps takes exactly one of its positions, `Σₛ zt = 1`.
 """
-function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_id_default(nm)
+function fnct_edge_limit(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_id_default(nm)
                                ) where {P<:AbstractDispatchProblem,F<:LPFFormulation}
     limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_edge_limit)
 
@@ -835,9 +836,9 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::
         A  = edge_arcs(nm, e; nw)
 
         limits[e] = length(A) == 2 ?
-            (constraint_linear_ratings!(nm, e, A, tf.s_max; nw),
-             constraint_linear_angle_difference!(nm, A[1], A[2], tf.v_angl_min, tf.v_angl_max; nw)) :
-            constraint_linear_ratings!(nm, e, A, tf.s_max; nw)
+            (fnct_edge_rating_linear!(nm, e, A, tf.s_max; nw),
+             fnct_edge_angle_difference_linear!(nm, A[1], A[2], tf.v_angl_min, tf.v_angl_max; nw)) :
+            fnct_edge_rating_linear!(nm, e, A, tf.s_max; nw)
 
         _constraint_steps!(nm, tf, e, A; nw)
     end

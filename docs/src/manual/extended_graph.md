@@ -47,7 +47,7 @@ pair, so Kirchhoff's current law at a node is
 and in code
 
 ```julia
-sum(cr[a] for a in node_arcs(nm, i; nw)) == sum(cru[u] for u in node_units(nm, i; nw))
+sum(i_term_real[a] for a in node_arcs(nm, i; nw)) == sum(i_unit_real[u] for u in node_units(nm, i; nw))
 ```
 
 The sign lives in the constraints of the individual unit type, not in the

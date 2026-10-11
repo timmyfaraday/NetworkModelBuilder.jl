@@ -1,7 +1,7 @@
 # Transformer
 
 A transformer is an edge with two or more **windings**. Winding ``k`` has an ideal
-ratio ``T_{e,k} = tm_{e,k} \exp(j \, ta_{e,k})`` at its terminal, a series impedance
+ratio ``T_{e,k} = t^{\text{m}}_{e,k} \exp(j \, t^{\text{a}}_{e,k})`` at its terminal, a series impedance
 ``z_{e,k}`` and a shunt ``y^{\text{sh}}_{e,k}``, and the windings meet at a **star
 point** that carries the magnetising branch ``y^{\text{m}}_{e}``. That is the T-model,
 for two windings as for more: a transformer is a set of ideal two-winding
@@ -28,16 +28,16 @@ referred through it as
 ```math
 v_{i_k} = T_{e,k} \, v^{\text{t}}_{e,k},
 \qquad
-c^{\text{t}}_{e,k} = \overline{T_{e,k}} \, c_{a_k} ,
+i^{\text{t}}_{e,k} = \overline{T_{e,k}} \, i_{a_k} ,
 ```
 
 which conserves complex power across the ideal part. What is left is the star,
 
 ```math
-v^{\text{t}}_{e,k} - v^{\text{s}}_{e} = z_{e,k} \left( c^{\text{t}}_{e,k} -
+v^{\text{t}}_{e,k} - v^{\text{s}}_{e} = z_{e,k} \left( i^{\text{t}}_{e,k} -
 y^{\text{sh}}_{e,k} \, v^{\text{t}}_{e,k} \right),
 \qquad
-\sum_{k} \left( c^{\text{t}}_{e,k} - y^{\text{sh}}_{e,k} \, v^{\text{t}}_{e,k} \right)
+\sum_{k} \left( i^{\text{t}}_{e,k} - y^{\text{sh}}_{e,k} \, v^{\text{t}}_{e,k} \right)
 = y^{\text{m}}_{e} \, v^{\text{s}}_{e} .
 ```
 
@@ -69,30 +69,34 @@ Every field with an entry per winding is indexed by terminal position. A transfo
 with two windings accepts a scalar for the first winding, the second being neutral: a
 ratio of one, no shift, no impedance, no shunt.
 
-| symbol | field | description | unit | default |
+| symbol | code name | description | unit | default |
 |:-------|:------|:------------|:-----|:--------|
+| | `id`, `name` | identifier and label | | |
+| ``(i_1, \dots, i_n)`` | `terminals` | the nodes the windings connect to, two or more | | |
 | ``z_{e,k}`` | `r`, `x` | series resistance and reactance, referred to the star point | pu | |
-| ``y^{\text{sh}}_{e,k}`` | `g_sh`, `b_sh` | shunt admittance behind the ratio, the whole of it at that terminal side; on a [Branch](@ref) the shunt of a section is half at each end | pu | `0` |
-| ``y^{\text{m}}_{e}`` | `g_m`, `b_m` | magnetising admittance at the star point | pu | `0` |
-| ``tm_{e,k}`` | `tm` | ratio magnitude, or its setpoint | pu | `1` |
-| ``ta_{e,k}`` | `ta` | ratio angle, or its setpoint | rad | `0` |
+| ``y^{\text{sh}}_{e,k}`` | `g_shnt`, `b_shnt` | shunt admittance behind the ratio, the whole of it at that terminal side; on a [Branch](@ref) the shunt of a section is half at each end | pu | `0` |
+| ``y^{\text{m}}_{e}`` | `g_mgnt`, `b_mgnt` | magnetising admittance at the star point | pu | `0` |
+| ``t^{\text{m}}_{e,k}`` | `t_magn` | ratio magnitude, or its setpoint | pu | `1` |
+| ``t^{\text{a}}_{e,k}`` | `t_angl` | ratio angle, or its setpoint | rad | `0` |
 | | `oltc`, `pst` | whether the magnitude, the angle, can move: a [`TapMode`](@ref) | | `FIXED` |
-| ``tm^{\text{min}}_{e,k}``, ``tm^{\text{max}}_{e,k}`` | `tm_min`, `tm_max` | limits of the magnitude | pu | `0.9`, `1.1` |
-| ``ta^{\text{min}}_{e,k}``, ``ta^{\text{max}}_{e,k}`` | `ta_min`, `ta_max` | limits of the angle | rad | `±π/12` |
-| | `tm_step`, `ta_step` | distance between the positions of a `STEPPED` winding | pu, rad | `0.0125`, `1°` |
-| ``s^{\text{max}}_{e,a}`` | `rate_a` | apparent power rating at each terminal | pu | `Inf` |
-| | `angmin`, `angmax` | limits of the angle difference, two windings only | rad | `±π/3` |
+| ``t^{\text{m,min}}_{e,k}``, ``t^{\text{m,max}}_{e,k}`` | `t_magn_min`, `t_magn_max` | limits of the magnitude | pu | `0.9`, `1.1` |
+| ``t^{\text{a,min}}_{e,k}``, ``t^{\text{a,max}}_{e,k}`` | `t_angl_min`, `t_angl_max` | limits of the angle | rad | `±π/12` |
+| | `t_magn_step`, `t_angl_step` | distance between the positions of a `STEPPED` winding | pu, rad | `0.0125`, `1°` |
+| ``s^{\text{max}}_{e,a}`` | `s_max` | apparent power rating at each terminal | pu | `Inf` |
+| | `v_angl_min`, `v_angl_max` | limits of the angle difference, two windings only | rad | `±π/3` |
+| | `status` | in service | | |
+| | `ext` | free-form storage, carried along and never read | | |
 
 ## Variables
 
 ### In the `IVRFormulation`
 
-| symbol | key | index | description | unit | when |
+| symbol | code name | index | description | unit | when |
 |:-------|:----|:------|:------------|:-----|:-----|
-| ``c^{\text{r}}_{a}``, ``c^{\text{i}}_{a}`` | `:i_term_real`, `:i_term_imag` | arc | terminal current | pu | all |
+| ``i^{\text{r}}_{a}``, ``i^{\text{i}}_{a}`` | `:i_term_real`, `:i_term_imag` | arc | terminal current | pu | all |
 | ``v^{\text{sr}}_{e}``, ``v^{\text{si}}_{e}`` | `:v_star_real`, `:v_star_imag` | edge | star point voltage | pu | all |
 | ``v^{\text{tr}}_{a}``, ``v^{\text{ti}}_{a}`` | `:v_wind_real`, `:v_wind_imag` | arc | voltage behind the ratio | pu | a winding that moves or steps, in a dispatch problem |
-| ``tm_{a}`` | `:t_magn` | arc | the ratio magnitude | pu | `oltc` is `CONTINUOUS` and `pst` is not |
+| ``t^{\text{m}}_{a}`` | `:t_magn` | arc | the ratio magnitude | pu | `oltc` is `CONTINUOUS` and `pst` is not |
 | ``t^{\text{r}}_{a}``, ``t^{\text{i}}_{a}`` | `:t_real`, `:t_imag` | arc | the ratio itself | pu | `pst` is `CONTINUOUS` |
 | ``z^{\text{t}}_{a,s}`` | `:z_step` | arc, position | the position taken, a binary | | a winding that is `STEPPED` |
 
@@ -102,11 +106,11 @@ bounds in place of a sine and a cosine of a variable.
 
 ### In the `LPFFormulation`
 
-| symbol | key | index | description | unit | when |
+| symbol | code name | index | description | unit | when |
 |:-------|:----|:------|:------------|:-----|:-----|
 | ``p_{a}`` | `:p_term` | arc | terminal active power | pu | all |
 | ``v^{\text{as}}_{e}`` | `:v_star_angl` | edge | star point angle | rad | three or more windings |
-| ``ta_{a}`` | `:t_angl` | arc | the ratio angle | rad | `pst` is `CONTINUOUS`, in a dispatch problem |
+| ``t^{\text{a}}_{a}`` | `:t_angl` | arc | the ratio angle | rad | `pst` is `CONTINUOUS`, in a dispatch problem |
 | ``z^{\text{t}}_{a,s}`` | `:z_step` | arc, position | the position taken, a binary | | `pst` is `STEPPED` |
 
 The ratio magnitude appears nowhere: with every voltage magnitude equal to one there
@@ -124,13 +128,13 @@ angle of a tap changer follow one law over its position [Gebhardt2026](@citep):
 | `oltc` / `pst` | in the `IVRFormulation` | in the `LPFFormulation` |
 |:---------------|:------------------------|:------------------------|
 | `FIXED` | the ratio is folded into the rows | the angle is data; the magnitude does nothing |
-| `oltc = CONTINUOUS` | ``tm_{a}`` between ``tm^{\text{min}}`` and ``tm^{\text{max}}``, at the setpoint angle | inert |
-| `pst = CONTINUOUS` | ``t^{\text{r}}_{a}, t^{\text{i}}_{a}`` on the circle ``(t^{\text{r}})^2 + (t^{\text{i}})^2 = tm^2``, between the angle limits | ``ta_{a}`` between ``ta^{\text{min}}`` and ``ta^{\text{max}}`` |
-| both `CONTINUOUS` | the same, on the ring ``(tm^{\text{min}})^2 \le (t^{\text{r}})^2 + (t^{\text{i}})^2 \le (tm^{\text{max}})^2`` | as the angle alone |
+| `oltc = CONTINUOUS` | ``t^{\text{m}}_{a}`` between ``t^{\text{m,min}}`` and ``t^{\text{m,max}}``, at the setpoint angle | inert |
+| `pst = CONTINUOUS` | ``t^{\text{r}}_{a}, t^{\text{i}}_{a}`` on the circle ``(t^{\text{r}})^2 + (t^{\text{i}})^2 = (t^{\text{m}})^2``, between the angle limits | ``t^{\text{a}}_{a}`` between ``t^{\text{a,min}}`` and ``t^{\text{a,max}}`` |
+| both `CONTINUOUS` | the same, on the ring ``(t^{\text{m,min}})^2 \le (t^{\text{r}})^2 + (t^{\text{i}})^2 \le (t^{\text{m,max}})^2`` | as the angle alone |
 | `STEPPED` | one binary per magnitude, per angle, or per pair | one binary per angle; `oltc` is inert |
 
-The angle limits of a continuous winding are ``\tan(ta^{\text{min}}) \, t^{\text{r}} \le
-t^{\text{i}} \le \tan(ta^{\text{max}}) \, t^{\text{r}}``.
+The angle limits of a continuous winding are ``\tan(t^{\text{a,min}}) \, t^{\text{r}} \le
+t^{\text{i}} \le \tan(t^{\text{a,max}}) \, t^{\text{r}}``.
 
 ### A winding that steps
 
@@ -172,7 +176,7 @@ z^{\text{t}}_{a,s} = 1``.
 
 ### In the `LPFFormulation`
 
-With ``v^{\text{at}}_{k} = v^{\text{a}}_{i_k} - ta_{e,k}`` the angle behind the ratio of
+With ``v^{\text{at}}_{k} = v^{\text{a}}_{i_k} - t^{\text{a}}_{e,k}`` the angle behind the ratio of
 winding ``k``, a transformer with two windings is a line across the sum of its
 impedances,
 
@@ -217,8 +221,8 @@ redispatch moved is the difference.
 Because a free angle is free, its final value is one of however many settings relieve
 the congestion equally, and which one a solver returns is not determined.
 
-What a preventive winding holds across the contingencies is its ratio: ``tm``,
-``t^{\text{r}}`` and ``t^{\text{i}}`` in the `IVRFormulation`, ``ta`` in the
+What a preventive winding holds across the contingencies is its ratio: ``t^{\text{m}}``,
+``t^{\text{r}}`` and ``t^{\text{i}}`` in the `IVRFormulation`, ``t^{\text{a}}`` in the
 `LPFFormulation`, each tied to the winding's own value in the base case. A transformer
 that is held, see [`is_held`](@ref), does not write again at the other network indices
 the rows that only restrict the ratio, since those of the base case imply them; written
@@ -304,11 +308,11 @@ winding.
 
 | before | now |
 |:-------|:----|
-| `PhaseShifter(; ta_min, ta_max, cost)` | `Transformer(; pst = true, ta_min, ta_max)`; a phase shifter has no price |
-| `TapChanger(; tm_min, tm_max)` | `Transformer(; oltc = true, tm_min, tm_max)` |
-| `MultiWindingTransformer(; terminals, r, x, tm, ta, g_m, b_m)` | `Transformer(; terminals, r, x, tm, ta, g_m, b_m)` |
-| `b_fr`, `b_to` of a transformer | `b_sh = [b_fr, b_to]` |
-| `tm`, `ta`, `r`, `x`, `rate_a` as scalars | the same for two windings; a vector with an entry per winding for more |
+| `PhaseShifter(; ta_min, ta_max, cost)` | `Transformer(; pst = true, t_angl_min, t_angl_max)`; a phase shifter has no price |
+| `TapChanger(; tm_min, tm_max)` | `Transformer(; oltc = true, t_magn_min, t_magn_max)` |
+| `MultiWindingTransformer(; terminals, r, x, tm, ta, g_m, b_m)` | `Transformer(; terminals, r, x, t_magn, t_angl, g_mgnt, b_mgnt)` |
+| `b_fr`, `b_to` of a transformer | `b_shnt = [b_fr, b_to]` |
+| `t_magn`, `t_angl`, `r`, `x`, `s_max` as scalars | the same for two windings; a vector with an entry per winding for more |
 | `solution["edge"][e]["tap"]` | `solution["edge"][e]["terminal"][k]["tap"]` |
 | `tap["taup"]`, `tap["tadn"]` | gone with the price |
 | `pst_cost` of [`parse_zorba`](@ref) | deprecated, with a warning, and without effect |

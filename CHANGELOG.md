@@ -10,6 +10,89 @@ against the per-file changelog comments the source already carries.
 
 ## [Unreleased]
 
+### Added
+
+- One nomenclature for the names of quantities: a symbol, then at most two descriptors from closed lists,
+  then a unit where the quantity is not in per unit, as `v_magn_max`, `i_term_real` and `v_base_kv`. It
+  holds for the fields of every component, the keys of the variables and the solution, and the keywords
+  that carry a quantity. The manual has a page for it, `Nomenclature`.
+- `test/nomenclature.jl` holds the grammar and the map from the old names to the new ones, and fails for a
+  name that breaks the grammar and for an old name that is written anywhere in `src`, `test`, `docs` or the
+  README. `test/docs_tables.jl` fails where the Parameters table of a component page does not list the
+  fields of its type, or where a variable key is in no Variables table.
+- Every concrete component type has a Parameters table and a Variables table in the docs, with the symbol
+  of the formulas next to the code name. `load.md` and `slack.md` have one per type.
+- Every solve takes `set_string_name = true`. With `false` no variable gets a name, and
+  `JuMP.set_string_names_on_creation` is switched off once for the model: the model is the same, it builds
+  a little faster, and `print(model)` shows `_[1]` for a variable.
+
+### Changed
+
+- **Breaking.** The fields, the variable keys, the solution keys and some keywords are renamed, with no
+  alias and no hint. The keys of `ext` are free-form and are not renamed. A solution key is the key of
+  its variable.
+- In the mathematics of the docs the current is `i`, as the code name is, the cost is `c` and the ratio
+  of a winding is `t`: ``i^{\text{r}}_{a}``, ``c_{u,k}``, ``t^{\text{m}}_{a}``. A node is still `i` in an
+  index.
+- A table has one `p_set` column for the setpoint of a generator, a fixed load and a storage unit.
+
+#### Fields
+
+| type | renamed |
+|:-----|:--------|
+| `Node` | `vm` → `v_magn_set`, `va` → `v_angl_set`, `vmin` → `v_magn_min`, `vmax` → `v_magn_max`, `base_kv` → `v_base_kv` |
+| `Generator` | `pg` → `p_set`, `qg` → `q_set`, `pmin` → `p_min`, `pmax` → `p_max`, `qmin` → `q_min`, `qmax` → `q_max`, `vg` → `v_magn_set`, `max_energy_per_period` → `e_per_max`, `cost` → `c`, `cost_up` → `c_up`, `cost_dn` → `c_dn` |
+| `FixedLoad` | `pd` → `p_set`, `qd` → `q_set` |
+| `FlexibleLoad` | `pd_nominal` → `p_nom`, `qd_nominal` → `q_nom`, `pd_min` → `p_min`, `pd_max` → `p_max`, `energy` → `e_set` |
+| `Shunt` | `gs` → `g`, `bs` → `b` |
+| `Storage` | `ps` → `p_set`, `qs` → `q_set`, `qmin` → `q_min`, `qmax` → `q_max`, `energy_capacity` → `e_max`, `energy_initial` → `e_init`, `energy_final` → `e_fin`, `charge_rating` → `p_chg_max`, `discharge_rating` → `p_dch_max`, `charge_efficiency` → `η_chg`, `discharge_efficiency` → `η_dch`, `max_cycles_per_period` → `k_cycl_max`, `cost_throughput` → `c_thru`, `cost_cycle` → `c_cycl`, `cost_up` → `c_up`, `cost_dn` → `c_dn` |
+| `EnergyNotServed`, `Spill` | `pmax` → `p_max`, `cost` → `c` |
+| `DCLink` | `rate_a` → `s_max`, `loss_fixed` → `p_loss_fix`, `loss_prop` → `p_loss_prop`, `pdc` → `p_set`, `cost` → `c` |
+| `Switch` | `rate_a` → `s_max`, `angmin` → `v_angl_min`, `angmax` → `v_angl_max` |
+| `Branch` | `g_sh` → `g_shnt`, `b_sh` → `b_shnt`, `rate_a` → `s_max`, `angmin` → `v_angl_min`, `angmax` → `v_angl_max`, `length_km` → `l_km` |
+| `Transformer` | `g_sh` → `g_shnt`, `b_sh` → `b_shnt`, `g_m` → `g_mgnt`, `b_m` → `b_mgnt`, `tm` → `t_magn`, `ta` → `t_angl`, `tm_min` → `t_magn_min`, `tm_max` → `t_magn_max`, `ta_min` → `t_angl_min`, `ta_max` → `t_angl_max`, `tm_step` → `t_magn_step`, `ta_step` → `t_angl_step`, `rate_a` → `s_max`, `angmin` → `v_angl_min`, `angmax` → `v_angl_max` |
+| `OverloadPrice` | `per_energy` → `c_ener`, `per_peak` → `c_peak` |
+| `NetworkData` | `baseMVA` → `s_base_mva`, also the accessor `s_base_mva(data)` and the keyword of `parse_tables` and `parse_zorba` |
+
+`v_angl_min` and `v_angl_max` of an edge limit the voltage angle
+difference across it. `r`, `x`, the words (`id`, `name`, `node`, `terminals`, `status`, `ext`, `type`, `area`,
+`zone`, `lock`, `position`, `reverse`, `oltc`, `pst`) and the Zorba adapter keywords are not renamed.
+
+#### Variable keys
+
+| owner | renamed |
+|:------|:--------|
+| node | `:vr` → `:v_real`, `:vi` → `:v_imag`, `:va` → `:v_angl` |
+| arc | `:cr` → `:i_term_real`, `:ci` → `:i_term_imag`, `:p` → `:p_term` |
+| branch | `:csr` → `:i_ser_real`, `:csi` → `:i_ser_imag`, `:vpr` → `:v_pnt_real`, `:vpi` → `:v_pnt_imag`, `:vap` → `:v_pnt_angl` |
+| transformer | `:vsr` → `:v_star_real`, `:vsi` → `:v_star_imag`, `:vas` → `:v_star_angl`, `:vtr` → `:v_wind_real`, `:vti` → `:v_wind_imag`, `:tr` → `:t_real`, `:ti` → `:t_imag`, `:tm` → `:t_magn`, `:ta` → `:t_angl`, `:zt` → `:z_step` |
+| edge | `:ol` → `:s_ovl`, `:olp` → `:s_ovl_peak`, `:zsw` → `:z_sw` |
+| `DCLink` | `:pdct` → `:p_dcl_thru`, `:pdcup` → `:p_dcl_up`, `:pdcdn` → `:p_dcl_dn` |
+| unit | `:cru` → `:i_unit_real`, `:ciu` → `:i_unit_imag`, `:pu` → `:p_unit` |
+| `Generator` | `:pg` → `:p_gen`, `:qg` → `:q_gen`, `:pgup` → `:p_gen_up`, `:pgdn` → `:p_gen_dn` |
+| `Storage` | `:psc` → `:p_chg`, `:psd` → `:p_dch`, `:es` → `:e_stor`, `:qs` → `:q_stor`, `:psup` → `:p_stor_up`, `:psdn` → `:p_stor_dn` |
+| other units | `:pdf` → `:p_flex`, `:psl` → `:p_slk` |
+
+#### Solution keys
+
+A solution key is the key of the variable it reports: `"vr"` → `"v_real"`, `"vi"` → `"v_imag"`,
+`"pg"` → `"p_gen"`, `"qg"` → `"q_gen"`, `"pgup"` → `"p_gen_up"`, `"pgdn"` → `"p_gen_dn"`,
+`"psc"` → `"p_chg"`, `"psd"` → `"p_dch"`, `"es"` → `"e_stor"`, `"psup"` → `"p_stor_up"`,
+`"psdn"` → `"p_stor_dn"`, `"psl"` → `"p_slk"`. The others:
+
+| where | renamed |
+|:------|:--------|
+| node | `"vm"` → `"v_magn"`, `"va"` → `"v_angl"` |
+| terminal | `"p"` → `"p_term"`, `"q"` → `"q_term"`, `"cr"` → `"i_term_real"`, `"ci"` → `"i_term_imag"` |
+| unit | `"p"` → `"p_unit"`, `"q"` → `"q_unit"`, `"cru"` → `"i_unit_real"`, `"ciu"` → `"i_unit_imag"` |
+| a parameter given back | `"pd"` → `"p_set"`, `"qd"` → `"q_set"`, `"gs"` → `"g"`, `"bs"` → `"b"` |
+| edge | `"overload"` → `"s_ovl"`, `"loss"` → `"p_loss"` |
+| `DCLink` | `"pdc"` → `"p_dcl"`, `"pdcup"` → `"p_dcl_up"`, `"pdcdn"` → `"p_dcl_dn"` |
+| tap of a winding | `"tr"` → `"t_real"`, `"ti"` → `"t_imag"`, `"tm"` → `"t_magn"`, `"ta"` → `"t_angl"`, `"step"` → `"z_step"` |
+| a market schedule | every `*_market` → `*_mkt`: `"pg_market"` → `"p_gen_mkt"`, `"ps_market"` → `"p_stor_mkt"`, `"pdc_market"` → `"p_dcl_mkt"`, `"tm_market"` → `"t_magn_mkt"`, `"ta_market"` → `"t_angl_mkt"` |
+
+The duals `"lambda"`, `"lambda_q"`, `"lambda_real"` and `"lambda_imag"` keep their names.
+
 ## [0.13.0] - 2026-10-11
 
 ### Added

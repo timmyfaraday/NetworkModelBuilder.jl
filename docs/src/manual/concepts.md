@@ -43,7 +43,7 @@ nothing # hide
 ```
 
 A [`LoadFlowProblem`](@ref) asks *what flows, given the dispatch as it
-stands*. `pg` is not a decision here — the branch is left to carry whatever a
+stands*. `p_set` is not a decision here — the branch is left to carry whatever a
 fixed 1.0 and 0.0 imply, rating or not:
 
 ```@example concepts-question
@@ -52,8 +52,8 @@ print_summary(lf)
 ```
 
 An [`OptimalPowerFlowProblem`](@ref) asks a different question — *what
-dispatch is cheapest, given the network's limits* — so `pg` becomes a decision
-bounded by `pmin`/`pmax`, and the branch's `rate_a` is now enforced rather than
+dispatch is cheapest, given the network's limits* — so `p_set` becomes a decision
+bounded by `p_min`/`p_max`, and the branch's `s_max` is now enforced rather than
 merely reported on:
 
 ```@example concepts-question
@@ -66,7 +66,7 @@ branch forces it to — the same physics, the same network, a different
 question.
 
 A [`RedispatchProblem`](@ref) asks a third question — *given a dispatch
-already decided (by a market, by the file's own `pg`), what is the cheapest
+already decided (by a market, by the file's own `p_set`), what is the cheapest
 way to adjust it so the network can carry it* — with the answer expressed as
 volumes moved rather than an absolute dispatch. [Redispatch](@ref) works this
 same network through in full, including its `RedispatchProblem` under

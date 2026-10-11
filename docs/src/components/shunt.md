@@ -18,39 +18,40 @@ Shunt
 
 ## Parameters
 
-| symbol | field | description | unit |
+| symbol | code name | description | unit |
 |:-------|:------|:------------|:-----|
 | | `id`, `name`, `node` | identifier, label, node | |
-| ``g^{\text{s}}_{u}`` | `gs` | shunt conductance | pu |
-| ``b^{\text{s}}_{u}`` | `bs` | shunt susceptance | pu |
+| ``g^{\text{s}}_{u}`` | `g` | shunt conductance | pu |
+| ``b^{\text{s}}_{u}`` | `b` | shunt susceptance | pu |
 | | `status` | in service | |
+| | `ext` | free-form storage, carried along and never read | |
 
-A switched capacitor bank is a `bs` given as a [`NetworkVector`](@ref).
+A switched capacitor bank is a `b` given as a [`NetworkVector`](@ref).
 
 ## Variables
 
 ### In the `IVRFormulation`
 
-| symbol | key | index | description | unit |
+| symbol | code name | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``c^{\text{r}}_{u}`` | `:i_unit_real` | unit | real injected current | pu |
-| ``c^{\text{i}}_{u}`` | `:i_unit_imag` | unit | imaginary injected current | pu |
+| ``i^{\text{r}}_{u}`` | `:i_unit_real` | unit | real injected current | pu |
+| ``i^{\text{i}}_{u}`` | `:i_unit_imag` | unit | imaginary injected current | pu |
 
 ### In the `LPFFormulation`
 
-| symbol | key | index | description | unit |
+| symbol | code name | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
 | ``p_{u}`` | `:p_unit` | unit | active power injected into the node | pu |
 
 ## Constraints
 
 The injected current is minus the current the admittance draws,
-``c_{u} = -y^{\text{s}}_{u} v_{i}``:
+``i_{u} = -y^{\text{s}}_{u} v_{i}``:
 
 ```math
-c^{\text{r}}_{u} = -\left(g^{\text{s}}_{u} v^{\text{r}}_{i} - b^{\text{s}}_{u} v^{\text{i}}_{i}\right),
+i^{\text{r}}_{u} = -\left(g^{\text{s}}_{u} v^{\text{r}}_{i} - b^{\text{s}}_{u} v^{\text{i}}_{i}\right),
 \qquad
-c^{\text{i}}_{u} = -\left(g^{\text{s}}_{u} v^{\text{i}}_{i} + b^{\text{s}}_{u} v^{\text{r}}_{i}\right).
+i^{\text{i}}_{u} = -\left(g^{\text{s}}_{u} v^{\text{i}}_{i} + b^{\text{s}}_{u} v^{\text{r}}_{i}\right).
 ```
 
 This is **linear**, where the constant power of a [`FixedLoad`](@ref) is

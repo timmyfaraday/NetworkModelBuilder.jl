@@ -12,6 +12,7 @@
 # v0.12.6 - the solution builders are cheaper and hold what is asked           #
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
+# v0.14.0 - the docstrings follow the nomenclature                             #
 ################################################################################
 
 export register_unit_type!, unit_types
@@ -154,9 +155,9 @@ end
 Link the power a unit exchanges with its node to the current it injects,
 
 ```math
-p = v^{\\text{r}}_{i} c^{\\text{r}}_{u} + v^{\\text{i}}_{i} c^{\\text{i}}_{u},
+p = v^{\\text{r}}_{i} i^{\\text{r}}_{u} + v^{\\text{i}}_{i} i^{\\text{i}}_{u},
 \\qquad
-q = v^{\\text{i}}_{i} c^{\\text{r}}_{u} - v^{\\text{r}}_{i} c^{\\text{i}}_{u}.
+q = v^{\\text{i}}_{i} i^{\\text{r}}_{u} - v^{\\text{r}}_{i} i^{\\text{i}}_{u}.
 ```
 
 `p` and `q` are injections, so a load hands in the negative of what it

@@ -17,7 +17,7 @@ resolve to.
 |:--|:----------|:-------------------|
 | reference node | complex voltage fixed | angle fixed, magnitude free |
 | `PV` node | magnitude at its setpoint | no setpoint |
-| voltage magnitude | unbounded | between `vmin` and `vmax` |
+| voltage magnitude | unbounded | between `v_magn_min` and `v_magn_max` |
 | generator | holds its setpoint | free within its capability |
 | edge | physics only | physics, rating, angle difference |
 | controls | hold their setpoints | free within their limits |
@@ -32,9 +32,9 @@ Two calls appear in this builder that do not appear in a load flow —
 
 | component | in an optimal power flow |
 |:----------|:-------------------------|
-| a winding of a [`Transformer`](@ref) that is `pst` | its ratio angle is free between `ta_min` and `ta_max`, or one of a list of positions if `STEPPED` |
-| a winding of a [`Transformer`](@ref) that is `oltc` | its ratio magnitude is free between `tm_min` and `tm_max`, or one of a list of positions if `STEPPED` — in the IVR formulation only, see below |
-| [`FlexibleLoad`](@ref) | its demand is free between `pd_min` and `pd_max`, subject to an energy balance |
+| a winding of a [`Transformer`](@ref) that is `pst` | its ratio angle is free between `t_angl_min` and `t_angl_max`, or one of a list of positions if `STEPPED` |
+| a winding of a [`Transformer`](@ref) that is `oltc` | its ratio magnitude is free between `t_magn_min` and `t_magn_max`, or one of a list of positions if `STEPPED` — in the IVR formulation only, see below |
+| [`FlexibleLoad`](@ref) | its demand is free between `p_min` and `p_max`, subject to an energy balance |
 | [`Storage`](@ref) | it charges and discharges within its ratings, subject to its state of charge |
 
 !!! note "A tap changer is inert in the linearized formulation"

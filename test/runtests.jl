@@ -25,6 +25,7 @@
 # v0.14.0 - the names follow one grammar, checked in nomenclature.jl           #
 # v0.14.0 - the string names test is included                                  #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.14.0 - the docs tables test is included                                   #
 ################################################################################
 
 using Test
@@ -91,5 +92,6 @@ held_controls(nm) = Set((id..., nw) for ((nw, key, id), _) in registered_constra
     include("solution_tables.jl")
     include("thread_safety.jl")
     include("nomenclature.jl")
+    include("docs_tables.jl")
     include("docs.jl")
 end

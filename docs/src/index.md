@@ -33,6 +33,7 @@ print_summary(result)
 | what `P` and `F` select | [Problems and formulations](@ref) |
 | what components exist and how they relate | [The hierarchy](@ref) |
 | the parameters, variables and constraints of one component | its page under **Components** |
+| how a name in the code is built | [Nomenclature](@ref) |
 | how to add a component, a formulation or a problem | [Extending the package](@ref) |
 
 ## Notation
@@ -41,7 +42,8 @@ Throughout the documentation, a **subscript is an index** and a **superscript is
 a descriptor**: ``v^{\text{r}}_{i}`` is the real part of the voltage at node
 ``i``, and ``p^{\text{g}}_{u,n}`` is the active power of generator ``u`` at
 network index ``n``. Quantities are in per unit on the system power base unless
-stated otherwise, and angles are in radians.
+stated otherwise, and angles are in radians. The name of every quantity in the
+code follows one grammar, see [Nomenclature](@ref).
 
 | symbol | meaning |
 |:-------|:--------|

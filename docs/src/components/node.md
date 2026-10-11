@@ -10,27 +10,28 @@ NodeType
 
 ## Parameters
 
-| symbol | field | description | unit |
+| symbol | code name | description | unit |
 |:-------|:------|:------------|:-----|
 | | `id` | identifier | |
 | | `name` | label | |
 | | `type` | [`PQ`](@ref NodeType), [`PV`](@ref NodeType), [`REF`](@ref NodeType) or [`ISOLATED`](@ref NodeType) | |
-| ``v^{\text{m}}_{i}`` | `vm` | voltage magnitude setpoint | pu |
-| ``v^{\text{a}}_{i}`` | `va` | voltage angle setpoint | rad |
-| ``v^{\text{min}}_{i}`` | `vmin` | lower voltage magnitude limit | pu |
-| ``v^{\text{max}}_{i}`` | `vmax` | upper voltage magnitude limit | pu |
-| | `base_kv` | voltage base | kV |
+| ``v^{\text{m}}_{i}`` | `v_magn_set` | voltage magnitude setpoint | pu |
+| ``v^{\text{a}}_{i}`` | `v_angl_set` | voltage angle setpoint | rad |
+| ``v^{\text{min}}_{i}`` | `v_magn_min` | lower voltage magnitude limit | pu |
+| ``v^{\text{max}}_{i}`` | `v_magn_max` | upper voltage magnitude limit | pu |
+| | `v_base_kv` | voltage base | kV |
 | | `area`, `zone` | bookkeeping identifiers | |
 | | `status` | in service | |
+| | `ext` | free-form storage; `:vr_start`, `:vi_start` and `:va_start` set where the solver starts the voltage | |
 
-Every field but `id`, `name`, `base_kv`, `area`, `zone` and `ext` may be a
+Every field but `id`, `name`, `v_base_kv`, `area`, `zone` and `ext` may be a
 [`NetworkVector`](@ref).
 
 ## Variables
 
 ### In the `IVRFormulation`
 
-| symbol | key | index | description | unit |
+| symbol | code name | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
 | ``v^{\text{r}}_{i}`` | `:v_real` | node | real part of the voltage | pu |
 | ``v^{\text{i}}_{i}`` | `:v_imag` | node | imaginary part of the voltage | pu |
@@ -42,7 +43,7 @@ below.
 
 ### In the `LPFFormulation`
 
-| symbol | key | index | description | unit |
+| symbol | code name | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
 | ``v^{\text{a}}_{i}`` | `:v_angl` | node | voltage angle | rad |
 
@@ -65,7 +66,7 @@ that span them.
 Kirchhoff's current law, at every node, in the `IVRFormulation`:
 
 ```math
-\sum_{a \in A(i)} c_{a} = \sum_{u \in U(i)} c_{u}
+\sum_{a \in A(i)} i_{a} = \sum_{u \in U(i)} i_{u}
 ```
 
 with ``c_a`` the current flowing from the node into an edge terminal and ``c_u``

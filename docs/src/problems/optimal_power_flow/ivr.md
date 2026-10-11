@@ -9,17 +9,17 @@ quadratically constrained program.
 Everything a [load flow](@ref "Load flow in the IVR formulation") has, now
 bounded, plus the controls a load flow does not give.
 
-| symbol | key | index set | bounds |
+| symbol | code name | index set | bounds |
 |:-------|:----|:----------|:-------|
 | ``v^{\text{r}}_{i}, v^{\text{i}}_{i}`` | `:v_real`, `:v_imag` | ``i \in I`` | ``[-v^{\text{max}}_{i}, v^{\text{max}}_{i}]`` |
-| ``c^{\text{r}}_{a}, c^{\text{i}}_{a}`` | `:i_term_real`, `:i_term_imag` | ``a \in A`` | free |
-| ``c^{\text{sr}}_{e}, c^{\text{si}}_{e}`` | `:i_ser_real`, `:i_ser_imag` | ``e \in E^{\text{br}}`` | free |
+| ``i^{\text{r}}_{a}, i^{\text{i}}_{a}`` | `:i_term_real`, `:i_term_imag` | ``a \in A`` | free |
+| ``i^{\text{sr}}_{e}, i^{\text{si}}_{e}`` | `:i_ser_real`, `:i_ser_imag` | ``e \in E^{\text{br}}`` | free |
 | ``v^{\text{sr}}_{e}, v^{\text{si}}_{e}`` | `:v_star_real`, `:v_star_imag` | ``e \in E^{\text{tf}}`` | free |
 | ``v^{\text{tr}}_{a}, v^{\text{ti}}_{a}`` | `:v_wind_real`, `:v_wind_imag` | ``a \in A^{\text{tm}} \cup A^{\text{ta}} \cup A^{\text{zt}}`` | free |
-| ``t^{\text{r}}_{a}, t^{\text{i}}_{a}`` | `:t_real`, `:t_imag` | ``a \in A^{\text{ta}}`` | from `ta_min`, `ta_max` |
-| ``tm_{a}`` | `:t_magn` | ``a \in A^{\text{tm}} \setminus A^{\text{ta}}`` | ``[tm^{\text{min}}_{a}, tm^{\text{max}}_{a}]`` |
+| ``t^{\text{r}}_{a}, t^{\text{i}}_{a}`` | `:t_real`, `:t_imag` | ``a \in A^{\text{ta}}`` | from `t_angl_min`, `t_angl_max` |
+| ``t^{\text{m}}_{a}`` | `:t_magn` | ``a \in A^{\text{tm}} \setminus A^{\text{ta}}`` | ``[t^{\text{m,min}}_{a}, t^{\text{m,max}}_{a}]`` |
 | ``z^{\text{t}}_{a,s}`` | `:z_step` | ``a \in A^{\text{zt}}``, every position ``s`` | binary |
-| ``c^{\text{r}}_{u}, c^{\text{i}}_{u}`` | `:i_unit_real`, `:i_unit_imag` | ``u \in U`` | free |
+| ``i^{\text{r}}_{u}, i^{\text{i}}_{u}`` | `:i_unit_real`, `:i_unit_imag` | ``u \in U`` | free |
 | ``p^{\text{g}}_{u}`` | `:p_gen` | ``u \in U^{\text{g}}`` | ``[p^{\text{min}}_{u}, p^{\text{max}}_{u}]`` |
 | ``q^{\text{g}}_{u}`` | `:q_gen` | ``u \in U^{\text{g}}`` | ``[q^{\text{min}}_{u}, q^{\text{max}}_{u}]`` |
 | ``p^{\text{d}}_{u}`` | `:p_flex` | ``u \in U^{\text{fl}}`` | ``[p^{\text{d,min}}_{u}, p^{\text{d,max}}_{u}]`` |
@@ -68,7 +68,7 @@ Rating, ``\forall e``, per terminal ``a`` at node ``i``:
 
 ```math
 \left((v^{\text{r}}_{i})^2 + (v^{\text{i}}_{i})^2\right)
-\left((c^{\text{r}}_{a})^2 + (c^{\text{i}}_{a})^2\right) \le (s^{\text{max}}_{e})^2
+\left((i^{\text{r}}_{a})^2 + (i^{\text{i}}_{a})^2\right) \le (s^{\text{max}}_{e})^2
 ```
 
 Angle difference across a two-terminal edge:
@@ -83,11 +83,11 @@ Ratio of a winding whose angle is chosen, ``\forall a \in A^{\text{ta}}``, with 
 magnitude held at its setpoint, or between its limits where it is chosen too,
 
 ```math
-(t^{\text{r}}_{a})^2 + (t^{\text{i}}_{a})^2 = tm_{a}^2
+(t^{\text{r}}_{a})^2 + (t^{\text{i}}_{a})^2 = (t^{\text{m}}_{a})^2
 \quad \text{or} \quad
-(tm^{\text{min}}_{a})^2 \le (t^{\text{r}}_{a})^2 + (t^{\text{i}}_{a})^2 \le (tm^{\text{max}}_{a})^2,
+(t^{\text{m,min}}_{a})^2 \le (t^{\text{r}}_{a})^2 + (t^{\text{i}}_{a})^2 \le (t^{\text{m,max}}_{a})^2,
 \qquad
-\tan(ta^{\text{min}}_{a}) \, t^{\text{r}}_{a} \le t^{\text{i}}_{a} \le \tan(ta^{\text{max}}_{a}) \, t^{\text{r}}_{a}
+\tan(t^{\text{a,min}}_{a}) \, t^{\text{r}}_{a} \le t^{\text{i}}_{a} \le \tan(t^{\text{a,max}}_{a}) \, t^{\text{r}}_{a}
 ```
 
 The ratio is carried as a real and an imaginary part rather than as an angle so
@@ -108,9 +108,9 @@ The power-against-current relations are as in the load flow, with the setpoints
 gone. A storage unit uses its own injection:
 
 ```math
-v^{\text{r}}_{i} c^{\text{r}}_{u} + v^{\text{i}}_{i} c^{\text{i}}_{u} = p^{\text{sd}}_{u} - p^{\text{sc}}_{u},
+v^{\text{r}}_{i} i^{\text{r}}_{u} + v^{\text{i}}_{i} i^{\text{i}}_{u} = p^{\text{sd}}_{u} - p^{\text{sc}}_{u},
 \qquad
-v^{\text{i}}_{i} c^{\text{r}}_{u} - v^{\text{r}}_{i} c^{\text{i}}_{u} = q^{\text{s}}_{u}
+v^{\text{i}}_{i} i^{\text{r}}_{u} - v^{\text{r}}_{i} i^{\text{i}}_{u} = q^{\text{s}}_{u}
 ```
 
 and a flexible load its variable demand, with the reactive part following at the

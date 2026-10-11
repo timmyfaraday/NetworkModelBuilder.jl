@@ -26,14 +26,14 @@ does not care why the dispatch is being chosen.
 ## The market dispatch is the setpoint
 
 The dispatch a redispatch moves away from is the **setpoint the component
-already carries** — `pg` on a [`Generator`](@ref), `ps` on a
+already carries** — `p_set` on a [`Generator`](@ref), `p_set` on a
 [`Storage`](@ref). No second field holds it.
 
-That is not a shortcut. `pg` has always meant *the operating point this unit was
+That is not a shortcut. `p_set` has always meant *the operating point this unit was
 given*: a [Load flow](@ref) holds a generator at it, and a redispatch prices the
 distance from it. A Matpower case is therefore a redispatch problem as it
 stands, against the dispatch the file was written with, and a market schedule
-over a horizon is a `pg` that varies over `:time`:
+over a horizon is a `p_set` that varies over `:time`:
 
 ```julia
 mn = set_dimension(data, Dimension(:time => 24); apply! = function (net, dim)
@@ -84,25 +84,25 @@ Nothing else marks it, and nothing has to.
 
 | measure | costly? | what moves |
 |:--------|:--------|:-----------|
-| [`Generator`](@ref) | yes, at `cost_up` and `cost_dn` | its active power |
-| [`Storage`](@ref) | yes, at `cost_up` and `cost_dn`, both zero by default | what it charges and discharges, over the whole window |
-| a winding of a [`Transformer`](@ref) that is `pst` | no | its ratio angle, between `ta_min` and `ta_max`, or one of its positions |
+| [`Generator`](@ref) | yes, at `c_up` and `c_dn` | its active power |
+| [`Storage`](@ref) | yes, at `c_up` and `c_dn`, both zero by default | what it charges and discharges, over the whole window |
+| a winding of a [`Transformer`](@ref) that is `pst` | no | its ratio angle, between `t_angl_min` and `t_angl_max`, or one of its positions |
 | a winding of a [`Transformer`](@ref) that is `oltc` | no | its ratio magnitude — in the IVR formulation only |
-| [`DCLink`](@ref) | at `cost`, zero by default | its transfer, within its rating |
+| [`DCLink`](@ref) | at `c`, zero by default | its transfer, within its rating |
 | [`FlexibleLoad`](@ref) | no | its demand, subject to its energy balance |
 
 A free control is taken first, because it is free: on a meshed network a phase
 shifter that can steer flow off a congested corridor relieves it at no cost at
 all, and the costly measures only start once the free ones run out. A
-[`DCLink`](@ref) left at its default `cost` is the direct current counterpart —
+[`DCLink`](@ref) left at its default `c` is the direct current counterpart —
 it carries whatever the congested branch cannot, for nothing.
 
 !!! note "A flexible load shifts for free"
     A [`FlexibleLoad`](@ref) behaves here as it does in an optimal power flow:
-    its demand is a decision between `pd_min` and `pd_max`, tied together by an
+    its demand is a decision between `p_min` and `p_max`, tied together by an
     energy balance, and nothing prices the shift. Where load flexibility is
-    meant to be procured rather than assumed, bound it through `pd_min` and
-    `pd_max`, or give the type a [`redispatch_cost`](@ref) method of its own.
+    meant to be procured rather than assumed, bound it through `p_min` and
+    `p_max`, or give the type a [`redispatch_cost`](@ref) method of its own.
 
 ## Monitored edges
 
@@ -125,7 +125,7 @@ monitored_edges
 
 !!! tip "An emergency rating needs no new field"
     Post-contingency limits are usually looser than the base case ones. There is
-    no `rate_b` here, and none is needed: make `rate_a` a
+    no `rate_b` here, and none is needed: make `s_max` a
     [`NetworkVector`](@ref) over the `:contingency` dimension and each state gets
     the rating it should have.
 
@@ -145,11 +145,16 @@ solve_rd(data, LPFFormulation, HiGHS.Optimizer;
 ```
 
 Every monitored edge with a finite rating gets one non-negative overload
-variable, `o_e`, shared by its terminals, and the objective pays `per_energy`
+variable, `o_e`, shared by its terminals, and the objective pays `c_ener`
 for it at every network index. An infeasible congestion becomes an expensive
 one, and `solution["edge"]["e"]["s_ovl"]` reports the excess on every edge
 that was watched — including the ones the answer left at zero, since an edge
 missing from the result reads as *not asked* rather than *asked and clear*.
+
+| symbol | code name | index set | bounds |
+|:-------|:----------|:----------|:-------|
+| ``o_{e}`` | `:s_ovl` | the monitored edges with a finite rating | ``[0, \infty)`` |
+| ``\hat{o}_{e}`` | `:s_ovl_peak` | the same, once per period, with a peak charge only | ``[0, \infty)`` |
 
 | | hard rating | priced rating |
 |:-------------------|:---------------------------------|:-----------------------------------|
@@ -180,10 +185,10 @@ variable_edge_overload!
 
 ## A charge on the peak
 
-`per_energy` prices every per unit of overload the same, whenever it happens. An
+`c_ener` prices every per unit of overload the same, whenever it happens. An
 overload that is small and constant and one that is brief and severe then cost
 the same, and they are not the same event: the second is what a rating exists to
-prevent. `per_peak` is what says so — a charge on the **worst** overload of a
+prevent. `c_peak` is what says so — a charge on the **worst** overload of a
 period rather than on each index of it.
 
 ```julia
@@ -383,8 +388,8 @@ one that is real.
 !!! warning "A flexible load keeps its energy per window"
     The energy balance of a [`FlexibleLoad`](@ref) holds over the horizon it is
     posed on, so in a rolling solve it holds over each **window**. With the
-    default `energy = NaN` that is right — the target is the nominal energy of
-    the window itself — but an `energy` given explicitly is read as a per-window
+    default `e_set = NaN` that is right — the target is the nominal energy of
+    the window itself — but an `e_set` given explicitly is read as a per-window
     target, not a per-day one. A load that must hit a daily figure needs its own
     [`initial_state`](@ref) method to carry down what it has already taken.
 

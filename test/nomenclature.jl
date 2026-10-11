@@ -206,6 +206,8 @@ end
 const NOM_EXEMPT = Set([("test/rd.jl", "overload"),                         # a word in the `show` of `Redispatch`
                         ("scripts/run_year_redispatch.jl", "overload"),     # the name of an output table
                         ("src/core/redispatch.jl", "overload"),             # the field of `Redispatch`, a word
+                        ("docs/src/problems/redispatch/index.md", "overload"), # the same field, in its table
+                        ("docs/src/manual/nomenclature.md", "loss"),         # a descriptor of the grammar
                         ("test/zorba.jl", "overload"),                      # the same field, read back
                         ("src/io/matpower.jl", "baseMVA"),                  # Matpower's own key and local
                         ("src/io/zorba.jl", "cost"),                       # the `cost` column of Zorba's hvdc table

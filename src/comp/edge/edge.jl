@@ -19,6 +19,7 @@
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.14.0 - the docstrings follow the nomenclature                             #
 ################################################################################
 
 export register_edge_type!, edge_types
@@ -255,7 +256,7 @@ constraint_edge_coupling(::NetworkModel, ::Type{T}) where {T<:AbstractEdge} = no
     constraint_edge_rating!(nm, e, s_max; nw)
 
 Bound the apparent power at every terminal of edge `e` by `s_max`,
-`(v^{\\text{r}}_i{}^2 + v^{\\text{i}}_i{}^2)(c^{\\text{r}}_a{}^2 + c^{\\text{i}}_a{}^2) \\le
+`(v^{\\text{r}}_i{}^2 + v^{\\text{i}}_i{}^2)(i^{\\text{r}}_a{}^2 + i^{\\text{i}}_a{}^2) \\le
 (s^{\\text{max}}_e)^2`. Written per terminal, it applies to an edge with any
 number of them. `s_max` is one number for every terminal or one per terminal, and
 a terminal whose rating is not finite is not bounded.
@@ -267,7 +268,7 @@ Where the problem prices congestion rather than forbidding it, see
 [`overload_price`](@ref), the bound is relaxed by the overload of the edge,
 
 ```math
-(v^{\\text{r}}_i{}^2 + v^{\\text{i}}_i{}^2)(c^{\\text{r}}_a{}^2 + c^{\\text{i}}_a{}^2)
+(v^{\\text{r}}_i{}^2 + v^{\\text{i}}_i{}^2)(i^{\\text{r}}_a{}^2 + i^{\\text{i}}_a{}^2)
 \\le (s^{\\text{max}}_e + o_e)^2 ,
 ```
 
@@ -375,7 +376,7 @@ susceptance(r::Real, x::Real) = -x / (r^2 + x^2)
 Add the linearized flow of a two-terminal edge,
 
 ```math
-p_{a^{\\text{f}}} = -b_{e} \\left(v^{\\text{a}}_{i} - v^{\\text{a}}_{j} - ta_{e}\\right),
+p_{a^{\\text{f}}} = -b_{e} \\left(v^{\\text{a}}_{i} - v^{\\text{a}}_{j} - t^{\\text{a}}_{e}\\right),
 \\qquad
 p_{a^{\\text{t}}} = -p_{a^{\\text{f}}} ,
 ```

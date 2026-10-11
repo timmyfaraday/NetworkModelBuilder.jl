@@ -10,6 +10,7 @@
 # v0.10.1 - exports its own public names                                       #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.14.0 - the docstrings follow the nomenclature                             #
 ################################################################################
 
 export AbstractLoad, demand
@@ -60,9 +61,9 @@ function demand end
 Fix the power a load injects into its node at minus its withdrawal,
 
 ```math
-v^{\\text{r}}_{i} c^{\\text{r}}_{u} + v^{\\text{i}}_{i} c^{\\text{i}}_{u} = -p^{\\text{d}}_{u},
+v^{\\text{r}}_{i} i^{\\text{r}}_{u} + v^{\\text{i}}_{i} i^{\\text{i}}_{u} = -p^{\\text{d}}_{u},
 \\qquad
-v^{\\text{i}}_{i} c^{\\text{r}}_{u} - v^{\\text{r}}_{i} c^{\\text{i}}_{u} = -q^{\\text{d}}_{u}.
+v^{\\text{i}}_{i} i^{\\text{r}}_{u} - v^{\\text{r}}_{i} i^{\\text{i}}_{u} = -q^{\\text{d}}_{u}.
 ```
 
 Written this way the load draws a constant power at any voltage, which is the

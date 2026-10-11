@@ -9,12 +9,12 @@ See [The linearized formulation](@ref) for what the approximations discard.
 
 ## Variables
 
-| symbol | key | index set | bounds |
+| symbol | code name | index set | bounds |
 |:-------|:----|:----------|:-------|
 | ``v^{\text{a}}_{i}`` | `:v_angl` | ``i \in I`` | free |
 | ``p_{a}`` | `:p_term` | ``a \in A`` | free |
 | ``v^{\text{as}}_{e}`` | `:v_star_angl` | ``e \in E^{\text{tf}}``, three or more windings | free |
-| ``ta_{a}`` | `:t_angl` | ``a \in A^{\text{ta}}`` | ``[ta^{\text{min}}_{a}, ta^{\text{max}}_{a}]`` |
+| ``t^{\text{a}}_{a}`` | `:t_angl` | ``a \in A^{\text{ta}}`` | ``[t^{\text{a,min}}_{a}, t^{\text{a,max}}_{a}]`` |
 | ``z^{\text{t}}_{a,s}`` | `:z_step` | ``a \in A^{\text{zt}}``, every position ``s`` | binary |
 | ``p_{u}`` | `:p_unit` | ``u \in U`` | free |
 | ``p^{\text{g}}_{u}`` | `:p_gen` | ``u \in U^{\text{g}}`` | ``[p^{\text{min}}_{u}, p^{\text{max}}_{u}]`` |
@@ -22,7 +22,7 @@ See [The linearized formulation](@ref) for what the approximations discard.
 | ``p^{\text{sc}}_{u}, p^{\text{sd}}_{u}`` | `:p_chg`, `:p_dch` | ``u \in U^{\text{s}}`` | ``[0, \cdot^{\text{max}}_{u}]`` |
 | ``e_{u}`` | `:e_stor` | ``u \in U^{\text{s}}`` | ``[0, e^{\text{max}}_{u}]`` |
 
-No voltage magnitude, no reactive power, no current — and no ``tm_{a}``: a winding
+No voltage magnitude, no reactive power, no current — and no ``t^{\text{m}}_{a}``: a winding
 that is `oltc` has no control to exercise here. A winding that is `pst` does, and
 here its angle is the variable itself, where the IVR formulation has to carry the
 ratio as a real and an imaginary part. A winding that steps its angle has a binary
@@ -53,10 +53,10 @@ voltage violation, and cannot use reactive support to avoid one.
 ### At the edges
 
 Flow, ``\forall e \in E^{\text{br}}``, and ``\forall e \in E^{\text{tf}}`` with two windings,
-whose shift is ``ta_{e,1} - ta_{e,2}``:
+whose shift is ``t^{\text{a}}_{e,1} - t^{\text{a}}_{e,2}``:
 
 ```math
-p_{a^{\text{f}}_{e}} = -b_{e} \left(v^{\text{a}}_{i} - v^{\text{a}}_{j} - ta_{e}\right),
+p_{a^{\text{f}}_{e}} = -b_{e} \left(v^{\text{a}}_{i} - v^{\text{a}}_{j} - t^{\text{a}}_{e}\right),
 \qquad
 p_{a^{\text{t}}_{e}} = -p_{a^{\text{f}}_{e}}
 ```
@@ -64,13 +64,13 @@ p_{a^{\text{t}}_{e}} = -p_{a^{\text{f}}_{e}}
 and ``\forall e \in E^{\text{tf}}`` with three or more windings:
 
 ```math
-p_{a_{e,k}} = -b_{e,k} \left(v^{\text{a}}_{i_k} - ta_{e,k} - v^{\text{as}}_{e}\right) \quad \forall k,
+p_{a_{e,k}} = -b_{e,k} \left(v^{\text{a}}_{i_k} - t^{\text{a}}_{e,k} - v^{\text{as}}_{e}\right) \quad \forall k,
 \qquad
 \sum_{k} p_{a_{e,k}} = 0
 ```
 
 A winding that steps takes exactly one of its positions, ``\sum_{s} z^{\text{t}}_{a,s} = 1``,
-and its angle is ``ta_{a} = \sum_{s} z^{\text{t}}_{a,s} \, ta_{s}``.
+and its angle is ``t^{\text{a}}_{a} = \sum_{s} z^{\text{t}}_{a,s} \, t^{\text{a}}_{s}``.
 
 Limits, per terminal and per two-terminal edge:
 

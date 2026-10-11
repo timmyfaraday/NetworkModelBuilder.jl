@@ -34,9 +34,9 @@ elsewhere is a constant here:
 
 | component | in a load flow |
 |:----------|:---------------|
-| a winding of a [`Transformer`](@ref) that is `oltc` or `pst` | holds `tm` and `ta` |
-| [`FlexibleLoad`](@ref) | takes `pd_nominal`, exactly as a [`FixedLoad`](@ref) |
-| [`Storage`](@ref) | holds the injection setpoint `ps`, `qs` |
+| a winding of a [`Transformer`](@ref) that is `oltc` or `pst` | holds `t_magn` and `t_angl` |
+| [`FlexibleLoad`](@ref) | takes `p_nom`, exactly as a [`FixedLoad`](@ref) |
+| [`Storage`](@ref) | holds the injection setpoint `p_set`, `q_set` |
 
 Because nothing is free across network indices, the coupling constraints add
 nothing: a load flow over 24 hours is 24 independent problems that happen to

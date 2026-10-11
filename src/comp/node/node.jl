@@ -15,6 +15,7 @@
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.14.0 - the docstrings follow the nomenclature                             #
 ################################################################################
 
 export Node, NodeType, PQ, PV, REF, ISOLATED, reference_nodes
@@ -109,7 +110,7 @@ reference_nodes(nm::NetworkModel; nw::Int = nw_id_default(nm)) =
 The node voltage variables at network index `nw`.
 
 In an [`IVRFormulation`](@ref) the voltage is written in rectangular
-coordinates, `vr` and `vi`. Whether they are bounded is decided by the problem
+coordinates, `:v_real` and `:v_imag`. Whether they are bounded is decided by the problem
 type: a load flow has a determinate solution and is left unbounded so that the
 solver is not steered away from it, whereas a dispatch problem bounds each
 component by the voltage magnitude limit of its node and adds the magnitude
@@ -152,7 +153,7 @@ end
 Kirchhoff's current law at every in-service node `i ∈ I`,
 
 ```math
-\\sum_{a \\in A(i)} c_{a} = \\sum_{u \\in U(i)} c_{u},
+\\sum_{a \\in A(i)} i_{a} = \\sum_{u \\in U(i)} i_{u},
 ```
 
 where `A(i)` are the arcs incident to node `i`, `c_a` is the current flowing
@@ -523,13 +524,13 @@ of the current balance, or `nothing` where they cannot be.
 The balance of an [`IVRFormulation`](@ref) is in current, so what its rows price
 is a per unit of real and of imaginary **current**. Those are not nodal prices
 and are one rotation away from being them. A unit injecting a current
-``c^{\\text{r}} + j c^{\\text{i}}`` at a node holding
+``i^{\\text{r}} + j i^{\\text{i}}`` at a node holding
 ``v^{\\text{r}} + j v^{\\text{i}}`` injects
 
 ```math
-p = v^{\\text{r}} c^{\\text{r}} + v^{\\text{i}} c^{\\text{i}},
+p = v^{\\text{r}} i^{\\text{r}} + v^{\\text{i}} i^{\\text{i}},
 \\qquad
-q = v^{\\text{i}} c^{\\text{r}} - v^{\\text{r}} c^{\\text{i}},
+q = v^{\\text{i}} i^{\\text{r}} - v^{\\text{r}} i^{\\text{i}},
 ```
 
 see [`constraint_unit_power!`](@ref), so the two current prices are the two power

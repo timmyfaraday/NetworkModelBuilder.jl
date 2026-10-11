@@ -17,6 +17,7 @@
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.14.0 - the docstrings follow the nomenclature                             #
 ################################################################################
 
 export AbstractBranch, Branch, impedance, shunt_admittance, dynamic_rating
@@ -227,8 +228,8 @@ variable_edge_series_current(nm::NetworkModel, ::Type{T}; nw::Int) where {T<:Abs
 """
     variable_edge(nm, T; nw)
 
-The series current of every in-service branch with two terminals, `csr` and `csi`,
-and the voltage of the point of every one with more, `vpr` and `vpi`. Together
+The series current of every in-service branch with two terminals, `:i_ser_real` and `:i_ser_imag`,
+and the voltage of the point of every one with more, `:v_pnt_real` and `:v_pnt_imag`. Together
 with the terminal currents shared by every edge type these close the branch model.
 """
 function variable_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
@@ -264,9 +265,9 @@ a transformer hand in the quantities behind its ideal ratio.
 
 ```math
 \\begin{aligned}
-c^{\\text{t}} &= y^{\\text{sh}}_{\\text{fr}} v^{\\text{t}} + c^{\\text{s}}, \\\\
-c_{a^{\\text{t}}} &= -c^{\\text{s}} + y^{\\text{sh}}_{\\text{to}} v_{j}, \\\\
-v^{\\text{t}} - v_{j} &= z \\, c^{\\text{s}}.
+i^{\\text{t}} &= y^{\\text{sh}}_{\\text{fr}} v^{\\text{t}} + i^{\\text{s}}, \\\\
+i_{a^{\\text{t}}} &= -i^{\\text{s}} + y^{\\text{sh}}_{\\text{to}} v_{j}, \\\\
+v^{\\text{t}} - v_{j} &= z \\, i^{\\text{s}}.
 \\end{aligned}
 ```
 """
@@ -308,9 +309,9 @@ links the two terminals.
 
 ```math
 \\begin{aligned}
-c_{a^{\\text{f}}} &= y^{\\text{sh}}_{\\text{fr}} v_{i} + c^{\\text{s}}_{e}, \\\\
-c_{a^{\\text{t}}} &= -c^{\\text{s}}_{e} + y^{\\text{sh}}_{\\text{to}} v_{j}, \\\\
-v_{i} - v_{j} &= (r + j x) \\, c^{\\text{s}}_{e}.
+i_{a^{\\text{f}}} &= y^{\\text{sh}}_{\\text{fr}} v_{i} + i^{\\text{s}}_{e}, \\\\
+i_{a^{\\text{t}}} &= -i^{\\text{s}}_{e} + y^{\\text{sh}}_{\\text{to}} v_{j}, \\\\
+v_{i} - v_{j} &= (r + j x) \\, i^{\\text{s}}_{e}.
 \\end{aligned}
 ```
 
@@ -319,9 +320,9 @@ with the voltage `v^{\\text{p}}_{e}` of its point where the section above has it
 to node, and the series currents balance there against the aggregated shunt,
 
 ```math
-\\sum_{k} c^{\\text{s}}_{k} = \\tfrac{1}{2} \\Big( \\sum_{k} y^{\\text{sh}}_{k} \\Big) v^{\\text{p}}_{e},
+\\sum_{k} i^{\\text{s}}_{k} = \\tfrac{1}{2} \\Big( \\sum_{k} y^{\\text{sh}}_{k} \\Big) v^{\\text{p}}_{e},
 \\qquad
-c^{\\text{s}}_{k} = c_{a_k} - \\tfrac{1}{2} y^{\\text{sh}}_{k} v_{i_k}.
+i^{\\text{s}}_{k} = i_{a_k} - \\tfrac{1}{2} y^{\\text{sh}}_{k} v_{i_k}.
 ```
 """
 function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
@@ -427,7 +428,7 @@ end
 A branch with two terminals needs no variables of its own under a
 [`LPFFormulation`](@ref): its flow is the terminal power every edge already has,
 and there is no series current left to carry once the model is lossless. One with
-more has the angle of its point, `vap`.
+more has the angle of its point, `:v_pnt_angl`.
 """
 function variable_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                       ) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractBranch}

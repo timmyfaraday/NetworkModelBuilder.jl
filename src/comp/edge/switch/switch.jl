@@ -10,6 +10,7 @@
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.14.0 - the docstrings follow the nomenclature                             #
 ################################################################################
 
 export AbstractSwitch, Switch, SwitchLock, FREE, LOCKED
@@ -168,7 +169,7 @@ variable_edge(::NetworkModel{P,F}, ::Type{T}; nw::Int = 0
 """
     variable_edge(nm, T; nw)
 
-The position `zsw` of every free switch in a dispatch problem, a binary variable
+The position `:z_sw` of every free switch in a dispatch problem, a binary variable
 that is 1 where the switch is closed and starts at the position the data gives.
 
 It is the first integer variable of the package, and it makes the model a
@@ -219,7 +220,7 @@ voltage across it and of the current through it,
 ```math
 \\left| v_{i} - v_{j} \\right| \\le M_{e} (1 - z_{e}),
 \\qquad
-\\left| c_{a^{\\text{f}}} \\right| \\le C_{e} z_{e},
+\\left| i_{a^{\\text{f}}} \\right| \\le C_{e} z_{e},
 ```
 
 with `M_e = 2 max(v^max_i, v^max_j)` and `C_e = s^max_e / min(v^min_i, v^min_j)`.
@@ -532,7 +533,7 @@ The rating of every in-service switch that is closed or free, where it is finite
 
 ```math
 \\left( (v^{\\text{r}}_{i})^2 + (v^{\\text{i}}_{i})^2 \\right)
-\\left( (c^{\\text{r}}_{a^{\\text{f}}})^2 + (c^{\\text{i}}_{a^{\\text{f}}})^2 \\right)
+\\left( (i^{\\text{r}}_{a^{\\text{f}}})^2 + (i^{\\text{i}}_{a^{\\text{f}}})^2 \\right)
 \\le (s^{\\text{max}}_{e})^2 .
 ```
 
@@ -568,7 +569,7 @@ end
 """
     redispatch_controls(nm, T)
 
-The position `zsw` of a free switch, which a preventive switch holds equal across
+The position `:z_sw` of a free switch, which a preventive switch holds equal across
 the contingencies and a corrective one does not. A locked switch has no such
 variable, so there is nothing of it to hold.
 

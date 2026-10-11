@@ -19,6 +19,7 @@
 # v0.14.0 - a variable is named by the model, not at the call site             #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.14.0 - the docstrings follow the nomenclature                             #
 ################################################################################
 
 export AbstractTransformer, Transformer, TapMode, FIXED, CONTINUOUS, STEPPED
@@ -311,7 +312,7 @@ _stepped(::NetworkModel{P,F}, tf::Transformer, k::Int) where {P<:AbstractProblem
 """
     _variable_steps!(nm, tf, a, k; nw)
 
-One binary `zt` for each position winding `k` can take, keyed by `(a, s)` with `a`
+One binary `:z_step` for each position winding `k` can take, keyed by `(a, s)` with `a`
 its [`Arc`](@ref), and starting at 1 for the position of the setpoint.
 
 A winding that is held, see [`is_held`](@ref), takes the position of the base case,
@@ -397,9 +398,9 @@ phase_shift(::NetworkModel, tf::Transformer, ::Int, k::Int; nw::Int) = tf.t_angl
 """
     variable_edge(nm, Transformer; nw)
 
-The complex voltage of the star point of every in-service transformer, `vsr` and
-`vsi`, and for every winding whose ratio the problem chooses, the voltage behind
-it, and the ratio itself: `t_magn` where only the magnitude moves, `tr` and `ti` where
+The complex voltage of the star point of every in-service transformer, `:v_star_real` and
+`:v_star_imag`, and for every winding whose ratio the problem chooses, the voltage behind
+it, and the ratio itself: `:t_magn` where only the magnitude moves, `:t_real` and `:t_imag` where
 the angle does, with or without the magnitude. A variable of a winding is keyed by
 its [`Arc`](@ref).
 
@@ -523,7 +524,7 @@ For winding `k` at node `i_k`, with ratio `T_k`, write the voltage behind the
 ratio and the current referred through it as
 
 ```math
-v_{i_k} = T_{k} \\, v^{\\text{t}}_{k}, \\qquad c^{\\text{t}}_{k} = \\overline{T_{k}} \\, c_{a_k},
+v_{i_k} = T_{k} \\, v^{\\text{t}}_{k}, \\qquad i^{\\text{t}}_{k} = \\overline{T_{k}} \\, i_{a_k},
 ```
 
 which conserves complex power across the ideal part. Where the ratio is held this
@@ -533,10 +534,10 @@ or the node voltage itself where the ratio is one; where the problem chooses it,
 `z_k` the impedance and `y^{\\text{sh}}_{k}` the shunt of winding `k`,
 
 ```math
-v^{\\text{t}}_{k} - v^{\\text{s}}_{e} = z_{k} \\left( c^{\\text{t}}_{k} -
+v^{\\text{t}}_{k} - v^{\\text{s}}_{e} = z_{k} \\left( i^{\\text{t}}_{k} -
 y^{\\text{sh}}_{k} v^{\\text{t}}_{k} \\right),
 \\qquad
-\\sum_{k} \\left( c^{\\text{t}}_{k} - y^{\\text{sh}}_{k} v^{\\text{t}}_{k} \\right)
+\\sum_{k} \\left( i^{\\text{t}}_{k} - y^{\\text{sh}}_{k} v^{\\text{t}}_{k} \\right)
 = y^{\\text{m}}_{e} \\, v^{\\text{s}}_{e}.
 ```
 """
@@ -685,9 +686,9 @@ end
     variable_edge(nm, Transformer; nw)
 
 The angle of the star point of every in-service transformer with three or more
-windings, `vas`, and the angle of every winding whose `pst` is `CONTINUOUS` where
+windings, `:v_star_angl`, and the angle of every winding whose `pst` is `CONTINUOUS` where
 the problem chooses, held between `t_angl_min` and `t_angl_max`. A winding whose `pst` is
-`STEPPED` has a binary `zt` for each of its positions instead.
+`STEPPED` has a binary `:z_step` for each of its positions instead.
 
 A transformer with two windings has no star point here: its windings are in series
 and only the sum of their impedances matters, so nothing is left to be a variable.
@@ -850,8 +851,8 @@ end
 """
     redispatch_controls(nm, Transformer)
 
-The ratio of a preventive winding, held equal across the contingencies: `t_magn`, `tr`
-and `ti` in the current based formulation, the angle `t_angl` in the linearized one,
+The ratio of a preventive winding, held equal across the contingencies: `:t_magn`, `:t_real`
+and `:t_imag` in the current based formulation, the angle `:t_angl` in the linearized one,
 each of them keyed by the [`Arc`](@ref) of the winding it belongs to. The binaries
 of a winding that steps are not tied: a preventive winding reuses the ones of the
 base case, see [`is_held`](@ref).
@@ -875,13 +876,13 @@ redispatch_controls(::NetworkModel{P,F}, ::Type{Transformer}
     solution_edge!(entry, nm, Transformer, e, nw)
 
 Add the tap setting of every winding to the entry of its terminal, under `tap`: the
-magnitude `t_magn` and the angle `t_angl` of the ratio, and `tr` and `ti` in the current
+magnitude `"t_magn"` and the angle `"t_angl"` of the ratio, and `"t_real"` and `"t_imag"` in the current
 based formulation. For a winding that holds its ratio this reports back what was
 given; for one the problem chose it is what the optimizer chose.
 
-In a redispatch the setpoint is reported too, as `tm_market` and `ta_market`: the
+In a redispatch the setpoint is reported too, as `"t_magn_mkt"` and `"t_angl_mkt"`: the
 ratio the market schedule left the winding at, so that what the redispatch moved is
-the difference. A winding that steps reports the index of its position as `step`,
+the difference. A winding that steps reports the index of its position as `"z_step"`,
 counted as the positions of [`Transformer`](@ref) run: for a winding that steps
 both in the current based formulation, the magnitudes in turn for every angle.
 """

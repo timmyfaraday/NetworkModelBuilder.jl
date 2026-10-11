@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
 # v0.12.0 - the measures are transformer windings, not types                   #
+# v0.14.0 - the docstrings follow the nomenclature                             #
 ################################################################################
 
 ################################################################################
@@ -180,7 +181,7 @@ reactive power is omitted, and angle differences are small enough that
 `sin θ ≈ θ` and `cos θ ≈ 1` — after which the flow of a two-terminal edge is
 
 ```math
-p_{a^{\\text{f}}} = -b_{e} \\left(v^{\\text{a}}_{i} - v^{\\text{a}}_{j} - ta_{e}\\right),
+p_{a^{\\text{f}}} = -b_{e} \\left(v^{\\text{a}}_{i} - v^{\\text{a}}_{j} - t^{\\text{a}}_{e}\\right),
 \\qquad
 p_{a^{\\text{t}}} = -p_{a^{\\text{f}}} ,
 ```

@@ -11,17 +11,17 @@ nothing a redispatch adds is nonlinear.
 Everything an optimal power flow has, plus two non-negative volumes per
 generator and per storage unit.
 
-| symbol | key | index set | bounds |
+| symbol | code name | index set | bounds |
 |:-------|:----|:----------|:-------|
 | ``v^{\text{r}}_{i}, v^{\text{i}}_{i}`` | `:v_real`, `:v_imag` | ``i \in I`` | ``[-v^{\text{max}}_{i}, v^{\text{max}}_{i}]`` |
-| ``c^{\text{r}}_{a}, c^{\text{i}}_{a}`` | `:i_term_real`, `:i_term_imag` | ``a \in A`` | free |
-| ``c^{\text{sr}}_{e}, c^{\text{si}}_{e}`` | `:i_ser_real`, `:i_ser_imag` | ``e \in E^{\text{br}}`` | free |
+| ``i^{\text{r}}_{a}, i^{\text{i}}_{a}`` | `:i_term_real`, `:i_term_imag` | ``a \in A`` | free |
+| ``i^{\text{sr}}_{e}, i^{\text{si}}_{e}`` | `:i_ser_real`, `:i_ser_imag` | ``e \in E^{\text{br}}`` | free |
 | ``v^{\text{sr}}_{e}, v^{\text{si}}_{e}`` | `:v_star_real`, `:v_star_imag` | ``e \in E^{\text{tf}}`` | free |
 | ``v^{\text{tr}}_{a}, v^{\text{ti}}_{a}`` | `:v_wind_real`, `:v_wind_imag` | ``a \in A^{\text{tm}} \cup A^{\text{ta}} \cup A^{\text{zt}}`` | free |
-| ``t^{\text{r}}_{a}, t^{\text{i}}_{a}`` | `:t_real`, `:t_imag` | ``a \in A^{\text{ta}}`` | from `ta_min`, `ta_max` |
-| ``tm_{a}`` | `:t_magn` | ``a \in A^{\text{tm}} \setminus A^{\text{ta}}`` | ``[tm^{\text{min}}_{a}, tm^{\text{max}}_{a}]`` |
+| ``t^{\text{r}}_{a}, t^{\text{i}}_{a}`` | `:t_real`, `:t_imag` | ``a \in A^{\text{ta}}`` | from `t_angl_min`, `t_angl_max` |
+| ``t^{\text{m}}_{a}`` | `:t_magn` | ``a \in A^{\text{tm}} \setminus A^{\text{ta}}`` | ``[t^{\text{m,min}}_{a}, t^{\text{m,max}}_{a}]`` |
 | ``z^{\text{t}}_{a,s}`` | `:z_step` | ``a \in A^{\text{zt}}``, every position ``s`` | binary |
-| ``c^{\text{r}}_{u}, c^{\text{i}}_{u}`` | `:i_unit_real`, `:i_unit_imag` | ``u \in U`` | free |
+| ``i^{\text{r}}_{u}, i^{\text{i}}_{u}`` | `:i_unit_real`, `:i_unit_imag` | ``u \in U`` | free |
 | ``p^{\text{g}}_{u}, q^{\text{g}}_{u}`` | `:p_gen`, `:q_gen` | ``u \in U^{\text{g}}`` | the capability of the generator |
 | ``p^{\uparrow}_{u}`` | `:p_gen_up` | ``u \in U^{\text{g}}`` | ``[0, p^{\text{max}}_{u} - p^{\text{g,mkt}}_{u}]`` |
 | ``p^{\downarrow}_{u}`` | `:p_gen_dn` | ``u \in U^{\text{g}}`` | ``[0, p^{\text{g,mkt}}_{u} - p^{\text{min}}_{u}]`` |
@@ -63,7 +63,7 @@ it applies, ``\forall e \in E^{\text{mon}}``, per terminal ``a`` at node ``i``:
 
 ```math
 \left((v^{\text{r}}_{i})^2 + (v^{\text{i}}_{i})^2\right)
-\left((c^{\text{r}}_{a})^2 + (c^{\text{i}}_{a})^2\right) \le (s^{\text{max}}_{e})^2
+\left((i^{\text{r}}_{a})^2 + (i^{\text{i}}_{a})^2\right) \le (s^{\text{max}}_{e})^2
 ```
 
 with ``E^{\text{mon}} \subseteq E`` the monitored edges, every edge by default.
@@ -99,7 +99,7 @@ x_{c,n} = x_{c,n^{0}} \quad \forall n, \; \forall x \in X^{\text{prev}}_{c}
 with ``n^{0}`` the base case of ``n``. Here ``X^{\text{prev}}_{c}`` is
 ``(p^{\uparrow}, p^{\downarrow})`` for a generator,
 ``(p^{\text{sc}}, p^{\text{sd}}, p^{\uparrow}, p^{\downarrow})`` for a storage
-unit, and ``(t^{\text{r}}, t^{\text{i}})`` or ``(tm)`` for a winding of a transformer —
+unit, and ``(t^{\text{r}}, t^{\text{i}})`` or ``(t^{\text{m}})`` for a winding of a transformer —
 see [`redispatch_controls`](@ref). The binaries of a winding that steps are not tied:
 a preventive winding reuses those of the base case, see [`is_held`](@ref), and
 writes no row of its own for the ratio at the other network indices.

@@ -10,12 +10,12 @@ See [The linearized formulation](@ref) for what the approximations discard.
 
 ## Variables
 
-| symbol | key | index set | bounds |
+| symbol | code name | index set | bounds |
 |:-------|:----|:----------|:-------|
 | ``v^{\text{a}}_{i}`` | `:v_angl` | ``i \in I`` | free |
 | ``p_{a}`` | `:p_term` | ``a \in A`` | free |
 | ``v^{\text{as}}_{e}`` | `:v_star_angl` | ``e \in E^{\text{tf}}``, three or more windings | free |
-| ``ta_{a}`` | `:t_angl` | ``a \in A^{\text{ta}}`` | ``[ta^{\text{min}}_{a}, ta^{\text{max}}_{a}]`` |
+| ``t^{\text{a}}_{a}`` | `:t_angl` | ``a \in A^{\text{ta}}`` | ``[t^{\text{a,min}}_{a}, t^{\text{a,max}}_{a}]`` |
 | ``z^{\text{t}}_{a,s}`` | `:z_step` | ``a \in A^{\text{zt}}``, every position ``s`` | binary |
 | ``p_{u}`` | `:p_unit` | ``u \in U`` | free |
 | ``p^{\text{g}}_{u}`` | `:p_gen` | ``u \in U^{\text{g}}`` | ``[p^{\text{min}}_{u}, p^{\text{max}}_{u}]`` |
@@ -25,7 +25,7 @@ See [The linearized formulation](@ref) for what the approximations discard.
 | ``e_{u}`` | `:e_stor` | ``u \in U^{\text{s}}`` | ``[0, e^{\text{max}}_{u}]`` |
 | ``p^{\uparrow}_{u}, p^{\downarrow}_{u}`` | `:p_stor_up`, `:p_stor_dn` | ``u \in U^{\text{s}}`` | the headroom each way |
 
-No voltage magnitude, no reactive power, no current — and no ``tm_{a}``, since a
+No voltage magnitude, no reactive power, no current — and no ``t^{\text{m}}_{a}``, since a
 winding that is `oltc` is inert here. A winding that is `pst` is not, and it is
 the free measure a redispatch reaches for first. Where it steps, the problem is
 mixed-integer, no longer a linear program, and has no duals.
@@ -50,10 +50,10 @@ v^{\text{a}}_{i} = v^{\text{a,set}}_{i} \quad \forall i \in I^{\text{ref}},
 ### At the edges
 
 Flow, ``\forall e \in E^{\text{br}}``, and ``\forall e \in E^{\text{tf}}`` with two windings,
-whose shift is ``ta_{e,1} - ta_{e,2}``:
+whose shift is ``t^{\text{a}}_{e,1} - t^{\text{a}}_{e,2}``:
 
 ```math
-p_{a^{\text{f}}_{e}} = -b_{e} \left(v^{\text{a}}_{i} - v^{\text{a}}_{j} - ta_{e}\right),
+p_{a^{\text{f}}_{e}} = -b_{e} \left(v^{\text{a}}_{i} - v^{\text{a}}_{j} - t^{\text{a}}_{e}\right),
 \qquad
 p_{a^{\text{t}}_{e}} = -p_{a^{\text{f}}_{e}}
 ```
@@ -90,7 +90,7 @@ p_{u} &= -g^{\text{s}}_{u} & && \forall u \in U^{\text{sh}}
 The state of charge, the energy of a flexible load, and the preventive
 equalities — identical to the
 [IVR formulation](@ref "Redispatch in the IVR formulation") but for which
-variables a winding contributes: the angle ``ta_{a}`` here, the pair
+variables a winding contributes: the angle ``t^{\text{a}}_{a}`` here, the pair
 ``(t^{\text{r}}_{a}, t^{\text{i}}_{a})`` there.
 
 ## A worked example

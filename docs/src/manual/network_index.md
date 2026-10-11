@@ -79,7 +79,7 @@ all_nw
 ```
 
 [`nw_component`](@ref) is why the component files read plain fields — `br.r`,
-`ld.pd` — and never mention profiles: `edge(nm, e; nw = n)` hands them a
+`ld.p_set` — and never mention profiles: `edge(nm, e; nw = n)` hands them a
 component already resolved at ``n``.
 
 ### Writing it
@@ -198,8 +198,8 @@ same_topology
 
 The second is the half that is easy to miss. A handful of fields are not
 coefficients but switches — the model asks a question of them and writes nothing
-when the answer is no, so a `rate_a` of `Inf` produces no rating at all and a
-`pmax` of `Inf` produces no upper bound. A field like that changes the shape of
+when the answer is no, so a `s_max` of `Inf` produces no rating at all and a
+`p_max` of `Inf` produces no upper bound. A field like that changes the shape of
 the model while the topology sits perfectly still:
 
 ```@docs

@@ -18,45 +18,67 @@ and ``q``. The constant impedance case is a [Shunt](@ref).
 
 ### `FixedLoad`
 
-| symbol | field | description | unit |
+| symbol | code name | description | unit |
 |:-------|:------|:------------|:-----|
 | | `id`, `name`, `node` | identifier, label, node | |
-| ``p^{\text{d}}_{u}`` | `pd` | active power withdrawn | pu |
-| ``q^{\text{d}}_{u}`` | `qd` | reactive power withdrawn | pu |
+| ``p^{\text{d}}_{u}`` | `p_set` | active power withdrawn | pu |
+| ``q^{\text{d}}_{u}`` | `q_set` | reactive power withdrawn | pu |
 | | `status` | in service | |
+| | `ext` | free-form storage, carried along and never read | |
 
-A demand that follows a profile is still a fixed load: give `pd` and `qd` a
+A demand that follows a profile is still a fixed load: give `p_set` and `q_set` a
 [`NetworkVector`](@ref) and each network index gets its own number. What makes a
 load *flexible* is that the **model** chooses the number.
 
 ### `FlexibleLoad`
 
-| symbol | field | description | unit |
+| symbol | code name | description | unit |
 |:-------|:------|:------------|:-----|
-| ``p^{\text{d,nom}}_{u}`` | `pd_nominal` | demand without flexibility | pu |
-| ``q^{\text{d,nom}}_{u}`` | `qd_nominal` | reactive demand at the nominal point | pu |
-| ``p^{\text{d,min}}_{u}``, ``p^{\text{d,max}}_{u}`` | `pd_min`, `pd_max` | limits on the shifted demand | pu |
-| ``E_{u}`` | `energy` | energy it must receive over the horizon | pu·h |
+| | `id`, `name`, `node` | identifier, label, node | |
+| ``p^{\text{d,nom}}_{u}`` | `p_nom` | demand without flexibility | pu |
+| ``q^{\text{d,nom}}_{u}`` | `q_nom` | reactive demand at the nominal point | pu |
+| ``p^{\text{d,min}}_{u}``, ``p^{\text{d,max}}_{u}`` | `p_min`, `p_max` | limits on the shifted demand | pu |
+| ``E_{u}`` | `e_set` | energy it must receive over the horizon | pu·h |
 | | `status` | in service | |
+| | `ext` | free-form storage, carried along and never read | |
 
-`energy` defaults to `NaN`, which means the energy the nominal profile would have
+`e_set` defaults to `NaN`, which means the energy the nominal profile would have
 taken.
 
 ## Variables
 
-### In the `IVRFormulation`
+### `FixedLoad`
 
-| symbol | key | index | description | unit | when |
-|:-------|:----|:------|:------------|:-----|:-----|
-| ``c^{\text{r}}_{u}``, ``c^{\text{i}}_{u}`` | `:i_unit_real`, `:i_unit_imag` | unit | injected current | pu | all |
-| ``p^{\text{d}}_{u}`` | `:p_flex` | unit | active demand | pu | [`FlexibleLoad`](@ref), dispatch |
+A fixed load has no variable of its own: what it hands to the node is the demand
+it was given.
 
-### In the `LPFFormulation`
+#### In the `IVRFormulation`
 
-| symbol | key | index | description | unit | when |
-|:-------|:----|:------|:------------|:-----|:-----|
-| ``p_{u}`` | `:p_unit` | unit | active power injected into the node | pu | all |
-| ``p^{\text{d}}_{u}`` | `:p_flex` | unit | active demand | pu | [`FlexibleLoad`](@ref), dispatch |
+| symbol | code name | index | description | unit |
+|:-------|:----------|:------|:------------|:-----|
+| ``i^{\text{r}}_{u}``, ``i^{\text{i}}_{u}`` | `:i_unit_real`, `:i_unit_imag` | unit | injected current | pu |
+
+#### In the `LPFFormulation`
+
+| symbol | code name | index | description | unit |
+|:-------|:----------|:------|:------------|:-----|
+| ``p_{u}`` | `:p_unit` | unit | active power injected into the node | pu |
+
+### `FlexibleLoad`
+
+#### In the `IVRFormulation`
+
+| symbol | code name | index | description | unit |
+|:-------|:----------|:------|:------------|:-----|
+| ``i^{\text{r}}_{u}``, ``i^{\text{i}}_{u}`` | `:i_unit_real`, `:i_unit_imag` | unit | injected current | pu |
+| ``p^{\text{d}}_{u}`` | `:p_flex` | unit | active demand, dispatch problems only | pu |
+
+#### In the `LPFFormulation`
+
+| symbol | code name | index | description | unit |
+|:-------|:----------|:------|:------------|:-----|
+| ``p_{u}`` | `:p_unit` | unit | active power injected into the node | pu |
+| ``p^{\text{d}}_{u}`` | `:p_flex` | unit | active demand, dispatch problems only | pu |
 
 The constraint is ``p_{u} = -p^{\text{d}}_{u}``; the reactive demand plays no
 part. A [`FlexibleLoad`](@ref) keeps its energy balance unchanged — that
@@ -69,9 +91,9 @@ Both load types share one constraint, and differ only in what [`demand`](@ref)
 returns:
 
 ```math
-v^{\text{r}}_{i} c^{\text{r}}_{u} + v^{\text{i}}_{i} c^{\text{i}}_{u} = -p^{\text{d}}_{u},
+v^{\text{r}}_{i} i^{\text{r}}_{u} + v^{\text{i}}_{i} i^{\text{i}}_{u} = -p^{\text{d}}_{u},
 \qquad
-v^{\text{i}}_{i} c^{\text{r}}_{u} - v^{\text{r}}_{i} c^{\text{i}}_{u} = -q^{\text{d}}_{u} .
+v^{\text{i}}_{i} i^{\text{r}}_{u} - v^{\text{r}}_{i} i^{\text{i}}_{u} = -q^{\text{d}}_{u} .
 ```
 
 For a [`FixedLoad`](@ref) the right-hand sides are data. For a

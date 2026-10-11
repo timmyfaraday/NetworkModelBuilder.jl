@@ -1,6 +1,6 @@
 # One nomenclature for constraints, functions and duals (B32)
 
-Status: decided (D63-D69), stage 0 done; the map is confirmed by Tom at stage 1 · Author: Tom Van Acker (requested) · Date: 2026-10-11
+Status: decided (D63-D69), stages 0 and 1 done, the map awaits Tom; the map is confirmed by Tom at stage 1 · Author: Tom Van Acker (requested) · Date: 2026-10-11
 Decisions: D63-D69 recorded 2026-10-11 (next free after: D70)
 Priority: P2 · Effort: Large, in six stages. Branch `b32-constraint-names`, cut from `main` at v0.14.0; becomes v0.15.0 (a hard removal that renames exports and extension points is a minor bump, as D59 made v0.14.0).
 Follows `naming.md` (D55-D62). The names themselves are drafted in stage 1 into `../nomenclature.md`; this file is how to get there.
@@ -39,7 +39,7 @@ Follows `naming.md` (D55-D62). The names themselves are drafted in stage 1 into 
 - **A name is a debugging aid.** Nothing in `src/`, `test/` or `scripts/` reads one back; a solver log, `print(model)` and an LP file do.
   v0.14.0 builds them by default (`set_string_name = true`, D61), 19 to 27 % of a cold `instantiate_model` on the step-3 window; the
   pipeline never passes the keyword.
-- **Functions.** 21 `constraint_*` names, 62 definitions, 233 lines in 20 files of `src/`, 59 lines in 13 pages of `docs/src/`, 3 lines in 2
+- **Functions.** 22 `constraint_*` names, 63 definitions (one a one-liner), 233 lines in 20 files of `src/`, 59 lines in 13 pages of `docs/src/`, 3 lines in 2
   test files, 1 in `scripts/`, 3 in `README.md`. Two are exported (`constraint_redispatch_control`, `constraint_overload_peak`);
   `constraint_edge`, `constraint_unit`, `constraint_edge_limits` and the two `*_coupling` are the extension points of
   `docs/src/manual/extending.md`, extended by `test/arc_controls.jl` and `test/multiterminal.jl`.
@@ -62,7 +62,7 @@ by two different hands, and a function and a dual took their name from the key t
    `instantiate_model` with names off (the new default), with variable names only (v0.14.0) and with both (`debug_mode = true`), min
    of 3, beside the row count. It says what debug mode costs and what the default gains.
 1. **Map and red.** Draft a "Constraints, functions and duals" section in `../nomenclature.md`: the closed owner, role and part lists, the
-   46 register keys, the 28 `con` keys, the id shapes, the 21 function names, the four duals, the old-letter parameters and locals; Tom
+   46 register keys, the 28 `con` keys, the id shapes, the 22 function names, the four duals, the old-letter parameters and locals; Tom
    confirms it as he confirmed B31's map. Then red in `test/nomenclature.jl`: every key a `constrain!` or a `con` literal writes is
    `cstr_<owner>_<role>` from the lists; `con` and the register agree; every id part is a word of the lists; no `constraint_*` is defined;
    every `dual_*` key a solution builder writes is in the map and no `lambda*` is left; and the old-name sweep reads bare identifiers
@@ -95,6 +95,13 @@ a patched `constrain!`. **Off** 1,706 ms, 764 MB; **variable names only** (v0.14
 1,352 MB. The default off against v0.14.0: -12 % time, -24 % memory; debug mode against off: +42 % time, +77 % memory (bytes are deterministic, times
 the best of four). The 274,523 row names are distinct, 41 characters at most (`22_redispatch_control[unit,1080,p_gen_up]`). Nothing stops stage 1.
 
+## Stage 1 result (2026-10-11)
+
+The map is in `../nomenclature.md` (139 lines) and as data in `test/nomenclature.jl`: 46 register keys to 43, 28 `con` keys, 22 functions, 4 duals, 8 old letters.
+The testset "constraint nomenclature" has 99 checks: the 89 on the vocabulary and the maps pass, the 10 on the package are red on v0.14.0: 46 of 46 register keys,
+28 of 28 `con` keys, 14 id words, 22 `constraint_*` functions and 2 exports, 4 `lambda*` duals, and 680 old names written (504 in `src` in 23 files, 92 in `test`,
+81 in `docs/src`, 1 in `scripts`, 2 in `README.md`; 312 functions, 226 keys, 82 letters, 49 duals, 11 containers). The 77 checks of B31 pass.
+
 ## Decisions
 
 - **D63** a key is `<owner>_<role>`: the owner, then what the row states, words from closed lists, singular, no formulation in it; the
@@ -106,18 +113,10 @@ the best of four). The 274,523 row names are distinct, 41 characters at most (`2
   `cstr_`, `fnct_` and `dual_` for a constraint, the function that writes it and its dual; with D63 a key is `cstr_<owner>_<role>`.
   All Tom Van Acker, 2026-10-11; see `decisions.md`.
 
-## Confirmed 2026-10-11 (the stage 1 map restates them)
+## Confirmed 2026-10-11
 
-- **One stem, three prefixes**: the row `(i, :real)` of `cstr_node_balance` is written by `fnct_node_balance` and priced by
-  `dual_node_balance_real`. The fan-out entry points write several keys and take their family as the stem: `fnct_edge`, `fnct_unit`,
-  `fnct_edge_limit`, `fnct_edge_coupling`, `fnct_unit_coupling`.
-- **`fnct_` for the `constraint_*` writers only.** `variable_*` (33 methods), `solution_*` (19) and `objective_*` keep their names; say so
-  if `fnct_` should cover them.
-- **The dual suffixes**: `"lambda"` `dual_node_balance_p`, `"lambda_q"` `dual_node_balance_q`, `"lambda_real"` `dual_node_balance_real`,
-  `"lambda_imag"` `dual_node_balance_imag`; the sign (a price is minus the dual, `_balance_price`) is kept.
-- **The π-section parameters**: `ctr cti vtr vti` become `i_wind_real`, `i_wind_imag`, `v_wind_real`, `v_wind_imag`, the location of the
-  transformer's own `:v_wind_real` keys; not `i_term_real`, which is a container local of the same function.
-- **Version**: v0.15.0, as D59 made v0.14.0.
+One stem and three prefixes; `fnct_` for the `constraint_*` writers only (`variable_*`, `solution_*`, `objective_*` keep their names); the dual suffixes
+`p q real imag`; the π-section parameters `i_wind_*` and `v_wind_*`; v0.15.0 as D59 made v0.14.0. The map is in `../nomenclature.md`.
 
 ## Verification
 

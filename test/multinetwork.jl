@@ -11,6 +11,7 @@
 # v0.12.5 - a topology lookup has one type and answers repeats                 #
 # v0.12.6 - a solution holds the indices and components asked for              #
 # v0.13.0 - a branch holds one entry per terminal of a field                   #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 "a copy of load `ld` whose demand follows `profile` over dimension `:time`"
@@ -139,10 +140,10 @@ const PROFILE = [0.9, 1.0, 1.1]
 
         # a heavier load is served at a higher cost and a lower voltage
         costs = [sum(generation_cost(unit(network(mn), u; nw = n),
-                                     nw_solution(result, n)["unit"]["$u"]["pg"])
+                                     nw_solution(result, n)["unit"]["$u"]["p_gen"])
                      for u in ids(network(mn), Generator; nw = n)) for n in 1:3]
         @test issorted(costs)
-        @test nw_solution(result, 1)["node"]["2"]["vm"] > nw_solution(result, 3)["node"]["2"]["vm"]
+        @test nw_solution(result, 1)["node"]["2"]["v_magn"] > nw_solution(result, 3)["node"]["2"]["v_magn"]
     end
 
     @testset "network_weight scales the objective" begin
@@ -233,7 +234,7 @@ const PROFILE = [0.9, 1.0, 1.1]
         nm2   = instantiate_model(mn, OptimalPowerFlowProblem, IVRFormulation)
         asked = quiet(() -> optimize_model!(nm2, OPTIMIZER; solution_indices = [1, 3]))
         @test sort(collect(keys(asked["solution"]["nw"]))) == ["1", "3"]
-        @test nw_solution(asked, 3)["node"]["1"]["vm"] ≈ nw_solution(full, 3)["node"]["1"]["vm"] atol = 1e-6
+        @test nw_solution(asked, 3)["node"]["1"]["v_magn"] ≈ nw_solution(full, 3)["node"]["1"]["v_magn"] atol = 1e-6
     end
 
     @testset "a report names what a solution holds" begin

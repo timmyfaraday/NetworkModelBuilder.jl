@@ -202,14 +202,18 @@ function nom_solution_keys()
     return found
 end
 
+"a name a file spells on purpose, as a word or as the name of something that is not a quantity: `(file, name)`"
+const NOM_EXEMPT = Set([("test/rd.jl", "overload"),                         # a word in the `show` of `Redispatch`
+                        ("scripts/run_year_redispatch.jl", "overload")])    # the name of an output table
+
 "where the old names of the map are still written: `(file, line, name)`"
 function nom_stragglers()
-    old = unique(first.(vcat(NOM_FIELDS, NOM_KEYS, NOM_SOLUTION)))
-    old = sort!(filter(n -> length(n) > 1 && !(n in NOM_SHARED), old); by = length, rev = true)
-    alt = join(old, "|")
+    longer(names) = sort!(filter(n -> length(n) > 1 && !(n in NOM_SHARED), unique(names)); by = length, rev = true)
+    alt = join(longer(first.(vcat(NOM_FIELDS, NOM_KEYS, NOM_SOLUTION))), "|")
+    sym = join(longer(first.(vcat(NOM_FIELDS, NOM_KEYS))), "|")   # a solution key is a string
 
     code = [Regex("(?<=[\\w\\)\\]])\\.($alt)(?![\\w!])"),
-            Regex("(?<![\\w:]):($alt)(?![\\w!])"),
+            Regex("(?<![\\w:\\]\\)]):($sym)(?![\\w!])"),
             Regex("\"($alt)\"")]
     docs = [code..., Regex("`($alt)`")]
 
@@ -221,11 +225,13 @@ function nom_stragglers()
                         ("benchmark", (".jl",)), ("docs/src", (".md",)))
         for path in nom_files(dir, exts...)
             path in skip && continue
+            rel     = relpath(path, BASE_DIR)
             isjulia = endswith(path, ".jl")
             for (n, line) in enumerate(readlines(path))
                 isjulia && (line = replace(line, r"(^|\s)#.*$" => ""))
                 for rx in (isjulia ? code : docs), m in eachmatch(rx, line)
-                    push!(found, (relpath(path, BASE_DIR), n, m.captures[1]))
+                    (replace(rel, '\\' => '/'), m.captures[1]) in NOM_EXEMPT && continue
+                    push!(found, (rel, n, m.captures[1]))
                 end
             end
         end

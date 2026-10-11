@@ -84,7 +84,7 @@ the solve asked for `set_string_name = false`.
 
 A key is not a private name. `var` and `con` are shared by the package and by
 every extension, so an extension **prefixes its keys with its own name**, as
-`:star_vr` rather than `:vsr`, which a [`Transformer`](@ref) already uses.
+`:star_vr` rather than `:v_star_real`, which a [`Transformer`](@ref) already uses.
 Where a key is asked for again with an index set or a type of `id` other than
 the one it holds, [`variable!`](@ref), [`variables!`](@ref) and
 [`variable_container!`](@ref) raise an `ArgumentError` naming the key and the

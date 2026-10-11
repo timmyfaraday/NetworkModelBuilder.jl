@@ -12,6 +12,7 @@
 # v0.10.1 - exports its own public names                                       #
 # v0.12.9 - the balance, cycle and end rows are registered by constrain! alone #
 # v0.14.0 - a variable is named by the model, not at the call site             #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 export AbstractStorage, Storage, inflow, storage_cycles
@@ -180,16 +181,16 @@ function variable_storage_active!(nm::NetworkModel, ::Type{T}; nw::Int) where {T
     isempty(ids(nm, T; nw)) && return nothing
     require_time_dimension(nm, T)
 
-    variable_container!(nm, :psc, :psd, :es; nw)
+    variable_container!(nm, :p_chg, :p_dch, :e_stor; nw)
 
     for u in ids(nm, T; nw)
         st = unit(nm, u; nw)::T
 
-        variable!(nm, :psc, u; nw, start = 0.0,
+        variable!(nm, :p_chg, u; nw, start = 0.0,
                   lower = 0.0, upper = st.charge_rating)
-        variable!(nm, :psd, u; nw, start = 0.0,
+        variable!(nm, :p_dch, u; nw, start = 0.0,
                   lower = 0.0, upper = st.discharge_rating)
-        variable!(nm, :es, u; nw, start = st.energy_initial,
+        variable!(nm, :e_stor, u; nw, start = st.energy_initial,
                   lower = 0.0, upper = st.energy_capacity)
     end
 
@@ -215,11 +216,11 @@ end
 
 "the reactive power of every storage unit, in a formulation that has reactive power"
 function variable_storage_reactive!(nm::NetworkModel, ::Type{T}; nw::Int) where {T<:AbstractStorage}
-    variable_container!(nm, :qs; nw)
+    variable_container!(nm, :q_stor; nw)
 
     for u in ids(nm, T; nw)
         st = unit(nm, u; nw)::T
-        variable!(nm, :qs, u; nw, start = 0.0,
+        variable!(nm, :q_stor, u; nw, start = 0.0,
                   lower = st.qmin, upper = st.qmax)
     end
 
@@ -257,12 +258,12 @@ constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
 function _constraint_storage_power(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractStorage}
     isempty(ids(nm, T; nw)) && return nothing
 
-    psc, psd, qs = var(nm, :psc; nw), var(nm, :psd; nw), var(nm, :qs; nw)
-    power        = get!(() -> Dict{Int,Any}(), con(nm; nw), :storage_power)
+    p_chg, p_dch, q_stor = var(nm, :p_chg; nw), var(nm, :p_dch; nw), var(nm, :q_stor; nw)
+    power                = get!(() -> Dict{Int,Any}(), con(nm; nw), :storage_power)
 
     for u in ids(nm, T; nw)
-        p = JuMP.@expression(nm.model, psd[u] - psc[u])
-        power[u] = constraint_unit_power!(nm, u, p, qs[u]; nw)
+        p = JuMP.@expression(nm.model, p_dch[u] - p_chg[u])
+        power[u] = constraint_unit_power!(nm, u, p, q_stor[u]; nw)
     end
 
     return nothing
@@ -295,17 +296,17 @@ function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
     require_time_dimension(nm, T)
 
     for n in nw_ids(nm)
-        psc, psd, es = var(nm, :psc; nw = n), var(nm, :psd; nw = n), var(nm, :es; nw = n)
+        p_chg, p_dch, e_stor = var(nm, :p_chg; nw = n), var(nm, :p_dch; nw = n), var(nm, :e_stor; nw = n)
 
         for u in ids(nm, T; nw = n)
             st    = unit(nm, u; nw = n)::T
             dt    = time_step(nm, n)
             start = is_first_id(nm, n, :time) ? st.energy_initial :
-                                                var(nm, :es, u; nw = prev_id(nm, n, :time))
+                                                var(nm, :e_stor, u; nw = prev_id(nm, n, :time))
 
             constrain!(nm, :storage_balance, u, JuMP.@build_constraint(
-                es[u] == start + dt * (st.charge_efficiency * psc[u] -
-                                       psd[u] / st.discharge_efficiency +
+                e_stor[u] == start + dt * (st.charge_efficiency * p_chg[u] -
+                                       p_dch[u] / st.discharge_efficiency +
                                        inflow(st, nm, n))); nw = n)
         end
     end
@@ -343,7 +344,7 @@ function constraint_storage_final_energy!(nm::NetworkModel, ::Type{T}) where {T<
             isnan(st.energy_final) && continue
 
             constrain!(nm, :storage_final, u, JuMP.@build_constraint(
-                var(nm, :es, u; nw = n) == st.energy_final); nw = n)
+                var(nm, :e_stor, u; nw = n) == st.energy_final); nw = n)
         end
     end
 
@@ -392,8 +393,8 @@ function storage_cycles(nm::NetworkModel, st::AbstractStorage, u::Int, window)
     iszero(capacity) && return 0.0
 
     return JuMP.@expression(nm.model,
-        sum(time_step(nm, m) * var(nm, :psd, u; nw = m)
-            for m in window if haskey(var(nm, :psd; nw = m), u); init = 0.0) / capacity)
+        sum(time_step(nm, m) * var(nm, :p_dch, u; nw = m)
+            for m in window if haskey(var(nm, :p_dch; nw = m), u); init = 0.0) / capacity)
 end
 
 """
@@ -426,8 +427,8 @@ function constraint_storage_cycles!(nm::NetworkModel, ::Type{T}) where {T<:Abstr
 
             capacity = nw_value(nm, st.energy_capacity, n)
             constrain!(nm, :storage_cycles, u, JuMP.@build_constraint(
-                sum(time_step(nm, m) * var(nm, :psd, u; nw = m)
-                    for m in window if haskey(var(nm, :psd; nw = m), u); init = 0.0) <=
+                sum(time_step(nm, m) * var(nm, :p_dch, u; nw = m)
+                    for m in window if haskey(var(nm, :p_dch; nw = m), u); init = 0.0) <=
                 st.max_cycles_per_period * capacity); nw = n)
         end
     end
@@ -498,11 +499,11 @@ of the step duration, a price per per unit becomes a price per per-unit-hour
 without this having to know it. Zero unless `cost_throughput` was given.
 """
 function dispatch_cost(nm::NetworkModel, ::Type{T}, u::Int; nw::Int) where {T<:AbstractStorage}
-    haskey(var(nm; nw), :psd) || return 0.0
+    haskey(var(nm; nw), :p_dch) || return 0.0
     st = unit(nm, u; nw)::T
     iszero(st.cost_throughput) && return 0.0
 
-    return JuMP.@expression(nm.model, st.cost_throughput * var(nm, :psd, u; nw))
+    return JuMP.@expression(nm.model, st.cost_throughput * var(nm, :p_dch, u; nw))
 end
 
 """
@@ -518,7 +519,7 @@ whole of what it moved either way. Both are real, they measure different wear,
 and a unit may carry either or both.
 """
 function period_cost(nm::NetworkModel, ::Type{T}, u::Int; nw::Int) where {T<:AbstractStorage}
-    haskey(var(nm; nw), :psd) || return 0.0
+    haskey(var(nm; nw), :p_dch) || return 0.0
     st = unit(nm, u; nw)::T
     iszero(st.cost_cycle) && return 0.0
 
@@ -532,20 +533,20 @@ end
 
 function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel, ::Type{T}, u::Int, nw::Int
                        ) where {T<:AbstractStorage}
-    if haskey(var(nm; nw), :es)
-        sol["psc"] = JuMP.value(var(nm, :psc, u; nw))
-        sol["psd"] = JuMP.value(var(nm, :psd, u; nw))
-        sol["es"]  = JuMP.value(var(nm, :es,  u; nw))
-        if haskey(var(nm; nw), :psup)
-            sol["ps_market"] = unit(nm, u; nw).ps
-            sol["psup"]      = JuMP.value(var(nm, :psup, u; nw))
-            sol["psdn"]      = JuMP.value(var(nm, :psdn, u; nw))
+    if haskey(var(nm; nw), :e_stor)
+        sol["p_chg"] = JuMP.value(var(nm, :p_chg, u; nw))
+        sol["p_dch"] = JuMP.value(var(nm, :p_dch, u; nw))
+        sol["e_stor"]  = JuMP.value(var(nm, :e_stor,  u; nw))
+        if haskey(var(nm; nw), :p_stor_up)
+            sol["p_stor_mkt"] = unit(nm, u; nw).ps
+            sol["p_stor_up"]      = JuMP.value(var(nm, :p_stor_up, u; nw))
+            sol["p_stor_dn"]      = JuMP.value(var(nm, :p_stor_dn, u; nw))
         end
     else
         st = unit(nm, u; nw)::T
-        sol["psc"] = max(-st.ps, 0.0)
-        sol["psd"] = max(st.ps, 0.0)
-        sol["es"]  = st.energy_initial
+        sol["p_chg"] = max(-st.ps, 0.0)
+        sol["p_dch"] = max(st.ps, 0.0)
+        sol["e_stor"]  = st.energy_initial
     end
 
     return nothing
@@ -580,12 +581,12 @@ constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
 function _constraint_storage_injection(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractStorage}
     isempty(ids(nm, T; nw)) && return nothing
 
-    psc, psd = var(nm, :psc; nw), var(nm, :psd; nw)
-    power    = get!(() -> Dict{Int,Any}(), con(nm; nw), :storage_power)
+    p_chg, p_dch = var(nm, :p_chg; nw), var(nm, :p_dch; nw)
+    power        = get!(() -> Dict{Int,Any}(), con(nm; nw), :storage_power)
 
     for u in ids(nm, T; nw)
         power[u] = constraint_unit_injection!(nm, u,
-                       JuMP.@expression(nm.model, psd[u] - psc[u]); nw)
+                       JuMP.@expression(nm.model, p_dch[u] - p_chg[u]); nw)
     end
 
     return nothing
@@ -628,14 +629,14 @@ function variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default
 end
 
 function _variable_storage_redispatch(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractStorage}
-    variable_container!(nm, :psup, :psdn; nw)
+    variable_container!(nm, :p_stor_up, :p_stor_dn; nw)
 
     for u in ids(nm, T; nw)
         st = unit(nm, u; nw)::T
 
-        variable!(nm, :psup, u; nw, start = 0.0,
+        variable!(nm, :p_stor_up, u; nw, start = 0.0,
                   lower = 0.0, upper = max(st.discharge_rating - st.ps, 0.0))
-        variable!(nm, :psdn, u; nw, start = 0.0,
+        variable!(nm, :p_stor_dn, u; nw, start = 0.0,
                   lower = 0.0, upper = max(st.ps + st.charge_rating, 0.0))
     end
 
@@ -679,14 +680,14 @@ end
 
 function _constraint_storage_redispatch(nm::NetworkModel, ::Type{T}, nw::Int
                                        ) where {T<:AbstractStorage}
-    psc,  psd  = var(nm, :psc;  nw), var(nm, :psd;  nw)
-    psup, psdn = var(nm, :psup; nw), var(nm, :psdn; nw)
-    split      = get!(() -> Dict{Int,Any}(), con(nm; nw), :storage_redispatch)
+    p_chg, p_dch         = var(nm, :p_chg;     nw), var(nm, :p_dch;     nw)
+    p_stor_up, p_stor_dn = var(nm, :p_stor_up; nw), var(nm, :p_stor_dn; nw)
+    split                = get!(() -> Dict{Int,Any}(), con(nm; nw), :storage_redispatch)
 
     for u in ids(nm, T; nw)
         st = unit(nm, u; nw)::T
         split[u] = constrain!(nm, :storage_redispatch, u, JuMP.@build_constraint(
-            psd[u] - psc[u] == st.ps + psup[u] - psdn[u]); nw)
+            p_dch[u] - p_chg[u] == st.ps + p_stor_up[u] - p_stor_dn[u]); nw)
     end
 
     return nothing
@@ -706,12 +707,12 @@ following a market schedule, and the volumes priced by `cost_up` and `cost_dn`
 are the deviation rather than the movement.
 """
 function redispatch_cost(nm::NetworkModel, ::Type{T}, u::Int; nw::Int) where {T<:AbstractStorage}
-    haskey(var(nm; nw), :psup) || return 0.0
+    haskey(var(nm; nw), :p_stor_up) || return 0.0
     st = unit(nm, u; nw)::T
 
     return JuMP.@expression(nm.model,
-        st.cost_up * var(nm, :psup, u; nw) + st.cost_dn * var(nm, :psdn, u; nw) +
-        st.cost_throughput * var(nm, :psd, u; nw))
+        st.cost_up * var(nm, :p_stor_up, u; nw) + st.cost_dn * var(nm, :p_stor_dn, u; nw) +
+        st.cost_throughput * var(nm, :p_dch, u; nw))
 end
 
 """
@@ -724,7 +725,7 @@ discharging free per contingency, and with it the energy the unit ends the
 horizon on.
 """
 redispatch_controls(::NetworkModel, ::Type{T}) where {T<:AbstractStorage} =
-    (:psc, :psd, :psup, :psdn)
+    (:p_chg, :p_dch, :p_stor_up, :p_stor_dn)
 
 ################################################################################
 # Storage — across windows                                                     #
@@ -776,12 +777,12 @@ The unit is returned untouched where the model has no state of charge to read,
 i.e. where it was built for a power flow rather than a dispatch problem.
 """
 function initial_state(st::Storage, nm::NetworkModel, n::Int)
-    haskey(var(nm; nw = n), :es) || return st
-    haskey(var(nm, :es; nw = n), st.id) || return st
+    haskey(var(nm; nw = n), :e_stor) || return st
+    haskey(var(nm, :e_stor; nw = n), st.id) || return st
 
     return Storage(; id = st.id, name = st.name, node = st.node, ps = st.ps, qs = st.qs,
                    energy_capacity = st.energy_capacity,
-                   energy_initial = JuMP.value(var(nm, :es, st.id; nw = n)),
+                   energy_initial = JuMP.value(var(nm, :e_stor, st.id; nw = n)),
                    energy_final = st.energy_final,
                    charge_rating = st.charge_rating, discharge_rating = st.discharge_rating,
                    charge_efficiency = st.charge_efficiency,

@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.8.0 - initial implementation                                              #
 # v0.12.0 - a phase shift range moves a winding, pst_cost is deprecated        #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 ################################################################################
@@ -659,7 +660,7 @@ function _zorba_flows(data::NetworkData, result::Dict{String,Any})
             flow_mw[r]     = entry === nothing ? 0.0f0 :
                              Float32(_zorba_terminal_power(entry, l) * base)
             overload_mw[r] = entry === nothing ? 0.0f0 :
-                             Float32(max(get(entry, "overload", 0.0), 0.0) * base)
+                             Float32(max(get(entry, "s_ovl", 0.0), 0.0) * base)
         end
     end
 
@@ -680,11 +681,11 @@ not is one this package has no model for, and saying that is better than a
 function _zorba_terminal_power(entry::Dict{String,Any}, link::ZorbaLink)
     terminal = get(entry, "terminal", nothing)
     from     = terminal === nothing ? nothing : get(terminal, "1", nothing)
-    (from === nothing || !haskey(from, "p")) &&
+    (from === nothing || !haskey(from, "p_term")) &&
         throw(ArgumentError("the solution of link $(link.name) carries no terminal power, " *
                             "which every formulation with a model reports; this one has none"))
 
-    return from["p"]
+    return from["p_term"]
 end
 
 "the setting of every phase shifter at every step, in Zorba's sign and in degrees"
@@ -712,7 +713,7 @@ function _zorba_phase_shifts(data::NetworkData, result::Dict{String,Any})
 
             entry      = get(sol, "$(l.id)", nothing)
             tap        = entry === nothing ? nothing : get(entry["terminal"]["1"], "tap", nothing)
-            pst_deg[r] = tap === nothing ? missing : Float32(-rad2deg(tap["ta"]))
+            pst_deg[r] = tap === nothing ? missing : Float32(-rad2deg(tap["t_angl"]))
         end
     end
 

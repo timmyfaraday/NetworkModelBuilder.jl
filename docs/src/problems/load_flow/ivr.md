@@ -8,12 +8,12 @@ equalities: nonconvex, exact, and solved as a feasibility problem.
 
 | symbol | key | index set | bounds |
 |:-------|:----|:----------|:-------|
-| ``v^{\text{r}}_{i}, v^{\text{i}}_{i}`` | `:vr`, `:vi` | ``i \in I`` | free |
-| ``c^{\text{r}}_{a}, c^{\text{i}}_{a}`` | `:cr`, `:ci` | ``a \in A`` | free |
-| ``c^{\text{sr}}_{e}, c^{\text{si}}_{e}`` | `:csr`, `:csi` | ``e \in E^{\text{br}}`` | free |
-| ``v^{\text{sr}}_{e}, v^{\text{si}}_{e}`` | `:vsr`, `:vsi` | ``e \in E^{\text{tf}}`` | free |
-| ``c^{\text{r}}_{u}, c^{\text{i}}_{u}`` | `:cru`, `:ciu` | ``u \in U`` | free |
-| ``p^{\text{g}}_{u}, q^{\text{g}}_{u}`` | `:pg`, `:qg` | ``u \in U^{\text{g}}`` | free |
+| ``v^{\text{r}}_{i}, v^{\text{i}}_{i}`` | `:v_real`, `:v_imag` | ``i \in I`` | free |
+| ``c^{\text{r}}_{a}, c^{\text{i}}_{a}`` | `:i_term_real`, `:i_term_imag` | ``a \in A`` | free |
+| ``c^{\text{sr}}_{e}, c^{\text{si}}_{e}`` | `:i_ser_real`, `:i_ser_imag` | ``e \in E^{\text{br}}`` | free |
+| ``v^{\text{sr}}_{e}, v^{\text{si}}_{e}`` | `:v_star_real`, `:v_star_imag` | ``e \in E^{\text{tf}}`` | free |
+| ``c^{\text{r}}_{u}, c^{\text{i}}_{u}`` | `:i_unit_real`, `:i_unit_imag` | ``u \in U`` | free |
+| ``p^{\text{g}}_{u}, q^{\text{g}}_{u}`` | `:p_gen`, `:q_gen` | ``u \in U^{\text{g}}`` | free |
 
 Nothing is bounded. A load flow has a determinate answer, and bounding a variable
 can only steer the solver away from it.

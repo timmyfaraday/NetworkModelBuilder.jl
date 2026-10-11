@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.3.0 - component hierarchy                                                 #
 # v0.10.1 - exports its own public names                                       #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 export AbstractLoad, demand
@@ -86,15 +87,15 @@ end
 function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T},
                         u::Int, nw::Int) where {P<:AbstractProblemType,F<:AbstractACFormulation,T<:AbstractLoad}
     pd, qd = demand(nm, unit(nm, u; nw)::T, u; nw)
-    sol["pd"] = _value(pd)
-    sol["qd"] = _value(qd)
+    sol["p_set"] = _value(pd)
+    sol["q_set"] = _value(qd)
 
     return nothing
 end
 
 function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T},
                         u::Int, nw::Int) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractLoad}
-    sol["pd"] = _value(first(demand(nm, unit(nm, u; nw)::T, u; nw)))
+    sol["p_set"] = _value(first(demand(nm, unit(nm, u; nw)::T, u; nw)))
 
     return nothing
 end

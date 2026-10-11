@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.10.0 - initial implementation                                             #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 # `security_tables` is tested against a `result` built by hand, not solved: the
@@ -32,7 +33,7 @@ end
 
 "an edge solution entry, the same nested `Dict{String,Any}` shape `build_solution` writes"
 _entry(p::Float64) = Dict{String,Any}("terminal" => Dict{String,Any}(
-                                      "1" => Dict{String,Any}("p" => p)))
+                                      "1" => Dict{String,Any}("p_term" => p)))
 
 """
 The solution `security_network()` would carry, in per unit on its 100 MVA base:

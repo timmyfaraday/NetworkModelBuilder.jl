@@ -13,6 +13,7 @@
 # v0.12.6 - a window builds the solution of what it commits                    #
 # v0.12.9 - the control and peak rows are registered by constrain! alone       #
 # v0.14.0 - a variable is named by the model, not at the call site             #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 ################################################################################
@@ -215,17 +216,17 @@ function constraint_overload_peak(nm::NetworkModel)
         monitored = _overloaded_edges(nm, window)
         isempty(monitored) && continue
 
-        variable_container!(nm, :olp; nw = n)
+        variable_container!(nm, :s_ovl_peak; nw = n)
         for e in monitored
-            olp = variable!(nm, :olp, e; nw = n,
+            olp = variable!(nm, :s_ovl_peak, e; nw = n,
                             start = 0.0, lower = 0.0)
             for m in window
-                haskey(var(nm; nw = m), :ol) || continue
-                ol = var(nm, :ol; nw = m)
-                haskey(ol, e) || continue
+                haskey(var(nm; nw = m), :s_ovl) || continue
+                s_ovl = var(nm, :s_ovl; nw = m)
+                haskey(s_ovl, e) || continue
 
                 constrain!(nm, :overload_peak, (e, m),
-                           JuMP.@build_constraint(ol[e] <= olp); nw = n)
+                           JuMP.@build_constraint(s_ovl[e] <= olp); nw = n)
             end
         end
     end
@@ -237,8 +238,8 @@ end
 function _overloaded_edges(nm::NetworkModel, window)
     found = Int[]
     for m in window
-        haskey(var(nm; nw = m), :ol) || continue
-        union!(found, keys(var(nm, :ol; nw = m)))
+        haskey(var(nm; nw = m), :s_ovl) || continue
+        union!(found, keys(var(nm, :s_ovl; nw = m)))
     end
 
     return sort!(found)
@@ -327,13 +328,13 @@ per-unit-hour without this having to know it.
 function overload_cost(nm::NetworkModel; nw::Int = nw_id_default(nm))
     price = overload_price(nm)
     price === nothing && return 0.0
-    haskey(var(nm; nw), :ol) || return 0.0
+    haskey(var(nm; nw), :s_ovl) || return 0.0
 
-    ol = var(nm, :ol; nw)
+    s_ovl = var(nm, :s_ovl; nw)
 
     return JuMP.@expression(nm.model,
                             price.per_energy *
-                            sum(ol[e] for e in sort!(collect(keys(ol))); init = 0.0))
+                            sum(s_ovl[e] for e in sort!(collect(keys(s_ovl))); init = 0.0))
 end
 
 """
@@ -387,13 +388,13 @@ function _overload_peak_cost(nm::NetworkModel, ids)
     total = JuMP.AffExpr(0.0)
 
     for n in nw_ids(nm)
-        haskey(var(nm; nw = n), :olp) || continue
+        haskey(var(nm; nw = n), :s_ovl_peak) || continue
         ids === nothing || all(in(ids), period_ids(nm, n, :time)) || continue
 
-        olp = var(nm, :olp; nw = n)
-        c   = price.per_peak * period_weight(nm, n, :time)
-        for e in sort!(collect(keys(olp)))
-            JuMP.add_to_expression!(total, c, olp[e])
+        s_ovl_peak = var(nm, :s_ovl_peak; nw = n)
+        c          = price.per_peak * period_weight(nm, n, :time)
+        for e in sort!(collect(keys(s_ovl_peak)))
+            JuMP.add_to_expression!(total, c, s_ovl_peak[e])
         end
     end
 
@@ -410,8 +411,8 @@ function solution_overload_peak(nm::NetworkModel)
     peaks = Dict{Tuple{Int,Int},Float64}()
 
     for n in nw_ids(nm)
-        haskey(var(nm; nw = n), :olp) || continue
-        for (e, v) in var(nm, :olp; nw = n)
+        haskey(var(nm; nw = n), :s_ovl_peak) || continue
+        for (e, v) in var(nm, :s_ovl_peak; nw = n)
             peaks[(e, n)] = JuMP.value(v)
         end
     end
@@ -636,7 +637,7 @@ julia> result = solve_rolling_horizon(mn, RedispatchProblem, LPFFormulation, HiG
 
 julia> result["objective"]              # the committed cost over the whole day
 
-julia> nw_solution(result, 17)["unit"]["3"]["pgup"]
+julia> nw_solution(result, 17)["unit"]["3"]["p_gen_up"]
 ```
 """
 function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimizer;

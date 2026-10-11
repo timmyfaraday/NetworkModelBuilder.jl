@@ -10,6 +10,7 @@
 # v0.10.1 - exports its own public names                                       #
 # v0.12.0 - names the transformer, not the phase shifter                       #
 # v0.14.0 - a variable is named by the model, not at the call site             #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 export AbstractDCLink, DCLink, transfer_loss, transfer_limits
@@ -211,13 +212,13 @@ variable_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
 
 "the transfer of every in-service dc link whose loss is charged on it"
 function _variable_dc_link!(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractDCLink}
-    variable_container!(nm, :pdct; nw)
+    variable_container!(nm, :p_dcl_thru; nw)
 
     for e in ids(nm, T; nw)
         dl = edge(nm, e; nw)::T
         _has_transfer_loss(dl) || continue
 
-        variable!(nm, :pdct, e; nw, start = abs(dl.pdc),
+        variable!(nm, :p_dcl_thru, e; nw, start = abs(dl.pdc),
                   lower = 0.0, upper = dl.rate_a)
     end
 
@@ -240,15 +241,15 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default
 
     _variable_dc_link!(nm, T, nw)
 
-    variable_container!(nm, :pdcup, :pdcdn; nw)
+    variable_container!(nm, :p_dcl_up, :p_dcl_dn; nw)
 
     for e in ids(nm, T; nw)
         dl         = edge(nm, e; nw)::T
         down, up   = transfer_limits(dl)
 
-        variable!(nm, :pdcup, e; nw, start = 0.0,
+        variable!(nm, :p_dcl_up, e; nw, start = 0.0,
                   lower = 0.0, upper = isfinite(up) ? max(up - dl.pdc, 0.0) : nothing)
-        variable!(nm, :pdcdn, e; nw, start = 0.0,
+        variable!(nm, :p_dcl_dn, e; nw, start = 0.0,
                   lower = 0.0, upper = isfinite(down) ? max(dl.pdc - down, 0.0) : nothing)
     end
 
@@ -347,8 +348,8 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
                         ) where {P<:AbstractPowerFlowProblem,F<:LPFFormulation,T<:AbstractDCLink}
     isempty(ids(nm, T; nw)) && return nothing
 
-    p    = var(nm, :p; nw)
-    link = get!(() -> Dict{Int,Any}(), con(nm; nw), :dc_link)
+    p_term = var(nm, :p_term; nw)
+    link   = get!(() -> Dict{Int,Any}(), con(nm; nw), :dc_link)
 
     for e in ids(nm, T; nw)
         dl         = edge(nm, e; nw)::T
@@ -356,9 +357,9 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
 
         # the transfer is `pdc` and the loss follows from it, both data
         link[e] = (constrain!(nm, :dc_link, (e, :setpoint),
-                              JuMP.@build_constraint(p[a_fr] == dl.pdc); nw),
+                              JuMP.@build_constraint(p_term[a_fr] == dl.pdc); nw),
                    constrain!(nm, :dc_link, (e, :loss), JuMP.@build_constraint(
-                       p[a_fr] + p[a_to] == transfer_loss(dl, abs(dl.pdc))); nw))
+                       p_term[a_fr] + p_term[a_to] == transfer_loss(dl, abs(dl.pdc))); nw))
     end
 
     return nothing
@@ -366,8 +367,8 @@ end
 
 "the transfer and the loss of every in-service dc link"
 function _constraint_dc_link!(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractDCLink}
-    p    = var(nm, :p; nw)
-    link = get!(() -> Dict{Int,Any}(), con(nm; nw), :dc_link)
+    p_term = var(nm, :p_term; nw)
+    link   = get!(() -> Dict{Int,Any}(), con(nm; nw), :dc_link)
 
     for e in ids(nm, T; nw)
         dl         = edge(nm, e; nw)::T
@@ -375,21 +376,21 @@ function _constraint_dc_link!(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:Ab
 
         if !_has_transfer_loss(dl)
             link[e] = (constrain!(nm, :dc_link, (e, :loss), JuMP.@build_constraint(
-                           p[a_fr] + p[a_to] == dl.loss_fixed); nw),)
+                           p_term[a_fr] + p_term[a_to] == dl.loss_fixed); nw),)
             continue
         end
 
-        t = var(nm, :pdct, e; nw)
+        p_dcl_thru = var(nm, :p_dcl_thru, e; nw)
 
         # the transfer is at least what each end puts in, so it is at least what
         # the *sending* end puts in whichever end that turns out to be; the loss
         # equality is what settles it there rather than above it
         forward = constrain!(nm, :dc_link, (e, :forward),
-                             JuMP.@build_constraint(t >= p[a_fr]); nw)
+                             JuMP.@build_constraint(p_dcl_thru >= p_term[a_fr]); nw)
         reverse = constrain!(nm, :dc_link, (e, :reverse),
-                             JuMP.@build_constraint(t >= p[a_to]); nw)
+                             JuMP.@build_constraint(p_dcl_thru >= p_term[a_to]); nw)
         loss = constrain!(nm, :dc_link, (e, :loss), JuMP.@build_constraint(
-                   p[a_fr] + p[a_to] == transfer_loss(dl, t)); nw)
+                   p_term[a_fr] + p_term[a_to] == transfer_loss(dl, p_dcl_thru)); nw)
 
         link[e] = (forward, reverse, loss)
     end
@@ -424,7 +425,7 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_i
                                         T<:AbstractDCLink}
     isempty(ids(nm, T; nw)) && return nothing
 
-    p      = var(nm, :p; nw)
+    p_term = var(nm, :p_term; nw)
     limits = get!(() -> Dict{Int,Any}(), con(nm; nw), :dc_link_limits)
 
     for e in ids(nm, T; nw)
@@ -433,7 +434,7 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_i
         caps       = (a_fr => dl.rate_a, a_to => dl.reverse ? dl.rate_a : 0.0)
 
         limits[e] = Tuple(constrain!(nm, :dc_link_limits, (e, a.terminal),
-                                     JuMP.@build_constraint(p[a] <= cap); nw)
+                                     JuMP.@build_constraint(p_term[a] <= cap); nw)
                           for (a, cap) in caps if isfinite(cap))
     end
 
@@ -460,17 +461,17 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
 
     _constraint_dc_link!(nm, T, nw)
 
-    p     = var(nm, :p;     nw)
-    pdcup = var(nm, :pdcup; nw)
-    pdcdn = var(nm, :pdcdn; nw)
-    split = get!(() -> Dict{Int,Any}(), con(nm; nw), :dc_link_redispatch)
+    p_term   = var(nm, :p_term;   nw)
+    p_dcl_up = var(nm, :p_dcl_up; nw)
+    p_dcl_dn = var(nm, :p_dcl_dn; nw)
+    split    = get!(() -> Dict{Int,Any}(), con(nm; nw), :dc_link_redispatch)
 
     for e in ids(nm, T; nw)
         dl      = edge(nm, e; nw)::T
         a_fr, _ = edge_arcs(nm, e; nw)
 
         split[e] = constrain!(nm, :dc_link_redispatch, e, JuMP.@build_constraint(
-                       p[a_fr] == dl.pdc + pdcup[e] - pdcdn[e]); nw)
+                       p_term[a_fr] == dl.pdc + p_dcl_up[e] - p_dcl_dn[e]); nw)
     end
 
     return nothing
@@ -495,13 +496,13 @@ function redispatch_cost(nm::NetworkModel, ::Type{T}, e::Int; nw::Int) where {T<
     dl = edge(nm, e; nw)::T
 
     return JuMP.@expression(nm.model,
-        dl.cost * (var(nm, :pdcup, e; nw) + var(nm, :pdcdn, e; nw)))
+        dl.cost * (var(nm, :p_dcl_up, e; nw) + var(nm, :p_dcl_dn, e; nw)))
 end
 
 "a preventive dc link holds one transfer across every contingency"
 redispatch_controls(::NetworkModel{P,F}, ::Type{T}
                    ) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractDCLink} =
-    (:pdcup, :pdcdn)
+    (:p_dcl_up, :p_dcl_dn)
 
 ################################################################################
 # DC link — solution                                                           #
@@ -512,16 +513,16 @@ function solution_edge!(entry::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T
                         e::Int, nw::Int) where {P<:AbstractProblemType,F<:LPFFormulation,
                                                 T<:AbstractDCLink}
     a_fr, a_to = edge_arcs(nm, e; nw)
-    p_fr       = JuMP.value(var(nm, :p, a_fr; nw))
-    p_to       = JuMP.value(var(nm, :p, a_to; nw))
+    p_fr       = JuMP.value(var(nm, :p_term, a_fr; nw))
+    p_to       = JuMP.value(var(nm, :p_term, a_to; nw))
 
-    entry["pdc"]  = p_fr
-    entry["loss"] = p_fr + p_to
+    entry["p_dcl"]  = p_fr
+    entry["p_loss"] = p_fr + p_to
 
-    if haskey(var(nm; nw), :pdcup) && haskey(var(nm, :pdcup; nw), e)
-        entry["pdc_market"] = edge(nm, e; nw).pdc
-        entry["pdcup"]      = JuMP.value(var(nm, :pdcup, e; nw))
-        entry["pdcdn"]      = JuMP.value(var(nm, :pdcdn, e; nw))
+    if haskey(var(nm; nw), :p_dcl_up) && haskey(var(nm, :p_dcl_up; nw), e)
+        entry["p_dcl_mkt"] = edge(nm, e; nw).pdc
+        entry["p_dcl_up"]      = JuMP.value(var(nm, :p_dcl_up, e; nw))
+        entry["p_dcl_dn"]      = JuMP.value(var(nm, :p_dcl_dn, e; nw))
     end
 
     return nothing

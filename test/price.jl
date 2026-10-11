@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.7.0 - nodal prices from the duals of the node balance                     #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 # Two nodes, a cheap generator on one and a dear one on the other, and a branch
@@ -159,8 +160,8 @@ prices(result, n = 1) = [nw_solution(result, n)["node"]["$i"]["lambda"] for i in
         @test node["2"]["lambda_real"] ≈ 109.9399 atol = 1e-3
         @test !isapprox(node["2"]["lambda_real"], 100.0; atol = 1.0)
         @test node["2"]["lambda_real"] ≈
-              node["2"]["vr"] * node["2"]["lambda"] +
-              node["2"]["vi"] * node["2"]["lambda_q"] atol = 1e-6
+              node["2"]["v_real"] * node["2"]["lambda"] +
+              node["2"]["v_imag"] * node["2"]["lambda_q"] atol = 1e-6
     end
 
     @testset "the rotation recovers the price the linearization gives" begin

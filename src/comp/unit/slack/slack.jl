@@ -10,6 +10,7 @@
 # v0.8.0 - a slack unit takes a side in the preventive-corrective split        #
 # v0.10.1 - exports its own public names                                       #
 # v0.14.0 - a variable is named by the model, not at the call site             #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 export AbstractSlackUnit, EnergyNotServed, Spill
@@ -184,11 +185,11 @@ variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
 function variable_slack_volume!(nm::NetworkModel, ::Type{T}; nw::Int) where {T<:AbstractSlackUnit}
     isempty(ids(nm, T; nw)) && return nothing
 
-    variable_container!(nm, :psl; nw)
+    variable_container!(nm, :p_slk; nw)
 
     for u in ids(nm, T; nw)
         su = unit(nm, u; nw)::T
-        variable!(nm, :psl, u; nw, start = 0.0,
+        variable!(nm, :p_slk, u; nw, start = 0.0,
                   lower = 0.0, upper = su.pmax)
     end
 
@@ -229,12 +230,12 @@ constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
 function _constraint_slack_power(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractSlackUnit}
     isempty(ids(nm, T; nw)) && return nothing
 
-    psl   = var(nm, :psl; nw)
+    p_slk = var(nm, :p_slk; nw)
     power = get!(() -> Dict{Int,Any}(), con(nm; nw), :slack_power)
 
     for u in ids(nm, T; nw)
         su = unit(nm, u; nw)::T
-        p  = JuMP.@expression(nm.model, slack_sign(su) * psl[u])
+        p  = JuMP.@expression(nm.model, slack_sign(su) * p_slk[u])
         power[u] = constraint_unit_power!(nm, u, p, 0.0; nw)
     end
 
@@ -260,10 +261,10 @@ a slack unit has no market schedule to move away from, so every per unit it
 takes is the intervention itself.
 """
 function slack_cost(nm::NetworkModel, ::Type{T}, u::Int; nw::Int) where {T<:AbstractSlackUnit}
-    haskey(var(nm; nw), :psl) || return 0.0
+    haskey(var(nm; nw), :p_slk) || return 0.0
     su = unit(nm, u; nw)::T
 
-    return JuMP.@expression(nm.model, su.cost * slack_sign(su) * var(nm, :psl, u; nw))
+    return JuMP.@expression(nm.model, su.cost * slack_sign(su) * var(nm, :p_slk, u; nw))
 end
 
 dispatch_cost(nm::NetworkModel, ::Type{T}, u::Int; nw::Int) where {T<:AbstractSlackUnit} =
@@ -284,7 +285,7 @@ is worth more precisely because it is never paid for a state that did not occur.
 Which one a problem means is a statement about how it is posed, so it is set on
 the setup rather than on the unit.
 """
-redispatch_controls(::NetworkModel, ::Type{T}) where {T<:AbstractSlackUnit} = (:psl,)
+redispatch_controls(::NetworkModel, ::Type{T}) where {T<:AbstractSlackUnit} = (:p_slk,)
 
 ################################################################################
 # Slack unit — solution                                                        #
@@ -293,8 +294,8 @@ redispatch_controls(::NetworkModel, ::Type{T}) where {T<:AbstractSlackUnit} = (:
 "the volume of slack unit `u`, where the problem gave it one"
 function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel, ::Type{T}, u::Int, nw::Int
                        ) where {T<:AbstractSlackUnit}
-    haskey(var(nm; nw), :psl) && haskey(var(nm, :psl; nw), u) || return nothing
-    sol["psl"] = JuMP.value(var(nm, :psl, u; nw))
+    haskey(var(nm; nw), :p_slk) && haskey(var(nm, :p_slk; nw), u) || return nothing
+    sol["p_slk"] = JuMP.value(var(nm, :p_slk, u; nw))
 
     return nothing
 end
@@ -329,13 +330,13 @@ constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
 function _constraint_slack_injection(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractSlackUnit}
     isempty(ids(nm, T; nw)) && return nothing
 
-    psl   = var(nm, :psl; nw)
+    p_slk = var(nm, :p_slk; nw)
     power = get!(() -> Dict{Int,Any}(), con(nm; nw), :slack_power)
 
     for u in ids(nm, T; nw)
         su = unit(nm, u; nw)::T
         power[u] = constraint_unit_injection!(nm, u,
-                       JuMP.@expression(nm.model, slack_sign(su) * psl[u]); nw)
+                       JuMP.@expression(nm.model, slack_sign(su) * p_slk[u]); nw)
     end
 
     return nothing

@@ -147,7 +147,7 @@ solve_rd(data, LPFFormulation, HiGHS.Optimizer;
 Every monitored edge with a finite rating gets one non-negative overload
 variable, `o_e`, shared by its terminals, and the objective pays `per_energy`
 for it at every network index. An infeasible congestion becomes an expensive
-one, and `solution["edge"]["e"]["overload"]` reports the excess on every edge
+one, and `solution["edge"]["e"]["s_ovl"]` reports the excess on every edge
 that was watched — including the ones the answer left at zero, since an edge
 missing from the result reads as *not asked* rather than *asked and clear*.
 

@@ -35,10 +35,10 @@ A network dependent cost is a `NetworkVector{Vector{Float64}}` — the plain
 
 | symbol | key | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``c^{\text{r}}_{u}`` | `:cru` | unit | real injected current | pu |
-| ``c^{\text{i}}_{u}`` | `:ciu` | unit | imaginary injected current | pu |
-| ``p^{\text{g}}_{u}`` | `:pg` | unit | active power | pu |
-| ``q^{\text{g}}_{u}`` | `:qg` | unit | reactive power | pu |
+| ``c^{\text{r}}_{u}`` | `:i_unit_real` | unit | real injected current | pu |
+| ``c^{\text{i}}_{u}`` | `:i_unit_imag` | unit | imaginary injected current | pu |
+| ``p^{\text{g}}_{u}`` | `:p_gen` | unit | active power | pu |
+| ``q^{\text{g}}_{u}`` | `:q_gen` | unit | reactive power | pu |
 
 The injection currents are shared by every unit type. `pg` and `qg` are free in
 a power flow, where [`constraint_unit`](@ref) fixes them at their setpoint
@@ -48,8 +48,8 @@ instead, and bounded by the operating limits in a dispatch problem.
 
 | symbol | key | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``p_{u}`` | `:pu` | unit | active power injected into the node | pu |
-| ``p^{\text{g}}_{u}`` | `:pg` | unit | active power | pu |
+| ``p_{u}`` | `:p_unit` | unit | active power injected into the node | pu |
+| ``p^{\text{g}}_{u}`` | `:p_gen` | unit | active power | pu |
 
 There is no reactive power, so `qg` is not created and the reactive limits play
 no part. In a load flow the `PV` and `PQ` distinction disappears with it: every

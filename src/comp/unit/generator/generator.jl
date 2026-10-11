@@ -13,6 +13,7 @@
 # v0.12.8 - a generator refuses limits and setpoints no model can use          #
 # v0.12.9 - the energy rows are registered by constrain! alone                 #
 # v0.14.0 - a variable is named by the model, not at the call site             #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 export AbstractGenerator, Generator
@@ -163,7 +164,7 @@ What generator `u` costs at network index `nw`, its
 an [`OptimalPowerFlowProblem`](@ref) minimizes.
 """
 dispatch_cost(nm::NetworkModel, ::Type{T}, u::Int; nw::Int) where {T<:AbstractGenerator} =
-    generation_cost(unit(nm, u; nw)::T, var(nm, :pg, u; nw))
+    generation_cost(unit(nm, u; nw)::T, var(nm, :p_gen, u; nw))
 
 ################################################################################
 # Generator — variables                                                        #
@@ -191,13 +192,13 @@ variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
 
 function _variable_generator_power(nm::NetworkModel, ::Type{T}, nw::Int, bounded::Bool
                                   ) where {T<:AbstractGenerator}
-    variable_container!(nm, :pg, :qg; nw)
+    variable_container!(nm, :p_gen, :q_gen; nw)
 
     for u in ids(nm, T; nw)
         g = unit(nm, u; nw)::T
-        variable!(nm, :pg, u; nw, start = g.pg,
+        variable!(nm, :p_gen, u; nw, start = g.pg,
                   lower = bounded ? g.pmin : nothing, upper = bounded ? g.pmax : nothing)
-        variable!(nm, :qg, u; nw, start = g.qg,
+        variable!(nm, :q_gen, u; nw, start = g.qg,
                   lower = bounded ? g.qmin : nothing, upper = bounded ? g.qmax : nothing)
     end
 
@@ -227,12 +228,12 @@ function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
                         ) where {P<:AbstractPowerFlowProblem,F<:IVRFormulation,T<:AbstractGenerator}
     _constraint_generator_power(nm, T, nw)
 
-    pg, qg = var(nm, :pg; nw), var(nm, :qg; nw)
+    p_gen, q_gen = var(nm, :p_gen; nw), var(nm, :q_gen; nw)
     for u in ids(nm, T; nw)
         g  = unit(nm, u; nw)::T
         nd = node(nm, g.node; nw)
-        bound!(pg[u]; fix = nd.type == REF ? nothing : g.pg)
-        bound!(qg[u]; fix = nd.type == PQ  ? g.qg : nothing)
+        bound!(p_gen[u]; fix = nd.type == REF ? nothing : g.pg)
+        bound!(q_gen[u]; fix = nd.type == PQ  ? g.qg : nothing)
     end
 
     return nothing
@@ -243,11 +244,11 @@ constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
     _constraint_generator_power(nm, T, nw)
 
 function _constraint_generator_power(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractGenerator}
-    pg, qg = var(nm, :pg; nw), var(nm, :qg; nw)
-    power  = get!(() -> Dict{Int,Any}(), con(nm; nw), :generator_power)
+    p_gen, q_gen = var(nm, :p_gen; nw), var(nm, :q_gen; nw)
+    power        = get!(() -> Dict{Int,Any}(), con(nm; nw), :generator_power)
 
     for u in ids(nm, T; nw)
-        power[u] = constraint_unit_power!(nm, u, pg[u], qg[u]; nw)
+        power[u] = constraint_unit_power!(nm, u, p_gen[u], q_gen[u]; nw)
     end
 
     return nothing
@@ -298,8 +299,8 @@ function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
             isfinite(g.max_energy_per_period) || continue
 
             constrain!(nm, :generator_energy, u, JuMP.@build_constraint(
-                sum(time_step(nm, m) * var(nm, :pg, u; nw = m)
-                    for m in window if haskey(var(nm, :pg; nw = m), u); init = 0.0) <=
+                sum(time_step(nm, m) * var(nm, :p_gen, u; nw = m)
+                    for m in window if haskey(var(nm, :p_gen; nw = m), u); init = 0.0) <=
                 g.max_energy_per_period); nw = n)
         end
     end
@@ -313,8 +314,8 @@ end
 
 function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T},
                         u::Int, nw::Int) where {P<:AbstractProblemType,F<:AbstractACFormulation,T<:AbstractGenerator}
-    sol["pg"] = JuMP.value(var(nm, :pg, u; nw))
-    sol["qg"] = JuMP.value(var(nm, :qg, u; nw))
+    sol["p_gen"] = JuMP.value(var(nm, :p_gen, u; nw))
+    sol["q_gen"] = JuMP.value(var(nm, :q_gen, u; nw))
     _solution_generator_redispatch!(sol, nm, u, nw)
 
     return nothing
@@ -322,7 +323,7 @@ end
 
 function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T},
                         u::Int, nw::Int) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractGenerator}
-    sol["pg"] = JuMP.value(var(nm, :pg, u; nw))
+    sol["p_gen"] = JuMP.value(var(nm, :p_gen, u; nw))
     _solution_generator_redispatch!(sol, nm, u, nw)
 
     return nothing
@@ -349,11 +350,11 @@ variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
 
 function _variable_generator_active(nm::NetworkModel, ::Type{T}, nw::Int, bounded::Bool
                                    ) where {T<:AbstractGenerator}
-    variable_container!(nm, :pg; nw)
+    variable_container!(nm, :p_gen; nw)
 
     for u in ids(nm, T; nw)
         g = unit(nm, u; nw)::T
-        variable!(nm, :pg, u; nw, start = g.pg,
+        variable!(nm, :p_gen, u; nw, start = g.pg,
                   lower = bounded ? g.pmin : nothing, upper = bounded ? g.pmax : nothing)
     end
 
@@ -373,10 +374,10 @@ function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
                         ) where {P<:AbstractPowerFlowProblem,F<:LPFFormulation,T<:AbstractGenerator}
     _constraint_generator_active(nm, T, nw)
 
-    pg = var(nm, :pg; nw)
+    p_gen = var(nm, :p_gen; nw)
     for u in ids(nm, T; nw)
         g = unit(nm, u; nw)::T
-        bound!(pg[u]; fix = node(nm, g.node; nw).type == REF ? nothing : g.pg)
+        bound!(p_gen[u]; fix = node(nm, g.node; nw).type == REF ? nothing : g.pg)
     end
 
     return nothing
@@ -387,11 +388,11 @@ constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
     _constraint_generator_active(nm, T, nw)
 
 function _constraint_generator_active(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractGenerator}
-    pg    = var(nm, :pg; nw)
+    p_gen = var(nm, :p_gen; nw)
     power = get!(() -> Dict{Int,Any}(), con(nm; nw), :generator_power)
 
     for u in ids(nm, T; nw)
-        power[u] = constraint_unit_injection!(nm, u, pg[u]; nw)
+        power[u] = constraint_unit_injection!(nm, u, p_gen[u]; nw)
     end
 
     return nothing
@@ -475,14 +476,14 @@ end
 
 function _variable_generator_redispatch(nm::NetworkModel, ::Type{T}, nw::Int
                                        ) where {T<:AbstractGenerator}
-    variable_container!(nm, :pgup, :pgdn; nw)
+    variable_container!(nm, :p_gen_up, :p_gen_dn; nw)
 
     for u in ids(nm, T; nw)
         g = unit(nm, u; nw)::T
 
-        variable!(nm, :pgup, u; nw, start = 0.0,
+        variable!(nm, :p_gen_up, u; nw, start = 0.0,
                   lower = 0.0, upper = isfinite(g.pmax) ? max(g.pmax - g.pg, 0.0) : nothing)
-        variable!(nm, :pgdn, u; nw, start = 0.0,
+        variable!(nm, :p_gen_dn, u; nw, start = 0.0,
                   lower = 0.0, upper = isfinite(g.pmin) ? max(g.pg - g.pmin, 0.0) : nothing)
     end
 
@@ -526,15 +527,15 @@ end
 
 function _constraint_generator_redispatch(nm::NetworkModel, ::Type{T}, nw::Int
                                          ) where {T<:AbstractGenerator}
-    pg   = var(nm, :pg;   nw)
-    pgup = var(nm, :pgup; nw)
-    pgdn = var(nm, :pgdn; nw)
+    p_gen    = var(nm, :p_gen;    nw)
+    p_gen_up = var(nm, :p_gen_up; nw)
+    p_gen_dn = var(nm, :p_gen_dn; nw)
     split = get!(() -> Dict{Int,Any}(), con(nm; nw), :generator_redispatch)
 
     for u in ids(nm, T; nw)
         g = unit(nm, u; nw)::T
         split[u] = constrain!(nm, :generator_redispatch, u,
-                       JuMP.@build_constraint(pg[u] == g.pg + pgup[u] - pgdn[u]); nw)
+                       JuMP.@build_constraint(p_gen[u] == g.pg + p_gen_up[u] - p_gen_dn[u]); nw)
     end
 
     return nothing
@@ -551,20 +552,20 @@ function redispatch_cost(nm::NetworkModel, ::Type{T}, u::Int; nw::Int) where {T<
     cup, cdn = redispatch_price(unit(nm, u; nw)::T)
 
     return JuMP.@expression(nm.model,
-        cup * var(nm, :pgup, u; nw) + cdn * var(nm, :pgdn, u; nw))
+        cup * var(nm, :p_gen_up, u; nw) + cdn * var(nm, :p_gen_dn, u; nw))
 end
 
 "a preventive generator holds one redispatch volume across every contingency"
-redispatch_controls(::NetworkModel, ::Type{T}) where {T<:AbstractGenerator} = (:pgup, :pgdn)
+redispatch_controls(::NetworkModel, ::Type{T}) where {T<:AbstractGenerator} = (:p_gen_up, :p_gen_dn)
 
 "add the redispatch volumes of generator `u` to its solution, where the problem has them"
 function _solution_generator_redispatch!(sol::Dict{String,Any}, nm::NetworkModel,
                                          u::Int, nw::Int)
-    haskey(var(nm; nw), :pgup) || return nothing
+    haskey(var(nm; nw), :p_gen_up) || return nothing
 
-    sol["pg_market"] = unit(nm, u; nw).pg
-    sol["pgup"]      = JuMP.value(var(nm, :pgup, u; nw))
-    sol["pgdn"]      = JuMP.value(var(nm, :pgdn, u; nw))
+    sol["p_gen_mkt"] = unit(nm, u; nw).pg
+    sol["p_gen_up"]      = JuMP.value(var(nm, :p_gen_up, u; nw))
+    sol["p_gen_dn"]      = JuMP.value(var(nm, :p_gen_dn, u; nw))
 
     return nothing
 end

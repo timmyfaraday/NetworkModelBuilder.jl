@@ -13,6 +13,7 @@
 # v0.12.9 - the held controls are read through held_controls                   #
 # v0.13.0 - a two-winding transformer is rated at each terminal                #
 # v0.13.0 - a lossy transformer is rated at each terminal                      #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 # What a transformer does, written so that it does not depend on how one is
@@ -122,8 +123,8 @@ function check_case5(make, F; extra = (;), objective, tm, ta, sz)
 
     @test result["termination_status"] == JuMP.LOCALLY_SOLVED
     @test result["objective"] ≈ objective rtol = 1e-7
-    @test tap["tm"] ≈ tm atol = 1e-6
-    @test tap["ta"] ≈ ta atol = 1e-6
+    @test tap["t_magn"] ≈ tm atol = 1e-6
+    @test tap["t_angl"] ≈ ta atol = 1e-6
     @test size_of(nm) == sz
 
     return nothing
@@ -139,13 +140,13 @@ function check_windings(F, extra; va, p, objective, lf_size, opf_size, vm = noth
     lf, result = solved(data, LoadFlowProblem, F)
     sol        = nw_solution(result)
     @test result["termination_status"] == JuMP.LOCALLY_SOLVED
-    @test sol["node"]["2"]["va"] ≈ va[1] atol = 1e-6
-    @test sol["node"]["3"]["va"] ≈ va[2] atol = 1e-6
-    @test sol["unit"]["1"]["p"] ≈ p atol = 1e-6
+    @test sol["node"]["2"]["v_angl"] ≈ va[1] atol = 1e-6
+    @test sol["node"]["3"]["v_angl"] ≈ va[2] atol = 1e-6
+    @test sol["unit"]["1"]["p_unit"] ≈ p atol = 1e-6
     if vm !== nothing
-        @test sol["node"]["2"]["vm"] ≈ vm[1] atol = 1e-6
-        @test sol["node"]["3"]["vm"] ≈ vm[2] atol = 1e-6
-        @test sol["unit"]["1"]["q"] ≈ q atol = 1e-6
+        @test sol["node"]["2"]["v_magn"] ≈ vm[1] atol = 1e-6
+        @test sol["node"]["3"]["v_magn"] ≈ vm[2] atol = 1e-6
+        @test sol["unit"]["1"]["q_unit"] ≈ q atol = 1e-6
     end
     @test size_of(lf) == lf_size
 
@@ -253,15 +254,15 @@ end
 
             @test result["objective"] ≈ 6.601790739817746 rtol = 1e-7
             @test size_of(nm) == (28, 32)
-            @test taps[1]["tm"] == 1.0
-            @test all(0.9 - 1e-6 <= t["tm"] < 1.0 for t in taps[2:3])
+            @test taps[1]["t_magn"] == 1.0
+            @test all(0.9 - 1e-6 <= t["t_magn"] < 1.0 for t in taps[2:3])
 
             # a ratio on one winding does not relieve the cap at the other
             _, one = opf(; oltc = [false, true, false])
             @test one["objective"] ≈ plain["objective"] rtol = 1e-9
 
             # held at the ratios it chose, the transformer gives the same optimum
-            _, held = opf(; tm = [t["tm"] for t in taps])
+            _, held = opf(; tm = [t["t_magn"] for t in taps])
             @test held["objective"] ≈ result["objective"] rtol = 1e-7
         end
 
@@ -278,10 +279,10 @@ end
 
             @test result["objective"] ≈ 6.601790739817746 rtol = 1e-7
             @test size_of(nm) == (30, 40)
-            @test all(0.9 - 1e-6 <= t["tm"] <= 1.1 + 1e-6 for t in taps)
-            @test all(-0.2 - 1e-6 <= t["ta"] <= 0.2 + 1e-6 for t in taps)
+            @test all(0.9 - 1e-6 <= t["t_magn"] <= 1.1 + 1e-6 for t in taps)
+            @test all(-0.2 - 1e-6 <= t["t_angl"] <= 0.2 + 1e-6 for t in taps)
 
-            _, held = opf(; tm = [t["tm"] for t in taps], ta = [t["ta"] for t in taps])
+            _, held = opf(; tm = [t["t_magn"] for t in taps], ta = [t["t_angl"] for t in taps])
             @test held["objective"] ≈ result["objective"] rtol = 1e-7
         end
     end
@@ -303,9 +304,9 @@ end
             # any angle that brings the corridor under its rating costs the same, so
             # it is the rating and the direction that are determined
             corridor = nw_solution(three)["edge"]["1"]["terminal"]["1"]
-            @test hypot(corridor["p"], get(corridor, "q", 0.0)) <= 0.5 + 1e-6
-            @test -0.3 - 1e-6 <= taps[1]["ta"] < -1e-3
-            @test taps[2]["ta"] == 0.0 && taps[3]["ta"] == 0.0
+            @test hypot(corridor["p_term"], get(corridor, "q_term", 0.0)) <= 0.5 + 1e-6
+            @test -0.3 - 1e-6 <= taps[1]["t_angl"] < -1e-3
+            @test taps[2]["t_angl"] == 0.0 && taps[3]["t_angl"] == 0.0
         end
     end
 
@@ -313,12 +314,12 @@ end
         dim  = Dimension(:contingency => 2)
         data = meshed_network(; dim, out = (2,), star = true)
 
-        for (F, keys) in ((LPFFormulation, (:ta,)), (IVRFormulation, (:tr, :ti)))
+        for (F, keys) in ((LPFFormulation, (:t_angl,)), (IVRFormulation, (:t_real, :t_imag)))
             tied = held_controls(instantiate_model(data, RedispatchProblem, F))
 
             @test all((:edge, Arc(2, 1, 1), k, 2) in tied for k in keys)
             @test !any((:edge, a, k, 2) in tied
-                       for a in (Arc(2, 2, 2), Arc(2, 3, 4)), k in (:ta, :tr, :ti, :tm))
+                       for a in (Arc(2, 2, 2), Arc(2, 3, 4)), k in (:t_angl, :t_real, :t_imag, :t_magn))
         end
 
         # the optimum is the two-winding one, held or not; the setpoint angle is zero,
@@ -331,8 +332,8 @@ end
             @test three["objective"] ≈
                   quiet(() -> solve_rd(two, F, OPTIMIZER; redispatch = rd))["objective"] rtol = 1e-6
 
-            control === :preventive && @test taps_of(three, 2, 1)[1]["ta"] ≈
-                                             taps_of(three, 2, 2)[1]["ta"] atol = 1e-6
+            control === :preventive && @test taps_of(three, 2, 1)[1]["t_angl"] ≈
+                                             taps_of(three, 2, 2)[1]["t_angl"] atol = 1e-6
         end
 
         # a held winding has no tap rows of its own, the base case's imply them
@@ -351,9 +352,9 @@ end
         nm, result = solved(shifter_network(), RedispatchProblem, LPFFormulation)
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
         @test result["objective"] ≈ 0.0 atol = 1e-5
-        @test tap_of(result, 2)["tm"] == 1.0
-        @test -0.3 - 1e-6 <= tap_of(result, 2)["ta"] <= 0.3 + 1e-6
-        @test tap_of(result, 2)["ta_market"] == 0.0
+        @test tap_of(result, 2)["t_magn"] == 1.0
+        @test -0.3 - 1e-6 <= tap_of(result, 2)["t_angl"] <= 0.3 + 1e-6
+        @test tap_of(result, 2)["t_angl_mkt"] == 0.0
         @test size_of(nm) == (19, 20)
 
         nm, result = solved(shifter_network(), RedispatchProblem, IVRFormulation)
@@ -390,23 +391,23 @@ end
             @test maximum(runs) - minimum(runs) > 100.0        # and it was a choice
 
             # the position it took is the angle it reports, and one that clears the corridor
-            @test tap["ta"] ≈ positions[tap["step"]] atol = 1e-9
-            @test tap["ta"] <= -0.1 + 1e-9
-            @test sum(JuMP.value, values(_NMB.var(nm)[:zt])) ≈ 1.0 atol = 1e-9
+            @test tap["t_angl"] ≈ positions[tap["z_step"]] atol = 1e-9
+            @test tap["t_angl"] <= -0.1 + 1e-9
+            @test sum(JuMP.value, values(_NMB.var(nm)[:z_step])) ≈ 1.0 atol = 1e-9
 
             # held at that position, the same winding gives the same optimum
-            @test quiet(() -> solve_opf(held_at(tap["ta"]), LPFFormulation, exact))["objective"] ≈
+            @test quiet(() -> solve_opf(held_at(tap["t_angl"]), LPFFormulation, exact))["objective"] ≈
                   result["objective"] atol = 1e-6
         end
 
         @testset "one binary for each position, and no prices" begin
             nm = instantiate_model(meshed_network(; tap = stepping), OptimalPowerFlowProblem,
                                    LPFFormulation)
-            zt = _NMB.var(nm)[:zt]
+            zt = _NMB.var(nm)[:z_step]
 
             @test length(zt) == 7 && all(JuMP.is_binary, values(zt))
             @test [JuMP.start_value(zt[(Arc(2, 1, 1), s)]) for s in 1:7] == [0, 0, 0, 1, 0, 0, 0]
-            @test !haskey(_NMB.var(nm), :ta)
+            @test !haskey(_NMB.var(nm), :t_angl)
             @test count(==(:tap_step), first.([(key, id) for (_, key, id) in
                                                keys(registered_constraints(nm))])) == 1
 
@@ -454,7 +455,7 @@ end
             @test result["termination_status"] in (JuMP.OPTIMAL, JuMP.LOCALLY_SOLVED)
             @test result["objective"] ≈ runs[best] rtol = 1e-6
             @test maximum(runs) - minimum(runs) > 100.0
-            @test tap["step"] == best
+            @test tap["z_step"] == best
             @test size_of(nm) == sz
             @test !JuMP.has_duals(nm.model)
         end
@@ -467,9 +468,9 @@ end
             three = quiet(() -> optimize_model!(nm, exact))
 
             @test three["objective"] ≈ two["objective"] atol = 1e-6
-            @test length(_NMB.var(nm)[:zt]) == 7              # the windings that hold have none
-            @test taps_of(three, 2)[1]["ta"] <= -0.1 + 1e-9
-            @test taps_of(three, 2)[2]["ta"] == 0.0 && !haskey(taps_of(three, 2)[2], "step")
+            @test length(_NMB.var(nm)[:z_step]) == 7              # the windings that hold have none
+            @test taps_of(three, 2)[1]["t_angl"] <= -0.1 + 1e-9
+            @test taps_of(three, 2)[2]["t_angl"] == 0.0 && !haskey(taps_of(three, 2)[2], "z_step")
         end
 
         @testset "preventive: one position over the contingencies" begin
@@ -487,7 +488,7 @@ end
 
                 @test preventive["objective"] ≈ minimum(runs) atol = 1e-6
                 @test corrective["objective"] < preventive["objective"] - 1.0
-                @test taps_of(preventive, 2, 1)[1]["step"] == taps_of(preventive, 2, 2)[1]["step"]
+                @test taps_of(preventive, 2, 1)[1]["z_step"] == taps_of(preventive, 2, 2)[1]["z_step"]
             end
 
             # a held winding has no binaries and no row of its own: it takes the base
@@ -500,9 +501,9 @@ end
                 held = control === :preventive
 
                 @test count(JuMP.is_binary, JuMP.all_variables(nm.model)) == (held ? 7 : 14)
-                @test all((_NMB.var(nm, :zt, (arc, s); nw = 2) === _NMB.var(nm, :zt, (arc, s); nw = 1))
+                @test all((_NMB.var(nm, :z_step, (arc, s); nw = 2) === _NMB.var(nm, :z_step, (arc, s); nw = 1))
                           == held for s in 1:7)
-                @test !any(key[3] === :zt for key in held_controls(nm))
+                @test !any(key[3] === :z_step for key in held_controls(nm))
                 @test haskey(_NMB.con(nm; nw = 1)[:tap_step], arc)
                 @test haskey(_NMB.con(nm; nw = 2)[:tap_step], arc) == !held
             end
@@ -544,7 +545,7 @@ end
             name = "lossy", baseMVA = 100.0)
 
         apparent(result, k) = (t = nw_solution(result)["edge"]["1"]["terminal"]["$k"];
-                               hypot(t["p"], get(t, "q", 0.0)))
+                               hypot(t["p_term"], get(t, "q_term", 0.0)))
         opf(rate_a, F) = quiet(() -> solve_opf(network(rate_a), F, OPTIMIZER))
 
         # the current based model has losses, so each terminal has its own limit

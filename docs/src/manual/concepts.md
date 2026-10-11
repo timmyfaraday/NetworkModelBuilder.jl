@@ -103,7 +103,7 @@ by hand, `solution_tables` is a tidy `NamedTuple` view over the same numbers:
 ```@example concepts-question
 tables = solution_tables(data, opf)
 
-(dict = nw_solution(opf)["node"]["2"]["vm"], column = tables.node.vm)
+(dict = nw_solution(opf)["node"]["2"]["v_magn"], column = tables.node.v_magn)
 ```
 
 Both read the same solve. `nw_solution` is the one-value-at-a-time reach;

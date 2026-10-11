@@ -17,6 +17,7 @@
 # v0.13.0 - a table may give a scalar where it takes an entry per winding      #
 # v0.13.0 - the docstring says what g_sh is, against a branch's                #
 # v0.14.0 - a variable is named by the model, not at the call site             #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 export AbstractTransformer, Transformer, TapMode, FIXED, CONTINUOUS, STEPPED
@@ -320,13 +321,13 @@ function _variable_steps!(nm::NetworkModel, tf::Transformer, a::Arc, k::Int; nw:
     start = _step_start(nm, tf, k)
     base  = is_held(nm, :edge, a.edge; nw) ? first_id(nm, nw, :contingency) : nothing
 
-    zt = variable_container!(nm, :zt; nw, idtype = Tuple{Arc,Int})
+    zt = variable_container!(nm, :z_step; nw, idtype = Tuple{Arc,Int})
     for s in eachindex(_step_values(nm, tf, k))
         if base === nothing
-            variable!(nm, :zt, (a, s); nw,
+            variable!(nm, :z_step, (a, s); nw,
                       start = s == start ? 1.0 : 0.0, binary = true)
         else
-            zt[(a, s)] = var(nm, :zt, (a, s); nw = base)
+            zt[(a, s)] = var(nm, :z_step, (a, s); nw = base)
         end
     end
 
@@ -346,9 +347,9 @@ function _constraint_steps!(nm::NetworkModel, tf::Transformer, e::Int, A::Vector
     for (k, a) in enumerate(A)
         _stepped(nm, tf, k) || continue
 
-        zt = var(nm, :zt; nw)
+        z_step = var(nm, :z_step; nw)
         step[a] = constrain!(nm, :tap_step, a, JuMP.@build_constraint(
-            sum(zt[(a, s)] for s in eachindex(_step_values(nm, tf, k))) == 1); nw)
+            sum(z_step[(a, s)] for s in eachindex(_step_values(nm, tf, k))) == 1); nw)
     end
 
     return nothing
@@ -356,7 +357,7 @@ end
 
 "the position winding `k` takes, among the ones it can, in a solved model"
 _chosen_step(nm::NetworkModel, tf::Transformer, a::Arc, k::Int; nw::Int) =
-    argmax(s -> JuMP.value(var(nm, :zt, (a, s); nw)), eachindex(_step_values(nm, tf, k)))
+    argmax(s -> JuMP.value(var(nm, :z_step, (a, s); nw)), eachindex(_step_values(nm, tf, k)))
 
 """
     tap_ratio(nm, tf, e, k; nw)
@@ -409,14 +410,14 @@ is the node's own, referred through it.
 """
 function variable_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_id_default(nm)
                       ) where {P<:AbstractProblemType,F<:IVRFormulation}
-    variable_container!(nm, :vsr, :vsi; nw)
+    variable_container!(nm, :v_star_real, :v_star_imag; nw)
 
     for e in ids(nm, Transformer; nw)
         tf = edge(nm, e; nw)::Transformer
 
         vs0 = _referred_start(tf, 1)
-        variable!(nm, :vsr, e; nw, start = vs0[1])
-        variable!(nm, :vsi, e; nw, start = vs0[2])
+        variable!(nm, :v_star_real, e; nw, start = vs0[1])
+        variable!(nm, :v_star_imag, e; nw, start = vs0[2])
 
         for (k, a) in enumerate(edge_arcs(nm, e; nw))
             _moves(nm, tf, k) || continue
@@ -439,8 +440,8 @@ function _variable_winding!(nm::NetworkModel, tf::Transformer, a::Arc, k::Int; n
     tm, ta = tf.tm[k], tf.ta[k]
 
     vtr0, vti0 = _referred_start(tf, k)
-    variable!(nm, :vtr, a; nw, start = vtr0)
-    variable!(nm, :vti, a; nw, start = vti0)
+    variable!(nm, :v_wind_real, a; nw, start = vtr0)
+    variable!(nm, :v_wind_imag, a; nw, start = vti0)
 
     if _stepped(nm, tf, k)
         _variable_steps!(nm, tf, a, k; nw)
@@ -449,13 +450,13 @@ function _variable_winding!(nm::NetworkModel, tf::Transformer, a::Arc, k::Int; n
         mlo, mhi = _moves_magnitude(nm, tf, k) ? (tf.tm_min[k], tf.tm_max[k]) : (tm, tm)
         ms       = clamp(tm, mlo, mhi)
 
-        variable!(nm, :tr, a; nw, start = ms * cos(ta),
+        variable!(nm, :t_real, a; nw, start = ms * cos(ta),
                   lower = mlo * cos(max(abs(lo), abs(hi))), upper = mhi)
-        variable!(nm, :ti, a; nw, start = ms * sin(ta),
+        variable!(nm, :t_imag, a; nw, start = ms * sin(ta),
                   lower = min(mlo * sin(lo), mhi * sin(lo)),
                   upper = max(mlo * sin(hi), mhi * sin(hi)))
     else
-        variable!(nm, :tm, a; nw,
+        variable!(nm, :t_magn, a; nw,
                   start = clamp(tm, tf.tm_min[k], tf.tm_max[k]),
                   lower = tf.tm_min[k], upper = tf.tm_max[k])
     end
@@ -469,17 +470,17 @@ function tap_ratio(nm::NetworkModel{P,F}, tf::Transformer, e::Int, k::Int; nw::I
 
     a = edge_arcs(nm, e; nw)[k]
     if _stepped(nm, tf, k)
-        zt, S = var(nm, :zt; nw), _step_values(nm, tf, k)
+        z_step, S = var(nm, :z_step; nw), _step_values(nm, tf, k)
 
-        return (JuMP.@expression(nm.model, sum(S[s][1] * zt[(a, s)] for s in eachindex(S))),
-                JuMP.@expression(nm.model, sum(S[s][2] * zt[(a, s)] for s in eachindex(S))))
+        return (JuMP.@expression(nm.model, sum(S[s][1] * z_step[(a, s)] for s in eachindex(S))),
+                JuMP.@expression(nm.model, sum(S[s][2] * z_step[(a, s)] for s in eachindex(S))))
     end
-    _moves_angle(nm, tf, k) && return (var(nm, :tr, a; nw), var(nm, :ti, a; nw))
+    _moves_angle(nm, tf, k) && return (var(nm, :t_real, a; nw), var(nm, :t_imag, a; nw))
 
-    tm = var(nm, :tm, a; nw)
+    t_magn = var(nm, :t_magn, a; nw)
 
-    return (JuMP.@expression(nm.model, cos(tf.ta[k]) * tm),
-            JuMP.@expression(nm.model, sin(tf.ta[k]) * tm))
+    return (JuMP.@expression(nm.model, cos(tf.ta[k]) * t_magn),
+            JuMP.@expression(nm.model, sin(tf.ta[k]) * t_magn))
 end
 
 """
@@ -540,7 +541,7 @@ y^{\\text{sh}}_{k} v^{\\text{t}}_{k} \\right),
 """
 function constraint_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractProblemType,F<:IVRFormulation}
-    vsr, vsi = var(nm, :vsr; nw), var(nm, :vsi; nw)
+    v_star_real, v_star_imag = var(nm, :v_star_real; nw), var(nm, :v_star_imag; nw)
 
     winding = get!(() -> Dict{Int,Any}(), con(nm; nw), :winding)
     star    = get!(() -> Dict{Int,Any}(), con(nm; nw), :star_balance)
@@ -565,16 +566,16 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = n
 
             zr, zx = tf.r[k], tf.x[k]
             (constrain!(nm, :winding, (a, :real), JuMP.@build_constraint(
-                 vtr - vsr[e] == zr * csr[k] - zx * csi[k]); nw),
+                 vtr - v_star_real[e] == zr * csr[k] - zx * csi[k]); nw),
              constrain!(nm, :winding, (a, :imag), JuMP.@build_constraint(
-                 vti - vsi[e] == zr * csi[k] + zx * csr[k]); nw))
+                 vti - v_star_imag[e] == zr * csi[k] + zx * csr[k]); nw))
         end
 
         star[e] = (
             constrain!(nm, :star_balance, (e, :real), JuMP.@build_constraint(
-                sum(csr) == tf.g_m * vsr[e] - tf.b_m * vsi[e]); nw),
+                sum(csr) == tf.g_m * v_star_real[e] - tf.b_m * v_star_imag[e]); nw),
             constrain!(nm, :star_balance, (e, :imag), JuMP.@build_constraint(
-                sum(csi) == tf.g_m * vsi[e] + tf.b_m * vsr[e]); nw))
+                sum(csi) == tf.g_m * v_star_imag[e] + tf.b_m * v_star_real[e]); nw))
     end
 
     return nothing
@@ -588,33 +589,33 @@ The voltage and the current of arc `a`, winding `k`, behind its ratio, as
 chooses it.
 """
 function _behind_ratio!(nm::NetworkModel, tf::Transformer, e::Int, k::Int, a::Arc; nw::Int)
-    vr, vi = var(nm, :vr; nw), var(nm, :vi; nw)
-    cr, ci = var(nm, :cr; nw), var(nm, :ci; nw)
-    i      = a.node
+    v_real, v_imag           = var(nm, :v_real;      nw), var(nm, :v_imag;      nw)
+    i_term_real, i_term_imag = var(nm, :i_term_real; nw), var(nm, :i_term_imag; nw)
+    i                        = a.node
 
     if _moves(nm, tf, k)
-        tr, ti   = tap_ratio(nm, tf, e, k; nw)
-        vtr, vti = var(nm, :vtr, a; nw), var(nm, :vti, a; nw)
+        tr, ti                   = tap_ratio(nm, tf, e, k; nw)
+        v_wind_real, v_wind_imag = var(nm, :v_wind_real, a; nw), var(nm, :v_wind_imag, a; nw)
 
         constrain!(nm, :transformer_ratio, (a, :real),
-                   JuMP.@build_constraint(vr[i] == tr * vtr - ti * vti); nw)
+                   JuMP.@build_constraint(v_real[i] == tr * v_wind_real - ti * v_wind_imag); nw)
         constrain!(nm, :transformer_ratio, (a, :imag),
-                   JuMP.@build_constraint(vi[i] == tr * vti + ti * vtr); nw)
+                   JuMP.@build_constraint(v_imag[i] == tr * v_wind_imag + ti * v_wind_real); nw)
 
-        return (vtr, vti,
-                JuMP.@expression(nm.model, tr * cr[a] + ti * ci[a]),
-                JuMP.@expression(nm.model, tr * ci[a] - ti * cr[a]))
+        return (v_wind_real, v_wind_imag,
+                JuMP.@expression(nm.model, tr * i_term_real[a] + ti * i_term_imag[a]),
+                JuMP.@expression(nm.model, tr * i_term_imag[a] - ti * i_term_real[a]))
     end
 
     tm, ta = tf.tm[k], tf.ta[k]
-    tm == 1 && ta == 0 && return (vr[i], vi[i], cr[a], ci[a])
+    tm == 1 && ta == 0 && return (v_real[i], v_imag[i], i_term_real[a], i_term_imag[a])
 
     tr, ti = tm * cos(ta), tm * sin(ta)
 
-    return (JuMP.@expression(nm.model, (tr * vr[i] + ti * vi[i]) / tm^2),
-            JuMP.@expression(nm.model, (tr * vi[i] - ti * vr[i]) / tm^2),
-            JuMP.@expression(nm.model, tr * cr[a] + ti * ci[a]),
-            JuMP.@expression(nm.model, tr * ci[a] - ti * cr[a]))
+    return (JuMP.@expression(nm.model, (tr * v_real[i] + ti * v_imag[i]) / tm^2),
+            JuMP.@expression(nm.model, (tr * v_imag[i] - ti * v_real[i]) / tm^2),
+            JuMP.@expression(nm.model, tr * i_term_real[a] + ti * i_term_imag[a]),
+            JuMP.@expression(nm.model, tr * i_term_imag[a] - ti * i_term_real[a]))
 end
 
 """
@@ -652,23 +653,23 @@ function constraint_edge_limits(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::
 
         for (k, a) in enumerate(A)
             _moves_angle(nm, tf, k) || continue
-            tr, ti = var(nm, :tr, a; nw), var(nm, :ti, a; nw)
+            t_real, t_imag = var(nm, :t_real, a; nw), var(nm, :t_imag, a; nw)
 
             magnitude = if _moves_magnitude(nm, tf, k)
                 (constrain!(nm, :tap_setting, (a, :magnitude_max),
-                            JuMP.@build_constraint(tr^2 + ti^2 <= tf.tm_max[k]^2); nw),
+                            JuMP.@build_constraint(t_real^2 + t_imag^2 <= tf.tm_max[k]^2); nw),
                  constrain!(nm, :tap_setting, (a, :magnitude_min),
-                            JuMP.@build_constraint(tr^2 + ti^2 >= tf.tm_min[k]^2); nw))
+                            JuMP.@build_constraint(t_real^2 + t_imag^2 >= tf.tm_min[k]^2); nw))
             else
                 (constrain!(nm, :tap_setting, (a, :magnitude),
-                            JuMP.@build_constraint(tr^2 + ti^2 == tf.tm[k]^2); nw),)
+                            JuMP.@build_constraint(t_real^2 + t_imag^2 == tf.tm[k]^2); nw),)
             end
 
             tap[a] = (magnitude...,
                 constrain!(nm, :tap_setting, (a, :max),
-                           JuMP.@build_constraint(ti <= tan(tf.ta_max[k]) * tr); nw),
+                           JuMP.@build_constraint(t_imag <= tan(tf.ta_max[k]) * t_real); nw),
                 constrain!(nm, :tap_setting, (a, :min),
-                           JuMP.@build_constraint(ti >= tan(tf.ta_min[k]) * tr); nw))
+                           JuMP.@build_constraint(t_imag >= tan(tf.ta_min[k]) * t_real); nw))
         end
     end
 
@@ -701,13 +702,13 @@ and only the sum of their impedances matters, so nothing is left to be a variabl
 """
 function variable_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_id_default(nm)
                       ) where {P<:AbstractProblemType,F<:LPFFormulation}
-    variable_container!(nm, :vas; nw)
+    variable_container!(nm, :v_star_angl; nw)
 
     for e in ids(nm, Transformer; nw)
         tf = edge(nm, e; nw)::Transformer
         A  = edge_arcs(nm, e; nw)
 
-        length(A) > 2 && variable!(nm, :vas, e; nw, start = 0.0)
+        length(A) > 2 && variable!(nm, :v_star_angl, e; nw, start = 0.0)
 
         for (k, a) in enumerate(A)
             if _stepped(nm, tf, k)
@@ -716,7 +717,7 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_
             end
 
             _moves_angle(nm, tf, k) || continue
-            variable!(nm, :ta, a; nw,
+            variable!(nm, :t_angl, a; nw,
                       start = clamp(tf.ta[k], tf.ta_min[k], tf.ta_max[k]),
                       lower = tf.ta_min[k], upper = tf.ta_max[k])
         end
@@ -729,12 +730,12 @@ function phase_shift(nm::NetworkModel{P,F}, tf::Transformer, e::Int, k::Int; nw:
                     ) where {P<:AbstractProblemType,F<:LPFFormulation}
     a = edge_arcs(nm, e; nw)[k]
     if _stepped(nm, tf, k)
-        zt, S = var(nm, :zt; nw), _step_values(nm, tf, k)
+        z_step, S = var(nm, :z_step; nw), _step_values(nm, tf, k)
 
-        return JuMP.@expression(nm.model, sum(S[s] * zt[(a, s)] for s in eachindex(S)))
+        return JuMP.@expression(nm.model, sum(S[s] * z_step[(a, s)] for s in eachindex(S)))
     end
 
-    return _moves_angle(nm, tf, k) ? var(nm, :ta, a; nw) : tf.ta[k]
+    return _moves_angle(nm, tf, k) ? var(nm, :t_angl, a; nw) : tf.ta[k]
 end
 
 "the angles winding `k` can take where it steps, one binary for each"
@@ -776,7 +777,7 @@ part, for the same reason a branch's shunt does not.
 """
 function constraint_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractProblemType,F<:LPFFormulation}
-    va, p = var(nm, :va; nw), var(nm, :p; nw)
+    v_angl, p_term = var(nm, :v_angl; nw), var(nm, :p_term; nw)
 
     branch  = get!(() -> Dict{Int,Any}(), con(nm; nw), :branch)
     winding = get!(() -> Dict{Int,Any}(), con(nm; nw), :winding)
@@ -794,19 +795,19 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{Transformer}; nw::Int = n
             continue
         end
 
-        vas = var(nm, :vas; nw)
+        v_star_angl = var(nm, :v_star_angl; nw)
         winding[e] = map(enumerate(A)) do (k, a)
             tf.r[k]^2 + tf.x[k]^2 > 0 ||
                 throw(ArgumentError("winding $k of transformer $e has no impedance, which a " *
                                     "transformer with $(length(A)) windings cannot have in a " *
                                     "linearized formulation: its susceptance would be infinite"))
 
-            constrain!(nm, :winding, a, JuMP.@build_constraint(p[a] ==
+            constrain!(nm, :winding, a, JuMP.@build_constraint(p_term[a] ==
                 -susceptance(tf.r[k], tf.x[k]) *
-                (va[a.node] - phase_shift(nm, tf, e, k; nw) - vas[e])); nw)
+                (v_angl[a.node] - phase_shift(nm, tf, e, k; nw) - v_star_angl[e])); nw)
         end
         star[e] = constrain!(nm, :star_balance, e,
-                             JuMP.@build_constraint(sum(p[a] for a in A) == 0.0); nw)
+                             JuMP.@build_constraint(sum(p_term[a] for a in A) == 0.0); nw)
     end
 
     return nothing
@@ -860,10 +861,10 @@ linearized formulation a magnitude is inert and has no variable, so it holds
 nothing there.
 """
 redispatch_controls(::NetworkModel{P,F}, ::Type{Transformer}
-                   ) where {P<:AbstractProblemType,F<:IVRFormulation} = (:tm, :tr, :ti)
+                   ) where {P<:AbstractProblemType,F<:IVRFormulation} = (:t_magn, :t_real, :t_imag)
 
 redispatch_controls(::NetworkModel{P,F}, ::Type{Transformer}
-                   ) where {P<:AbstractProblemType,F<:LPFFormulation} = (:ta,)
+                   ) where {P<:AbstractProblemType,F<:LPFFormulation} = (:t_angl,)
 
 ################################################################################
 # Transformer — solution                                                       #
@@ -889,8 +890,8 @@ function solution_edge!(entry::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T
 
     for (k, a) in enumerate(edge_arcs(nm, e; nw))
         tr, ti = map(_value, tap_ratio(nm, tf, e, k; nw))
-        tap    = Dict{String,Any}("tr" => tr, "ti" => ti, "tm" => hypot(tr, ti), "ta" => atan(ti, tr))
-        _stepped(nm, tf, k) && (tap["step"] = _chosen_step(nm, tf, a, k; nw))
+        tap    = Dict{String,Any}("t_real" => tr, "t_imag" => ti, "t_magn" => hypot(tr, ti), "t_angl" => atan(ti, tr))
+        _stepped(nm, tf, k) && (tap["z_step"] = _chosen_step(nm, tf, a, k; nw))
         _market!(tap, nm, tf, k)
 
         entry["terminal"]["$(a.terminal)"]["tap"] = tap
@@ -904,8 +905,8 @@ function solution_edge!(entry::Dict{String,Any}, nm::NetworkModel{P,F}, ::Type{T
     tf = edge(nm, e; nw)::Transformer
 
     for (k, a) in enumerate(edge_arcs(nm, e; nw))
-        tap = Dict{String,Any}("tm" => tf.tm[k], "ta" => _value(phase_shift(nm, tf, e, k; nw)))
-        _stepped(nm, tf, k) && (tap["step"] = _chosen_step(nm, tf, a, k; nw))
+        tap = Dict{String,Any}("t_magn" => tf.tm[k], "t_angl" => _value(phase_shift(nm, tf, e, k; nw)))
+        _stepped(nm, tf, k) && (tap["z_step"] = _chosen_step(nm, tf, a, k; nw))
         _market!(tap, nm, tf, k)
 
         entry["terminal"]["$(a.terminal)"]["tap"] = tap
@@ -916,4 +917,4 @@ end
 
 "add the setpoint of winding `k` to `tap` where the problem is a redispatch"
 _market!(tap::Dict{String,Any}, ::NetworkModel{P}, tf::Transformer, k::Int) where {P<:AbstractProblemType} =
-    P <: RedispatchProblem ? (tap["tm_market"] = tf.tm[k]; tap["ta_market"] = tf.ta[k]; nothing) : nothing
+    P <: RedispatchProblem ? (tap["t_magn_mkt"] = tf.tm[k]; tap["t_angl_mkt"] = tf.ta[k]; nothing) : nothing

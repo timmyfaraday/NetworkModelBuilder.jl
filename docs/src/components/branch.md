@@ -61,12 +61,12 @@ A branch is refused when it cannot be modelled: an entry of `r`, `x`, `g_sh` or
 
 | symbol | key | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``c^{\text{r}}_{a}`` | `:cr` | arc | real terminal current, node into edge | pu |
-| ``c^{\text{i}}_{a}`` | `:ci` | arc | imaginary terminal current | pu |
-| ``c^{\text{sr}}_{e}`` | `:csr` | edge | real series current, from → to; two terminals | pu |
-| ``c^{\text{si}}_{e}`` | `:csi` | edge | imaginary series current; two terminals | pu |
-| ``v^{\text{pr}}_{e}`` | `:vpr` | edge | real voltage of the point; more than two terminals | pu |
-| ``v^{\text{pi}}_{e}`` | `:vpi` | edge | imaginary voltage of the point; more than two terminals | pu |
+| ``c^{\text{r}}_{a}`` | `:i_term_real` | arc | real terminal current, node into edge | pu |
+| ``c^{\text{i}}_{a}`` | `:i_term_imag` | arc | imaginary terminal current | pu |
+| ``c^{\text{sr}}_{e}`` | `:i_ser_real` | edge | real series current, from → to; two terminals | pu |
+| ``c^{\text{si}}_{e}`` | `:i_ser_imag` | edge | imaginary series current; two terminals | pu |
+| ``v^{\text{pr}}_{e}`` | `:v_pnt_real` | edge | real voltage of the point; more than two terminals | pu |
+| ``v^{\text{pi}}_{e}`` | `:v_pnt_imag` | edge | imaginary voltage of the point; more than two terminals | pu |
 
 The terminal currents are shared by every edge type and are created once, over
 all arcs; the series current is created by each edge type that has one, into a
@@ -79,8 +79,8 @@ variable.
 
 | symbol | key | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``p_{a}`` | `:p` | arc | terminal active power, node into edge | pu |
-| ``v^{\text{ap}}_{e}`` | `:vap` | edge | angle of the point; more than two terminals | rad |
+| ``p_{a}`` | `:p_term` | arc | terminal active power, node into edge | pu |
+| ``v^{\text{ap}}_{e}`` | `:v_pnt_angl` | edge | angle of the point; more than two terminals | rad |
 
 A branch with two terminals needs no variables of its own: there is no series
 current left to carry once the model is lossless.

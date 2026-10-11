@@ -9,6 +9,7 @@
 # v0.9.7 - a live PowerModels.jl solve is checked, not just a snapshot         #
 # v0.11.0 - the switch problems of PowerModels.jl                              #
 # v0.12.0 - case5, whose transformers shift the phase                          #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 # lf.jl, lpf.jl and opf.jl check against PowerModels.jl v0.21 values frozen at
@@ -27,8 +28,8 @@
         sol = nw_solution(nmb)
 
         for (i, bus) in pm["solution"]["bus"]
-            @test sol["node"][i]["vm"] ≈ bus["vm"] atol = 1e-6
-            @test sol["node"][i]["va"] ≈ bus["va"] atol = 1e-5
+            @test sol["node"][i]["v_magn"] ≈ bus["vm"] atol = 1e-6
+            @test sol["node"][i]["v_angl"] ≈ bus["va"] atol = 1e-5
         end
     end
 
@@ -59,8 +60,8 @@
         pm  = PowerModels.solve_ac_pf(case("case5"), OPTIMIZER)
 
         for (i, bus) in pm["solution"]["bus"]
-            @test nw_solution(nmb)["node"][i]["vm"] ≈ bus["vm"] atol = 1e-6
-            @test nw_solution(nmb)["node"][i]["va"] ≈ bus["va"] atol = 1e-5
+            @test nw_solution(nmb)["node"][i]["v_magn"] ≈ bus["vm"] atol = 1e-6
+            @test nw_solution(nmb)["node"][i]["v_angl"] ≈ bus["va"] atol = 1e-5
         end
     end
 

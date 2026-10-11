@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 @testset "problem and formulation dispatch" begin
@@ -70,14 +71,14 @@
         opf  = instantiate_model(data, OptimalPowerFlowProblem, IVRFormulation)
 
         # a load flow leaves the voltage unbounded and fixes the generator setpoints
-        @test !JuMP.has_upper_bound(_NMB.var(lf, :vr, 1))
-        @test JuMP.is_fixed(_NMB.var(lf, :pg, 1))
+        @test !JuMP.has_upper_bound(_NMB.var(lf, :v_real, 1))
+        @test JuMP.is_fixed(_NMB.var(lf, :p_gen, 1))
 
         # a dispatch problem bounds the voltage and the generator power instead
-        @test JuMP.has_upper_bound(_NMB.var(opf, :vr, 1))
-        @test JuMP.upper_bound(_NMB.var(opf, :vr, 1)) == node(opf, 1).vmax
-        @test !JuMP.is_fixed(_NMB.var(opf, :pg, 1))
-        @test JuMP.upper_bound(_NMB.var(opf, :pg, 1)) ≈ unit(opf, 1).pmax
+        @test JuMP.has_upper_bound(_NMB.var(opf, :v_real, 1))
+        @test JuMP.upper_bound(_NMB.var(opf, :v_real, 1)) == node(opf, 1).vmax
+        @test !JuMP.is_fixed(_NMB.var(opf, :p_gen, 1))
+        @test JuMP.upper_bound(_NMB.var(opf, :p_gen, 1)) ≈ unit(opf, 1).pmax
 
         # the PV magnitude setpoint exists only in a load flow, the limits only in a dispatch
         @test haskey(_NMB.con(lf), :node_voltage_setpoint)

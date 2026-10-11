@@ -9,6 +9,7 @@
 # v0.8.0 - the zorba adapter                                                   #
 # v0.12.0 - a phase shifter is a winding that can move                         #
 # v0.13.0 - a branch holds one entry per terminal of a field                   #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 # The network below is the one Zorba's own `BaseTestCase.get_ref_minimal_study`
@@ -189,7 +190,7 @@ end
         # Zorba's objective, written out: every overload of every state, and every
         # MWh the link moved once. The phase shift is not in it, being free.
         congestion = 1e3 * sum(gf.overload_mw)
-        transfer   = 10.0 * sum(abs(nw_solution(result, n)["edge"]["4"]["pdc"]) * 100.0
+        transfer   = 10.0 * sum(abs(nw_solution(result, n)["edge"]["4"]["p_dcl"]) * 100.0
                                 for n in nw_ids(data; contingency = 1))
 
         @test result["objective"] ≈ congestion + transfer rtol = 1e-5
@@ -264,7 +265,7 @@ end
 
         # this package writes `p = -b(θi - θj - ta)` and Zorba `P = (θi - θj + s)B`,
         # so the two differ by a sign and the adapter is where it is applied
-        ta = nw_solution(result, 1)["edge"]["1"]["terminal"]["1"]["tap"]["ta"]
+        ta = nw_solution(result, 1)["edge"]["1"]["terminal"]["1"]["tap"]["t_angl"]
         @test tables.pst_dispatch.pst_deg[1] ≈ -rad2deg(ta)
         @test !iszero(ta)
 

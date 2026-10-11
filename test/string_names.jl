@@ -38,17 +38,17 @@ unnamed(nm) = all(v -> isempty(JuMP.name(v)), JuMP.all_variables(nm.model))
         nm = instantiate_model(named_network(; dim = Dimension(:time => 2)),
                                OptimalPowerFlowProblem, IVRFormulation)
 
-        @test JuMP.name(_NMB.var(nm, :pg, 1; nw = 1)) == "1_pg[1]"
-        @test JuMP.name(_NMB.var(nm, :pg, 2; nw = 2)) == "2_pg[2]"
-        @test JuMP.name(_NMB.var(nm, :csr, 1; nw = 1)) == "1_csr[1]"
-        @test JuMP.name(_NMB.var(nm, :vr; nw = 1)[2]) == "1_vr[2]"
-        @test startswith(JuMP.name(_NMB.var(nm, :cr; nw = 1)[Arc(1, 1, 1)]), "1_cr[")
+        @test JuMP.name(_NMB.var(nm, :p_gen, 1; nw = 1)) == "1_p_gen[1]"
+        @test JuMP.name(_NMB.var(nm, :p_gen, 2; nw = 2)) == "2_p_gen[2]"
+        @test JuMP.name(_NMB.var(nm, :i_ser_real, 1; nw = 1)) == "1_i_ser_real[1]"
+        @test JuMP.name(_NMB.var(nm, :v_real; nw = 1)[2]) == "1_v_real[2]"
+        @test startswith(JuMP.name(_NMB.var(nm, :i_term_real; nw = 1)[Arc(1, 1, 1)]), "1_i_term_real[")
         @test all(v -> !isempty(JuMP.name(v)), JuMP.all_variables(nm.model))
 
         # a variable that belongs to one terminal of an edge, or to one position of it
-        @test _NMB._variable_name(2, :tr, Arc(3, 2, 5)) == "2_tr[3,2]"
-        @test _NMB._variable_name(1, :zt, (Arc(3, 2, 5), 4)) == "1_zt[3,2,4]"
-        @test _NMB._variable_name(1, :pg, 7) == "1_pg[7]"
+        @test _NMB._variable_name(2, :t_real, Arc(3, 2, 5)) == "2_t_real[3,2]"
+        @test _NMB._variable_name(1, :z_step, (Arc(3, 2, 5), 4)) == "1_z_step[3,2,4]"
+        @test _NMB._variable_name(1, :p_gen, 7) == "1_p_gen[7]"
     end
 
     @testset "a solve can leave the variables unnamed, and the model is the same" begin

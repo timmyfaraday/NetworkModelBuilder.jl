@@ -64,15 +64,15 @@ different kind of model: see [A free switch](@ref).
 
 | symbol | key | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``p_{a}`` | `:p` | arc | terminal active power, node into edge | pu |
-| ``z_{e}`` | `:zsw` | edge | closed position, a binary variable, free switches in a dispatch problem only | |
+| ``p_{a}`` | `:p_term` | arc | terminal active power, node into edge | pu |
+| ``z_{e}`` | `:z_sw` | edge | closed position, a binary variable, free switches in a dispatch problem only | |
 
 ### In the `IVRFormulation`
 
 | symbol | key | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``c^{\text{r}}_{a}``, ``c^{\text{i}}_{a}`` | `:cr`, `:ci` | arc | terminal current, node into edge | pu |
-| ``z_{e}`` | `:zsw` | edge | closed position, a binary variable, free switches in a dispatch problem only | |
+| ``c^{\text{r}}_{a}``, ``c^{\text{i}}_{a}`` | `:i_term_real`, `:i_term_imag` | arc | terminal current, node into edge | pu |
+| ``z_{e}`` | `:z_sw` | edge | closed position, a binary variable, free switches in a dispatch problem only | |
 
 A switch has no variables of its own beyond that. ``z_{e}`` starts at the position
 in the data.

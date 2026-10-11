@@ -9,6 +9,7 @@
 # v0.1.0 - initial implementation                                              #
 # v0.10.2 - a tidy solution_tables view, alongside nw_solution                 #
 # v0.12.6 - a solution holds the indices and components asked for              #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 ################################################################################
@@ -26,7 +27,7 @@ values; that entry mirrors the extended graph, with a `"node"`, `"edge"` and
 `"unit"` dictionary per network index:
 
 ```
-result["solution"]["nw"]["1"]["node"]["4"]["vm"]
+result["solution"]["nw"]["1"]["node"]["4"]["v_magn"]
 ```
 
 Use [`nw_solution`](@ref) to reach one network index without spelling out the
@@ -167,8 +168,8 @@ return.
 # Examples
 ```julia
 tables = solution_tables(data, result)
-tables.node.vm                              # every node's voltage, every index
-tables.edge.p[tables.edge.terminal .== 1]   # the flow into every edge's terminal 1
+tables.node.v_magn                          # every node's voltage, every index
+tables.edge.p_term[tables.edge.terminal .== 1]   # the flow into every edge's terminal 1
 ```
 """
 function solution_tables(data::NetworkData, result::Dict{String,Any})
@@ -301,15 +302,15 @@ function print_summary(io::IO, result::Dict{String,Any}; nw::Int = 1)
     haskey(result, "objective") && Printf.@printf(io, ", objective %.6f", result["objective"])
     Printf.@printf(io, "\n\nnode        vm [pu]     va [deg]\n")
     for i in sort(collect(keys(sol["node"])), by = x -> parse(Int, x))
-        Printf.@printf(io, "%-8s %10.5f %12.5f\n", i, sol["node"][i]["vm"],
-                       rad2deg(sol["node"][i]["va"]))
+        Printf.@printf(io, "%-8s %10.5f %12.5f\n", i, sol["node"][i]["v_magn"],
+                       rad2deg(sol["node"][i]["v_angl"]))
     end
 
     Printf.@printf(io, "\nunit     type        node      p [pu]      q [pu]\n")
     for u in sort(collect(keys(sol["unit"])), by = x -> parse(Int, x))
         e = sol["unit"][u]
         Printf.@printf(io, "%-8s %-11s %5d %11.5f %11.5f\n", u, e["type"], e["node"],
-                       e["p"], e["q"])
+                       e["p_unit"], e["q_unit"])
     end
 
     return nothing

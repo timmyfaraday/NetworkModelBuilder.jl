@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.11.0 - the islands test                                                   #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 # Which nodes can exchange power, what a model does about an island that cannot
@@ -164,9 +165,9 @@
             result = quiet(() -> solve_opf(data, F, OPTIMIZER))
             sol    = nw_solution(result)["node"]
             @test result["termination_status"] == JuMP.LOCALLY_SOLVED
-            @test sol["1"]["va"] ≈ 0 atol = 1e-6
-            @test sol["3"]["va"] ≈ 0 atol = 1e-6
-            @test sol["4"]["va"] < sol["3"]["va"]                           # the load pulls it
+            @test sol["1"]["v_angl"] ≈ 0 atol = 1e-6
+            @test sol["3"]["v_angl"] ≈ 0 atol = 1e-6
+            @test sol["4"]["v_angl"] < sol["3"]["v_angl"]                           # the load pulls it
         end
 
         # a network that has its reference node needs none
@@ -180,7 +181,7 @@
                  units = [gen(1, 1), load(2, 2), gen(3, 3; pg = 1.0), load(4, 4)])
         pf = quiet(() -> solve_lf(lf, LPFFormulation, OPTIMIZER))
         @test pf["termination_status"] == JuMP.LOCALLY_SOLVED
-        @test nw_solution(pf)["node"]["3"]["va"] ≈ 0 atol = 1e-6
+        @test nw_solution(pf)["node"]["3"]["v_angl"] ≈ 0 atol = 1e-6
     end
 
     @testset "a model that may open a switch may not leave a section on its own" begin
@@ -239,7 +240,7 @@
         @test collect(keys(_NMB.con(nm)[:node_voltage_anchor])) == [3]
         r = quiet(() -> solve_lf(data, LPFFormulation, OPTIMIZER))
         @test r["termination_status"] == JuMP.LOCALLY_SOLVED
-        @test nw_solution(r)["node"]["3"]["va"] ≈ 0 atol = 1e-6
+        @test nw_solution(r)["node"]["3"]["v_angl"] ≈ 0 atol = 1e-6
 
         # while a dispatch problem is refused, since opening the switch would leave it there
         @test_throws ArgumentError instantiate_model(data, OptimalPowerFlowProblem, LPFFormulation)

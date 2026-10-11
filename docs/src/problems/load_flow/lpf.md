@@ -10,11 +10,11 @@ See [The linearized formulation](@ref) for what the approximations discard.
 
 | symbol | key | index set | bounds |
 |:-------|:----|:----------|:-------|
-| ``v^{\text{a}}_{i}`` | `:va` | ``i \in I`` | free |
-| ``p_{a}`` | `:p` | ``a \in A`` | free |
-| ``v^{\text{as}}_{e}`` | `:vas` | ``e \in E^{\text{tf}}``, three or more windings | free |
-| ``p_{u}`` | `:pu` | ``u \in U`` | free |
-| ``p^{\text{g}}_{u}`` | `:pg` | ``u \in U^{\text{g}}`` | free |
+| ``v^{\text{a}}_{i}`` | `:v_angl` | ``i \in I`` | free |
+| ``p_{a}`` | `:p_term` | ``a \in A`` | free |
+| ``v^{\text{as}}_{e}`` | `:v_star_angl` | ``e \in E^{\text{tf}}``, three or more windings | free |
+| ``p_{u}`` | `:p_unit` | ``u \in U`` | free |
+| ``p^{\text{g}}_{u}`` | `:p_gen` | ``u \in U^{\text{g}}`` | free |
 
 There is no magnitude variable, no current, and no reactive power.
 

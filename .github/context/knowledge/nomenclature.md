@@ -32,7 +32,8 @@ grammar as code.
   solution key that echoes one (`"g"`, `"b"`), is a bare symbol.
 - A **field** does not, the type says whose it is: `Generator.p_max`, `Storage.p_chg_max`, `Switch.s_max`.
 - A **local** in an equation is named as its key: `v_real, v_imag = var(nm, :v_real; nw), var(nm, :v_imag; nw)`. The component
-  locals stay `br tf dl sw ld st`, the indices `i e u a t k n`.
+  locals stay `br tf dl sw ld st`, the indices `i e u a t k n`. A scalar read out of such a container in a solution builder
+  (`vr = JuMP.value(v_real[i])`) keeps its short name, the container has the key's.
 - Matpower, PowerModels and Zorba names live at the reader boundary only; inside the package the names below.
 - `v_angl_min` and `v_angl_max` on an edge limit the voltage angle **difference** across it; the docs index says so.
 - `s_max` bounds apparent power, which is active power wherever no reactive power exists: a `DCLink`, and the linearized model.

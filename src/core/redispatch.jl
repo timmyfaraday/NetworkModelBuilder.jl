@@ -11,6 +11,7 @@
 # v0.12.0 - a measure may belong to one terminal of an edge                    #
 # v0.12.0 - a measure held at the base case builds no rows of its own          #
 # v0.12.0 - a held measure may reuse the binaries of the base case             #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 ################################################################################
@@ -285,7 +286,7 @@ This is the single dispatch point [`constraint_redispatch_control`](@ref) walks,
 so an extension package that adds a controllable component gets it into the
 preventive-corrective split by giving it one method. The keys depend on the
 formulation as well as on the type: a [`Transformer`](@ref) carries the ratio of a
-winding as `(:tm, :tr, :ti)` in the current based formulation and as `(:ta,)` in
+winding as `(:t_magn, :t_real, :t_imag)` in the current based formulation and as `(:t_angl,)` in
 the linearized one.
 
 A key may name a variable that belongs to one terminal of an edge, registered

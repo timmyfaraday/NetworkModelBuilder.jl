@@ -48,15 +48,15 @@ taken.
 
 | symbol | key | index | description | unit | when |
 |:-------|:----|:------|:------------|:-----|:-----|
-| ``c^{\text{r}}_{u}``, ``c^{\text{i}}_{u}`` | `:cru`, `:ciu` | unit | injected current | pu | all |
-| ``p^{\text{d}}_{u}`` | `:pdf` | unit | active demand | pu | [`FlexibleLoad`](@ref), dispatch |
+| ``c^{\text{r}}_{u}``, ``c^{\text{i}}_{u}`` | `:i_unit_real`, `:i_unit_imag` | unit | injected current | pu | all |
+| ``p^{\text{d}}_{u}`` | `:p_flex` | unit | active demand | pu | [`FlexibleLoad`](@ref), dispatch |
 
 ### In the `LPFFormulation`
 
 | symbol | key | index | description | unit | when |
 |:-------|:----|:------|:------------|:-----|:-----|
-| ``p_{u}`` | `:pu` | unit | active power injected into the node | pu | all |
-| ``p^{\text{d}}_{u}`` | `:pdf` | unit | active demand | pu | [`FlexibleLoad`](@ref), dispatch |
+| ``p_{u}`` | `:p_unit` | unit | active power injected into the node | pu | all |
+| ``p^{\text{d}}_{u}`` | `:p_flex` | unit | active demand | pu | [`FlexibleLoad`](@ref), dispatch |
 
 The constraint is ``p_{u} = -p^{\text{d}}_{u}``; the reactive demand plays no
 part. A [`FlexibleLoad`](@ref) keeps its energy balance unchanged — that
@@ -76,7 +76,7 @@ v^{\text{i}}_{i} c^{\text{r}}_{u} - v^{\text{r}}_{i} c^{\text{i}}_{u} = -q^{\tex
 
 For a [`FixedLoad`](@ref) the right-hand sides are data. For a
 [`FlexibleLoad`](@ref) in a dispatch problem ``p^{\text{d}}_{u}`` is the variable
-`:pdf`, and the reactive demand follows it at the power factor of the nominal
+`:p_flex`, and the reactive demand follows it at the power factor of the nominal
 point, ``q^{\text{d}}_{u} = (q^{\text{d,nom}}_{u} / p^{\text{d,nom}}_{u}) \,
 p^{\text{d}}_{u}``, so that shifting a load does not silently change what it does
 to voltages. In a power flow a flexible load has no freedom and sits at its

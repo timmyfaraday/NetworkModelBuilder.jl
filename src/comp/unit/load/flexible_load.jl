@@ -11,6 +11,7 @@
 # v0.10.1 - exports its own public names                                       #
 # v0.12.9 - the energy rows are registered by constrain! alone                 #
 # v0.14.0 - a variable is named by the model, not at the call site             #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 export FlexibleLoad, power_factor_ratio
@@ -95,11 +96,11 @@ function variable_unit(nm::NetworkModel{P,F}, ::Type{FlexibleLoad}; nw::Int = nw
     isempty(ids(nm, FlexibleLoad; nw)) && return nothing
     require_time_dimension(nm, FlexibleLoad)
 
-    variable_container!(nm, :pdf; nw)
+    variable_container!(nm, :p_flex; nw)
 
     for u in ids(nm, FlexibleLoad; nw)
         ld = unit(nm, u; nw)::FlexibleLoad
-        variable!(nm, :pdf, u; nw, start = ld.pd_nominal,
+        variable!(nm, :p_flex, u; nw, start = ld.pd_nominal,
                   lower = ld.pd_min, upper = ld.pd_max)
     end
 
@@ -110,9 +111,9 @@ demand(::NetworkModel, ld::FlexibleLoad, ::Int; nw::Int) = (ld.pd_nominal, ld.qd
 
 function demand(nm::NetworkModel{P,F}, ld::FlexibleLoad, u::Int; nw::Int
                ) where {P<:AbstractDispatchProblem,F<:AbstractFormulationType}
-    pd = var(nm, :pdf, u; nw)
+    p_flex = var(nm, :p_flex, u; nw)
 
-    return (pd, JuMP.@expression(nm.model, power_factor_ratio(ld) * pd))
+    return (p_flex, JuMP.@expression(nm.model, power_factor_ratio(ld) * p_flex))
 end
 
 ################################################################################
@@ -152,7 +153,7 @@ function constraint_unit_coupling(nm::NetworkModel{P,F}, ::Type{FlexibleLoad}
                 ld.energy
 
             constrain!(nm, :flexible_energy, u, JuMP.@build_constraint(
-                sum(time_step(nm, m) * var(nm, :pdf, u; nw = m) for m in window) == target); nw = n)
+                sum(time_step(nm, m) * var(nm, :p_flex, u; nw = m) for m in window) == target); nw = n)
         end
     end
 

@@ -15,6 +15,7 @@
 # v0.13.0 - a branch has one entry per terminal, and two or more terminals     #
 # v0.13.0 - checking plain data allocates nothing                              #
 # v0.14.0 - a variable is named by the model, not at the call site             #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 export AbstractBranch, Branch, impedance, shunt_admittance, dynamic_rating
@@ -202,18 +203,18 @@ _is_pi(nm::NetworkModel, e::Int) = nterminals(edges(network(nm))[e]) == 2
     variable_edge_series_current(nm, T; nw)
 
 The series current of every edge in `E`, or of every in-service edge of type `T`,
-added to the `:csr` and `:csi` containers shared by every edge type that has one.
+added to the `:i_ser_real` and `:i_ser_imag` containers shared by every edge type that has one.
 
 The container is a `Dict` rather than a JuMP array because several edge types
 contribute to it: the dispatcher visits one concrete type at a time, and each
 adds its own edges to the same two containers.
 """
 function variable_edge_series_current(nm::NetworkModel, E; nw::Int)
-    variable_container!(nm, :csr, :csi; nw)
+    variable_container!(nm, :i_ser_real, :i_ser_imag; nw)
 
     for e in E
-        variable!(nm, :csr, e; nw, start = 0.0)
-        variable!(nm, :csi, e; nw, start = 0.0)
+        variable!(nm, :i_ser_real, e; nw, start = 0.0)
+        variable!(nm, :i_ser_imag, e; nw, start = 0.0)
     end
 
     return nothing
@@ -236,8 +237,8 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default
 
     for e in E
         _is_pi(nm, e) && continue
-        variable!(nm, :vpr, e; nw, start = 1.0)
-        variable!(nm, :vpi, e; nw, start = 0.0)
+        variable!(nm, :v_pnt_real, e; nw, start = 1.0)
+        variable!(nm, :v_pnt_imag, e; nw, start = 0.0)
     end
 
     return nothing
@@ -277,23 +278,23 @@ function constraint_pi_section!(nm::NetworkModel, ctr, cti, vtr, vti, a_to::Arc,
     g_to, b_to   = y_to
     j            = a_to.node
 
-    vr, vi   = var(nm, :vr;  nw), var(nm, :vi;  nw)
-    cr, ci   = var(nm, :cr;  nw), var(nm, :ci;  nw)
-    csr, csi = var(nm, :csr; nw), var(nm, :csi; nw)
+    v_real, v_imag           = var(nm, :v_real;      nw), var(nm, :v_imag;      nw)
+    i_term_real, i_term_imag = var(nm, :i_term_real; nw), var(nm, :i_term_imag; nw)
+    i_ser_real, i_ser_imag   = var(nm, :i_ser_real;  nw), var(nm, :i_ser_imag;  nw)
 
     return (
         constrain!(nm, :pi_section, (e, :cr_fr),
-                   JuMP.@build_constraint(ctr == g_fr * vtr - b_fr * vti + csr[e]); nw),
+                   JuMP.@build_constraint(ctr == g_fr * vtr - b_fr * vti + i_ser_real[e]); nw),
         constrain!(nm, :pi_section, (e, :ci_fr),
-                   JuMP.@build_constraint(cti == g_fr * vti + b_fr * vtr + csi[e]); nw),
+                   JuMP.@build_constraint(cti == g_fr * vti + b_fr * vtr + i_ser_imag[e]); nw),
         constrain!(nm, :pi_section, (e, :cr_to),
-                   JuMP.@build_constraint(cr[a_to] == -csr[e] + g_to * vr[j] - b_to * vi[j]); nw),
+                   JuMP.@build_constraint(i_term_real[a_to] == -i_ser_real[e] + g_to * v_real[j] - b_to * v_imag[j]); nw),
         constrain!(nm, :pi_section, (e, :ci_to),
-                   JuMP.@build_constraint(ci[a_to] == -csi[e] + g_to * vi[j] + b_to * vr[j]); nw),
-        constrain!(nm, :pi_section, (e, :vr),
-                   JuMP.@build_constraint(vtr - vr[j] == r * csr[e] - x * csi[e]); nw),
-        constrain!(nm, :pi_section, (e, :vi),
-                   JuMP.@build_constraint(vti - vi[j] == r * csi[e] + x * csr[e]); nw),
+                   JuMP.@build_constraint(i_term_imag[a_to] == -i_ser_imag[e] + g_to * v_imag[j] + b_to * v_real[j]); nw),
+        constrain!(nm, :pi_section, (e, :v_real),
+                   JuMP.@build_constraint(vtr - v_real[j] == r * i_ser_real[e] - x * i_ser_imag[e]); nw),
+        constrain!(nm, :pi_section, (e, :v_imag),
+                   JuMP.@build_constraint(vti - v_imag[j] == r * i_ser_imag[e] + x * i_ser_real[e]); nw),
     )
 end
 
@@ -324,8 +325,8 @@ c^{\\text{s}}_{k} = c_{a_k} - \\tfrac{1}{2} y^{\\text{sh}}_{k} v_{i_k}.
 """
 function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractProblemType,F<:IVRFormulation,T<:AbstractBranch}
-    vr, vi = var(nm, :vr; nw), var(nm, :vi; nw)
-    cr, ci = var(nm, :cr; nw), var(nm, :ci; nw)
+    v_real, v_imag           = var(nm, :v_real;      nw), var(nm, :v_imag;      nw)
+    i_term_real, i_term_imag = var(nm, :i_term_real; nw), var(nm, :i_term_imag; nw)
 
     branch = get!(() -> Dict{Int,Any}(), con(nm; nw), :branch)
 
@@ -342,7 +343,7 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
         i          = a_fr.node
         y          = (br.g_sh[1] / 2, br.b_sh[1] / 2)
 
-        branch[e] = constraint_pi_section!(nm, cr[a_fr], ci[a_fr], vr[i], vi[i],
+        branch[e] = constraint_pi_section!(nm, i_term_real[a_fr], i_term_imag[a_fr], v_real[i], v_imag[i],
                                            a_to, e, (br.r[1], br.x[1]), y, y; nw)
     end
 
@@ -358,9 +359,9 @@ current through the section read off the terminal current less the half of the
 section's shunt at the terminal, and the balance of the sections at the point.
 """
 function _constraint_sections!(nm::NetworkModel, br::AbstractBranch, e::Int, A; nw::Int)
-    vr, vi   = var(nm, :vr; nw), var(nm, :vi; nw)
-    cr, ci   = var(nm, :cr; nw), var(nm, :ci; nw)
-    vpr, vpi = var(nm, :vpr, e; nw), var(nm, :vpi, e; nw)
+    v_real, v_imag           = var(nm, :v_real;        nw), var(nm, :v_imag;        nw)
+    i_term_real, i_term_imag = var(nm, :i_term_real;   nw), var(nm, :i_term_imag;   nw)
+    v_pnt_real, v_pnt_imag   = var(nm, :v_pnt_real, e; nw), var(nm, :v_pnt_imag, e; nw)
 
     csr = Any[]
     csi = Any[]
@@ -370,24 +371,24 @@ function _constraint_sections!(nm::NetworkModel, br::AbstractBranch, e::Int, A; 
         g, b = br.g_sh[k] / 2, br.b_sh[k] / 2
 
         if iszero(g) && iszero(b)
-            push!(csr, cr[a])
-            push!(csi, ci[a])
+            push!(csr, i_term_real[a])
+            push!(csi, i_term_imag[a])
         else
-            push!(csr, JuMP.@expression(nm.model, cr[a] - (g * vr[i] - b * vi[i])))
-            push!(csi, JuMP.@expression(nm.model, ci[a] - (g * vi[i] + b * vr[i])))
+            push!(csr, JuMP.@expression(nm.model, i_term_real[a] - (g * v_real[i] - b * v_imag[i])))
+            push!(csi, JuMP.@expression(nm.model, i_term_imag[a] - (g * v_imag[i] + b * v_real[i])))
         end
 
         (constrain!(nm, :branch_section, (a, :real), JuMP.@build_constraint(
-             vr[i] - vpr == br.r[k] * csr[k] - br.x[k] * csi[k]); nw),
+             v_real[i] - v_pnt_real == br.r[k] * csr[k] - br.x[k] * csi[k]); nw),
          constrain!(nm, :branch_section, (a, :imag), JuMP.@build_constraint(
-             vi[i] - vpi == br.r[k] * csi[k] + br.x[k] * csr[k]); nw))
+             v_imag[i] - v_pnt_imag == br.r[k] * csi[k] + br.x[k] * csr[k]); nw))
     end
 
     g, b  = sum(br.g_sh) / 2, sum(br.b_sh) / 2
     point = (constrain!(nm, :branch_point, (e, :real), JuMP.@build_constraint(
-                 sum(csr) == g * vpr - b * vpi); nw),
+                 sum(csr) == g * v_pnt_real - b * v_pnt_imag); nw),
              constrain!(nm, :branch_point, (e, :imag), JuMP.@build_constraint(
-                 sum(csi) == g * vpi + b * vpr); nw))
+                 sum(csi) == g * v_pnt_imag + b * v_pnt_real); nw))
 
     return (sections, point)
 end
@@ -431,7 +432,7 @@ function variable_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default
                       ) where {P<:AbstractProblemType,F<:LPFFormulation,T<:AbstractBranch}
     for e in ids(nm, T; nw)
         _is_pi(nm, e) && continue
-        variable!(nm, :vap, e; nw, start = 0.0)
+        variable!(nm, :v_pnt_angl, e; nw, start = 0.0)
     end
 
     return nothing
@@ -473,14 +474,14 @@ function constraint_edge(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_defau
         A  = edge_arcs(nm, e; nw)
 
         if length(A) > 2
-            va, p, vap = var(nm, :va; nw), var(nm, :p; nw), var(nm, :vap, e; nw)
+            v_angl, p_term, v_pnt_angl = var(nm, :v_angl; nw), var(nm, :p_term; nw), var(nm, :v_pnt_angl, e; nw)
 
             sections = map(enumerate(A)) do (k, a)
-                constrain!(nm, :branch_section, a, JuMP.@build_constraint(p[a] ==
-                    -susceptance(br.r[k], br.x[k]) * (va[a.node] - vap)); nw)
+                constrain!(nm, :branch_section, a, JuMP.@build_constraint(p_term[a] ==
+                    -susceptance(br.r[k], br.x[k]) * (v_angl[a.node] - v_pnt_angl)); nw)
             end
             point = constrain!(nm, :branch_point, e,
-                               JuMP.@build_constraint(sum(p[a] for a in A) == 0.0); nw)
+                               JuMP.@build_constraint(sum(p_term[a] for a in A) == 0.0); nw)
 
             branch[e] = (sections, point)
             continue

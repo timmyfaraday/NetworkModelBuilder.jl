@@ -102,8 +102,8 @@ using NetworkModelBuilder, Ipopt
 result = solve_lf("case14.m", IVRFormulation, Ipopt.Optimizer)
 print_summary(result)
 
-nw_solution(result)["node"]["4"]["vm"]        # 1.01767
-nw_solution(result)["unit"]["1"]["pg"]        # 2.32393
+nw_solution(result)["node"]["4"]["v_magn"]        # 1.01767
+nw_solution(result)["unit"]["1"]["p_gen"]        # 2.32393
 ```
 
 `set_dimension` lifts parsed data onto a `Dimension` and takes an `apply!` hook

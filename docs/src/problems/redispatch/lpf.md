@@ -12,18 +12,18 @@ See [The linearized formulation](@ref) for what the approximations discard.
 
 | symbol | key | index set | bounds |
 |:-------|:----|:----------|:-------|
-| ``v^{\text{a}}_{i}`` | `:va` | ``i \in I`` | free |
-| ``p_{a}`` | `:p` | ``a \in A`` | free |
-| ``v^{\text{as}}_{e}`` | `:vas` | ``e \in E^{\text{tf}}``, three or more windings | free |
-| ``ta_{a}`` | `:ta` | ``a \in A^{\text{ta}}`` | ``[ta^{\text{min}}_{a}, ta^{\text{max}}_{a}]`` |
-| ``z^{\text{t}}_{a,s}`` | `:zt` | ``a \in A^{\text{zt}}``, every position ``s`` | binary |
-| ``p_{u}`` | `:pu` | ``u \in U`` | free |
-| ``p^{\text{g}}_{u}`` | `:pg` | ``u \in U^{\text{g}}`` | ``[p^{\text{min}}_{u}, p^{\text{max}}_{u}]`` |
-| ``p^{\uparrow}_{u}, p^{\downarrow}_{u}`` | `:pgup`, `:pgdn` | ``u \in U^{\text{g}}`` | the headroom each way |
-| ``p^{\text{d}}_{u}`` | `:pdf` | ``u \in U^{\text{fl}}`` | ``[p^{\text{d,min}}_{u}, p^{\text{d,max}}_{u}]`` |
-| ``p^{\text{sc}}_{u}, p^{\text{sd}}_{u}`` | `:psc`, `:psd` | ``u \in U^{\text{s}}`` | ``[0, \cdot^{\text{max}}_{u}]`` |
-| ``e_{u}`` | `:es` | ``u \in U^{\text{s}}`` | ``[0, e^{\text{max}}_{u}]`` |
-| ``p^{\uparrow}_{u}, p^{\downarrow}_{u}`` | `:psup`, `:psdn` | ``u \in U^{\text{s}}`` | the headroom each way |
+| ``v^{\text{a}}_{i}`` | `:v_angl` | ``i \in I`` | free |
+| ``p_{a}`` | `:p_term` | ``a \in A`` | free |
+| ``v^{\text{as}}_{e}`` | `:v_star_angl` | ``e \in E^{\text{tf}}``, three or more windings | free |
+| ``ta_{a}`` | `:t_angl` | ``a \in A^{\text{ta}}`` | ``[ta^{\text{min}}_{a}, ta^{\text{max}}_{a}]`` |
+| ``z^{\text{t}}_{a,s}`` | `:z_step` | ``a \in A^{\text{zt}}``, every position ``s`` | binary |
+| ``p_{u}`` | `:p_unit` | ``u \in U`` | free |
+| ``p^{\text{g}}_{u}`` | `:p_gen` | ``u \in U^{\text{g}}`` | ``[p^{\text{min}}_{u}, p^{\text{max}}_{u}]`` |
+| ``p^{\uparrow}_{u}, p^{\downarrow}_{u}`` | `:p_gen_up`, `:p_gen_dn` | ``u \in U^{\text{g}}`` | the headroom each way |
+| ``p^{\text{d}}_{u}`` | `:p_flex` | ``u \in U^{\text{fl}}`` | ``[p^{\text{d,min}}_{u}, p^{\text{d,max}}_{u}]`` |
+| ``p^{\text{sc}}_{u}, p^{\text{sd}}_{u}`` | `:p_chg`, `:p_dch` | ``u \in U^{\text{s}}`` | ``[0, \cdot^{\text{max}}_{u}]`` |
+| ``e_{u}`` | `:e_stor` | ``u \in U^{\text{s}}`` | ``[0, e^{\text{max}}_{u}]`` |
+| ``p^{\uparrow}_{u}, p^{\downarrow}_{u}`` | `:p_stor_up`, `:p_stor_dn` | ``u \in U^{\text{s}}`` | the headroom each way |
 
 No voltage magnitude, no reactive power, no current — and no ``tm_{a}``, since a
 winding that is `oltc` is inert here. A winding that is `pst` is not, and it is

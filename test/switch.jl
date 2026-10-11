@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.11.0 - the switch test                                                    #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 # What a switch is, before any model is built from one: the data it takes and
@@ -142,7 +143,7 @@ end
     end
 
     "the active power into the first terminal of edge `e`"
-    flow(result, e) = nw_solution(result)["edge"]["$e"]["terminal"]["1"]["p"]
+    flow(result, e) = nw_solution(result)["edge"]["$e"]["terminal"]["1"]["p_term"]
 
     "the same component with some of its fields replaced"
     function rebuilt(c; kw...)
@@ -207,8 +208,8 @@ end
         @test flow(r, 2) ≈ 0.5 atol = 1e-5
         @test flow(r, 3) ≈ 0.5 atol = 1e-5
         current(e, part) = nw_solution(r)["edge"]["$e"]["terminal"]["1"][part]
-        @test current(2, "cr") ≈ current(3, "cr") atol = 1e-6
-        @test current(2, "ci") ≈ current(3, "ci") atol = 1e-6
+        @test current(2, "i_term_real") ≈ current(3, "i_term_real") atol = 1e-6
+        @test current(2, "i_term_imag") ≈ current(3, "i_term_imag") atol = 1e-6
 
         # one angle equality for the pair, and a loop row for the other switch
         nm   = instantiate_model(data, OptimalPowerFlowProblem, LPFFormulation)
@@ -266,7 +267,7 @@ end
             tight = quiet(() -> solve_opf(net(0.5), F, OPTIMIZER))
             @test flow(free, 1) ≈ 2.0 atol = 1e-5
             @test flow(tight, 1) ≈ 0.5 atol = 1e-5              # the dear one makes up the rest
-            @test nw_solution(tight)["unit"]["2"]["pg"] ≈ 1.5 atol = 1e-5
+            @test nw_solution(tight)["unit"]["2"]["p_gen"] ≈ 1.5 atol = 1e-5
 
             # a power flow chooses nothing and has no rating, as for a branch
             pf = quiet(() -> solve_lf(net(0.5), F, OPTIMIZER))
@@ -275,7 +276,7 @@ end
             # open, there is nothing to limit
             r = quiet(() -> solve_opf(net(0.5; position = 0), F, OPTIMIZER))
             @test abs(flow(r, 1)) < 1e-7
-            @test nw_solution(r)["unit"]["2"]["pg"] ≈ 2.0 atol = 1e-5
+            @test nw_solution(r)["unit"]["2"]["p_gen"] ≈ 2.0 atol = 1e-5
         end
     end
 
@@ -304,7 +305,7 @@ end
             for result in (built, reused)
                 @test result["termination_status"] == JuMP.LOCALLY_SOLVED
                 @test result["objective"] ≈ whole["objective"] rtol = 1e-6
-                @test [nw_solution(result, n)["unit"]["2"]["pg"] for n in 1:6] ≈
+                @test [nw_solution(result, n)["unit"]["2"]["p_gen"] for n in 1:6] ≈
                       [0.0, 0.0, 0.0, 1.0, 1.0, 1.0] atol = 1e-5
             end
 
@@ -322,7 +323,7 @@ end
             @test r["termination_status"] == JuMP.LOCALLY_SOLVED
 
             nm = instantiate_model(data, LoadFlowProblem, F)
-            @test isempty(get(_NMB.var(nm), :zsw, Dict()))          # no decision to make
+            @test isempty(get(_NMB.var(nm), :z_sw, Dict()))          # no decision to make
         end
     end
 
@@ -339,7 +340,7 @@ end
     load(id, i; pd = 1.0) = FixedLoad(; id, node = i, pd)
 
     "the active power into the first terminal of edge `e`"
-    flow(result, e) = nw_solution(result)["edge"]["$e"]["terminal"]["1"]["p"]
+    flow(result, e) = nw_solution(result)["edge"]["$e"]["terminal"]["1"]["p_term"]
 
     exact = JuMP.optimizer_with_attributes(HiGHS.Optimizer, "output_flag" => false,
                                            "mip_rel_gap" => 0.0, "mip_abs_gap" => 0.0)
@@ -384,7 +385,7 @@ end
         @test JuMP.objective_value(nm.model) ≈ best atol = 1e-6
 
         # it closes the one across and opens the other two
-        z = [round(Int, JuMP.value(_NMB.var(nm, :zsw, e))) for e in 3:5]
+        z = [round(Int, JuMP.value(_NMB.var(nm, :z_sw, e))) for e in 3:5]
         @test z == [1, 0, 0]
         @test only(p for (p, o) in solved if o ≈ best) == (1, 0, 0)
 
@@ -397,7 +398,7 @@ end
 
     @testset "a free switch is a binary variable that starts where the data has it" begin
         nm = instantiate_model(free((1, 0, 1)), OptimalPowerFlowProblem, LPFFormulation)
-        zs = [_NMB.var(nm, :zsw, e) for e in 3:5]
+        zs = [_NMB.var(nm, :z_sw, e) for e in 3:5]
 
         @test all(JuMP.is_binary, zs)
         @test JuMP.start_value.(zs) == [1.0, 0.0, 1.0]
@@ -413,7 +414,7 @@ end
 
         # a locked one has none of it
         nm = instantiate_model(locked((1, 1, 1)), OptimalPowerFlowProblem, LPFFormulation)
-        @test isempty(_NMB.var(nm)[:zsw])
+        @test isempty(_NMB.var(nm)[:z_sw])
         @test !any(JuMP.is_binary, JuMP.all_variables(nm.model))
     end
 
@@ -477,7 +478,7 @@ end
     @testset "in current a free switch is nine rows and a nonconvex one" begin
         nm    = instantiate_model(free((1, 0, 1)), OptimalPowerFlowProblem, IVRFormulation)
         keys_ = first.([(key, id) for (_, key, id) in keys(registered_constraints(nm))])
-        zs    = [_NMB.var(nm, :zsw, e) for e in 3:5]
+        zs    = [_NMB.var(nm, :z_sw, e) for e in 3:5]
 
         @test all(JuMP.is_binary, zs)
         @test JuMP.start_value.(zs) == [1.0, 0.0, 1.0]
@@ -490,7 +491,7 @@ end
         @test count(==(:switch_cycle), keys_) == 4          # the loop, on each current twice
 
         nm = instantiate_model(locked((1, 1, 1)), OptimalPowerFlowProblem, IVRFormulation)
-        @test isempty(_NMB.var(nm)[:zsw])
+        @test isempty(_NMB.var(nm)[:z_sw])
         @test !any(JuMP.is_binary, JuMP.all_variables(nm.model))
     end
 
@@ -501,7 +502,7 @@ end
             nm = instantiate_model(free(), OptimalPowerFlowProblem, F)
             JuMP.relax_integrality(nm.model)
             for (e, z) in zip(3:5, positions)
-                JuMP.fix(_NMB.var(nm, :zsw, e), z; force = true)
+                JuMP.fix(_NMB.var(nm, :z_sw, e), z; force = true)
             end
             relaxed = quiet(() -> optimize_model!(nm, OPTIMIZER))
             held    = quiet(() -> solve_opf(locked(positions), F, OPTIMIZER))
@@ -537,7 +538,7 @@ end
 
         @test JuMP.termination_status(nm.model) in (JuMP.OPTIMAL, JuMP.LOCALLY_SOLVED)
         @test JuMP.objective_value(nm.model) ≈ best rtol = 1e-5
-        @test round(Int, JuMP.value(_NMB.var(nm, :zsw, 3))) == 1
+        @test round(Int, JuMP.value(_NMB.var(nm, :z_sw, 3))) == 1
         @test maximum(r["objective"] for r in held) > best + 1.0       # and it was a choice
 
         # a mixed-integer program has no prices in this formulation either
@@ -561,7 +562,7 @@ end
         # and in current, with the position fixed at closed
         nm = instantiate_model(parallel(), OptimalPowerFlowProblem, IVRFormulation)
         JuMP.relax_integrality(nm.model)
-        JuMP.fix(_NMB.var(nm, :zsw, 2), 1; force = true)
+        JuMP.fix(_NMB.var(nm, :z_sw, 2), 1; force = true)
         r = quiet(() -> optimize_model!(nm, OPTIMIZER))
         @test r["termination_status"] == JuMP.LOCALLY_SOLVED
         @test flow(r, 1) ≈ 0.5 atol = 1e-5
@@ -646,7 +647,7 @@ end
                 3 => load(3, 2; pd = state(1.0, 0.4))); dim))
 
         @test _NMB.redispatch_controls(instantiate_model(data, RedispatchProblem, LPFFormulation;
-                                                         build = false), Switch) == (:zsw,)
+                                                         build = false), Switch) == (:z_sw,)
 
         corrective = quiet(() -> solve_rd(data, LPFFormulation, exact;
                                           redispatch = Redispatch(; control = :corrective)))
@@ -666,8 +667,8 @@ end
 
         # the tie is a row for the free switch under a preventive setup and none under a corrective one
         ties(nm) = [id for (_, key, id) in keys(registered_constraints(nm)) if key == :redispatch_control]
-        @test (:edge, 2, :zsw) in ties(instantiate_model(data, RedispatchProblem, LPFFormulation))
-        @test (:edge, 2, :zsw) ∉ ties(instantiate_model(data, RedispatchProblem, LPFFormulation;
+        @test (:edge, 2, :z_sw) in ties(instantiate_model(data, RedispatchProblem, LPFFormulation))
+        @test (:edge, 2, :z_sw) ∉ ties(instantiate_model(data, RedispatchProblem, LPFFormulation;
             ext = Dict{Symbol,Any}(:redispatch => Redispatch(; control = :corrective))))
 
         # a locked switch has nothing to tie

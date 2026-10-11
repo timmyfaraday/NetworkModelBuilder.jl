@@ -9,6 +9,7 @@
 # v0.12.0 - initial implementation                                             #
 # v0.12.9 - the held controls are read through held_controls                   #
 # v0.14.0 - a variable is named by the model, not by its caller                #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 # A control that belongs to one terminal of an edge rather than to the edge, such
@@ -98,7 +99,7 @@ end
 
         # the containers a component declares keep the type of their identifiers
         @test keytype(_NMB.var(nm, :shift; nw = 1)) === Arc
-        @test keytype(_NMB.var(nm, :pg; nw = 1)) === Int
+        @test keytype(_NMB.var(nm, :p_gen; nw = 1)) === Int
         @test isempty(variable_container!(nm, :nothing_here; nw = 1, idtype = Arc))
         @test keytype(variable_container!(nm, :nothing_here; nw = 1, idtype = Arc)) === Arc
 

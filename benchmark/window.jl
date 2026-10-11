@@ -40,7 +40,7 @@ fields(c::T) where {T} = NamedTuple{fieldnames(T)}(map(f -> getfield(c, f), fiel
 function base_flows(data)
     lf = solve_lf(data, LPFFormulation, optimizer_with_attributes(HiGHS.Optimizer, "output_flag" => false))
 
-    return Dict(parse(Int, e) => entry["terminal"]["1"]["p"] for (e, entry) in nw_solution(lf)["edge"])
+    return Dict(parse(Int, e) => entry["terminal"]["1"]["p_term"] for (e, entry) in nw_solution(lf)["edge"])
 end
 
 """
@@ -96,7 +96,7 @@ roll(report = (;)) = solve_rolling_horizon(mn, RedispatchProblem, LPFFormulation
 result = roll()
 result["termination_status"] == JuMP.OPTIMAL ||
     error("the roll finished $(result["termination_status"]), the benchmark means nothing")
-overloaded = count(entry -> get(entry, "overload", 0.0) > 1e-6, [entry for s in values(result["solution"]["nw"])
+overloaded = count(entry -> get(entry, "s_ovl", 0.0) > 1e-6, [entry for s in values(result["solution"]["nw"])
                                                                    for entry in values(s["edge"])])
 @printf("case14, %d time steps, windows of %d; %d outages, %d network indices a window; %d rated edges\n",
         HOURS, HORIZON, length(out), dim_length(w1), length(rated))

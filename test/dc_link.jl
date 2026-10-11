@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.6.0 - initial implementation                                              #
 # v0.12.1 - a loss that depends on the transfer is another shape               #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 # Two nodes with no alternating current path between them, joined only by a dc
@@ -79,12 +80,12 @@ link(result, n = 1) = nw_solution(result, n)["edge"]["1"]
         result = quiet(() -> solve_opf(island_network(), LPFFormulation, OPTIMIZER))
 
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
-        @test link(result)["pdc"]  ≈ 1.0 atol = 1e-6
-        @test link(result)["loss"] ≈ 0.0 atol = 1e-8
+        @test link(result)["p_dcl"]  ≈ 1.0 atol = 1e-6
+        @test link(result)["p_loss"] ≈ 0.0 atol = 1e-8
         @test result["objective"]  ≈ 10.0 atol = 1e-5
 
         # what leaves one terminal arrives at the other, and nothing else joins them
-        @test link(result)["terminal"]["1"]["p"] ≈ -link(result)["terminal"]["2"]["p"] atol = 1e-8
+        @test link(result)["terminal"]["1"]["p_term"] ≈ -link(result)["terminal"]["2"]["p_term"] atol = 1e-8
     end
 
     @testset "a lossy link is charged on what is sent" begin
@@ -92,8 +93,8 @@ link(result, n = 1) = nw_solution(result, n)["edge"]["1"]
                                        LPFFormulation, OPTIMIZER))
 
         # to land 1.0 the link must be sent t with t - 0.05t = 1.0
-        @test link(result)["pdc"]  ≈ 1 / 0.95    atol = 1e-6
-        @test link(result)["loss"] ≈ 0.05 / 0.95 atol = 1e-6
+        @test link(result)["p_dcl"]  ≈ 1 / 0.95    atol = 1e-6
+        @test link(result)["p_loss"] ≈ 0.05 / 0.95 atol = 1e-6
         @test result["objective"]  ≈ 10.0 / 0.95 atol = 1e-4
 
         # the transfer settled on what was sent rather than anywhere above it,
@@ -101,7 +102,7 @@ link(result, n = 1) = nw_solution(result, n)["edge"]["1"]
         nm = instantiate_model(island_network(; loss_prop = 0.05),
                                OptimalPowerFlowProblem, LPFFormulation)
         quiet(() -> optimize_model!(nm, OPTIMIZER))
-        @test JuMP.value(_NMB.var(nm, :pdct, 1)) ≈ 1 / 0.95 atol = 1e-6
+        @test JuMP.value(_NMB.var(nm, :p_dcl_thru, 1)) ≈ 1 / 0.95 atol = 1e-6
     end
 
     @testset "a fixed loss is taken whether it carries anything or not" begin
@@ -112,13 +113,13 @@ link(result, n = 1) = nw_solution(result, n)["edge"]["1"]
 
         result = quiet(() -> solve_opf(idle, LPFFormulation, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
-        @test link(result)["loss"] ≈ 0.02 atol = 1e-6
-        @test link(result)["pdc"]  ≈ 0.02 atol = 1e-6   # what it draws is the loss itself
+        @test link(result)["p_loss"] ≈ 0.02 atol = 1e-6
+        @test link(result)["p_dcl"]  ≈ 0.02 atol = 1e-6   # what it draws is the loss itself
 
         # with the loss gone the link is genuinely idle, which is the contrast
         none = quiet(() -> solve_opf(island_network(; load = 1), LPFFormulation, OPTIMIZER))
-        @test link(none)["pdc"]  ≈ 0.0 atol = 1e-7
-        @test link(none)["loss"] ≈ 0.0 atol = 1e-8
+        @test link(none)["p_dcl"]  ≈ 0.0 atol = 1e-7
+        @test link(none)["p_loss"] ≈ 0.0 atol = 1e-8
     end
 
     @testset "it runs the same way whichever way it runs" begin
@@ -133,14 +134,14 @@ link(result, n = 1) = nw_solution(result, n)["edge"]["1"]
                                                          loss_prop = 0.05),
                                         LPFFormulation, OPTIMIZER))
 
-        @test link(forward)["pdc"] > 0 && link(reverse)["pdc"] < 0
-        @test link(forward)["loss"] ≈ link(reverse)["loss"] atol = 1e-8
+        @test link(forward)["p_dcl"] > 0 && link(reverse)["p_dcl"] < 0
+        @test link(forward)["p_loss"] ≈ link(reverse)["p_loss"] atol = 1e-8
         @test forward["objective"]  ≈ reverse["objective"]  atol = 1e-6
         @test reverse["objective"]  ≈ listed["objective"]   atol = 1e-6
 
         # and it never delivers more than it took, which a loss charged to a
         # signed flow would do in exactly this direction
-        @test link(reverse)["loss"] > 0
+        @test link(reverse)["p_loss"] > 0
     end
 
     @testset "a one-way link stays shut rather than running against itself" begin
@@ -148,7 +149,7 @@ link(result, n = 1) = nw_solution(result, n)["edge"]["1"]
         # backwards to help; it may not, and the dear local generator serves
         one = quiet(() -> solve_opf(island_network(; cheap = 2, reverse = false),
                                     LPFFormulation, OPTIMIZER))
-        @test link(one)["pdc"] ≈ 0.0 atol = 1e-7
+        @test link(one)["p_dcl"] ≈ 0.0 atol = 1e-7
         @test one["objective"] ≈ 100.0 atol = 1e-4
 
         both = quiet(() -> solve_opf(island_network(; cheap = 2), LPFFormulation, OPTIMIZER))
@@ -159,7 +160,7 @@ link(result, n = 1) = nw_solution(result, n)["edge"]["1"]
         for cheap in (1, 2)
             result = quiet(() -> solve_opf(island_network(; cheap, rate = 0.4),
                                            LPFFormulation, OPTIMIZER))
-            @test abs(link(result)["pdc"]) ≈ 0.4 atol = 1e-6
+            @test abs(link(result)["p_dcl"]) ≈ 0.4 atol = 1e-6
             # 0.4 comes across and the dear generator makes up the other 0.6
             @test result["objective"] ≈ 0.4 * 10.0 + 0.6 * 100.0 atol = 1e-4
         end
@@ -193,8 +194,8 @@ link(result, n = 1) = nw_solution(result, n)["edge"]["1"]
         result = quiet(() -> solve_model(data, LoadFlowProblem, LPFFormulation, OPTIMIZER))
 
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
-        @test link(result)["pdc"]  ≈ 0.3 atol = 1e-8
-        @test link(result)["loss"] ≈ 0.05 * 0.3 atol = 1e-8
+        @test link(result)["p_dcl"]  ≈ 0.3 atol = 1e-8
+        @test link(result)["p_loss"] ≈ 0.05 * 0.3 atol = 1e-8
     end
 
     @testset "it has no model in an alternating current formulation" begin
@@ -294,9 +295,9 @@ end
 
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
         @test result["objective"] ≈ 0.0 atol = 1e-5
-        @test nw_solution(result)["unit"]["1"]["pg"] ≈ 1.0 atol = 1e-6
-        @test dcl(result, 1)["pdc"] ≥ 0.5 - 1e-6
-        @test abs(nw_solution(result)["edge"]["1"]["terminal"]["1"]["p"]) ≤ 0.5 + 1e-6
+        @test nw_solution(result)["unit"]["1"]["p_gen"] ≈ 1.0 atol = 1e-6
+        @test dcl(result, 1)["p_dcl"] ≥ 0.5 - 1e-6
+        @test abs(nw_solution(result)["edge"]["1"]["terminal"]["1"]["p_term"]) ≤ 0.5 + 1e-6
 
         # it is a non-costly measure, so it carries no price at all
         nm = instantiate_model(linked_network(), RedispatchProblem, LPFFormulation)
@@ -308,13 +309,13 @@ end
         # unit, so the link is still the cheaper way to move all 0.5
         priced = quiet(() -> solve_rd(linked_network(; cost = 40.0),
                                       LPFFormulation, OPTIMIZER))
-        @test dcl(priced, 1)["pdc"] ≈ 0.5 atol = 1e-6
+        @test dcl(priced, 1)["p_dcl"] ≈ 0.5 atol = 1e-6
         @test priced["objective"] ≈ 0.5 * 40.0 atol = 1e-5
 
         # at 200 a per unit it is dearer than redispatching, so it stays put
         dear = quiet(() -> solve_rd(linked_network(; cost = 200.0),
                                     LPFFormulation, OPTIMIZER))
-        @test dcl(dear, 1)["pdc"] ≈ 0.0 atol = 1e-6
+        @test dcl(dear, 1)["p_dcl"] ≈ 0.0 atol = 1e-6
         @test dear["objective"] ≈ 0.5 * 100.0 + 0.5 * 10.0 atol = 1e-5
     end
 
@@ -325,10 +326,10 @@ end
                                          LPFFormulation, OPTIMIZER))
 
         @test scheduled["objective"] ≈ 0.0 atol = 1e-5
-        @test dcl(scheduled, 1)["pdc"]        ≈ 0.5 atol = 1e-6
-        @test dcl(scheduled, 1)["pdc_market"] ≈ 0.5
-        @test dcl(scheduled, 1)["pdcup"] ≈ 0.0 atol = 1e-6
-        @test dcl(scheduled, 1)["pdcdn"] ≈ 0.0 atol = 1e-6
+        @test dcl(scheduled, 1)["p_dcl"]        ≈ 0.5 atol = 1e-6
+        @test dcl(scheduled, 1)["p_dcl_mkt"] ≈ 0.5
+        @test dcl(scheduled, 1)["p_dcl_up"] ≈ 0.0 atol = 1e-6
+        @test dcl(scheduled, 1)["p_dcl_dn"] ≈ 0.0 atol = 1e-6
     end
 
     @testset "its rating is not congestion and cannot be priced away" begin
@@ -338,15 +339,15 @@ end
         result = quiet(() -> solve_rd(linked_network(; rate = 0.2), LPFFormulation,
                                       OPTIMIZER; redispatch = rd))
 
-        @test dcl(result, 1)["pdc"] ≈ 0.2 atol = 1e-6
-        @test !haskey(dcl(result, 1), "overload")
-        @test nw_solution(result)["edge"]["1"]["overload"] ≈ 0.0 atol = 1e-6
+        @test dcl(result, 1)["p_dcl"] ≈ 0.2 atol = 1e-6
+        @test !haskey(dcl(result, 1), "s_ovl")
+        @test nw_solution(result)["edge"]["1"]["s_ovl"] ≈ 0.0 atol = 1e-6
         @test result["objective"] ≈ 0.3 * 100.0 + 0.3 * 10.0 atol = 1e-5
     end
 
     @testset "a preventive link holds one transfer across the contingencies" begin
         nm = instantiate_model(linked_network(), RedispatchProblem, LPFFormulation)
-        @test redispatch_controls(nm, DCLink) == (:pdcup, :pdcdn)
+        @test redispatch_controls(nm, DCLink) == (:p_dcl_up, :p_dcl_dn)
 
         # The branch is the contingency, so the link has to carry the whole load
         # in the second state. Price the link, or there is no reason to prefer
@@ -359,13 +360,13 @@ end
 
         preventive = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER))
         @test preventive["termination_status"] == JuMP.LOCALLY_SOLVED
-        @test dcl(preventive, 1)["pdc"] ≈ dcl(preventive, 2)["pdc"] atol = 1e-6
-        @test dcl(preventive, 1)["pdc"] ≈ 1.0 atol = 1e-5
+        @test dcl(preventive, 1)["p_dcl"] ≈ dcl(preventive, 2)["p_dcl"] atol = 1e-6
+        @test dcl(preventive, 1)["p_dcl"] ≈ 1.0 atol = 1e-5
 
         corrective = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
                                           redispatch = Redispatch(; control = :corrective)))
-        @test dcl(corrective, 1)["pdc"] ≈ 0.5 atol = 1e-5
-        @test dcl(corrective, 2)["pdc"] ≈ 1.0 atol = 1e-5
+        @test dcl(corrective, 1)["p_dcl"] ≈ 0.5 atol = 1e-5
+        @test dcl(corrective, 2)["p_dcl"] ≈ 1.0 atol = 1e-5
 
         # holding one setting for a contingency that may not happen is what a
         # preventive measure pays for
@@ -384,7 +385,7 @@ end
                                       step = 1, reuse = true, warm_start = true))
         @test reused["objective"] ≈ built["objective"] rtol = 1e-6
         for n in 1:4
-            @test dcl(reused, n)["pdc"] ≈ dcl(built, n)["pdc"] atol = 1e-5
+            @test dcl(reused, n)["p_dcl"] ≈ dcl(built, n)["p_dcl"] atol = 1e-5
         end
         @test reused["horizon"]["built"] < built["horizon"]["built"]
     end

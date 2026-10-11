@@ -14,6 +14,7 @@
 # v0.12.9 - a model knows when it is being built for the first time            #
 # v0.12.9 - the constraints a model registered are a field, not a key of ext   #
 # v0.14.0 - set_string_name leaves the variables of a model unnamed            #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 ################################################################################
@@ -168,7 +169,7 @@ The variables, constraints and expressions of `nm` at network index `nw`: the
 whole dictionary, the container registered under `key`, or a single entry of it.
 
 Assign a container by writing into the dictionary, e.g.,
-`var(nm; nw = n)[:vr] = ...`.
+`var(nm; nw = n)[:v_real] = ...`.
 """
 function var end
 

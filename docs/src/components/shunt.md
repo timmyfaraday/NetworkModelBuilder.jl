@@ -33,14 +33,14 @@ A switched capacitor bank is a `bs` given as a [`NetworkVector`](@ref).
 
 | symbol | key | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``c^{\text{r}}_{u}`` | `:cru` | unit | real injected current | pu |
-| ``c^{\text{i}}_{u}`` | `:ciu` | unit | imaginary injected current | pu |
+| ``c^{\text{r}}_{u}`` | `:i_unit_real` | unit | real injected current | pu |
+| ``c^{\text{i}}_{u}`` | `:i_unit_imag` | unit | imaginary injected current | pu |
 
 ### In the `LPFFormulation`
 
 | symbol | key | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``p_{u}`` | `:pu` | unit | active power injected into the node | pu |
+| ``p_{u}`` | `:p_unit` | unit | active power injected into the node | pu |
 
 ## Constraints
 

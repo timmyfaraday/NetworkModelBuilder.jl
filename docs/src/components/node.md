@@ -32,8 +32,8 @@ Every field but `id`, `name`, `base_kv`, `area`, `zone` and `ext` may be a
 
 | symbol | key | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``v^{\text{r}}_{i}`` | `:vr` | node | real part of the voltage | pu |
-| ``v^{\text{i}}_{i}`` | `:vi` | node | imaginary part of the voltage | pu |
+| ``v^{\text{r}}_{i}`` | `:v_real` | node | real part of the voltage | pu |
+| ``v^{\text{i}}_{i}`` | `:v_imag` | node | imaginary part of the voltage | pu |
 
 Whether they are bounded depends on the problem. A power flow leaves them free,
 so that the solver is not steered away from the one physical answer. A dispatch
@@ -44,7 +44,7 @@ below.
 
 | symbol | key | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``v^{\text{a}}_{i}`` | `:va` | node | voltage angle | rad |
+| ``v^{\text{a}}_{i}`` | `:v_angl` | node | voltage angle | rad |
 
 There is no magnitude variable: it is one by assumption. The angle is unbounded
 whatever the problem, since the differences that matter are bounded on the edges
@@ -70,7 +70,7 @@ Kirchhoff's current law, at every node, in the `IVRFormulation`:
 
 with ``c_a`` the current flowing from the node into an edge terminal and ``c_u``
 the current a unit injects. Every kind of unit contributes to the same sum
-through the shared `:cru` and `:ciu` variables, which is what keeps this
+through the shared `:i_unit_real` and `:i_unit_imag` variables, which is what keeps this
 constraint independent of what a network contains.
 
 ### Voltage reference

@@ -9,6 +9,7 @@
 # v0.4.0 - the linearized formulation                                          #
 # v0.12.0 - one Transformer; its controls are flags, not types                 #
 # v0.13.0 - one Branch, so no branch type is compared                          #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 # The reference values below are those of PowerModels.jl v0.21 in its
@@ -32,7 +33,7 @@ const CASE3_DC_PF_VA  = [0.0, 2.118113, -17.631043]
 
 "the angles of a solution, in degrees, ordered by node identifier"
 degrees(result, nw = 1) =
-    [rad2deg(nw_solution(result, nw)["node"]["$i"]["va"])
+    [rad2deg(nw_solution(result, nw)["node"]["$i"]["v_angl"])
      for i in sort(parse.(Int, collect(keys(nw_solution(result, nw)["node"]))))]
 
 @testset "linearized formulation" begin
@@ -61,11 +62,11 @@ degrees(result, nw = 1) =
     @testset "the variables are the linearized ones" begin
         nm = quiet(() -> instantiate_model(case("case14"), OptimalPowerFlowProblem, LPFFormulation))
 
-        for key in (:va, :p, :pu, :pg)
+        for key in (:v_angl, :p_term, :p_unit, :p_gen)
             @test haskey(_NMB.var(nm), key)
         end
         # no magnitude, no current, no reactive power
-        for key in (:vr, :vi, :cr, :ci, :cru, :ciu, :csr, :csi, :qg)
+        for key in (:v_real, :v_imag, :i_term_real, :i_term_imag, :i_unit_real, :i_unit_imag, :i_ser_real, :i_ser_imag, :q_gen)
             @test !haskey(_NMB.var(nm), key)
         end
     end
@@ -79,8 +80,8 @@ degrees(result, nw = 1) =
         pf = quiet(() -> solve_lf(case("case14"), LPFFormulation, OPTIMIZER))
         @test pf["termination_status"] == JuMP.LOCALLY_SOLVED
         @test degrees(pf) ≈ CASE14_DC_PF_VA atol = 1e-5
-        @test nw_solution(pf)["unit"]["1"]["pg"] ≈ 2.19 atol = 1e-6   # the slack closes
-        @test nw_solution(pf)["unit"]["2"]["pg"] ≈ 0.40 atol = 1e-8   # the rest hold
+        @test nw_solution(pf)["unit"]["1"]["p_gen"] ≈ 2.19 atol = 1e-6   # the slack closes
+        @test nw_solution(pf)["unit"]["2"]["p_gen"] ≈ 0.40 atol = 1e-8   # the rest hold
     end
 
     @testset "case3 reproduces the reference solution" begin
@@ -96,9 +97,9 @@ degrees(result, nw = 1) =
         result = quiet(() -> solve_opf(case("case14"), LPFFormulation, OPTIMIZER))
         sol    = nw_solution(result)
 
-        @test all(sol["node"]["$i"]["vm"] == 1.0 for i in keys(sol["node"]))
-        @test !any(haskey(sol["unit"][u], "qg") for u in keys(sol["unit"]))
-        @test !any(haskey(sol["edge"][e]["terminal"]["1"], "q") for e in keys(sol["edge"]))
+        @test all(sol["node"]["$i"]["v_magn"] == 1.0 for i in keys(sol["node"]))
+        @test !any(haskey(sol["unit"][u], "q_gen") for u in keys(sol["unit"]))
+        @test !any(haskey(sol["edge"][e]["terminal"]["1"], "q_term") for e in keys(sol["edge"]))
     end
 
     @testset "the model is lossless" begin
@@ -109,20 +110,20 @@ degrees(result, nw = 1) =
 
         # whatever leaves one terminal of an edge arrives at the others
         for e in ids(net, AbstractEdge)
-            @test sum(t["p"] for t in values(sol["edge"]["$e"]["terminal"])) ≈ 0.0 atol = 1e-8
+            @test sum(t["p_term"] for t in values(sol["edge"]["$e"]["terminal"])) ≈ 0.0 atol = 1e-8
         end
 
         # so generation equals demand exactly, with the shunt conductance included
-        generated = sum(sol["unit"]["$u"]["pg"] for u in ids(net, Generator))
+        generated = sum(sol["unit"]["$u"]["p_gen"] for u in ids(net, Generator))
         withdrawn = sum(unit(net, u).pd for u in ids(net, FixedLoad)) +
                     sum(unit(net, u).gs for u in ids(net, Shunt))
         @test generated ≈ withdrawn atol = 1e-7
 
         # and the node balance holds at every node
         for i in ids(net, Node)
-            into = sum(sol["edge"]["$(a.edge)"]["terminal"]["$(a.terminal)"]["p"]
+            into = sum(sol["edge"]["$(a.edge)"]["terminal"]["$(a.terminal)"]["p_term"]
                        for a in node_arcs(net, i); init = 0.0)
-            from = sum(sol["unit"]["$u"]["p"] for u in node_units(net, i); init = 0.0)
+            from = sum(sol["unit"]["$u"]["p_unit"] for u in node_units(net, i); init = 0.0)
             @test into ≈ from atol = 1e-7
         end
     end
@@ -138,12 +139,12 @@ degrees(result, nw = 1) =
             for a in edge_arcs(net, e)
                 rate = rating_at(br, a.terminal)
                 isfinite(rate) || continue
-                @test abs(sol["edge"]["$e"]["terminal"]["$(a.terminal)"]["p"]) <= rate + 1e-6
+                @test abs(sol["edge"]["$e"]["terminal"]["$(a.terminal)"]["p_term"]) <= rate + 1e-6
             end
         end
         for u in ids(net, Generator)
             g = unit(net, u)
-            @test g.pmin - 1e-6 <= sol["unit"]["$u"]["pg"] <= g.pmax + 1e-6
+            @test g.pmin - 1e-6 <= sol["unit"]["$u"]["p_gen"] <= g.pmax + 1e-6
         end
     end
 end
@@ -167,7 +168,7 @@ end
 
         @test pst["objective"] <= plain["objective"] + 1e-6
         @test pst["objective"] < plain["objective"]          # it is worth using here
-        @test -0.2 - 1e-6 <= nw_solution(pst)["edge"]["5"]["terminal"]["1"]["tap"]["ta"] <= 0.2 + 1e-6
+        @test -0.2 - 1e-6 <= nw_solution(pst)["edge"]["5"]["terminal"]["1"]["tap"]["t_angl"] <= 0.2 + 1e-6
 
         # and it stays a linear program while doing it
         @test all(T <: Union{JuMP.AffExpr,JuMP.VariableRef}
@@ -175,7 +176,7 @@ end
 
         # in a load flow it has no freedom and holds its setpoint
         lf = instantiate_model(data, LoadFlowProblem, LPFFormulation)
-        @test !haskey(_NMB.var(lf), :ta)
+        @test !haskey(_NMB.var(lf), :t_angl)
     end
 
     @testset "a shunt keeps its conductance and loses its susceptance" begin
@@ -188,8 +189,8 @@ end
         result = quiet(() -> solve_lf(data, LPFFormulation, OPTIMIZER))
         sol    = nw_solution(result)
 
-        @test sol["unit"]["2"]["p"] ≈ -0.03 atol = 1e-9     # gs, and not bs
-        @test sol["unit"]["1"]["pg"] ≈ 0.03 atol = 1e-9     # which the generator covers
+        @test sol["unit"]["2"]["p_unit"] ≈ -0.03 atol = 1e-9     # gs, and not bs
+        @test sol["unit"]["1"]["p_gen"] ≈ 0.03 atol = 1e-9     # which the generator covers
     end
 
     @testset "a transformer with three windings hides its star point here too" begin
@@ -217,8 +218,8 @@ end
         b = quiet(() -> solve_lf(split, LPFFormulation, OPTIMIZER))
 
         for i in 1:3
-            @test nw_solution(a)["node"]["$i"]["va"] ≈
-                  nw_solution(b)["node"]["$i"]["va"] atol = 1e-9
+            @test nw_solution(a)["node"]["$i"]["v_angl"] ≈
+                  nw_solution(b)["node"]["$i"]["v_angl"] atol = 1e-9
         end
         @test !haskey(nw_solution(a)["node"], "4")
     end
@@ -240,8 +241,8 @@ end
         flat = NetworkData(Network(net.node, E, net.unit); name = "flat", baseMVA = 100.0)
 
         sol = nw_solution(quiet(() -> solve_opf(flat, LPFFormulation, OPTIMIZER)))
-        @test sol["edge"]["5"]["terminal"]["1"]["p"] ≈
-              -sol["edge"]["6"]["terminal"]["1"]["p"] atol = 1e-8
+        @test sol["edge"]["5"]["terminal"]["1"]["p_term"] ≈
+              -sol["edge"]["6"]["terminal"]["1"]["p_term"] atol = 1e-8
     end
 
     @testset "the time coupled units work here too" begin
@@ -253,15 +254,15 @@ end
         result = quiet(() -> solve_model(data, OptimalPowerFlowProblem,
                                          LPFFormulation, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
-        @test nw_solution(result, 1)["unit"]["3"]["psc"] > 0.01   # charges when cheap
-        @test nw_solution(result, 2)["unit"]["3"]["psd"] > 0.01   # discharges when dear
+        @test nw_solution(result, 1)["unit"]["3"]["p_chg"] > 0.01   # charges when cheap
+        @test nw_solution(result, 2)["unit"]["3"]["p_dch"] > 0.01   # discharges when dear
 
         flat = FlexibleLoad(; id = 3, node = 2, pd_nominal = 0.10, qd_nominal = 0.02,
                             pd_min = 0.0, pd_max = 0.15)
         shifted = quiet(() -> solve_model(price_network(PRICES;
                                               extra = Dict{Int,AbstractUnit}(3 => flat)),
                                           OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
-        pd = [nw_solution(shifted, n)["unit"]["3"]["pd"] for n in 1:3]
+        pd = [nw_solution(shifted, n)["unit"]["3"]["p_set"] for n in 1:3]
         @test pd[1] ≈ 0.15 atol = 1e-5
         @test sum(pd) ≈ 3 * 0.10 atol = 1e-6
     end

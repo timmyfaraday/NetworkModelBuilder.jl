@@ -56,10 +56,10 @@ and so does not vary over the network index; take a link out through `status`.
 
 | symbol | key | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``p_{a}`` | `:p` | arc | terminal active power, node into edge | pu |
-| ``t_{e}`` | `:pdct` | edge | power sent into the link | pu |
-| ``p^{\uparrow}_{e}`` | `:pdcup` | edge | moved up from the schedule, redispatch only | pu |
-| ``p^{\downarrow}_{e}`` | `:pdcdn` | edge | moved down from the schedule, redispatch only | pu |
+| ``p_{a}`` | `:p_term` | arc | terminal active power, node into edge | pu |
+| ``t_{e}`` | `:p_dcl_thru` | edge | power sent into the link | pu |
+| ``p^{\uparrow}_{e}`` | `:p_dcl_up` | edge | moved up from the schedule, redispatch only | pu |
+| ``p^{\downarrow}_{e}`` | `:p_dcl_dn` | edge | moved down from the schedule, redispatch only | pu |
 
 ``t_{e}`` exists only where `loss_prop` is non-zero, and only in a dispatch
 problem — see [The transfer, and why it is a variable](@ref).

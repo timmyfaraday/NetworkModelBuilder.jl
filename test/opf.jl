@@ -9,6 +9,7 @@
 # v0.1.0 - initial implementation                                              #
 # v0.12.0 - a transformer has an entry per winding                             #
 # v0.13.0 - a branch holds one entry per terminal of a field                   #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 # The reference objectives below are those of PowerModels.jl v0.21, computed in
@@ -36,13 +37,13 @@
 
         for i in ids(net, Node)
             nd = node(net, i)
-            @test nd.vmin - 1e-6 <= sol["node"]["$i"]["vm"] <= nd.vmax + 1e-6
+            @test nd.vmin - 1e-6 <= sol["node"]["$i"]["v_magn"] <= nd.vmax + 1e-6
         end
 
         for u in ids(net, Generator)
             g = unit(net, u)
-            @test g.pmin - 1e-6 <= sol["unit"]["$u"]["pg"] <= g.pmax + 1e-6
-            @test g.qmin - 1e-6 <= sol["unit"]["$u"]["qg"] <= g.qmax + 1e-6
+            @test g.pmin - 1e-6 <= sol["unit"]["$u"]["p_gen"] <= g.pmax + 1e-6
+            @test g.qmin - 1e-6 <= sol["unit"]["$u"]["q_gen"] <= g.qmax + 1e-6
         end
 
         for e in ids(net, AbstractEdge)
@@ -51,7 +52,7 @@
                 rate = rating_at(br, a.terminal)
                 isfinite(rate) || continue
                 t = sol["edge"]["$e"]["terminal"]["$(a.terminal)"]
-                @test hypot(t["p"], t["q"]) <= rate + 1e-6
+                @test hypot(t["p_term"], t["q_term"]) <= rate + 1e-6
             end
         end
     end
@@ -62,7 +63,7 @@
         result = quiet(() -> solve_opf(data, IVRFormulation, OPTIMIZER))
         sol    = nw_solution(result)
 
-        cost = sum(generation_cost(unit(net, u), sol["unit"]["$u"]["pg"])
+        cost = sum(generation_cost(unit(net, u), sol["unit"]["$u"]["p_gen"])
                    for u in ids(net, Generator))
         @test cost ≈ result["objective"] rtol = 1e-8
     end

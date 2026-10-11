@@ -61,7 +61,7 @@ Read against the volume rather than the injection, the defaults are a charge of
 
 | symbol | key | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``p^{\text{sl}}_{u}`` | `:psl` | unit | the volume relaxed, ``\ge 0`` | pu |
+| ``p^{\text{sl}}_{u}`` | `:p_slk` | unit | the volume relaxed, ``\ge 0`` | pu |
 
 One variable serves both types, and it is always the *amount* of the relaxation
 rather than a signed injection. A power flow creates none: there is nothing to

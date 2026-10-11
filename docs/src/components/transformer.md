@@ -89,12 +89,12 @@ ratio of one, no shift, no impedance, no shunt.
 
 | symbol | key | index | description | unit | when |
 |:-------|:----|:------|:------------|:-----|:-----|
-| ``c^{\text{r}}_{a}``, ``c^{\text{i}}_{a}`` | `:cr`, `:ci` | arc | terminal current | pu | all |
-| ``v^{\text{sr}}_{e}``, ``v^{\text{si}}_{e}`` | `:vsr`, `:vsi` | edge | star point voltage | pu | all |
-| ``v^{\text{tr}}_{a}``, ``v^{\text{ti}}_{a}`` | `:vtr`, `:vti` | arc | voltage behind the ratio | pu | a winding that moves or steps, in a dispatch problem |
-| ``tm_{a}`` | `:tm` | arc | the ratio magnitude | pu | `oltc` is `CONTINUOUS` and `pst` is not |
-| ``t^{\text{r}}_{a}``, ``t^{\text{i}}_{a}`` | `:tr`, `:ti` | arc | the ratio itself | pu | `pst` is `CONTINUOUS` |
-| ``z^{\text{t}}_{a,s}`` | `:zt` | arc, position | the position taken, a binary | | a winding that is `STEPPED` |
+| ``c^{\text{r}}_{a}``, ``c^{\text{i}}_{a}`` | `:i_term_real`, `:i_term_imag` | arc | terminal current | pu | all |
+| ``v^{\text{sr}}_{e}``, ``v^{\text{si}}_{e}`` | `:v_star_real`, `:v_star_imag` | edge | star point voltage | pu | all |
+| ``v^{\text{tr}}_{a}``, ``v^{\text{ti}}_{a}`` | `:v_wind_real`, `:v_wind_imag` | arc | voltage behind the ratio | pu | a winding that moves or steps, in a dispatch problem |
+| ``tm_{a}`` | `:t_magn` | arc | the ratio magnitude | pu | `oltc` is `CONTINUOUS` and `pst` is not |
+| ``t^{\text{r}}_{a}``, ``t^{\text{i}}_{a}`` | `:t_real`, `:t_imag` | arc | the ratio itself | pu | `pst` is `CONTINUOUS` |
+| ``z^{\text{t}}_{a,s}`` | `:z_step` | arc, position | the position taken, a binary | | a winding that is `STEPPED` |
 
 The ratio of a winding that moves its angle is kept as a real and an imaginary part
 rather than as an angle, so that the angle enters through a circle and a pair of
@@ -104,10 +104,10 @@ bounds in place of a sine and a cosine of a variable.
 
 | symbol | key | index | description | unit | when |
 |:-------|:----|:------|:------------|:-----|:-----|
-| ``p_{a}`` | `:p` | arc | terminal active power | pu | all |
-| ``v^{\text{as}}_{e}`` | `:vas` | edge | star point angle | rad | three or more windings |
-| ``ta_{a}`` | `:ta` | arc | the ratio angle | rad | `pst` is `CONTINUOUS`, in a dispatch problem |
-| ``z^{\text{t}}_{a,s}`` | `:zt` | arc, position | the position taken, a binary | | `pst` is `STEPPED` |
+| ``p_{a}`` | `:p_term` | arc | terminal active power | pu | all |
+| ``v^{\text{as}}_{e}`` | `:v_star_angl` | edge | star point angle | rad | three or more windings |
+| ``ta_{a}`` | `:t_angl` | arc | the ratio angle | rad | `pst` is `CONTINUOUS`, in a dispatch problem |
+| ``z^{\text{t}}_{a,s}`` | `:z_step` | arc, position | the position taken, a binary | | `pst` is `STEPPED` |
 
 The ratio magnitude appears nowhere: with every voltage magnitude equal to one there
 is nothing for it to change. A winding that is `oltc` is therefore **inert** here,
@@ -233,16 +233,16 @@ The entry of every terminal carries the tap of its winding, under `"tap"`:
 
 | key | description | when |
 |:----|:------------|:-----|
-| `"tm"`, `"ta"` | the magnitude and the angle of the ratio | always |
-| `"tr"`, `"ti"` | the ratio as a real and an imaginary part | `IVRFormulation` |
-| `"step"` | the index of the position taken | a winding that steps |
-| `"tm_market"`, `"ta_market"` | the setpoint the market left the winding at | a redispatch |
+| `"t_magn"`, `"t_angl"` | the magnitude and the angle of the ratio | always |
+| `"t_real"`, `"t_imag"` | the ratio as a real and an imaginary part | `IVRFormulation` |
+| `"z_step"` | the index of the position taken | a winding that steps |
+| `"t_magn_mkt"`, `"t_angl_mkt"` | the setpoint the market left the winding at | a redispatch |
 
 For a winding that holds its ratio this reports back what was given, for one the
 problem chose it is what the optimizer chose. A position is numbered as its range runs;
 for a winding that steps both magnitude and angle in the `IVRFormulation`, the
-magnitudes in turn for each angle. [`solution_tables`](@ref) has the taps as `tap_tm`,
-`tap_ta` and so on, one row per terminal, and `missing` for every edge that is not a
+magnitudes in turn for each angle. [`solution_tables`](@ref) has the taps as `tap_t_magn`,
+`tap_t_angl` and so on, one row per terminal, and `missing` for every edge that is not a
 transformer.
 
 ## An example
@@ -279,7 +279,7 @@ free    = solve_opf(corridor(; pst = CONTINUOUS, ta_min = -0.3, ta_max = 0.3),
 stepped = solve_opf(corridor(; pst = STEPPED, ta_min = -0.3, ta_max = 0.3, ta_step = 0.1),
                     LPFFormulation, optimizer)
 
-corridor_flow(result) = nw_solution(result)["edge"]["1"]["terminal"]["1"]["p"]
+corridor_flow(result) = nw_solution(result)["edge"]["1"]["terminal"]["1"]["p_term"]
 
 (held    = held["objective"],
  free    = free["objective"],

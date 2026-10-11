@@ -35,11 +35,11 @@ Storage
 
 | symbol | key | index | description | unit |
 |:-------|:----|:------|:------------|:-----|
-| ``c^{\text{r}}_{u}``, ``c^{\text{i}}_{u}`` | `:cru`, `:ciu` | unit | injected current | pu |
-| ``p^{\text{sc}}_{u}`` | `:psc` | unit | charge power, ``\ge 0`` | pu |
-| ``p^{\text{sd}}_{u}`` | `:psd` | unit | discharge power, ``\ge 0`` | pu |
-| ``e_{u}`` | `:es` | unit | state of charge | pu·h |
-| ``q^{\text{s}}_{u}`` | `:qs` | unit | reactive power | pu |
+| ``c^{\text{r}}_{u}``, ``c^{\text{i}}_{u}`` | `:i_unit_real`, `:i_unit_imag` | unit | injected current | pu |
+| ``p^{\text{sc}}_{u}`` | `:p_chg` | unit | charge power, ``\ge 0`` | pu |
+| ``p^{\text{sd}}_{u}`` | `:p_dch` | unit | discharge power, ``\ge 0`` | pu |
+| ``e_{u}`` | `:e_stor` | unit | state of charge | pu·h |
+| ``q^{\text{s}}_{u}`` | `:q_stor` | unit | reactive power | pu |
 
 A power flow creates none of these: there the unit holds its setpoint.
 

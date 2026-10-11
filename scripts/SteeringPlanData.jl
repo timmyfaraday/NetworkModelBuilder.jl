@@ -519,14 +519,14 @@ function freeze_dispatch(data::NetworkData, result::Dict{String,Any};
             if c isa Generator
                 pg = nw_values(dim, c.pg)
                 for (i, t) in enumerate(positions)
-                    pg[t] = nw_solution(result, i)["unit"]["$u"]["pg"]
+                    pg[t] = nw_solution(result, i)["unit"]["$u"]["p_gen"]
                 end
                 net.unit[u] = Generator(; _fields(c)..., pg = nw_vector(dim, :time, pg))
             elseif c isa Storage
                 ps = nw_values(dim, c.ps)
                 for (i, t) in enumerate(positions)
                     sol = nw_solution(result, i)["unit"]
-                    haskey(sol, "$u") && (ps[t] = sol["$u"]["psd"] - sol["$u"]["psc"])
+                    haskey(sol, "$u") && (ps[t] = sol["$u"]["p_dch"] - sol["$u"]["p_chg"])
                 end
                 net.unit[u] = Storage(; _fields(c)..., ps = nw_vector(dim, :time, ps))
             end
@@ -537,7 +537,7 @@ function freeze_dispatch(data::NetworkData, result::Dict{String,Any};
             for (i, t) in enumerate(positions)
                 terminal = nw_solution(result, i)["edge"]["$e"]["terminal"]
                 for k in findall(!=(FIXED), c.pst)
-                    ta[t][k] = terminal["$k"]["tap"]["ta"]
+                    ta[t][k] = terminal["$k"]["tap"]["t_angl"]
                 end
             end
             net.edge[e] = Transformer(; _fields(c)..., ta = nw_vector(dim, :time, ta))

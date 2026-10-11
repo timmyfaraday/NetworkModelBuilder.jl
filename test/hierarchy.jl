@@ -10,6 +10,7 @@
 # v0.12.0 - one Transformer; its controls are flags, not types                 #
 # v0.13.0 - one Branch, so no branch type is compared with another             #
 # v0.13.0 - a branch holds one entry per terminal of a field                   #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 "case5 with edge 5, which has a turns ratio, rebuilt as a transformer carrying `extra`"
@@ -70,8 +71,8 @@ end
 
             @test result["termination_status"] == JuMP.LOCALLY_SOLVED
             for i in keys(nw_solution(reference)["node"])
-                @test nw_solution(result)["node"][i]["vm"] ≈
-                      nw_solution(reference)["node"][i]["vm"] atol = 1e-7
+                @test nw_solution(result)["node"][i]["v_magn"] ≈
+                      nw_solution(reference)["node"][i]["v_magn"] atol = 1e-7
             end
         end
     end
@@ -94,11 +95,11 @@ end
             # and the tap it chose sits inside its limits
             tap = nw_solution(result)["edge"]["5"]["terminal"]["1"]["tap"]
             if name == "angle"
-                @test tap["tm"] ≈ edge(nm, 5).tm[1] atol = 1e-6     # magnitude preserved
-                @test -0.2 - 1e-6 <= tap["ta"] <= 0.2 + 1e-6
+                @test tap["t_magn"] ≈ edge(nm, 5).tm[1] atol = 1e-6     # magnitude preserved
+                @test -0.2 - 1e-6 <= tap["t_angl"] <= 0.2 + 1e-6
             else
-                @test 0.9 - 1e-6 <= tap["tm"] <= 1.1 + 1e-6
-                @test tap["ta"] ≈ edge(nm, 5).ta[1] atol = 1e-6     # angle preserved
+                @test 0.9 - 1e-6 <= tap["t_magn"] <= 1.1 + 1e-6
+                @test tap["t_angl"] ≈ edge(nm, 5).ta[1] atol = 1e-6     # angle preserved
             end
         end
     end
@@ -137,10 +138,10 @@ end
         b = quiet(() -> solve_lf(split, IVRFormulation, OPTIMIZER))
 
         for i in 1:3
-            @test nw_solution(a)["node"]["$i"]["vm"] ≈ nw_solution(b)["node"]["$i"]["vm"] atol = 1e-8
-            @test nw_solution(a)["node"]["$i"]["va"] ≈ nw_solution(b)["node"]["$i"]["va"] atol = 1e-8
+            @test nw_solution(a)["node"]["$i"]["v_magn"] ≈ nw_solution(b)["node"]["$i"]["v_magn"] atol = 1e-8
+            @test nw_solution(a)["node"]["$i"]["v_angl"] ≈ nw_solution(b)["node"]["$i"]["v_angl"] atol = 1e-8
         end
-        @test nw_solution(a)["unit"]["1"]["p"] ≈ nw_solution(b)["unit"]["1"]["p"] atol = 1e-8
+        @test nw_solution(a)["unit"]["1"]["p_unit"] ≈ nw_solution(b)["unit"]["1"]["p_unit"] atol = 1e-8
 
         # the star point appears in the edge, and nowhere among the nodes
         @test !haskey(nw_solution(a)["node"], "4")
@@ -216,9 +217,9 @@ end
 
 "the charge, discharge and state of charge of unit 3 over `steps` of a result"
 storage_path(result, steps) =
-    ([nw_solution(result, n)["unit"]["3"]["psc"] for n in steps],
-     [nw_solution(result, n)["unit"]["3"]["psd"] for n in steps],
-     [nw_solution(result, n)["unit"]["3"]["es"]  for n in steps])
+    ([nw_solution(result, n)["unit"]["3"]["p_chg"] for n in steps],
+     [nw_solution(result, n)["unit"]["3"]["p_dch"] for n in steps],
+     [nw_solution(result, n)["unit"]["3"]["e_stor"]  for n in steps])
 
 """
 A two node network whose cheap generator carries an energy limit, with an
@@ -257,7 +258,7 @@ const PRICES = [10.0, 100.0, 50.0]
                                          IVRFormulation, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
 
-        pd = [nw_solution(result, n)["unit"]["3"]["pd"] for n in 1:3]
+        pd = [nw_solution(result, n)["unit"]["3"]["p_set"] for n in 1:3]
 
         # it fills the cheapest step to the brim, then prefers the next cheapest
         @test pd[1] ≈ 0.15 atol = 1e-5
@@ -269,8 +270,8 @@ const PRICES = [10.0, 100.0, 50.0]
 
         # reactive demand follows at the nominal power factor
         for n in 1:3
-            @test nw_solution(result, n)["unit"]["3"]["qd"] ≈
-                  0.2 * nw_solution(result, n)["unit"]["3"]["pd"] atol = 1e-8
+            @test nw_solution(result, n)["unit"]["3"]["q_set"] ≈
+                  0.2 * nw_solution(result, n)["unit"]["3"]["p_set"] atol = 1e-8
         end
     end
 
@@ -286,7 +287,7 @@ const PRICES = [10.0, 100.0, 50.0]
         result = quiet(() -> solve_model(data, OptimalPowerFlowProblem,
                                          LPFFormulation, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
-        pd = [nw_solution(result, n)["unit"]["3"]["pd"] for n in 1:6]
+        pd = [nw_solution(result, n)["unit"]["3"]["p_set"] for n in 1:6]
 
         # each day balances on its own, rather than the horizon balancing as one
         @test sum(pd[1:3]) ≈ 3 * 0.10 atol = 1e-6
@@ -300,7 +301,7 @@ const PRICES = [10.0, 100.0, 50.0]
         loose = quiet(() -> solve_model(price_network(prices;
                                             extra = Dict{Int,AbstractUnit}(3 => flat)),
                                         OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
-        @test sum(nw_solution(loose, n)["unit"]["3"]["pd"] for n in 1:6) ≈ 6 * 0.10 atol = 1e-6
+        @test sum(nw_solution(loose, n)["unit"]["3"]["p_set"] for n in 1:6) ≈ 6 * 0.10 atol = 1e-6
         @test loose["objective"] <= result["objective"] + 1e-8
     end
 
@@ -312,7 +313,7 @@ const PRICES = [10.0, 100.0, 50.0]
         result = quiet(() -> solve_model(data, LoadFlowProblem, IVRFormulation, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
         for n in 1:3
-            @test nw_solution(result, n)["unit"]["3"]["pd"] ≈ 0.10 atol = 1e-8
+            @test nw_solution(result, n)["unit"]["3"]["p_set"] ≈ 0.10 atol = 1e-8
         end
     end
 
@@ -326,9 +327,9 @@ const PRICES = [10.0, 100.0, 50.0]
                                          IVRFormulation, OPTIMIZER))
         @test result["termination_status"] == JuMP.LOCALLY_SOLVED
 
-        psc = [nw_solution(result, n)["unit"]["3"]["psc"] for n in 1:3]
-        psd = [nw_solution(result, n)["unit"]["3"]["psd"] for n in 1:3]
-        es  = [nw_solution(result, n)["unit"]["3"]["es"]  for n in 1:3]
+        psc = [nw_solution(result, n)["unit"]["3"]["p_chg"] for n in 1:3]
+        psd = [nw_solution(result, n)["unit"]["3"]["p_dch"] for n in 1:3]
+        es  = [nw_solution(result, n)["unit"]["3"]["e_stor"]  for n in 1:3]
 
         # it charges when power is cheap and discharges when it is dear
         @test psc[1] > 0.01
@@ -403,8 +404,8 @@ const PRICES = [10.0, 100.0, 50.0]
         # horizon term rather than through any one network index
         nm = instantiate_model(arbitrage_network(cheap), OptimalPowerFlowProblem,
                                LPFFormulation)
-        @test JuMP.coefficient(horizon_cost(nm), _NMB.var(nm, :psd, 3; nw = 2)) ≈ 20.0 / 0.5
-        @test JuMP.coefficient(network_cost(nm, 2), _NMB.var(nm, :psd, 3; nw = 2)) ≈ 0.0
+        @test JuMP.coefficient(horizon_cost(nm), _NMB.var(nm, :p_dch, 3; nw = 2)) ≈ 20.0 / 0.5
+        @test JuMP.coefficient(network_cost(nm, 2), _NMB.var(nm, :p_dch, 3; nw = 2)) ≈ 0.0
         @test period_cost(nm, Storage, 3; nw = 1) isa JuMP.AbstractJuMPScalar
         @test period_cost(nm, FixedLoad, 2; nw = 1) == 0.0
     end
@@ -589,7 +590,7 @@ const PRICES = [10.0, 100.0, 50.0]
     #   0.3 per day     : 0.3 in each half, 200 pays for 0.1 in each      = 64
     @testset "a generator can be given an energy limit per period" begin
         prices = [10.0, 100.0, 10.0, 100.0]
-        cheap(result) = [nw_solution(result, n)["unit"]["1"]["pg"] for n in 1:4]
+        cheap(result) = [nw_solution(result, n)["unit"]["1"]["p_gen"] for n in 1:4]
 
         free = quiet(() -> solve_model(allocation_network(prices, Inf),
                                        OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))

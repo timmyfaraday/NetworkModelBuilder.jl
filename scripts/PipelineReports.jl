@@ -74,7 +74,7 @@ function congestion_report(data::NetworkData, result::Dict{String,Any})
         for n in nw_ids(data)
             is_solved(result, n) || continue
             term = nw_solution(result, n)["edge"]["$e"]["terminal"]
-            flow = maximum(abs(t["p"]) for t in values(term))
+            flow = maximum(abs(t["p_term"]) for t in values(term))
             flow > rate + 1e-6 &&
                 push!(rows, (edge = e, hour = hours[n], flow_pu = flow, rate_a_pu = rate,
                              overload_pu = flow - rate))
@@ -124,12 +124,12 @@ function redispatch_volumes(data::NetworkData, result::Dict{String,Any})
         is_solved(result, n) || continue
         sol = nw_solution(result, n)
         for (u, entry) in sol["unit"]
-            if haskey(entry, "pgup")
+            if haskey(entry, "p_gen_up")
                 push!(rows, (unit = parse(Int, u), type = entry["type"], hour = hours[n],
-                             up = entry["pgup"], down = entry["pgdn"]))
-            elseif haskey(entry, "psup")
+                             up = entry["p_gen_up"], down = entry["p_gen_dn"]))
+            elseif haskey(entry, "p_stor_up")
                 push!(rows, (unit = parse(Int, u), type = entry["type"], hour = hours[n],
-                             up = entry["psup"], down = entry["psdn"]))
+                             up = entry["p_stor_up"], down = entry["p_stor_dn"]))
             end
         end
     end
@@ -161,8 +161,8 @@ function overload_report(data::NetworkData, result::Dict{String,Any}, events::Ve
         c   = coordinates(dim, n)
         sol = nw_solution(result, n)["edge"]
         for (e_str, entry) in sol
-            haskey(entry, "overload") || continue
-            ov = entry["overload"]
+            haskey(entry, "s_ovl") || continue
+            ov = entry["s_ovl"]
             ov > 1e-6 || continue
             e  = parse(Int, e_str)
             ev = c.contingency == 1 ? missing : events[c.contingency - 1]
@@ -191,7 +191,7 @@ Empty, with the same columns, when `result` carries no solved values.
 """
 function load_shedding_report(data::NetworkData, result::Dict{String,Any},
                               shed_ids::Vector{Int}, events::Vector{ContingencyEvent})
-    return _corrective_report(data, result, shed_ids, events, "pgup", :shed_pu)
+    return _corrective_report(data, result, shed_ids, events, "p_gen_up", :shed_pu)
 end
 
 """
@@ -206,7 +206,7 @@ Empty, with the same columns, when `result` carries no solved values.
 """
 function spillage_report(data::NetworkData, result::Dict{String,Any},
                          spill_ids::Vector{Int}, events::Vector{ContingencyEvent})
-    return _corrective_report(data, result, spill_ids, events, "pgdn", :spilled_pu)
+    return _corrective_report(data, result, spill_ids, events, "p_gen_dn", :spilled_pu)
 end
 
 "the rows of a corrective relief valve: where `key` of one of `unit_ids` is non-zero, per node, hour and contingency"

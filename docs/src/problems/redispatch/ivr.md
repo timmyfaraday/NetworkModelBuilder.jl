@@ -13,24 +13,24 @@ generator and per storage unit.
 
 | symbol | key | index set | bounds |
 |:-------|:----|:----------|:-------|
-| ``v^{\text{r}}_{i}, v^{\text{i}}_{i}`` | `:vr`, `:vi` | ``i \in I`` | ``[-v^{\text{max}}_{i}, v^{\text{max}}_{i}]`` |
-| ``c^{\text{r}}_{a}, c^{\text{i}}_{a}`` | `:cr`, `:ci` | ``a \in A`` | free |
-| ``c^{\text{sr}}_{e}, c^{\text{si}}_{e}`` | `:csr`, `:csi` | ``e \in E^{\text{br}}`` | free |
-| ``v^{\text{sr}}_{e}, v^{\text{si}}_{e}`` | `:vsr`, `:vsi` | ``e \in E^{\text{tf}}`` | free |
-| ``v^{\text{tr}}_{a}, v^{\text{ti}}_{a}`` | `:vtr`, `:vti` | ``a \in A^{\text{tm}} \cup A^{\text{ta}} \cup A^{\text{zt}}`` | free |
-| ``t^{\text{r}}_{a}, t^{\text{i}}_{a}`` | `:tr`, `:ti` | ``a \in A^{\text{ta}}`` | from `ta_min`, `ta_max` |
-| ``tm_{a}`` | `:tm` | ``a \in A^{\text{tm}} \setminus A^{\text{ta}}`` | ``[tm^{\text{min}}_{a}, tm^{\text{max}}_{a}]`` |
-| ``z^{\text{t}}_{a,s}`` | `:zt` | ``a \in A^{\text{zt}}``, every position ``s`` | binary |
-| ``c^{\text{r}}_{u}, c^{\text{i}}_{u}`` | `:cru`, `:ciu` | ``u \in U`` | free |
-| ``p^{\text{g}}_{u}, q^{\text{g}}_{u}`` | `:pg`, `:qg` | ``u \in U^{\text{g}}`` | the capability of the generator |
-| ``p^{\uparrow}_{u}`` | `:pgup` | ``u \in U^{\text{g}}`` | ``[0, p^{\text{max}}_{u} - p^{\text{g,mkt}}_{u}]`` |
-| ``p^{\downarrow}_{u}`` | `:pgdn` | ``u \in U^{\text{g}}`` | ``[0, p^{\text{g,mkt}}_{u} - p^{\text{min}}_{u}]`` |
-| ``p^{\text{d}}_{u}`` | `:pdf` | ``u \in U^{\text{fl}}`` | ``[p^{\text{d,min}}_{u}, p^{\text{d,max}}_{u}]`` |
-| ``p^{\text{sc}}_{u}, p^{\text{sd}}_{u}`` | `:psc`, `:psd` | ``u \in U^{\text{s}}`` | ``[0, \cdot^{\text{max}}_{u}]`` |
-| ``e_{u}`` | `:es` | ``u \in U^{\text{s}}`` | ``[0, e^{\text{max}}_{u}]`` |
-| ``q^{\text{s}}_{u}`` | `:qs` | ``u \in U^{\text{s}}`` | ``[q^{\text{min}}_{u}, q^{\text{max}}_{u}]`` |
-| ``p^{\uparrow}_{u}`` | `:psup` | ``u \in U^{\text{s}}`` | ``[0, p^{\text{sd,max}}_{u} - p^{\text{s}}_{u}]`` |
-| ``p^{\downarrow}_{u}`` | `:psdn` | ``u \in U^{\text{s}}`` | ``[0, p^{\text{s}}_{u} + p^{\text{sc,max}}_{u}]`` |
+| ``v^{\text{r}}_{i}, v^{\text{i}}_{i}`` | `:v_real`, `:v_imag` | ``i \in I`` | ``[-v^{\text{max}}_{i}, v^{\text{max}}_{i}]`` |
+| ``c^{\text{r}}_{a}, c^{\text{i}}_{a}`` | `:i_term_real`, `:i_term_imag` | ``a \in A`` | free |
+| ``c^{\text{sr}}_{e}, c^{\text{si}}_{e}`` | `:i_ser_real`, `:i_ser_imag` | ``e \in E^{\text{br}}`` | free |
+| ``v^{\text{sr}}_{e}, v^{\text{si}}_{e}`` | `:v_star_real`, `:v_star_imag` | ``e \in E^{\text{tf}}`` | free |
+| ``v^{\text{tr}}_{a}, v^{\text{ti}}_{a}`` | `:v_wind_real`, `:v_wind_imag` | ``a \in A^{\text{tm}} \cup A^{\text{ta}} \cup A^{\text{zt}}`` | free |
+| ``t^{\text{r}}_{a}, t^{\text{i}}_{a}`` | `:t_real`, `:t_imag` | ``a \in A^{\text{ta}}`` | from `ta_min`, `ta_max` |
+| ``tm_{a}`` | `:t_magn` | ``a \in A^{\text{tm}} \setminus A^{\text{ta}}`` | ``[tm^{\text{min}}_{a}, tm^{\text{max}}_{a}]`` |
+| ``z^{\text{t}}_{a,s}`` | `:z_step` | ``a \in A^{\text{zt}}``, every position ``s`` | binary |
+| ``c^{\text{r}}_{u}, c^{\text{i}}_{u}`` | `:i_unit_real`, `:i_unit_imag` | ``u \in U`` | free |
+| ``p^{\text{g}}_{u}, q^{\text{g}}_{u}`` | `:p_gen`, `:q_gen` | ``u \in U^{\text{g}}`` | the capability of the generator |
+| ``p^{\uparrow}_{u}`` | `:p_gen_up` | ``u \in U^{\text{g}}`` | ``[0, p^{\text{max}}_{u} - p^{\text{g,mkt}}_{u}]`` |
+| ``p^{\downarrow}_{u}`` | `:p_gen_dn` | ``u \in U^{\text{g}}`` | ``[0, p^{\text{g,mkt}}_{u} - p^{\text{min}}_{u}]`` |
+| ``p^{\text{d}}_{u}`` | `:p_flex` | ``u \in U^{\text{fl}}`` | ``[p^{\text{d,min}}_{u}, p^{\text{d,max}}_{u}]`` |
+| ``p^{\text{sc}}_{u}, p^{\text{sd}}_{u}`` | `:p_chg`, `:p_dch` | ``u \in U^{\text{s}}`` | ``[0, \cdot^{\text{max}}_{u}]`` |
+| ``e_{u}`` | `:e_stor` | ``u \in U^{\text{s}}`` | ``[0, e^{\text{max}}_{u}]`` |
+| ``q^{\text{s}}_{u}`` | `:q_stor` | ``u \in U^{\text{s}}`` | ``[q^{\text{min}}_{u}, q^{\text{max}}_{u}]`` |
+| ``p^{\uparrow}_{u}`` | `:p_stor_up` | ``u \in U^{\text{s}}`` | ``[0, p^{\text{sd,max}}_{u} - p^{\text{s}}_{u}]`` |
+| ``p^{\downarrow}_{u}`` | `:p_stor_dn` | ``u \in U^{\text{s}}`` | ``[0, p^{\text{s}}_{u} + p^{\text{sc,max}}_{u}]`` |
 
 Each upper bound is clipped at zero, so a market schedule that lies outside the
 capability can still be brought back into it rather than making the problem

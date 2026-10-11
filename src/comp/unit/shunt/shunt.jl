@@ -9,6 +9,7 @@
 # v0.3.0 - component hierarchy                                                 #
 # v0.10.1 - exports its own public names                                       #
 # v0.12.8 - a shunt refuses an admittance that is not finite                   #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 export AbstractShunt, Shunt
@@ -84,18 +85,18 @@ c^{\\text{i}}_{u} = -\\left(g^{\\text{s}}_{u} v^{\\text{i}}_{i} + b^{\\text{s}}_
 """
 function constraint_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                         ) where {P<:AbstractProblemType,F<:IVRFormulation,T<:AbstractShunt}
-    vr,  vi  = var(nm, :vr;  nw), var(nm, :vi;  nw)
-    cru, ciu = var(nm, :cru; nw), var(nm, :ciu; nw)
-    current  = get!(() -> Dict{Int,Any}(), con(nm; nw), :shunt_current)
+    v_real, v_imag           = var(nm, :v_real;      nw), var(nm, :v_imag;      nw)
+    i_unit_real, i_unit_imag = var(nm, :i_unit_real; nw), var(nm, :i_unit_imag; nw)
+    current                  = get!(() -> Dict{Int,Any}(), con(nm; nw), :shunt_current)
 
     for u in ids(nm, T; nw)
         sh = unit(nm, u; nw)::T
         i  = sh.node
         current[u] = (
             constrain!(nm, :shunt_current, (u, :real),
-                       JuMP.@build_constraint(cru[u] == -(sh.gs * vr[i] - sh.bs * vi[i])); nw),
+                       JuMP.@build_constraint(i_unit_real[u] == -(sh.gs * v_real[i] - sh.bs * v_imag[i])); nw),
             constrain!(nm, :shunt_current, (u, :imag),
-                       JuMP.@build_constraint(ciu[u] == -(sh.gs * vi[i] + sh.bs * vr[i])); nw))
+                       JuMP.@build_constraint(i_unit_imag[u] == -(sh.gs * v_imag[i] + sh.bs * v_real[i])); nw))
     end
 
     return nothing
@@ -108,8 +109,8 @@ end
 function solution_unit!(sol::Dict{String,Any}, nm::NetworkModel, ::Type{T}, u::Int, nw::Int
                        ) where {T<:AbstractShunt}
     sh = unit(nm, u; nw)::T
-    sol["gs"] = sh.gs
-    sol["bs"] = sh.bs
+    sol["g"] = sh.gs
+    sol["b"] = sh.bs
 
     return nothing
 end

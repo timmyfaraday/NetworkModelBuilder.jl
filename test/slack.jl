@@ -7,6 +7,7 @@
 ################################################################################
 # Changelog:                                                                   #
 # v0.7.0 - energy not served and spill                                         #
+# v0.14.0 - variable and solution keys follow the nomenclature                 #
 ################################################################################
 
 # Every network below is a single node, so nothing the network does can hide
@@ -70,7 +71,7 @@ end
             nm = instantiate_model(slack_network(; extra), LoadFlowProblem, F)
 
             # nothing to relax in a problem that decides nothing
-            @test !haskey(_NMB.var(nm), :psl)
+            @test !haskey(_NMB.var(nm), :p_slk)
         end
     end
 
@@ -84,9 +85,9 @@ end
               result["termination_status"] == JuMP.OPTIMAL
 
         sol = nw_solution(result, 1)["unit"]
-        @test sol["1"]["pg"] ≈ 0.4  atol = 1e-6      # the generator runs flat out
-        @test sol["3"]["psl"] ≈ 0.6 atol = 1e-6      # and 0.6 pu goes unserved
-        @test sol["3"]["p"] ≈ 0.6   atol = 1e-6      # a slack unit that injects
+        @test sol["1"]["p_gen"] ≈ 0.4  atol = 1e-6      # the generator runs flat out
+        @test sol["3"]["p_slk"] ≈ 0.6 atol = 1e-6      # and 0.6 pu goes unserved
+        @test sol["3"]["p_unit"] ≈ 0.6   atol = 1e-6      # a slack unit that injects
 
         # 10 · 0.4 of generation plus 5000 · 0.6 of lost load
         @test result["objective"] ≈ 3004.0 atol = 1e-4
@@ -99,9 +100,9 @@ end
                            LPFFormulation, OPTIMIZER)
 
         sol = nw_solution(result, 1)["unit"]
-        @test sol["1"]["pg"] ≈ 1.0   atol = 1e-6     # the must-run cannot back off
-        @test sol["3"]["psl"] ≈ 0.6  atol = 1e-6     # so 0.6 pu is spilled
-        @test sol["3"]["p"] ≈ -0.6   atol = 1e-6     # a slack unit that withdraws
+        @test sol["1"]["p_gen"] ≈ 1.0   atol = 1e-6     # the must-run cannot back off
+        @test sol["3"]["p_slk"] ≈ 0.6  atol = 1e-6     # so 0.6 pu is spilled
+        @test sol["3"]["p_unit"] ≈ -0.6   atol = 1e-6     # a slack unit that withdraws
 
         # 10 · 1.0 of generation plus 500 · 0.6 of spill, both a cost
         @test result["objective"] ≈ 310.0 atol = 1e-4
@@ -116,9 +117,9 @@ end
                            LPFFormulation, OPTIMIZER)
 
         sol = nw_solution(result, 1)["unit"]
-        @test sol["1"]["pg"] ≈ 1.0   atol = 1e-6
-        @test sol["3"]["psl"] ≈ 0.0  atol = 1e-6
-        @test sol["4"]["psl"] ≈ 0.0  atol = 1e-6
+        @test sol["1"]["p_gen"] ≈ 1.0   atol = 1e-6
+        @test sol["3"]["p_slk"] ≈ 0.0  atol = 1e-6
+        @test sol["4"]["p_slk"] ≈ 0.0  atol = 1e-6
         @test result["objective"] ≈ 10.0 atol = 1e-4
     end
 
@@ -128,15 +129,15 @@ end
         nm    = instantiate_model(slack_network(; pmax = 0.4, extra),
                                   OptimalPowerFlowProblem, LPFFormulation)
 
-        @test JuMP.lower_bound(_NMB.var(nm, :psl, 3)) == 0.0
-        @test JuMP.upper_bound(_NMB.var(nm, :psl, 3)) == 0.2
+        @test JuMP.lower_bound(_NMB.var(nm, :p_slk, 3)) == 0.0
+        @test JuMP.upper_bound(_NMB.var(nm, :p_slk, 3)) == 0.2
 
         # an unbounded one is left free rather than bounded by infinity
         free = instantiate_model(
             slack_network(; extra = Dict{Int,AbstractUnit}(
                 3 => EnergyNotServed(; id = 3, node = 1))),
             OptimalPowerFlowProblem, LPFFormulation)
-        @test !JuMP.has_upper_bound(_NMB.var(free, :psl, 3))
+        @test !JuMP.has_upper_bound(_NMB.var(free, :p_slk, 3))
 
         # and `pmax` is what decides the shape of the model, so a rating that
         # comes and goes across a rolling horizon rebuilds rather than updates
@@ -149,7 +150,7 @@ end
                                   IVRFormulation)
 
         # it has a volume like any other, and no reactive counterpart
-        @test haskey(_NMB.var(nm, :psl), 3)
+        @test haskey(_NMB.var(nm, :p_slk), 3)
         @test !haskey(_NMB.var(nm), :qsl)
     end
 
@@ -165,14 +166,14 @@ end
         sl    = instantiate_model(slack_network(; extra), OptimalPowerFlowProblem,
                                   LPFFormulation)
         @test JuMP.coefficient(dispatch_cost(sl, EnergyNotServed, 3; nw = 1),
-                               _NMB.var(sl, :psl, 3)) ≈ 5000.0
+                               _NMB.var(sl, :p_slk, 3)) ≈ 5000.0
 
         # a spill is priced on its injection, which makes its volume a charge
         extra = Dict{Int,AbstractUnit}(3 => Spill(; id = 3, node = 1, cost = -500.0))
         sp    = instantiate_model(slack_network(; extra), OptimalPowerFlowProblem,
                                   LPFFormulation)
         @test JuMP.coefficient(dispatch_cost(sp, Spill, 3; nw = 1),
-                               _NMB.var(sp, :psl, 3)) ≈ 500.0
+                               _NMB.var(sp, :p_slk, 3)) ≈ 500.0
     end
 
     @testset "a linear cost keeps the objective linear" begin
@@ -203,8 +204,8 @@ end
                           redispatch = Redispatch(; monitored = [1]))
 
         sol = nw_solution(result, 1)["unit"]
-        @test sol["3"]["psl"] ≈ 0.5 atol = 1e-6      # half the load goes unserved
-        @test sol["1"]["pgdn"] ≈ 0.5 atol = 1e-6     # and the generator backs off
+        @test sol["3"]["p_slk"] ≈ 0.5 atol = 1e-6      # half the load goes unserved
+        @test sol["1"]["p_gen_dn"] ≈ 0.5 atol = 1e-6     # and the generator backs off
 
         # 1000 · 0.5 of lost load plus 10 · 0.5 of the generator moving down
         @test result["objective"] ≈ 505.0 atol = 1e-4
@@ -229,22 +230,22 @@ end
 
         @test redispatch_controls(instantiate_model(data, RedispatchProblem,
                                                     LPFFormulation),
-                                  EnergyNotServed) == (:psl,)
+                                  EnergyNotServed) == (:p_slk,)
 
         # preventive: one volume serves both states, so the shed decided for the
         # outage is shed in the base case too
         preventive = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
                                           redispatch = Redispatch(; monitored = [1, 2])))
-        @test nw_solution(preventive, 1)["unit"]["3"]["psl"] ≈
-              nw_solution(preventive, 2)["unit"]["3"]["psl"] atol = 1e-6
+        @test nw_solution(preventive, 1)["unit"]["3"]["p_slk"] ≈
+              nw_solution(preventive, 2)["unit"]["3"]["p_slk"] atol = 1e-6
 
         # corrective: the load is shed only in the state that needs it, which is
         # the cheaper of the two and is why the distinction is worth having
         corrective = quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER;
                                           redispatch = Redispatch(; monitored = [1, 2],
                                                                     control = :corrective)))
-        @test nw_solution(corrective, 1)["unit"]["3"]["psl"] ≈ 0.0 atol = 1e-6
-        @test nw_solution(corrective, 2)["unit"]["3"]["psl"] > 0.4
+        @test nw_solution(corrective, 1)["unit"]["3"]["p_slk"] ≈ 0.0 atol = 1e-6
+        @test nw_solution(corrective, 2)["unit"]["3"]["p_slk"] > 0.4
         @test corrective["objective"] < preventive["objective"]
     end
 end

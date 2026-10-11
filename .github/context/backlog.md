@@ -10,7 +10,9 @@ older ones: git has them). Next id: **B32**.
   `set_string_name` on every solve; per-type parameter and variable tables in the docs · Tom · 2026-10-11 · branch `b31-nomenclature`
   - Spec `knowledge/plan/naming.md`, names in `knowledge/nomenclature.md`, D55-D61; v0.14.0, a hard removal; the map confirmed.
     Stage 1 done: `test/nomenclature.jl` is red on purpose (1,639 old names written). Stage 2 done: `set_string_name` (D61), names on
-    +2-4 % against the control (accepted by Tom), names off 26 % faster. Next: stage 3, the keys layer.
+    +2-4 % against the control (accepted by Tom), names off 26 % faster. Stage 3 done: variable keys, solution keys and the locals
+    that hold a key's variables (438 identifiers, by syntax tree), 24 h chunk byte-identical; old names written 1,639 to 776, the
+    variable-key and solution-key checks green. Next: stage 4, the fields layer.
     Constraints and their names are the next item.
 
 ## Next

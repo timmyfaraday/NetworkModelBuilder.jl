@@ -6,13 +6,12 @@ older ones: git has them). Next id: **B31**.
 
 ## Now
 
-- (nothing)
-
-## Next
-
 - [ ] B30 · One `Branch` (`length_km`, NaN by default) instead of `Branch`, `Cable` and `OverheadLine`; `pi_model.jl` split by who
   uses what; a rating and an angle limit apart; then a branch of two or more terminals · Tom · 2026-10-10 · branch `b30-one-branch`
-  - Plans `knowledge/plan/one-branch.md` (stage 1) and `one-branch-terminals.md` (stage 2), D50-D53; v0.13.0, as public names go.
+  - Implemented 2026-10-11, v0.13.0, not merged: plans `knowledge/plan/one-branch.md` and `one-branch-terminals.md` (Result), D50-D53;
+    suite 3340, a 24 h chunk byte-identical, window cut 7.7-7.8 ms against 7.7-8.0. Awaiting Tom: merge, tag `v0.13.0`, push.
+
+## Next
 
 ## Later
 

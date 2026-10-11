@@ -1,6 +1,6 @@
 # A branch with more than two terminals (B30, stage 2)
 
-Status: decided (D53), not started · Author: Tom Van Acker (requested) · Date: 2026-10-10
+Status: implemented on `b30-one-branch` (D53), not merged · Author: Tom Van Acker (requested) · Date: 2026-10-11
 Decisions: D53 recorded 2026-10-10 (next free after: D54); no open point
 Priority: P3 · Effort: Large. Second stage of B30, on `b30-one-branch` after parts 1 to 3 of `one-branch.md`; v0.13.0.
 
@@ -56,11 +56,14 @@ Priority: P3 · Effort: Large. Second stage of B30, on `b30-one-branch` after pa
    so one function writes every section; the two-terminal call passes `vr[j]` and `cr[a_to]` and `y_sh[1]/2` at both ends, and
    writes the same six rows: for Matpower data `b_sh[1]/2` is `b/2` to the last bit. In the
    linearized formulation `susceptance(sum(r), sum(x))`, exactly `r` and `x` where the second entry is 0.
-4. **More than two terminals.** IVR: a point voltage per branch, `vpr[e]` and `vpi[e]`; a series current per section, `scr[a]`
-   and `sci[a]`, keyed by its `Arc`; the six rows of a section against the point; the balance `Σ c^s_k = (Σ y_k/2) v^p`.
-   LPF: a point angle `vap[e]`, `p_k = -b_k (va_k - vap)`, `Σ p_k = 0`, the shunts playing no part. The keys are new: D49 refuses
-   `:csr`, `:csi` (keyed by edge) for variables keyed by an `Arc`, and `:vsr`, `:vsi`, `:vas` are the transformer's. Limits: the
-   ratings of `constraint_linear_ratings!` and `constraint_edge_rating!`, the angle limit for two terminals only.
+4. **More than two terminals.** IVR: a point voltage per branch, `vpr[e]` and `vpi[e]`; the current of a section is an expression,
+   `cr[a]` less the half of the section's shunt at its terminal, as a transformer's winding is, so there is no series-current
+   variable; two rows a section against the point, `:branch_section` with id `(a, :real | :imag)`, and the balance
+   `Σ c^s_k = (Σ y_k/2) v^p` under `:branch_point`, `(e, :real | :imag)`.
+   LPF: a point angle `vap[e]`, `p_k = -b_k (va_k - vap)` under `:branch_section` and `Σ p_k = 0` under `:branch_point`, the shunts
+   playing no part. The keys are new: D49 refuses `:csr`, `:csi` (keyed by edge) for variables keyed by an `Arc`, and `:vsr`,
+   `:vsi`, `:vas` are the transformer's. Limits: the ratings of `constraint_linear_ratings!` and `constraint_edge_rating!`, the
+   angle limit for two terminals only.
 5. **Docs.** `branch.md` (per-terminal parameters, a section on more than two terminals with the equations and the variable
    tables), `AbstractBranch` and `Branch` docstrings, `README.md` (its Matpower table says a branch has two terminals),
    `hierarchy.md`.
@@ -89,6 +92,26 @@ Priority: P3 · Effort: Large. Second stage of B30, on `b30-one-branch` after pa
 If the window cut is above 8.0 ms, or the chunk is not byte-identical, look first at `_per_terminal`: it allocates a vector per
 field each time a `Branch` is built. If a `NetworkVector` holding vectors cannot be read through `nw_component` or
 `structure_gates` for a branch the way it is for a transformer, stop and report.
+
+## Result (2026-10-11)
+
+- **Commits** on `b30-one-branch`: `e63843c` (`_per_terminal`), `19510e2` (fields, checks, builders, Matpower, tables),
+  `42930e1` (`test/multiterminal.jl`), `2e79f09` (the rebuild cost), then the docs.
+- **Reference:** a three-terminal `Branch` against the `Transformer` of ratio one and against the point written out as a node
+  with a two-terminal `Branch` to each terminal: load flow (1e-8), optimal power flow with one rating binding in both
+  formulations (1e-5, 1e-6), and a priced rating in a redispatch with the numbers worked out by hand (0.15 over, 110 per pu).
+  64 checks. They passed at their first run, the code being written first, so red was not shown; halving the shunt at the point
+  makes the load-flow checks fail.
+- **Differences from the plan:** sections are expressions, with no `scr`/`sci` (Fix 4). A table may give a scalar cell for a
+  field with an entry per terminal of a `Branch` or a `Transformer` (`_per_terminal_data`): the reader asked for a list and 8
+  testsets of `tables.jl` failed. `variable_edge_series_current` takes the ids of the edges.
+- **The stop rule fired.** A `Branch` rebuilt by a window cost 681 ns and 576 B against 62 ns and 144 B, the step-3 cut 8.2-8.3 ms
+  against 8.0. A kept `Float64` vector and a check method for plain data (`all_nw` allocates) gave 47 ns and 32 B, the cut 7.7
+  and 7.8 against a control of 7.7 and 8.0 (`scratch/b30_rebuild.jl`, `lessons.md`).
+- **Nothing moved for two terminals:** a 24 h chunk byte-identical to `runs/_b25_proc/chunks/h00001-00024`, three times, objectives
+  317686796.800330 and 308105792.250268 equal; suite 3340 with 4 threads; `update_model!` of the real step-3 window 1,145 against
+  1,155 ms; `benchmark/window.jl` update 25.95 against 26.08 ms, allocations 296,297 against 303,921.
+- **Left for the reader:** `scripts/NMinusOneScreen.jl` (untracked) reads a branch's `r`, `x` and `rate_a` as numbers and breaks.
 
 ## What this deliberately does not decide
 

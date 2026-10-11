@@ -1,6 +1,6 @@
 # One `Branch`, and the fragments in the file that owns them (B30)
 
-Status: decided (D50-D53), not started · Author: Tom Van Acker (requested) · Date: 2026-10-10
+Status: implemented on `b30-one-branch` (D50-D53), not merged · Author: Tom Van Acker (requested) · Date: 2026-10-11
 Decisions: D50-D53 recorded 2026-10-10 (next free after: D54); no open point
 Priority: P3 · Effort: Large, in two stages. Branch `b30-one-branch`, cut from `main` at `b577b4a` (v0.12.9);
 becomes v0.13.0. Stage 1 is this file (parts 1 to 3), stage 2, more than two terminals, is `one-branch-terminals.md`.
@@ -132,7 +132,8 @@ transformer was going to call it; the transformer called part of it and wrote th
 3. The move: `edge.jl`, `branch.jl`; `pi_model.jl` deleted.
 4. The split: `constraint_linear_angle_difference!`, `constraint_linear_limits!` removed, the two call sites. The 24 h chunk here.
 5. Stage 2, `one-branch-terminals.md`, in its own commits, with the chunk again after it.
-6. Docs, README, `CHANGELOG.md`, `Project.toml` 0.13.0, headers; after the runs STATE and B30.
+6. Docs, README, `CHANGELOG.md`, `Project.toml` 0.13.0, headers; after the runs STATE and B30. Done 2026-10-11. Stage 1 is
+   `edf3657`, `af00183`, `967d06d` (24 h chunk byte-identical after it, suite 3265); the rest is in `one-branch-terminals.md`.
 
 ## Stop rule
 

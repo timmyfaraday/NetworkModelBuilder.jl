@@ -77,7 +77,7 @@ for the quantity and a locally chosen suffix for the owner, the part or the dire
    by meaning and not by search; a page `docs/src/manual/nomenclature.md` from `nomenclature.md`, linked from the Notation table of
    `index.md`, with the index that says `v_angl_min` is a difference; `README.md`; `CHANGELOG.md`; `Project.toml` 0.14.0.
 6. **Memory.** `decisions.md` live sections that name a renamed field are edited in place (the Log stays as it was), `STATE.md`,
-   the backlog. With Tom's OK (setup files): one line in `julia.instructions.md` and the vocabulary in `domain-invariants`.
+   the backlog. With Tom's OK (setup files): one line in `julia.instructions.md` (SC9); the vocabulary in `domain-invariants` is dropped.
 
 ## Decisions
 

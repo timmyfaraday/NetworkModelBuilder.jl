@@ -48,7 +48,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-11 by Tom Va
 - B31 done (v0.14.0, D55-D62, tagged): one nomenclature for fields, variable keys, solution keys, keywords and a node's `ext` start keys
   (`knowledge/nomenclature.md`), `set_string_name` on every solve, per-type tables in the docs; suite 3551 (3351 at v0.13.0), a 24 h chunk byte-identical (stages 3, 4).
 - B32 done (v0.15.0, D63-D70, merged, tagged, pushed): constraint keys and ids `cstr_<owner>_<role>`, `fnct_*` writers, `dual_*` duals, `debug_mode` (default false: 29 % less time, 44 % less
-  allocation than names on); suite 3686, a 24 h chunk byte-identical (`knowledge/plan/naming-constraints.md`). `julia.instructions.md` has the line (SC9); the `domain-invariants` vocabulary note waits for Tom's OK.
+  allocation than names on); suite 3686, a 24 h chunk byte-identical (`knowledge/plan/naming-constraints.md`). `julia.instructions.md` has the line (SC9); the `domain-invariants` vocabulary note is dropped.
 - Agent setup runs on the second-brain plugin (D37-D41, SC6); a fresh chat must inject STATE (F1).
 - B11 merged, tagged `v0.12.0` (`unified-transformer.md`, D28-D36); Zorba flows are not unique without a phase shifter price (D34).
 - B12 done: `scripts/` run on `Transformer`; week 1 beside a same-day pre-B11 control (`runs/_b12*`): 14 of 14 chunks

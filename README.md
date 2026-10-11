@@ -57,8 +57,10 @@ nothing more than a `status` that varies.
 ## Components
 
 Within the three families a type earns its place by changing the *model*, not by
-carrying a label. `Cable` and `OverheadLine` are electrically identical to
-`Branch` and exist to be addressed; a `Transformer` has a ratio per winding that is
+carrying a label. A cable and an overhead line are electrically identical to
+each other, so they are a `Branch` with another `length_km`, not types, and a
+`Branch` has two or more terminals, as π-sections that meet at one point. A
+`Transformer` has a ratio per winding that is
 a constant in a power flow and, in a dispatch problem, a decision between limits or
 one of a list of positions, so a tap changer and a phase shifter are flags on a
 winding rather than types, and a winding can be both. It keeps its star point as an
@@ -70,13 +72,13 @@ dispatch problem chooses which, as a mixed-integer program.
 ```
 AbstractEdge                          AbstractUnit
 ├── AbstractBranch                    ├── AbstractGenerator → Generator
-│   ├── Branch                        ├── AbstractLoad
-│   ├── Cable                         │   ├── FixedLoad
-│   └── OverheadLine                  │   └── FlexibleLoad
-├── AbstractTransformer               ├── AbstractStorage → Storage
-│   └── Transformer                   ├── AbstractSlackUnit
-├── AbstractDCLink → DCLink           │   ├── EnergyNotServed
-└── AbstractSwitch → Switch           │   └── Spill
+│   └── Branch                        ├── AbstractLoad
+├── AbstractTransformer               │   ├── FixedLoad
+│   └── Transformer                   │   └── FlexibleLoad
+├── AbstractDCLink → DCLink           ├── AbstractStorage → Storage
+└── AbstractSwitch → Switch           ├── AbstractSlackUnit
+                                      │   ├── EnergyNotServed
+                                      │   └── Spill
                                       └── AbstractShunt → Shunt
 ```
 
@@ -158,7 +160,7 @@ changes — `src/prob/rd.jl` is the worked example.
 | problem | a `build_*` function | a type, dispatched on |
 | formulation | `AbstractPowerModel` subtype | a type, dispatched on |
 | data | `Dict{String,Any}` | typed structs |
-| branch | two-terminal, `f_bus`/`t_bus` | an edge with any number of terminals |
+| branch | two-terminal, `f_bus`/`t_bus` | an edge of two or more terminals, as π-sections |
 | flow index | `(l, i, j)` arc | `Arc(edge, terminal, node)` |
 | gen/load/shunt | three separate balance terms | one set `U`, one injection pair |
 | code layout | by kind — `variable.jl`, `constraint.jl` | by component — one file each |

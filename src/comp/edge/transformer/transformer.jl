@@ -15,6 +15,7 @@
 # v0.13.0 - a two-winding transformer is rated at each terminal                #
 # v0.13.0 - its per-winding data is normalised in edge.jl                      #
 # v0.13.0 - a table may give a scalar where it takes an entry per winding      #
+# v0.13.0 - the docstring says what g_sh is, against a branch's                #
 ################################################################################
 
 export AbstractTransformer, Transformer, TapMode, FIXED, CONTINUOUS, STEPPED
@@ -75,7 +76,9 @@ Every field with an entry per winding is indexed by terminal position.
 - `terminals`: the nodes the windings connect to, two or more.
 - `r`, `x`: the series resistance and reactance of each winding [pu], referred to
   the star point.
-- `g_sh`, `b_sh`: the shunt admittance behind each ratio [pu], zero by default.
+- `g_sh`, `b_sh`: the shunt admittance behind each ratio [pu], zero by default, the
+  whole of it at the terminal side of the winding. On a [`Branch`](@ref) the same
+  names are the shunt of a section, half of it at each end.
 - `g_m`, `b_m`: the magnetising admittance at the star point [pu].
 - `tm`, `ta`: the magnitude [pu] and the angle [rad] of the ratio of each
   winding, or the setpoint of it where it can move.

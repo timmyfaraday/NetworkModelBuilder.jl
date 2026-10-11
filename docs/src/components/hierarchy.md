@@ -14,9 +14,7 @@ AbstractComponent
 │
 ├── AbstractEdge
 │   ├── AbstractBranch                transports power, no transformation
-│   │   ├── Branch                    of unspecified construction
-│   │   ├── Cable
-│   │   └── OverheadLine
+│   │   └── Branch                    two or more terminals, as π-sections; a cable and an overhead line are one
 │   ├── AbstractTransformer           transforms power between its terminals
 │   │   └── Transformer               two or more windings, each with a ratio and an impedance
 │   ├── AbstractDCLink                the flow is chosen, not determined
@@ -45,8 +43,8 @@ that: [`constraint_node_balance`](@ref) sums the arcs incident to a node against
 the units connected to it without knowing what kinds of either exist.
 
 **The abstract middle** is where an implementation lives. Every
-[`AbstractBranch`](@ref) shares one π-equivalent, written once and dispatched on
-the abstract type. [`AbstractTransformer`](@ref) is where an extension that adds a
+[`AbstractBranch`](@ref) shares one set of π-sections, written once and dispatched on
+the abstract type, and [`Branch`](@ref) is the one concrete type. [`AbstractTransformer`](@ref) is where an extension that adds a
 transformer of its own hangs, and [`Transformer`](@ref) is the one concrete type: a
 winding is data, a decision or a step, and the type does not change with it. A
 concrete type inherits the implementation and overrides only what genuinely differs.
@@ -61,7 +59,7 @@ package is explicit about which is which.
 
 | distinction | changes the model? | why the type exists |
 |:------------|:-------------------|:--------------------|
-| [`Cable`](@ref) vs [`OverheadLine`](@ref) | **no** — the same π-equivalent | to address one kind, and to carry the data that does differ |
+| a cable vs an overhead line | **no** — the same π-equivalent | not a type: each is a [`Branch`](@ref), with its own `length_km` and its own rating |
 | [`Branch`](@ref) vs [`Transformer`](@ref) | **yes** — the turns ratio and the voltage behind it | a branch transports, a transformer transforms |
 | a winding that holds its ratio vs one that moves or steps | **yes** — the ratio becomes a variable, or a binary for each position, in a dispatch problem | a property of a winding of one [`Transformer`](@ref), not a type: a device can be a tap changer and a phase shifter at once |
 | [`FixedLoad`](@ref) vs [`FlexibleLoad`](@ref) | **yes** — the demand becomes a variable, and constraints span network indices | who chooses the demand |
@@ -69,17 +67,18 @@ package is explicit about which is which.
 | [`Branch`](@ref) vs [`DCLink`](@ref) | **yes** — the flow stops being a function of the angles and becomes a decision | one transports what the physics send it, the other what it is told |
 | [`Branch`](@ref) vs [`Switch`](@ref) | **yes** — there is no impedance, so no susceptance to be badly scaled; closed equates the voltages, open stops the flow, and a free switch makes the position a decision | one has an impedance however small, the other has none |
 
-Cable and overhead line are the honest case: in a steady-state model they are the
-same equations, and the documentation says so rather than implying a difference
-that is not there. They pay for themselves as soon as a rating follows the
-weather or a planning problem costs a route.
+A cable and an overhead line are the honest case: in a steady-state model they are the
+same equations, so the documentation says so rather than implying a difference
+that is not there, and neither is a type. What does differ is data — the length of
+the route, and a rating that follows the weather — and a [`Branch`](@ref) carries
+both. The type is not where that difference lives.
 
 ## How a component reaches a model
 
 A concrete type registers itself once, at the bottom of its own file:
 
 ```julia
-register_edge_type!(Cable)
+register_edge_type!(Transformer)
 register_unit_type!(Storage)
 ```
 
@@ -101,9 +100,8 @@ The code of a component — its data structure, its variables and its constraint
 src/comp/
 ├── node/node.jl
 ├── edge/
-│   ├── edge.jl                     the registry, terminal currents, dispatchers
-│   ├── pi_model.jl                 the π-equivalent, shared by branch and transformer
-│   ├── branch/{branch,cable,overhead_line}.jl
+│   ├── edge.jl                     the registry, terminal currents, dispatchers, and what a branch and a transformer share
+│   ├── branch/branch.jl
 │   ├── switch/switch.jl
 │   └── transformer/transformer.jl
 └── unit/

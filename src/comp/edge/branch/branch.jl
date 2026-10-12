@@ -20,6 +20,7 @@
 # v0.14.0 - the docstrings follow the nomenclature                             #
 # v0.15.0 - constraint keys and ids follow the nomenclature                    #
 # v0.15.0 - functions that write rows, duals and letters follow the map        #
+# v0.15.4 - a branch's and a transformer's s_max is positive                   #
 ################################################################################
 
 export AbstractBranch, Branch, impedance, shunt_admittance, dynamic_rating
@@ -73,7 +74,8 @@ Every field with an entry per terminal is indexed by terminal position, and entr
   end of the section. A line with total charging susceptance `b` has `b_shnt = b`.
   On a [`Transformer`](@ref) the same names are the shunt at the terminal side of
   a winding.
-- `s_max`: the apparent power rating at each terminal [pu], `Inf` when unlimited.
+- `s_max`: the apparent power rating at each terminal [pu], positive, `Inf` when unlimited.
+  A branch that cannot carry is out of service, which `status` says.
 - `v_angl_min`, `v_angl_max`: the limits on the voltage angle difference between the two
   terminals of a branch with two [rad]. A branch with more has none.
 - `l_km`: the route length [km], `NaN` where it is not known.
@@ -86,8 +88,8 @@ for every terminal. With more terminals each of them is a vector, but `s_max`,
 which may still be one number.
 
 A branch is refused when an entry of `r`, `x`, `g_shnt` or `b_shnt` is not finite,
-when a section has no impedance, `r` and `x` both 0, when `s_max` is negative or
-NaN, when its angle limits are out of order, or when its `l_km` is negative
+when a section has no impedance, `r` and `x` both 0, when `s_max` is not
+positive, when its angle limits are out of order, or when its `l_km` is negative
 or infinite. A bus coupler has no impedance to give: it is a [`Switch`](@ref).
 """
 Base.@kwdef struct Branch <: AbstractBranch
@@ -141,8 +143,8 @@ function _check_branch(id, n, r::Vector{Float64}, x::Vector{Float64}, g_shnt::Ve
                             "a bus coupler is a Switch"))
     all(isfinite, g_shnt) && all(isfinite, b_shnt) ||
         throw(ArgumentError("branch $id has a shunt admittance that is not finite"))
-    all(>=(0), s_max) ||
-        throw(ArgumentError("branch $id has a rating that is negative or NaN"))
+    all(>(0), s_max) ||
+        throw(ArgumentError("branch $id has a rating `s_max` that is not positive; a branch that cannot carry is out of service, which `status` says"))
     v_angl_min <= v_angl_max ||
         throw(ArgumentError("branch $id has v_angl_min above v_angl_max"))
 

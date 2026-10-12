@@ -82,7 +82,7 @@ ratio of one, no shift, no impedance, no shunt.
 | ``t^{\text{m,min}}_{e,k}``, ``t^{\text{m,max}}_{e,k}`` | `t_magn_min`, `t_magn_max` | limits of the magnitude | pu | `0.9`, `1.1` |
 | ``t^{\text{a,min}}_{e,k}``, ``t^{\text{a,max}}_{e,k}`` | `t_angl_min`, `t_angl_max` | limits of the angle | rad | `±π/12` |
 | | `t_magn_step`, `t_angl_step` | distance between the positions of a `STEPPED` winding | pu, rad | `0.0125`, `1°` |
-| ``s^{\text{max}}_{e,a}`` | `s_max` | apparent power rating at each terminal | pu | `Inf` |
+| ``s^{\text{max}}_{e,a}`` | `s_max` | apparent power rating at each terminal, positive | pu | `Inf` |
 | | `v_angl_min`, `v_angl_max` | limits of the angle difference, two windings only | rad | `±π/3` |
 | | `status` | in service | | |
 | | `ext` | free-form storage, carried along and never read | | |

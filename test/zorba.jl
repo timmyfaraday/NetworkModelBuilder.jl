@@ -11,6 +11,7 @@
 # v0.13.0 - a branch holds one entry per terminal of a field                   #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.4 - a branch's and a transformer's s_max is positive                   #
 ################################################################################
 
 # The network below is the one Zorba's own `BaseTestCase.get_ref_minimal_study`
@@ -254,6 +255,14 @@ end
         # rather than dropping the row
         tables = zorba_tables(data, quiet(() -> solve_zorba(data, OPTIMIZER)))
         @test overloads(tables.grid_flows, 0)[2] == 0.0f0
+    end
+
+    @testset "a capacity of zero is refused, a link that cannot carry is an outage" begin
+        grid = merge(ref_grid(), (capacity = [8.0, 0.0, 11.0],))
+        err  = try parse_zorba(; grid, net_position = ref_net_position()) catch e; e end
+
+        @test err isa ArgumentError
+        @test occursin("b - c", err.msg) && occursin("outage", err.msg)
     end
 
     @testset "the phase shift is reported in Zorba's sign" begin

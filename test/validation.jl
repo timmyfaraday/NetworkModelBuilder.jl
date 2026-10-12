@@ -14,6 +14,7 @@
 # v0.15.2 - a storage unit's converter rating                                  #
 # v0.15.3 - a storage unit's s_max is positive, never zero                     #
 # v0.15.3 - exact keeps charging and discharging at once out                   #
+# v0.15.4 - a branch's and a transformer's s_max is positive                   #
 ################################################################################
 
 # An impossible value used to travel on to the solver, which answered
@@ -324,6 +325,7 @@ end
         @test_throws ArgumentError branch(b_shnt = [NaN, 0.0])
         @test_throws ArgumentError branch(s_max = -1.0)
         @test_throws ArgumentError branch(s_max = NaN)
+        @test_throws ArgumentError branch(s_max = 0.0)
 
         # a length is NaN where it is not known, and is neither negative nor infinite
         @test_throws ArgumentError branch(l_km = -5.0)
@@ -334,6 +336,7 @@ end
         dim = Dimension(:time => 3)
         @test_throws ArgumentError branch(r = nw_vector(dim, [0.01, NaN, 0.01]))
         @test_throws ArgumentError branch(s_max = nw_vector(dim, [1.0, 1.0, -1.0]))
+        @test_throws ArgumentError branch(s_max = nw_vector(dim, [1.0, 0.0, 1.0]))
         @test_throws ArgumentError branch(r = nw_vector(dim, [0.01, 0.0, 0.01]), x = 0.0)
 
         # and it says which branch, and what to do about a coupler
@@ -341,9 +344,13 @@ end
         @test err isa ArgumentError
         @test occursin("branch 3", err.msg) && occursin("Switch", err.msg)
 
-        # what is not refused: no rating, a rating of zero, a pure resistor, a series capacitor, a length not given
+        # a branch that cannot carry is out of service, and `status` says so
+        err = refusal(() -> branch(s_max = 0.0))
+        @test err isa ArgumentError
+        @test occursin("branch 3", err.msg) && occursin("status", err.msg)
+
+        # what is not refused: no rating, a pure resistor, a series capacitor, a length not given
         @test branch(s_max = Inf).s_max == [Inf, Inf]
-        @test branch(s_max = 0.0).s_max == [0.0, 0.0]
         @test branch(r = 0.01, x = 0.0).x == [0.0, 0.0]
         @test branch(r = 0.0, x = -0.05).x == [-0.05, 0.0]
         @test isnan(branch().l_km)
@@ -374,6 +381,7 @@ end
         @test_throws ArgumentError three(x = [0.1, 0.2])
         @test_throws ArgumentError three(b_shnt = 0.02)
         @test_throws ArgumentError three(s_max = [1.0, -1.0, 1.0])
+        @test_throws ArgumentError three(s_max = [1.0, 0.0, 1.0])
         @test_throws ArgumentError three(g_shnt = [0.0, NaN, 0.0])
 
         # every section has an impedance, and the message says which branch
@@ -388,6 +396,31 @@ end
         # and profiles that do not cover the same network indices are refused
         @test_throws ArgumentError branch(r = nw_vector(dim, [0.01, 0.01, 0.01]),
                                           x = nw_vector(Dimension(:time => 2), [0.1, 0.1]))
+    end
+
+    @testset "a transformer's rating" begin
+        tf(; kwargs...) = Transformer(; id = 5, terminals = [1, 2], r = 0.0, x = 0.1, kwargs...)
+
+        # one number is the rating at every terminal, a vector one per terminal
+        @test tf().s_max == [Inf, Inf]
+        @test tf(s_max = 0.5).s_max == [0.5, 0.5]
+        @test tf(s_max = [0.5, 0.8]).s_max == [0.5, 0.8]
+
+        @test_throws ArgumentError tf(s_max = 0.0)
+        @test_throws ArgumentError tf(s_max = -0.5)
+        @test_throws ArgumentError tf(s_max = NaN)
+        @test_throws ArgumentError tf(s_max = [0.5, 0.0])
+        @test_throws ArgumentError tf(s_max = [0.5, -0.5])
+
+        # a profile is refused at the one network index that breaks it
+        dim = Dimension(:time => 3)
+        @test_throws ArgumentError tf(s_max = nw_vector(dim, [0.5, 0.0, 0.5]))
+        @test_throws ArgumentError tf(s_max = nw_vector(dim, [0.5, -0.5, 0.5]))
+
+        # a transformer that cannot carry is out of service, and `status` says so
+        err = refusal(() -> tf(s_max = 0.0))
+        @test err isa ArgumentError
+        @test occursin("transformer 5", err.msg) && occursin("status", err.msg)
     end
 
 end

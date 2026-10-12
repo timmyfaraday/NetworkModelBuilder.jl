@@ -8,6 +8,16 @@ Versions before 0.9.1 were never tagged in git; the version numbers and dates
 below are reconstructed from `Project.toml`'s own history, cross-referenced
 against the per-file changelog comments the source already carries.
 
+## [0.15.4] - 2026-10-12
+
+### Changed
+
+- **Breaking.** The `s_max` of a `Branch` and of a `Transformer` is positive: a rating of zero is refused at any
+  terminal and any network index, with `status` named as the way to take the edge out of service. A
+  `Transformer` had no check on its rating at all, so a negative or undefined one is refused too. A Matpower
+  branch with a rating of zero is still unlimited, as Matpower reads it, and a Zorba link with a capacity that is
+  not positive is refused by name.
+
 ## [0.15.3] - 2026-10-12
 
 ### Added

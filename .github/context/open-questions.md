@@ -1,7 +1,7 @@
 # Open questions
 
 Questions only a person can settle. Before asking Tom, check here; when one is answered, record
-the answer as a decision (if it changes a rule) and delete the question. Next id: **Q10**.
+the answer as a decision (if it changes a rule) and delete the question. Next id: **Q13**.
 
 Format: `### Q<n> · <question>` then who can settle it, what depends on it, and the options.
 
@@ -54,3 +54,9 @@ Status 2026-10-09, after (A) and the filter (B22, v0.12.6): the stop rule sits a
 1.5 GB) and peaked at 2.9 GB, was 5.0. What is left of it is `JuMP.value` and one boxed `Float64` per entry, which
 (B) or (C) would remove; (B) breaks `result["solution"] isa Dict`. Recommended: not now, B25 first so a later
 change is measured by a benchmark; Tom decides.
+
+### Q11 · What does Zorba's daily throughput cap count?
+Owner: Tom (to be clarified later). Depends on: B38, D79-D82, plan `storage-review.md` item 6, `zorba-integration.md` (Storage stop condition).
+NMB counts half the sum of the energy into and out of the store over `e_max` in any sliding 24 h window (D79-D81). Whether Zorba's cap is that quantity (energy delivered or drawn,
+one side or both, a calendar day or a sliding one, how its partial-day windows count) is not known; `zorba-integration.md` stops the storage work until a test
+shows an exact mapping. Settle it before the Zorba storage items.

@@ -2,14 +2,31 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B33**.
+older ones: git has them). Next id: **B41**.
 
 ## Now
 
 ## Next
 
+- [ ] B33 · Storage fields and validation: `_check_storage`, `check_storage` before the build, `e_min`, `c_chg` and `c_dch` in place of `c_thru`, `c_up + c_dn >= 0`, a market schedule inside the energy bounds, `scheduled_energy` (D74, D75, D83, D84) · Tom · 2026-10-12
+  - Plan `knowledge/plan/storage-review.md` item 1, v0.15.1; first, the other items add fields and items 3, 4 and 7 use what this adds.
+- [ ] B34 · Converter limit `s_max` on `Storage`: the circle in IVR, a limit on the active power in LPF (D73) · Tom · 2026-10-12
+  - Plan item 2, v0.15.2.
+- [ ] B35 · `exact` on `Storage`: relaxed, exact by lazy binaries, a third value `FROZEN` that fixes the direction; the gap, the price guard, the docs correction (D71, D78) · Tom · 2026-10-12
+  - Plan item 3, v0.15.3. Relaxed 393.00 against exact 426.54 on the three-step run.
+- [ ] B36 · Terminal conditions on `Storage`: `Pin`, `Cyclic`, `Floor`, `Value`, `Soft`, `Quad`, the scheduled energy as a target (D72, D85) · Tom · 2026-10-12
+  - Plan item 4, v0.15.4. A roll without a terminal value costs 26.2, 10.1, 8.4 extra at horizons 2, 3, 4.
+- [ ] B37 · Outage support for `Storage`: a unit out of service holds its energy (D76) · Tom · 2026-10-12
+  - Plan item 5, v0.15.5. Acceptance: the zero-rating run, objective 28.216.
+- [ ] B38 · Cycle limit of `Storage`: energy into and out of the store over any sliding 24 h window, carried across the windows of a roll, `c_cycl` per index; the same carry for `Generator.e_per_max` (D79-D82) · Tom · 2026-10-12
+  - Plan item 6, v0.15.6. A roll that does not start and end on period boundaries lets a unit turn up to the window count times its limit: 0.2 against 0.1 pu·h a period, a generator 1.2 against 0.6. What Zorba's cap counts is Q11.
+- [ ] B40 · Curative range of `Storage`: `h_cur`, the net power of a corrective unit within one band over the contingencies (D86) · Tom · 2026-10-12
+  - Plan item 7, v0.15.7; last of the storage items. Acceptance: 6.0 without the row, 7.0 at a range of 0.25, on the one-step three-contingency network.
+
 ## Later
 
+- [ ] B39 · Detailed battery physics and self-discharge, a storage ramp limit (D77) · Tom · 2026-10-12
+  - Fortenbacher et al. 2017 (loss curve, rate capacity, degradation map); Li 2016, Wang 2023, Zafar 2020 (self-discharge); Qin et al. 2025 (ramp).
 - [ ] B15 · Plugin PR: make `new-spec`, `new-run-prompt`, `review-run-report`, `probe-environment` and
   `pr-description` project-neutral, so NMB's five overrides in `.github/skills/` can be deleted (D37)
   · Tom · 2026-10-07

@@ -4,7 +4,7 @@ The rules that still constrain NMB. Read the section for the area you are touchi
 changing it.
 
 How to use this file:
-- A new decision gets the next free id (**D71**), goes in the Log at the bottom, and is written by
+- A new decision gets the next free id (**D87**), goes in the Log at the bottom, and is written by
   the `record-decision` skill. `Decided by` is a person's username, never an agent.
 - A decision that changes a rule below edits the rule in place and cites the new id. The old
   wording goes to the archive line of the id it came from.
@@ -113,6 +113,7 @@ How to use this file:
 - **A constraint, the function that writes it and the dual it gives share one stem and take one prefix each: `cstr_`, `fnct_`,
   `dual_`** (D68): `cstr_node_balance`, `fnct_node_balance`, `dual_node_balance_real`; the `constraint_*` functions and the `"lambda*"`
   solution keys are renamed by a hard removal (D59). In v0.15.0, spec `knowledge/plan/naming-constraints.md`.
+- **A limit is written in the most complete form that keeps the problem class of its formulation** (D73). A converter rating `s_max` is the circle on the net injection, `p^2 + q^2 <= s_max^2`, in `IVRFormulation`, which is already a nonconvex quadratic program; a limit on the active power alone in `LPFFormulation`, which has no reactive power; the box, a limit on `p` and one on `q`, in a linear formulation that has reactive power (none yet), since the circle would make it a second-order cone program. A new formulation says which of the three it takes.
 
 ## Concurrency
 
@@ -224,6 +225,17 @@ How to use this file:
   terminals being the single π as before; its fields are vectors with one entry per terminal, as a transformer's, and the
   shunt of a section, `g_shnt` and `b_shnt`, is split equally between its two ends** (D53).
   Spec `knowledge/plan/one-branch-terminals.md`.
+- **`Storage` has a keyword `exact` that says how charging and discharging at once is kept out: `RELAXED` (the default, no integers, exact where the nodal price is not negative or the unit's own prices cover it), `EXACT` (optimal, binaries only where the relaxed solution violates, so mixed-integer with no duals) and `FROZEN` (the direction of each violating unit-step is fixed and the model solved again: feasible, not optimal); a `Bool` is accepted, `true` is `EXACT`, as `pst` accepts one** (D71, D78). `exact` is a plain word of `test/nomenclature.jl`. Spec `knowledge/plan/storage-review.md`.
+- **The end of a storage unit's horizon is `terminal`, a list of typed conditions: `Pin`, `Cyclic`, `Floor`, `Value`, `Soft`, `Quad`; `e_fin` stays as `Pin`** (D72). `Pin`, `Cyclic` and `Floor` belong to the last window of a roll, the others to the end of every window; a target may be a profile over `:time`.
+- **A storage unit prices what it charges and what it discharges apart, `c_chg` and `c_dch`, both at least 0; `c_thru` is removed with no shim** (D74), a hard removal (D59).
+- **A storage unit has a lower energy bound `e_min`, 0 by default** (D75).
+- **A storage unit out of service for part of the time holds its energy across the gap: no variables while out, the next step starts from the last in-service state, and `initial_state` reads that state** (D76). A `status` outage must give what zero ratings give today.
+- **Detailed battery physics is not modelled: a power-dependent loss curve, rate capacity, a convexified degradation map (Fortenbacher et al.) and self-discharge** (D77). Noted in `docs/src/components/storage.md` and B39.
+- **A storage cycle counts both sides, the energy into the store and the energy drawn from it, `Δt·(η_chg·p_chg + p_dch/η_dch)/2`, over `e_max` (a lossless full cycle counts 1); charging and discharging are priced apart, as Barrera et al. do** (D79, D81).
+- **`k_cycl_max` holds over any sliding 24 h window, a row per step, and a roll carries the used allowance through `initial_state`; a market schedule over the budget is refused before the build** (D80).
+- **`c_cycl` is charged per index on the same count, with no period, and `Generator.e_per_max` carries its calendar-period allowance across the windows of a roll through `initial_state`** (D82).
+- **The `c_up` and `c_dn` of a storage unit are each finite and sum to at least 0 at every index; `check_storage(data)` refuses a market schedule whose own energy, `e_n = e_{n-1} + Δt(η_chg max(-p_set, 0) - max(p_set, 0)/η_dch)` from `e_init`, leaves `[e_min, e_max]`; the exported `scheduled_energy(data, u)` returns that trajectory and may be the target of `Pin`, `Soft` and `Quad`** (D83, D84, D85).
+- **A corrective storage unit may carry a curative holding time `h_cur` [h], 0 by default: its net power over the contingency coordinates, the base case included, spans at most `e_max/h_cur` at every step; a preventive unit gets no row** (D86).
 
 ## Zorba pipeline (`scripts/`)
 
@@ -700,3 +712,83 @@ Changes: `set_string_name` (D61, D67) is replaced by `debug_mode::Bool = false`,
 Date: 2026-10-11 · Decided by: Tom Van Acker · Area: Code conventions
 Why: 11 of 46 register keys have two id shapes, the LPF id and the IVR `(id, :real|:imag)` (`switch_cycle` puts the part before the bound), and D63 merges `linear_*` into `edge_*`: `cstr_edge_overload` is `(e, t)` in IVR and `(e, t, :pos|:neg)` in LPF, `cstr_edge_angle_difference` `(e, :max|:min)` against `e`. Splitting the LPF rows to match would change the model's rows. The IVR node balance is two `con` containers, `node_balance_real` and `node_balance_imag`, while D63 keeps a part out of a key.
 Changes: D65 edited in place: one shape per key within a formulation, and the fixed magnitude of a tap is `(a, :magn, :set)`, so that `cstr_tf_tap_setting` has 3-tuples only. D64 extended: a `con` value is a row, or a tuple of rows in the order of the register's id parts, `(real, imag)` for the IVR node balance; its ids stay component ids. A check of one id arity per key in a built IVR and LPF model comes with stage 3.
+
+### D71 — `Storage` takes `exact`: relaxed by default, exact, and a third value that fixes the direction
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: the relaxation, with no integers, lets a full battery absorb more than it can where a node price is negative: 393.00 against 426.54 in a three-step run, and the warning for it missed that run. The cheapest exact way measured is the relaxed solve first and binaries only where it violates (`knowledge/plan/storage-review.md`).
+Changes: new rule in Component model; `exact` goes into the word list of `test/nomenclature.jl`; the third value is named in D78.
+
+### D72 — `Storage` takes `terminal`, a list of typed end-of-horizon conditions
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: a pin alone made a roll spend the energy before a peak it could not see (extra cost 26.2, 10.1, 8.4 over perfect foresight at horizons 2, 3, 4, none at 5); the literature has a pin, a cyclic condition, a floor, a value and a penalty, and Zorba's plan asks for a soft target. Tom wants all of them selectable.
+Changes: new rule in Component model; `e_fin` stays as `Pin`.
+
+### D73 — A limit takes the most complete form that keeps its formulation's problem class
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Code conventions
+Why: the converter limit is the circle, or separate cones, in IVR, which is already a nonconvex quadratic program; a limit on the active power in LPF; the box in a future linear formulation with reactive power, where the circle would make it a second-order cone program.
+Changes: new rule in Code conventions; `s_max` on `Storage`, `Inf` by default.
+
+### D74 — `Storage` prices charging and discharging apart: `c_chg` and `c_dch`
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: only the discharged energy could be priced; the literature prices both sides (Barrera-Singana et al., Wang et al. 2023) and the exactness conditions read both prices (Liang et al.).
+Changes: `c_thru` is replaced by `c_dch` and `c_chg` is added, a hard removal as D59; the map in `knowledge/nomenclature.md` follows when it is built.
+
+### D75 — `Storage` has a minimum energy `e_min`
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: five sources bound the energy below by more than zero (Jha et al. 0.30 of the capacity, Barrera-Singana et al., Garifi et al., Wang et al. 2023, Liang et al.), and a curative use needs energy held back (Lindner et al.).
+Changes: new field, 0 by default.
+
+### D76 — A storage unit out of service for part of the time holds its energy across the gap
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: a `status` over `:time` is a raw `KeyError` today; zero ratings already hold the energy (e_stor 0.0205 across two steps, objective 28.216), and an outage is to be supported as the status it is, not as a rating of zero.
+Changes: new rule in Component model; the acceptance test is that equality, also across a window boundary.
+
+### D77 — Detailed battery physics, self-discharge included, is deferred
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: a loss curve, rate capacity and a convexified degradation map (Fortenbacher et al.) and self-discharge (Li et al., Wang et al. 2023, Zafar et al.) are detail the questions asked of NMB do not need yet.
+Changes: new rule in Component model; a note in the docs citing Fortenbacher et al.; B39.
+
+### D78 — The third value of `exact` is `FROZEN`
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: `FIXED` is a `TapMode` value and exported, so a second `FIXED` is an invalid redefinition.
+Changes: D71 edited in place: `exact` takes `RELAXED`, `EXACT` and `FROZEN`; Q10 deleted.
+
+### D79 — A storage cycle is the energy drawn from the store over `e_max`, and charging and discharging are priced apart
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: delivered energy lets a unit draw `k·e_max/η_dch` from its store, 5 % more at η 0.95; Barrera et al. price both sides, which D74 does. Tom confirmed that `c_thru` is retired.
+Changes: `storage_cycles` counts `Δt·p_dch/η_dch` over `e_max`; D74 stands as written. The count is widened to both sides in D81.
+
+### D80 — The cycle limit holds over any sliding 24 h window, and a roll carries the used allowance
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: a calendar block lets a unit turn twice its limit in 24 h across midnight, and a roll gave every window a fresh allowance (0.2 against 0.1 pu·h a period at horizon 2 step 2, a generator 1.2 against 0.6). Tom chose a row per step over the 24 h up to it, the allowance carried through `initial_state`, and a market schedule over the budget refused before the build.
+Changes: new rule in Component model; the carry for `Generator.e_per_max` on its calendar period and `c_cycl` charged per index are decided in D82. Q11 now holds only what Zorba's cap counts.
+
+### D81 — The cycle count covers both sides of the store
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: Tom chose that the count itself covers both sides, not only the energy drawn. Both sides then spend the allowance, so charging and discharging in the same step, which the relaxation allows, spends it twice. The form, half the sum of the two store-side energies so that a lossless full cycle still counts 1, is the form Tom confirmed.
+Changes: D79's rule edited in place; `storage_cycles` counts `Δt·(η_chg·p_chg + p_dch/η_dch)/2` over `e_max`; the check of a market schedule counts a negative `p_set` as charge.
+
+### D82 — `c_cycl` is charged per index and the generator's allowance is carried in a roll
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: `c_cycl` is linear in the same count, so it needs no period; `Generator.e_per_max` has the defect measured for storage (1.2 against 0.6 in total at horizon 2 step 2). Tom agreed both proposals of plan item 6.
+Changes: new rule in Component model; `storage_cycles` and the storage `period_cost` go and the horizon-term test of `test/hierarchy.jl` changes; `e_per_max` keeps its calendar period, not the sliding window.
+
+### D83 — The redispatch prices of a storage unit may not sum below zero
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: a pair `c_up`, `c_dn` that sums below zero pays the solver to raise both volumes by the same amount: -20.0 with no congestion at `c_up` 10 and `c_dn` -30. Either price alone may be negative, a payback; the thesis of Scarponi keeps binaries on its up and down bids for the same reason.
+Changes: new rule in Component model; `_check_storage` refuses `c_up + c_dn < 0` at any index.
+
+### D84 — A market schedule whose own energy leaves the bounds is refused
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: a schedule that discharges 0.3 for three steps from a full 0.5 is repaired silently by a redispatch at its prices, 24.0 with no congestion, so a data error is booked as redispatch cost.
+Changes: new rule in Component model; `check_storage(data)` and the exported helper `scheduled_energy(data, u)`.
+
+### D85 — The scheduled energy is a target of `Pin`, `Soft` and `Quad`
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: a redispatch should leave a unit where the market plan leaves it (Dratsas et al. restore the scheduled state of charge by rule); ending on 0.25 instead of free costs 110.0 against 85.0 on the radial test network.
+Changes: same rule as D84; no new terminal type, D72's list stands.
+
+### D86 — A corrective storage unit may carry a curative holding time
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: Lindner et al. keep a booster's curative set points over the contingencies in one band of width `e_max` over the holding time, so that one pre-positioned state serves whichever contingency occurs; a corrective unit here has a trajectory per contingency, which is more freedom (objective 6.0 against 7.0 at a range of 0.25). Tom asked for it; the name `h_cur`, and the symbol `h` and the word `cur` it needs in the vocabulary, are proposed with it and stand unless Tom objects at the plan review.
+Changes: new rule in Component model; B40.

@@ -11,6 +11,7 @@
 # v0.13.0 - a branch has one entry per terminal, and two or more terminals     #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.15.1 - a storage unit is refused what it cannot use, and checked          #
+# v0.15.2 - a storage unit's converter rating                                  #
 ################################################################################
 
 # An impossible value used to travel on to the solver, which answered
@@ -132,6 +133,8 @@ end
         @test_throws ArgumentError Storage(; id = 1, node = 1, p_chg_max = -0.1)
         @test_throws ArgumentError Storage(; id = 1, node = 1, p_dch_max = -0.1)
         @test_throws ArgumentError Storage(; id = 1, node = 1, p_chg_max = NaN)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, s_max = -0.1)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, s_max = NaN)
         @test_throws ArgumentError Storage(; id = 1, node = 1, e_max = -0.5)
         @test_throws ArgumentError Storage(; id = 1, node = 1, e_min = -0.1, e_max = 0.5)
         @test_throws ArgumentError Storage(; id = 1, node = 1, e_min = 0.6, e_max = 0.5)
@@ -152,6 +155,7 @@ end
         # a profile is refused at the one network index that breaks it
         dim = Dimension(:time => 3)
         @test_throws ArgumentError Storage(; id = 1, node = 1, e_max = nw_vector(dim, [0.5, 0.5, -0.1]))
+        @test_throws ArgumentError Storage(; id = 1, node = 1, s_max = nw_vector(dim, [0.2, -0.2, 0.2]))
         @test_throws ArgumentError Storage(; id = 1, node = 1, e_min = nw_vector(dim, [0.0, 0.6, 0.0]), e_max = 0.5)
         @test_throws ArgumentError Storage(; id = 1, node = 1, p_dch_max = nw_vector(dim, [0.2, -0.2, 0.2]))
         @test_throws ArgumentError Storage(; id = 1, node = 1, c_dch = nw_vector(dim, [1.0, -1.0, 1.0]))
@@ -169,6 +173,8 @@ end
         @test Storage(; id = 1, node = 1, e_max = 0.5, e_init = 0.6).e_init == 0.6
         @test Storage(; id = 1, node = 1, e_init = -1e-12).e_init == -1e-12    # what a solver hands the next window
         @test Storage(; id = 1, node = 1).e_min == 0.0
+        @test Storage(; id = 1, node = 1).s_max == Inf          # no converter limit unless given
+        @test Storage(; id = 1, node = 1, s_max = 0.2).s_max == 0.2
 
         # a price on each side replaces the one price on the discharge, and the old
         # name is gone

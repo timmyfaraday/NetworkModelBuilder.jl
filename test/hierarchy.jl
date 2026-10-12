@@ -14,6 +14,7 @@
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.15.0 - constraint keys follow the nomenclature                            #
 # v0.15.1 - e_min, c_chg and c_dch replace c_thru                              #
+# v0.15.2 - a storage unit's converter rating                                  #
 ################################################################################
 
 "case5 with edge 5, which has a turns ratio, rebuilt as a transformer carrying `extra`"
@@ -204,6 +205,7 @@ Base.@kwdef struct InflowStorage <: AbstractStorage
     net_inflow           ::NetworkQuantity{Float64} = 0.0
     q_min                 ::NetworkQuantity{Float64} = 0.0
     q_max                 ::NetworkQuantity{Float64} = 0.0
+    s_max                 ::NetworkQuantity{Float64} = Inf
     c_up              ::NetworkQuantity{Float64} = 0.0
     c_dn              ::NetworkQuantity{Float64} = 0.0
     status               ::NetworkQuantity{Bool}    = true
@@ -403,6 +405,51 @@ const PRICES = [10.0, 100.0, 50.0]
         idle = solved(priced(c_chg = 50.0, c_dch = 50.0))
         @test storage_path(idle, 1:2)[1][1] < 1e-6
         @test idle["objective"] ≈ 22.0 atol = 1e-4
+    end
+
+    # The 0.2 pu arbitrage again, behind a converter that carries 0.1: half of the
+    # 18 it is worth, so 22 - 9 = 13.
+    @testset "a converter rating limits what a battery injects" begin
+        behind(; kw...) = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
+                                  p_chg_max = 0.2, p_dch_max = 0.2, kw...)
+        solved(st, F) = quiet(() -> solve_model(arbitrage_network(st), OptimalPowerFlowProblem,
+                                                F, OPTIMIZER))
+
+        # what the converter carries is the net injection: with efficiencies of one the
+        # unit may charge and discharge at once, so the sides are free to be larger
+        net_injection(result) = (path = storage_path(result, 1:2); path[2] .- path[1])
+
+        # a limit on the active power in the linearized formulation, which has no reactive power
+        limited = solved(behind(s_max = 0.1), LPFFormulation)
+        @test net_injection(limited) ≈ [-0.1, 0.1] atol = 1e-6
+        @test limited["objective"] ≈ 13.0 atol = 1e-4
+
+        # the circle in the current based one, where reactive power is fixed at zero unless it is given
+        circle = solved(behind(s_max = 0.1), IVRFormulation)
+        @test circle["termination_status"] == JuMP.LOCALLY_SOLVED
+        @test maximum(abs, net_injection(circle)) <= 0.1 + 1e-6
+        @test net_injection(circle)[2] > 0.09   # and it is the rating that stops it
+        @test net_injection(solved(behind(), IVRFormulation))[2] > 0.15
+
+        # no rating is no row, and a rating is a row at every index, two of them in the linearized formulation
+        for (F, rows) in ((LPFFormulation, 4), (IVRFormulation, 2))
+            rated(m) = count(k -> k[2] === :cstr_stor_rating, keys(_NMB.registered_constraints(m)))
+            @test rated(instantiate_model(arbitrage_network(behind()), OptimalPowerFlowProblem, F)) == 0
+            @test rated(instantiate_model(arbitrage_network(behind(s_max = 0.1)),
+                                          OptimalPowerFlowProblem, F)) == rows
+        end
+
+        # with reactive power free the net injection and q share the circle: maximise both
+        wide = behind(e_init = 0.25, q_min = -0.2, q_max = 0.2, s_max = 0.15)
+        nm   = instantiate_model(arbitrage_network(wide), OptimalPowerFlowProblem, IVRFormulation)
+        JuMP.@objective(nm.model, Max, _NMB.var(nm, :p_dch, 3; nw = 1) - _NMB.var(nm, :p_chg, 3; nw = 1) +
+                                       _NMB.var(nm, :q_stor, 3; nw = 1))
+        JuMP.set_optimizer(nm.model, OPTIMIZER)
+        JuMP.optimize!(nm.model)
+        p = JuMP.value(_NMB.var(nm, :p_dch, 3; nw = 1)) - JuMP.value(_NMB.var(nm, :p_chg, 3; nw = 1))
+        q = JuMP.value(_NMB.var(nm, :q_stor, 3; nw = 1))
+        @test p^2 + q^2 ≈ 0.15^2 atol = 1e-6
+        @test p ≈ q atol = 1e-4
     end
 
     @testset "a battery pays per cycle, which is not per unit of energy" begin

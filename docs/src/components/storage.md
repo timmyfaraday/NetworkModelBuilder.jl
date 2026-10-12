@@ -29,6 +29,7 @@ Storage
 | ``c^{\text{d}}_{u}`` | `c_dch` | price of one per unit discharged | currency/pu/h |
 | ``c^{\text{cyc}}_{u}`` | `c_cycl` | price of one equivalent full cycle | currency/cycle |
 | ``q^{\text{min}}_{u}``, ``q^{\text{max}}_{u}`` | `q_min`, `q_max` | reactive power limits | pu |
+| ``s^{\text{max}}_{u}`` | `s_max` | rating of the converter the unit sits behind, `Inf` for none | pu |
 | ``c^{\uparrow}_{u}``, ``c^{\downarrow}_{u}`` | `c_up`, `c_dn` | price of injecting one per unit more and less than the market schedule in a redispatch, each finite and the pair summing to at least zero | currency/pu/h |
 | | `status` | in service | |
 | | `ext` | free-form storage, carried along and never read | |
@@ -65,6 +66,34 @@ v^{\text{r}}_{i} i^{\text{r}}_{u} + v^{\text{i}}_{i} i^{\text{i}}_{u}
 \qquad
 v^{\text{i}}_{i} i^{\text{r}}_{u} - v^{\text{r}}_{i} i^{\text{i}}_{u} = q^{\text{s}}_{u} .
 ```
+
+### The converter limit
+
+A unit behind a converter cannot put more on its node than the converter carries,
+whatever its charge and discharge ratings allow side by side. Where
+``s^{\text{max}}_{u}`` is finite, the `IVRFormulation` keeps the net injection and
+the reactive power inside a circle:
+
+```math
+\left( p^{\text{sd}}_{u} - p^{\text{sc}}_{u} \right)^{2} + \left( q^{\text{s}}_{u} \right)^{2}
+\le \left( s^{\text{max}}_{u} \right)^{2} ,
+```
+
+and the `LPFFormulation`, which has no reactive power, limits the active power alone:
+
+```math
+- s^{\text{max}}_{u} \le p^{\text{sd}}_{u} - p^{\text{sc}}_{u} \le s^{\text{max}}_{u} .
+```
+
+The default `Inf` writes neither, and the two power ratings are then the whole limit.
+The limit is on the net, not on each side: where the efficiencies are one the unit may
+charge and discharge at once, so either side can exceed ``s^{\text{max}}_{u}`` as long as
+the difference does not. A rating that is finite at some network indices and `Inf` at
+others changes the shape of the model, see [`structure_gates`](@ref).
+
+In a [`RedispatchProblem`](@ref) a unit with a preventive setup holds the active power it
+has at the base case in every contingency, so the linearized limit is written at the base
+case only. The reactive power is not held, so the circle is written at every index.
 
 ### Across network indices
 

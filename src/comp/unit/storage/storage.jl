@@ -17,6 +17,7 @@
 # v0.15.0 - constraint keys and ids follow the nomenclature                    #
 # v0.15.0 - functions that write rows, duals and letters follow the map        #
 # v0.15.1 - e_min, c_chg and c_dch, the checks made before the build           #
+# v0.15.2 - s_max, the converter rating of a storage unit                      #
 ################################################################################
 
 export AbstractStorage, Storage, inflow, storage_cycles
@@ -58,6 +59,7 @@ and the rolling horizon by declaring them:
 | `c_chg`, `c_dch`, `c_cycl` | [`dispatch_cost`](@ref), [`period_cost`](@ref) |
 | `c_up`, `c_dn` | [`redispatch_cost`](@ref) |
 | `q_min`, `q_max` | the reactive power, where the formulation has any |
+| `s_max` | the converter limit, a row where it is finite |
 
 What a subtype adds on top is its own, and the one thing it is expected to
 override is [`inflow`](@ref), for energy that reaches the unit from outside the
@@ -109,6 +111,12 @@ market schedule that runs the unit out. A model runs it before it builds.
   once per period rather than once per network index — a cost that spans network
   indices, see [`period_cost`](@ref).
 - `q_min`, `q_max`: the reactive power limits [pu].
+- `s_max`: the rating of the converter the unit sits behind [pu]. `Inf`, the
+  default, writes no row. A current based formulation keeps the net injection
+  and the reactive power inside a circle, `(p^{sd} - p^{sc})^2 + q^2 <= s_max^2`;
+  a linearized one, which has no reactive power, limits the net active
+  injection, `|p^{sd} - p^{sc}| <= s_max`. The charge and discharge ratings still
+  bound each side; this bounds what the unit puts on the node.
 - `c_up`, `c_dn`: the price of injecting one per unit more and one per
   unit less than the market schedule, in a [`RedispatchProblem`](@ref)
   [currency/pu/h]. Both default to zero, which makes the unit a free measure;
@@ -141,6 +149,7 @@ Base.@kwdef struct Storage <: AbstractStorage
     c_cycl    ::Float64                  = 0.0
     q_min     ::NetworkQuantity{Float64} = 0.0
     q_max     ::NetworkQuantity{Float64} = 0.0
+    s_max     ::NetworkQuantity{Float64} = Inf
     c_up      ::NetworkQuantity{Float64} = 0.0
     c_dn      ::NetworkQuantity{Float64} = 0.0
     status    ::NetworkQuantity{Bool}    = true
@@ -148,13 +157,13 @@ Base.@kwdef struct Storage <: AbstractStorage
 
     function Storage(id, name, node, p_set, q_set, e_max, e_min, e_init, e_fin,
                      p_chg_max, p_dch_max, η_chg, η_dch, k_cycl_max, c_chg, c_dch,
-                     c_cycl, q_min, q_max, c_up, c_dn, status, ext)
+                     c_cycl, q_min, q_max, s_max, c_up, c_dn, status, ext)
         _check_storage(id, e_max, e_min, e_init, e_fin, p_chg_max, p_dch_max, η_chg,
-                       η_dch, k_cycl_max, c_chg, c_dch, c_cycl, q_min, q_max, c_up, c_dn)
+                       η_dch, k_cycl_max, c_chg, c_dch, c_cycl, q_min, q_max, s_max, c_up, c_dn)
 
         return new(id, name, node, p_set, q_set, e_max, e_min, e_init, e_fin,
                    p_chg_max, p_dch_max, η_chg, η_dch, k_cycl_max, c_chg, c_dch,
-                   c_cycl, q_min, q_max, c_up, c_dn, status, ext)
+                   c_cycl, q_min, q_max, s_max, c_up, c_dn, status, ext)
     end
 end
 
@@ -163,7 +172,7 @@ end
 # compared with its bounds in `check_storage`, at the first and the last index only.
 # A window starts from what a solver returned, a digit below zero included, so `e_init` is not refused here.
 function _check_storage(id, e_max, e_min, e_init, e_fin, p_chg_max, p_dch_max, η_chg, η_dch,
-                        k_cycl_max, c_chg, c_dch, c_cycl, q_min, q_max, c_up, c_dn)
+                        k_cycl_max, c_chg, c_dch, c_cycl, q_min, q_max, s_max, c_up, c_dn)
     0 < η_chg <= 1 ||
         throw(ArgumentError("storage $id has a charge efficiency outside (0, 1]"))
     0 < η_dch <= 1 ||
@@ -190,6 +199,8 @@ function _check_storage(id, e_max, e_min, e_init, e_fin, p_chg_max, p_dch_max, �
         throw(ArgumentError("storage $id has a cycle cost that is negative or not finite, which pays the problem to cycle it"))
     all_nw(<=, q_min, q_max) ||
         throw(ArgumentError("storage $id has q_min above q_max"))
+    all_nw(>=(0), s_max) ||
+        throw(ArgumentError("storage $id has a negative or undefined converter rating `s_max`"))
     all_nw(isfinite, c_up) && all_nw(isfinite, c_dn) ||
         throw(ArgumentError("storage $id has a `c_up` or a `c_dn` that is not finite"))
     all_nw((up, dn) -> up + dn >= 0, c_up, c_dn) ||
@@ -199,6 +210,14 @@ function _check_storage(id, e_max, e_min, e_init, e_fin, p_chg_max, p_dch_max, �
 end
 
 register_unit_type!(Storage)
+
+"""
+    structure_gates(st)
+
+A converter rating is written only where it is finite, so it decides the shape of
+a storage unit's model. See [`structure_gates`](@ref).
+"""
+structure_gates(::AbstractStorage) = (:s_max,)
 
 ################################################################################
 # Storage — what is checked before the build                                   #
@@ -477,7 +496,7 @@ fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                ) where {P<:AbstractDispatchProblem,F<:IVRFormulation,T<:AbstractStorage} =
     _constraint_storage_power(nm, T, nw)
 
-"link what every storage unit charges and discharges to the current it injects"
+"link what every storage unit charges and discharges to the current it injects, within the rating of its converter"
 function _constraint_storage_power(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractStorage}
     isempty(ids(nm, T; nw)) && return nothing
 
@@ -485,8 +504,13 @@ function _constraint_storage_power(nm::NetworkModel, ::Type{T}, nw::Int) where {
     power                = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_power)
 
     for u in ids(nm, T; nw)
-        p = JuMP.@expression(nm.model, p_dch[u] - p_chg[u])
+        st = unit(nm, u; nw)::T
+        p  = JuMP.@expression(nm.model, p_dch[u] - p_chg[u])
         power[u] = fnct_unit_power!(nm, u, p, q_stor[u]; nw)
+
+        isfinite(st.s_max) || continue
+        constrain!(nm, :cstr_stor_rating, u,
+                   JuMP.@build_constraint(p^2 + q_stor[u]^2 <= st.s_max^2); nw)
     end
 
     return nothing
@@ -802,7 +826,7 @@ fnct_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
                ) where {P<:AbstractDispatchProblem,F<:LPFFormulation,T<:AbstractStorage} =
     _constraint_storage_injection(nm, T, nw)
 
-"link what every storage unit charges and discharges to the active power it injects"
+"link what every storage unit charges and discharges to the active power it injects, within the rating of its converter"
 function _constraint_storage_injection(nm::NetworkModel, ::Type{T}, nw::Int) where {T<:AbstractStorage}
     isempty(ids(nm, T; nw)) && return nothing
 
@@ -810,8 +834,16 @@ function _constraint_storage_injection(nm::NetworkModel, ::Type{T}, nw::Int) whe
     power        = get!(() -> Dict{Int,Any}(), con(nm; nw), :cstr_unit_injection)
 
     for u in ids(nm, T; nw)
-        power[u] = fnct_unit_injection!(nm, u,
-                       JuMP.@expression(nm.model, p_dch[u] - p_chg[u]); nw)
+        st = unit(nm, u; nw)::T
+        p  = JuMP.@expression(nm.model, p_dch[u] - p_chg[u])
+        power[u] = fnct_unit_injection!(nm, u, p; nw)
+
+        # a unit that is held has the net injection of the base case, which that case's row bounds
+        isfinite(st.s_max) && !is_held(nm, :unit, u; nw) || continue
+        constrain!(nm, :cstr_stor_rating, (u, :max),
+                   JuMP.@build_constraint(p <= st.s_max); nw)
+        constrain!(nm, :cstr_stor_rating, (u, :min),
+                   JuMP.@build_constraint(p >= -st.s_max); nw)
     end
 
     return nothing

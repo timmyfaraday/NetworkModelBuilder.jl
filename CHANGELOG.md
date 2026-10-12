@@ -8,6 +8,22 @@ Versions before 0.9.1 were never tagged in git; the version numbers and dates
 below are reconstructed from `Project.toml`'s own history, cross-referenced
 against the per-file changelog comments the source already carries.
 
+## [0.15.2] - 2026-10-12
+
+### Added
+
+- `s_max` on `Storage`, the rating of the converter the unit sits behind, `Inf` by default. Where it is
+  finite, `IVRFormulation` keeps the net injection and the reactive power inside the circle
+  `(p^sd - p^sc)^2 + q^2 <= s_max^2`, and `LPFFormulation`, which has no reactive power, limits the net
+  active power to `[-s_max, s_max]`. The rows are `:cstr_stor_rating`. A redispatch with a preventive
+  setup writes the linearized rows at the base case only.
+- The `Storage` constructor refuses a negative or undefined `s_max`.
+
+### Changed
+
+- A subtype of `AbstractStorage` carries an `s_max`, and `structure_gates` of a storage unit is `(:s_max,)`:
+  a rating that is finite at one network index and `Inf` at another is a change of shape.
+
 ## [0.15.1] - 2026-10-12
 
 ### Added

@@ -21,6 +21,7 @@
 # v0.15.0 - constraint keys follow the nomenclature                            #
 # v0.15.1 - the throughput of a storage unit is paid in a redispatch           #
 # v0.15.1 - a roll checks the schedule of its storage over the whole           #
+# v0.15.2 - a storage unit's converter rating                                  #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The
@@ -307,6 +308,26 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["p_gen_
                                RedispatchProblem, LPFFormulation)
         @test JuMP.coefficient(network_cost(nm, 1), _NMB.var(nm, :p_chg, 4; nw = 1)) ≈ 3.0
         @test JuMP.coefficient(network_cost(nm, 1), _NMB.var(nm, :p_dch, 4; nw = 1)) ≈ 7.0
+    end
+
+    @testset "a converter rating is written where the base case does not already imply it" begin
+        # one unit over two steps and three contingencies, which no outage separates
+        dim     = Dimension(:time => 2, :contingency => 3)
+        battery = Storage(; id = 4, node = 2, e_max = 0.5, e_init = 0.25,
+                          p_chg_max = 0.5, p_dch_max = 0.5, η_chg = 1.0, η_dch = 1.0, s_max = 0.3)
+        data    = radial_network(; dim, extra = Dict{Int,AbstractUnit}(4 => battery))
+
+        rated(m)   = count(k -> k[2] === :cstr_stor_rating, keys(_NMB.registered_constraints(m)))
+        corrective = Dict{Symbol,Any}(:redispatch => Redispatch(; control = :corrective))
+
+        # the linearized formulation has the active power alone, which a preventive unit holds
+        # equal in every contingency: its rating is the base case's, two rows a step
+        @test rated(instantiate_model(data, RedispatchProblem, LPFFormulation)) == 2 * 2
+        @test rated(instantiate_model(data, RedispatchProblem, LPFFormulation; ext = corrective)) == 2 * 2 * 3
+
+        # the current based one has reactive power too, and that is not held: a circle at every index
+        @test rated(instantiate_model(data, RedispatchProblem, IVRFormulation)) == 2 * 3
+        @test rated(instantiate_model(data, RedispatchProblem, IVRFormulation; ext = corrective)) == 2 * 3
     end
 
     @testset "a preventive measure serves every contingency" begin
@@ -969,7 +990,20 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         @test structure_gates(edges(net)[1]) == (:s_max, :v_angl_min, :v_angl_max)
         @test structure_gates(units(net)[1]) == (:p_min, :p_max, :q_min, :q_max)
         @test structure_gates(units(net)[3]) == ()          # a fixed load has none
-        @test structure_gates(units(net)[4]) == ()          # nor a storage unit
+        @test structure_gates(units(net)[4]) == (:s_max,)   # a storage unit has its converter
+    end
+
+    @testset "a converter rating that is finite at one index only is a change of shape" begin
+        dim  = Dimension(:time => 4)
+        net  = network(rolling_network())
+        net.unit[4] = Storage(; id = 4, node = 2, e_max = 0.4, e_init = 0.4, p_dch_max = 0.5,
+                              s_max = nw_vector(dim, [Inf, Inf, 0.3, 0.3]))
+        data = NetworkData(Network(net.node, net.edge, net.unit; dim))
+
+        @test structure_varies(data)
+        @test same_structure(data, 1, 2)
+        @test !same_structure(data, 2, 3)
+        @test same_structure(data, 3, 4)
     end
 
     @testset "an outage is a change of topology" begin

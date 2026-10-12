@@ -38,7 +38,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-12 by Tom Va
 - Julia guide review (`knowledge/plan/julia-guide-review.md`, B21-B28, Q7-Q9): B21-B25 done and tagged v0.12.5-v0.12.9 (D45-D49): topology lookup
   (chunk -10.7 %), a roll builds the committed indices (-12.3 %, peak 5.0 to 2.9 GB; Q9 stop rule at its line, B29), guard rails (7 threads 224 s
   against 7 processes 125 s a chunk), constructors refuse impossible input, typed registers (`lessons.md`, `validation.md`).
-- Storage review (`knowledge/plan/storage-review.md`, B33-B40, D71-D89, Q11): decided; B33 and B34 built on `b33-storage-fields` (v0.15.2, suite 3813, not merged), B35 under way (v0.15.3). The relaxation is not exact (393.00 against
+- Storage review (`knowledge/plan/storage-review.md`, B33-B40, D71-D89, Q11): decided; B33 to B35 built on `b33-storage-fields` (v0.15.3, suite 3868, not merged). `exact` (B35, opt-in) keeps the relaxation honest (393.00 against
   426.54), a roll drains a unit before a peak, and a cycle limit is not carried across windows (0.2 against 0.1 pu·h a period).
 - B30 done (v0.13.0, D50-D54, tagged): one `Branch`, shared fragments in `edge.jl`; suite 3351, chunk byte-identical (`one-branch-terminals.md`).
 - B31 done (v0.14.0, D55-D62, tagged): one nomenclature for fields, variable keys, solution keys, keywords and a node's `ext` start keys
@@ -66,7 +66,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-12 by Tom Va
 ## Next
 
 1. B26, B27 (the review's order); then B20, B7, B3, B4, B13, B19, B28, B29, see `backlog.md`.
-2. The storage review: merge B33 and B34 (Tom), then B35 to B38 and B40 in order (Q11, what Zorba's cap counts, waits for Zorba).
+2. The storage review: merge B33 to B35 (Tom), then B36 to B38 and B40 in order (Q11, what Zorba's cap counts, waits for Zorba).
 
 ## Blocked / waiting
 

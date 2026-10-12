@@ -265,3 +265,9 @@ again get retired.
   `s_max` and failed with 0.15 against 0.1: with efficiencies of one the solver charges 0.15 and discharges 0.05 in the same step at no
   cost, so only the difference is bound. The objective (13.0) was right all along. A maximised objective over `p_dch` alone does the
   same: maximise the net. (unconfirmed)
+- **Read the solution before writing to the model that holds it.** The first `refine!` added a binary the moment it found a
+  violating step, and the next `JuMP.value` raised `OptimizeNotCalled`: a model that has been written to has no solution
+  any more. It now collects every violating step first and writes after. (unconfirmed)
+- **An edit script that anchors on a line starting with spaces matches inside a line indented deeper.** In B34 a
+  `str.index("        rated(m) = count")` found the 12-space line of another testset and cut the wrong span, so the script
+  duplicated a block. Anchor on a word of the line, or on the whole line with its newline, and print the match count. (unconfirmed)

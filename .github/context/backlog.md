@@ -2,14 +2,12 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B41**.
+older ones: git has them). Next id: **B42**.
 
 ## Now
 
 ## Next
 
-- [ ] B35 · `exact` on `Storage`: relaxed, exact by lazy binaries, a third value `FROZEN` that fixes the direction; the gap, the price guard, the docs correction (D71, D78) · Tom · 2026-10-12
-  - Plan item 3, v0.15.3. Relaxed 393.00 against exact 426.54 on the three-step run.
 - [ ] B36 · Terminal conditions on `Storage`: `Pin`, `Cyclic`, `Floor`, `Value`, `Soft`, `Quad`, the scheduled energy as a target (D72, D85) · Tom · 2026-10-12
   - Plan item 4, v0.15.4. A roll without a terminal value costs 26.2, 10.1, 8.4 extra at horizons 2, 3, 4.
 - [ ] B37 · Outage support for `Storage`: a unit out of service holds its energy (D76) · Tom · 2026-10-12
@@ -18,6 +16,9 @@ older ones: git has them). Next id: **B41**.
   - Plan item 6, v0.15.6. A roll that does not start and end on period boundaries lets a unit turn up to the window count times its limit: 0.2 against 0.1 pu·h a period, a generator 1.2 against 0.6. What Zorba's cap counts is Q11.
 - [ ] B40 · Curative range of `Storage`: `h_cur`, the net power of a corrective unit within one band over the contingencies (D86) · Tom · 2026-10-12
   - Plan item 7, v0.15.7; last of the storage items. Acceptance: 6.0 without the row, 7.0 at a range of 0.25, on the one-step three-contingency network.
+
+- [ ] B41 · `print_summary` fails on a linearized result: it reads `q_unit`, which `LPFFormulation` does not write (`KeyError`) · Tom · 2026-10-12
+  - Found by a B35 test; the docs only print current based results. Either skip the column or write a zero.
 
 ## Later
 
@@ -73,6 +74,10 @@ older ones: git has them). Next id: **B41**.
 
 ## Done
 
+- [x] B35 · `exact` on `Storage`: `Exclusion` (`RELAXED`, `EXACT`, `FROZEN`), `refine!` after every solve, the gap, the price guard, the docs correction (D71, D78, D89) · Tom · 2026-10-12
+  - v0.15.3 on `b33-storage-fields`, not merged; plan item 3. Suite 3868 (3813 at v0.15.2), `docs/make.jl` clean. Three-step run: 393.00 relaxed, 426.54 `EXACT` and with a binary on every step; `c_dch` 100 gives 441.60 and 446.54, 130 gives 450.00 for both; in current through Juniper 426.54 too.
+  - Left to know: no hull row is written, the two big-M rows imply it; `exact` is `RELAXED` by default, so existing models are unchanged; the guard reads the first network index (B37 widens it); `EXACT` and `FROZEN` need finite ratings; the 10-node chain of the plan (36 binaries, FROZEN within 1 %) is not run.
+  - Names proposed here, standing unless Tom objects: `exact` (a word), `exclusion` (a role), `chg` and `dch` (id parts), `:z_stor`, `:cstr_stor_exclusion`, the solution key `relaxation_gap`.
 - [x] B34 · Converter limit `s_max` on `Storage`: the circle in IVR, a limit on the active power in LPF (D73) · Tom · 2026-10-12
   - v0.15.2 on `b33-storage-fields`, stacked on B33, not merged; plan item 2. Red then green; suite 3813 (3788 at v0.15.1), `docs/make.jl` clean. Rows `:cstr_stor_rating`: id `u` in IVR, `(u, :max)` and `(u, :min)` in LPF, none at `Inf`.
   - Left to know: the limit is on the net injection, so with efficiencies of one each side can exceed it; LPF skips a held unit (the base case's rows imply it), IVR writes a circle at every index since `q_stor` is not held; `structure_gates` of a storage unit is `(:s_max,)` (an existing `rd.jl` test said `()`); `s_max = 0` is accepted and gives a degenerate circle in IVR.

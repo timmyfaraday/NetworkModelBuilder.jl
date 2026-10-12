@@ -1,6 +1,6 @@
 # Storage: a review against the literature, and the changes it asks for
 
-Status: B33 and B34 built on `b33-storage-fields` (v0.15.2, suite 3813, not merged), the rest ready to implement, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D89 (next free after: D90)
+Status: B33 to B35 built on `b33-storage-fields` (v0.15.3, suite 3868, not merged), the rest ready to implement, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D89 (next free after: D90)
 Priority: P1 · Effort: Large. Open: Q11 (what Zorba's throughput cap counts). Backlog B33-B38 and B40, B39 later.
 
 Literature: knowledge-base nodes Storage Models in OPF (14 sources that model storage, raw PDFs re-read) and Redispatch and
@@ -62,13 +62,13 @@ Measured with HiGHS; the scripts are `%LOCALAPPDATA%\Temp\nmb_storage_review\*.j
 - **Verification.** A unit with `s_max` below its ratings, q fixed at 0: `p_dch` stops at `s_max` in both formulations; no row at `Inf`; with q free
   the solution satisfies the circle to 1e-6.
 
-## 3. `exact` (B35, D71, v0.15.3)
+## 3. `exact` (B35, D71, v0.15.3, built)
 
 - **API.** `@enum Exclusion RELAXED EXACT FROZEN`, a field `exact` that takes an `Exclusion` or a `Bool` (`true` is `EXACT`) as `pst` takes a
   `TapMode`; `RELAXED` by default; `exact` goes into `NOM_WORDS`. `FROZEN` (D78) is the iterative fixing above: each violating unit-step has the
   direction of its net power fixed and the model is solved again, feasible and not optimal.
 - **Fix.** RELAXED builds what it builds today. EXACT: after a solve a hook `refine!` (called by `optimize_model!` as `solution_processors` are)
-  adds a hull row for the unit and a binary `z_stor` with two big-M rows for each unit-step whose `p_chg·p_dch/(p_chg_max·p_dch_max)` is above 1e-5,
+  adds a binary `z_stor` with two big-M rows (they imply the hull row, so it is not written) for each unit-step whose `p_chg·p_dch/(p_chg_max·p_dch_max)` is above 1e-5,
   solves again, and repeats until none is left (at most 8 rounds, then an error). A refined model is mixed-integer: no duals, Juniper in IVR; a
   roll rebuilds a window that refined. The gap is a solution key and in `print_summary`. `_warn_free_cycling` becomes the price guard
   `η_c c_dch + c_chg/η_d >= (1/η_d - η_c)|λ_floor|` with `λ_floor` the most negative price a `Spill` or a generator sets, saying that a

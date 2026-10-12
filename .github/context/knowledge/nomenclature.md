@@ -23,7 +23,7 @@ grammar as code.
 - **Secondary:** after a what, a part; otherwise a qualifier. A bound `min max`; a reference `set init fin nom mkt`; a direction
   `up dn`; a kind `fix prop thru peak step ener`.
 - **Unit:** last slot, only where the quantity is not in pu or rad: `kv mva km`.
-- **Words:** what is not a quantity stays a plain word: `id name node terminals status ext type area zone lock position reverse oltc pst`.
+- **Words:** what is not a quantity stays a plain word: `id name node terminals status ext type area zone lock position reverse oltc pst exact`.
 
 ## Fields and keys (D57, D58)
 
@@ -100,10 +100,10 @@ function `fnct_<stem>`, the dual `dual_<stem>`, as in `cstr_node_balance`, `fnct
 - **Owner:** who writes the row: a family `node edge unit`, a type `br tf dcl sw gen stor flex shnt` (the descriptors of the quantities where there is
   one, the component locals `br tf` where not), or the problem `rd`. The family where several types write the row (D51), the type where one does.
 - **Role:** what the row states, one or two of `balance reference setpoint anchor limit range rating overload peak angle difference voltage current
-  flow power injection energy final cycle redispatch control equation open loop winding ratio tap step setting star pi section point`.
+  flow power injection energy final cycle redispatch control equation open loop winding ratio tap step setting star pi section point exclusion`.
 - **No formulation in a key**, as `:p_term` has none: `cstr_edge_rating` is the rating in IVR and in LPF, with the id shape of its formulation. A function
   written for the linearized formulation only keeps `linear`: `fnct_edge_rating_linear`.
-- **Id:** the component's id, or `(id, part...)`, a part one of `real imag magn angl min max fr to ser set loss forward reverse pos neg side p q`.
+- **Id:** the component's id, or `(id, part...)`, a part one of `real imag magn angl min max fr to ser set loss forward reverse pos neg side p q chg dch`.
   A nested tuple of edges names a loop, `(family, sub, key)` a control. One shape per key within a formulation: an IVR row carries the phasor part where
   an LPF row has none, and a row that is two-sided in one is a single row in the other (D70).
 - **`con`** takes the register's key where an entry holds the rows of one key; a bundle of several takes an owner and `equation` or `limit`

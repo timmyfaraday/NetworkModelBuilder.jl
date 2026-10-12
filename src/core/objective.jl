@@ -10,6 +10,7 @@
 # v0.2.0 - network dependent data stored per component                         #
 # v0.15.4 - terminal, the end of the horizon as a list of conditions           #
 # v0.15.5 - a storage unit out of service holds its energy                     #
+# v0.15.6 - no component of the package has a charge per period                #
 ################################################################################
 
 ################################################################################
@@ -180,7 +181,7 @@ expression or a number, and zero for a problem that has none.
 
 [`network_cost`](@ref) prices one network index and
 [`minimize_network_cost`](@ref) weights it by that index's weight. A cost over a
-*period* — the worst overload of a day, a charge per storage cycle — has no
+*period* — the worst overload of a day — has no
 index to be attributed to and no weight that is right for it, because the
 quantity is not a rate. This is where it goes instead, added to the objective
 unweighted: what weighting a period-spanning cost does deserve is
@@ -216,9 +217,11 @@ index `nw`, as a JuMP expression or a number.
 
 The period counterpart of [`dispatch_cost`](@ref), and the reason both exist is
 that some charges do not divide into indices. A price per unit of energy a
-battery moves is per index and belongs on `dispatch_cost`; a price per *cycle*
-is a charge on a quantity defined over a whole period and belongs here, where
-[`horizon_cost`](@ref) pays it once per period rather than once per hour.
+unit moves is per index and belongs on `dispatch_cost`; a charge on a quantity
+defined over a whole period, as the worst of it is, belongs here, where
+[`horizon_cost`](@ref) pays it once per period rather than once per hour. No
+component of the package has one at present, and it is the hook a type of your own
+uses.
 
 Called only at the first network index of each period, see
 [`is_first_period_id`](@ref), and zero for anything that does not say otherwise.

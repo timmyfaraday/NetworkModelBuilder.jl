@@ -4,7 +4,7 @@ The rules that still constrain NMB. Read the section for the area you are touchi
 changing it.
 
 How to use this file:
-- A new decision gets the next free id (**D91**), goes in the Log at the bottom, and is written by
+- A new decision gets the next free id (**D93**), goes in the Log at the bottom, and is written by
   the `record-decision` skill. `Decided by` is a person's username, never an agent.
 - A decision that changes a rule below edits the rule in place and cites the new id. The old
   wording goes to the archive line of the id it came from.
@@ -235,11 +235,12 @@ How to use this file:
 - **`k_cycl_max` holds over any sliding 24 h window, a row per step, and a roll carries the used allowance through `initial_state`; a market schedule over the budget is refused before the build** (D80).
 - **`c_cycl` is charged per index on the same count, with no period, and `Generator.e_per_max` carries its calendar-period allowance across the windows of a roll through `initial_state`** (D82).
 - **The `c_up` and `c_dn` of a storage unit are each finite and sum to at least 0 at every index; `check_storage(data)` refuses a market schedule whose own energy, `e_n = e_{n-1} + Δt(η_chg max(-p_set, 0) - max(p_set, 0)/η_dch)` from `e_init`, leaves `[e_min, e_max]`; the exported `scheduled_energy(data, u)` returns that trajectory and may be the target of `Pin`, `Soft` and `Quad`** (D83, D84, D85).
+- **A preventive unit that is in service in the base case and out of service in a contingency is an error of the redispatch build, not a measure that constrains nothing; the unit is posed corrective, by `exception`, where it may be lost** (D92).
 - **A corrective storage unit may carry a curative holding time `h_cur` [h], 0 by default: its net power over the contingency coordinates, the base case included, spans at most `e_max/h_cur` at every step; a preventive unit gets no row** (D86).
 - **The `Storage` constructor does not compare `e_init` or `e_fin` with the bounds; `check_storage(data)` does, at the first and the last index, within 1e-5** (D87).
 - **A rolling horizon checks the market schedule of its storage once, over the whole problem; its windows do not, `schedule = false`** (D88).
 - **The `s_max` of a storage unit is positive, never zero; a unit that cannot inject is out of service, which its `status` says** (D89).
-- **The `s_max` of a branch or a transformer is positive, never zero, at every terminal; an edge that cannot carry is out of service, which its `status` says** (D90). A `Switch` and a `DCLink` still accept zero.
+- **The `s_max` of a branch or a transformer is positive, never zero, at every terminal; an edge that cannot carry is out of service, which its `status` says** (D90), and so is that of a `Switch` and of a `DCLink` (D91).
 
 ## Zorba pipeline (`scripts/`)
 
@@ -816,3 +817,13 @@ Changes: new rule in Component model; D73 stands, its `s_max >= 0` is `> 0`; `_c
 Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
 Why: Tom extended D89 to the edges: a rating of zero is an edge that cannot carry, which is what an outage is, and an outage is `status`. A `Transformer` had no check on its rating at all.
 Changes: D50's `s_max >= 0` is `> 0` for a `Branch` and now holds for a `Transformer`, at every terminal and every network index; a Matpower rating of 0 is still read as unlimited; the Zorba reader names the link; `Switch` and `DCLink` are not asked and keep `>= 0`; v0.15.4.
+
+### D91 — The `s_max` of a switch and of a dc link is positive
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: Tom closed the exception of D90: no edge or unit is given a rating of zero, since the unavailability of an asset is its `status`. Every rating of the package is then positive or `Inf`.
+Changes: D90's exception for a `Switch` and a `DCLink` is removed; both refuse zero, negative and NaN at any network index, the message naming `status`; v0.15.6.
+
+### D92 — A preventive unit lost in a contingency is an error
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: a preventive measure takes one setting that serves every state, and a unit that is out in a contingency cannot take it there; the build skipped it and said it constrained nothing, which left the problem asking for what the unit does at the base case in a state where it cannot do it (infeasible with a pin that makes a storage unit move). Tom prefers the error to the silence.
+Changes: new rule in Component model; `fnct_rd_control` refuses a unit of a type with redispatch controls that is preventive, in service at the base case and out of service at another coordinate of `:contingency`, naming the unit and the coordinate and the exception that poses it corrective; the line about a generator that is itself the contingency leaves the documentation; v0.15.6.

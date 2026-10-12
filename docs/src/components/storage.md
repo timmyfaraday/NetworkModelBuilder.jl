@@ -26,10 +26,11 @@ Storage
 | ``\eta^{\text{c}}_{u}`` | `η_chg` | one-way charge efficiency, in ``(0,1]`` | |
 | ``\eta^{\text{d}}_{u}`` | `η_dch` | one-way discharge efficiency, in ``(0,1]`` | |
 | | `exact` | how charging and discharging at once is kept out, an [`Exclusion`](@ref) or a `Bool`; `EXACT` and `FROZEN` need finite ratings | |
-| ``k^{\text{max}}_{u}`` | `k_cycl_max` | equivalent full cycles allowed per period | |
+| ``k^{\text{max}}_{u}`` | `k_cycl_max` | equivalent full cycles allowed over any 24 hours, both sides of the store counted | |
+| ``\hat{e}_{u}`` | `e_cycl_init` | what the unit counted in the 24 hours before the first step, as `(hours, energy)` per step, oldest first; empty by default | h, pu·h |
 | ``c^{\text{c}}_{u}`` | `c_chg` | price of one per unit charged | currency/pu/h |
 | ``c^{\text{d}}_{u}`` | `c_dch` | price of one per unit discharged | currency/pu/h |
-| ``c^{\text{cyc}}_{u}`` | `c_cycl` | price of one equivalent full cycle | currency/cycle |
+| ``c^{\text{cyc}}_{u}`` | `c_cycl` | price of one equivalent full cycle, on the same count and charged at every step | currency/cycle |
 | ``q^{\text{min}}_{u}``, ``q^{\text{max}}_{u}`` | `q_min`, `q_max` | reactive power limits | pu |
 | ``s^{\text{max}}_{u}`` | `s_max` | rating of the converter the unit sits behind, positive, `Inf` for none | pu |
 | ``c^{\uparrow}_{u}``, ``c^{\downarrow}_{u}`` | `c_up`, `c_dn` | price of injecting one per unit more and less than the market schedule in a redispatch, each finite and the pair summing to at least zero | currency/pu/h |
@@ -274,16 +275,16 @@ e_{u,n} = e_{u,n-1}, \qquad e_{u,n} = e^{0}_{u} \;\; \text{before the first step
 conditions on the end of the horizon, which are asked of the energy the unit holds at the last
 step whether it is in service there or not: a `Pin` on a unit that is out at the last step is a pin
 on what it left. A unit that is out for the whole of a trajectory, as when a contingency loses
-it, has no state of charge there and is asked nothing. The cycle limit holds over the steps a unit
-is in service for in its period, also when it is out at the first. A rolling horizon carries the
+it, has no state of charge there and is asked nothing. A step a unit is out of service at counts
+nothing toward its cycle limit. A rolling horizon carries the
 energy a unit holds at the last step a window commits, in service or not, so that a unit that is out
 when a window ends is not refilled by the next.
 
 On five steps with prices 10, 10, 100, 10 and 100, a unit that is out at steps 2 and 3 costs 28.216
 against 10.432 in service, which is what ratings of zero over the two steps cost. A preventive unit
-that is lost in a contingency cannot serve what it does at the base case, since the volumes of the
-other preventive measures are tied across the states and the unit is not there to match them; a
-redispatch that loses a storage unit is posed with the unit corrective.
+that is lost in a contingency is refused by a redispatch, since the setting it takes in the base case is
+one it cannot take there; a redispatch that loses a storage unit poses the unit corrective, with an
+`exception` of the [`Redispatch`](@ref) setup.
 
 ```@docs
 energy_at
@@ -291,31 +292,48 @@ energy_at
 
 ### The cycle limit
 
-A unit that carries a finite `k_cycl_max` gets one row per period:
+A unit that carries a finite `k_cycl_max` gets a row at every network index, over the time steps up to it
+that fit in 24 hours:
 
 ```math
-\sum_{n \in \mathcal{P}} \Delta t_{n} \, p^{\text{sd}}_{u,n}
-    \le k^{\text{max}}_{u} \, e^{\text{max}}_{u}
+\sum_{m \in \mathcal{W}_{n}} \frac{\Delta t_{m}}{2}
+    \left( \eta^{\text{c}}_{u} p^{\text{sc}}_{u,m} + p^{\text{sd}}_{u,m} / \eta^{\text{d}}_{u} \right)
+    \le k^{\text{max}}_{u} \, e^{\text{max}}_{u,n} - \hat{e}_{u,n}
 ```
 
-with the period ``\mathcal{P}`` running over the `:time` coordinates grouped
-with the index, see [`period_ids`](@ref), and every other coordinate held fixed.
-A `:time` dimension with no grouping gives one period spanning the horizon, and
-the limit is then a limit over the whole problem.
+with the window ``\mathcal{W}_{n}`` running along `:time` back from ``n``, ``n`` included, for as long as the
+steps fit in 24 hours, and every other coordinate held fixed. ``\hat{e}_{u,n}`` is what `e_cycl_init` counted of
+the hours that reach back before the first step, which is nothing unless it was given or a rolling horizon
+filled it. The limit holds over any 24 hours and not over a calendar day, which a unit could turn twice over
+across midnight, so a grouping of `:time` into periods does not apply to it.
 
-An infinite limit — the default — is the **absence** of a row rather than a row
-with an infinite right hand side.
+The right hand side is the energy the unit may count, `k_cycl_max` capacities, and a step counts half of
+what goes into the store and half of what comes out of it: one capacity charged and discharged counts
+one cycle, in a lossless unit and in a lossy one. A step the unit is out of service at counts nothing. In a
+redispatch a preventive unit holds its schedule across the contingencies and has the rows of the base case
+only; a corrective one has them in every contingency, see [`is_held`](@ref).
+
+An infinite limit — the default — is the **absence** of a row rather than a row with an infinite right
+hand side. A right hand side that the energy already counted has used up is taken as zero.
 
 ```@docs
-storage_cycles
 fnct_stor_cycle!
 ```
 
-!!! note "Why the discharge side"
-    One cycle is one energy capacity delivered. Counting the charge side instead
-    would make a lossy unit appear to cycle more than it did, and counting both
-    would count every cycle twice. This is also the definition a warranty is
-    written in, and the one that makes the count independent of the capacity.
+!!! note "Why both sides"
+    A unit that discharges what it holds draws `k_cycl_max · e_max / η_dch` out of its store, more than the
+    limit says it delivers, and the same unit charging draws it from the grid before the loss. Counting
+    both sides, half of each, is the one count that sees all of that and keeps a lossless cycle at one. It
+    is also what makes charging and discharging in the same step, which the relaxation allows, spend the
+    allowance twice. Charging and discharging are priced apart for the same reason.
+
+!!! note "A roll carries what it has counted"
+    [`solve_rolling_horizon`](@ref) hands the trailing 24 hours of the count from one window to the next
+    through [`initial_state`](@ref), so that a unit does not get its allowance back at every window. A
+    full unit with a limit of 0.1 pu·h that sells at 100 in the first of four steps sells 0.2 in all, rolled
+    two steps at a time as well as whole, and not 0.2 again in the next window. Independent problems, such
+    as the chunks of a pipeline run in separate processes, start with nothing counted unless `e_cycl_init`
+    is given.
 
 !!! warning "A cycle limit does not stop charging and discharging at once"
     Where a node pays to have energy taken off the network, a unit with losses is
@@ -347,13 +365,13 @@ scheduled_energy
 | what | code name | where it is paid |
 |:-----|:------|:-----------------|
 | moving energy | `c_chg`, `c_dch` | [`dispatch_cost`](@ref), once per network index |
-| turning a cycle | `c_cycl` | [`period_cost`](@ref), once per period |
+| turning a cycle | `c_cycl` | [`dispatch_cost`](@ref) and [`redispatch_cost`](@ref), once per network index |
 | leaving a market schedule | `c_up`, `c_dn` | [`redispatch_cost`](@ref), once per network index |
 
 The first two measure different wear and a unit may carry either or both: a
 battery that discharges half its capacity twice pays for one cycle, while the
-throughput price charges it for the whole of what it moved either way. The
-throughput price is also in `redispatch_cost`, because degradation does not care
+throughput price charges it for the whole of what it moved either way. All three
+are also in `redispatch_cost`, because degradation does not care
 why the energy moved — a battery asked to relieve a congestion wears exactly as
 much as one following a schedule, and `c_up` and `c_dn` price the
 *deviation* rather than the movement.

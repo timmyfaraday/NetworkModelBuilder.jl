@@ -8,3 +8,4 @@ old decision id cited in a commit, PR or note.
 - D67 · superseded 2026-10-11 by D69: `set_string_name` covered constraints, default true; it is `debug_mode`, default false.
 - D65 · superseded 2026-10-11 by D70: an id had one shape per key; it has one per key within a formulation.
 - D50 · partly superseded 2026-10-12 by D90: the `s_max` of a branch was checked `>= 0`, so a rating of zero was accepted; it is `> 0`, and so is a transformer's.
+- D90 · partly superseded 2026-10-12 by D91: a `Switch` and a `DCLink` still accepted a rating of zero; they are `> 0` too.

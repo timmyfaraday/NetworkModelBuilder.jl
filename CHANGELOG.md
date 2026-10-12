@@ -8,6 +8,38 @@ Versions before 0.9.1 were never tagged in git; the version numbers and dates
 below are reconstructed from `Project.toml`'s own history, cross-referenced
 against the per-file changelog comments the source already carries.
 
+## [0.15.6] - 2026-10-12
+
+### Added
+
+- `e_cycl_init` on `Storage`, what the unit counted toward its cycle limit in the 24 hours before the first step, as
+  `(hours, energy)` per step, oldest first. A rolling horizon fills it from the window before through
+  `initial_state`, so a unit no longer gets its allowance back at every window; on a full unit with a limit of
+  0.1 pu·h that sells at 100 in the first of four steps, a roll of two steps at a time sells 0.2 in all, as the whole
+  problem does.
+- `e_per_init` on `Generator`, the energy already produced in the period of the first step. A rolling horizon carries
+  it through `initial_state`, and a window that starts a period of its own starts it with nothing produced, so an
+  `e_per_max` is no longer a limit per window where a window cuts a period.
+
+### Changed
+
+- **Breaking.** The `s_max` of a `Switch` and of a `DCLink` is positive: a rating of zero is refused at any network
+  index, with `status` named as the way to take the edge out of service. Every rating of the package is now
+  positive or `Inf`.
+- **Breaking.** `k_cycl_max` holds over any 24 hours with a row at every network index, not once per period, and a
+  period grouping of `:time` no longer applies to it. A step counts half of what goes into the store and half of
+  what comes out of it, `Δt (η_chg p_chg + p_dch / η_dch) / 2`, over `e_max`, so a lossless full cycle counts one and
+  charging and discharging in the same step spends the allowance twice. A held unit of a redispatch has the rows of the
+  base case only, a corrective one has them in every contingency.
+- **Breaking.** `c_cycl` is charged at every network index on the same count, by `dispatch_cost` and by
+  `redispatch_cost`, and no longer once per period through `period_cost`.
+- **Breaking.** A redispatch refuses a unit that is preventive, in service in the base case and out of service in
+  another contingency, which it used to skip; the error names the unit and the exception that poses it corrective.
+
+### Removed
+
+- `storage_cycles` and the `period_cost` of `Storage`.
+
 ## [0.15.5] - 2026-10-12
 
 ### Added

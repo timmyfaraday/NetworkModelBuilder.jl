@@ -18,6 +18,7 @@
 # v0.15.3 - exact keeps charging and discharging at once out                   #
 # v0.15.4 - the end of a storage unit's horizon is a list of conditions        #
 # v0.15.5 - an outage of a storage unit is its status                          #
+# v0.15.6 - the cycle limit is a sliding 24 h window on both sides of the store#
 ################################################################################
 
 "case5 with edge 5, which has a turns ratio, rebuilt as a transformer carrying `extra`"
@@ -165,8 +166,8 @@ A two-node network over a `:time` dimension whose generation cost changes from
 one step to the next, which is what gives a flexible unit something to respond
 to.
 """
-function price_network(prices; extra::Dict{Int,AbstractUnit} = Dict{Int,AbstractUnit}())
-    dim = Dimension(:time => length(prices))
+function price_network(prices; dim::Dimension = Dimension(:time => length(prices)),
+                       extra::Dict{Int,AbstractUnit} = Dict{Int,AbstractUnit}())
 
     I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0),
                                2 => Node(; id = 2))
@@ -204,6 +205,7 @@ Base.@kwdef struct InflowStorage <: AbstractStorage
     η_dch ::Float64                  = 1.0
     exact       ::Exclusion                = RELAXED
     k_cycl_max::Float64                  = Inf
+    e_cycl_init::Vector{Tuple{Float64,Float64}} = Tuple{Float64,Float64}[]
     c_chg      ::NetworkQuantity{Float64} = 0.0
     c_dch      ::NetworkQuantity{Float64} = 0.0
     c_cycl           ::Float64                  = 0.0
@@ -500,18 +502,42 @@ const PRICES = [10.0, 100.0, 50.0]
         @test storage_path(idle, 1:2)[2][2] < 1e-6
         @test idle["objective"] ≈ 22.0 atol = 1e-4
 
-        # the charge is a period cost, so it reaches the objective through the
-        # horizon term rather than through any one network index
+        # the cycles are counted at every network index, on both sides of the store, so the
+        # price reaches the objective where the energy moves: half of what goes in and half of
+        # what comes out, over the capacity, at 20 per cycle
         nm = instantiate_model(arbitrage_network(cheap), OptimalPowerFlowProblem,
                                LPFFormulation)
-        @test JuMP.coefficient(horizon_cost(nm), _NMB.var(nm, :p_dch, 3; nw = 2)) ≈ 20.0 / 0.5
-        @test JuMP.coefficient(network_cost(nm, 2), _NMB.var(nm, :p_dch, 3; nw = 2)) ≈ 0.0
-        @test period_cost(nm, Storage, 3; nw = 1) isa JuMP.AbstractJuMPScalar
+        for key in (:p_chg, :p_dch)
+            @test JuMP.coefficient(network_cost(nm, 2), _NMB.var(nm, key, 3; nw = 2)) ≈ 20.0 / (2 * 0.5)
+            @test JuMP.coefficient(horizon_cost(nm), _NMB.var(nm, key, 3; nw = 2)) ≈ 0.0
+        end
+        @test period_cost(nm, Storage, 3; nw = 1) == 0.0
         @test period_cost(nm, FixedLoad, 2; nw = 1) == 0.0
     end
 
-    @testset "a cycle limit is written once per period" begin
-        # a limit of 0.2 cycles on a capacity of 0.5 is 0.1 pu·h of discharge
+    @testset "a price per cycle counts the length of a step once" begin
+        # a step of a quarter of an hour moves a quarter of the energy, whether the objective
+        # weighs the index by its duration or not, and each side by what it puts into the store
+        # or draws from it
+        for weight in (nothing, 0.25)
+            prop = weight === nothing ? Dict{Symbol,Any}(:duration => 0.25) :
+                                        Dict{Symbol,Any}(:duration => 0.25, :weight => weight)
+            dim  = Dimension(:time => [copy(prop) for _ in 1:2])
+            lossy = Storage(; id = 3, node = 2, e_max = 0.5, p_chg_max = 0.2, p_dch_max = 0.2,
+                            η_chg = 0.9, η_dch = 0.8, c_cycl = 20.0)
+            nm = instantiate_model(price_network([10.0, 100.0]; dim, extra = Dict{Int,AbstractUnit}(3 => lossy)),
+                                   OptimalPowerFlowProblem, LPFFormulation)
+
+            paid(key) = network_weight(nm, 2) *
+                        JuMP.coefficient(network_cost(nm, 2), _NMB.var(nm, key, 3; nw = 2))
+            @test paid(:p_chg) ≈ 20.0 * 0.25 * 0.9 / (2 * 0.5)
+            @test paid(:p_dch) ≈ 20.0 * 0.25 / (0.8 * 2 * 0.5)
+        end
+    end
+
+    @testset "a cycle limit holds over any 24 hours, with a row per network index" begin
+        # a limit of 0.2 cycles on a capacity of 0.5 is 0.1 pu·h counted over 24 hours, and a lossless
+        # unit that charges and discharges the same amount counts that amount once
         limited = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
                           p_chg_max = 0.2, p_dch_max = 0.2,
                           k_cycl_max = 0.2)
@@ -526,38 +552,81 @@ const PRICES = [10.0, 100.0, 50.0]
                                         LPFFormulation, OPTIMIZER))
         @test sum(storage_path(free, 1:2)[2]) ≈ 0.2 atol = 1e-6
 
-        # an infinite limit is the absence of a row, not a row with an infinite
-        # right hand side
+        # an infinite limit is the absence of a row, not a row with an infinite right hand
+        # side, and a finite one has a row at every network index
         loose = instantiate_model(arbitrage_network(plain), OptimalPowerFlowProblem,
                                   LPFFormulation)
-        @test !haskey(_NMB.registered_constraints(loose), (1, :cstr_stor_cycle, 3))
+        @test !any(k -> k[2] === :cstr_stor_cycle, keys(_NMB.registered_constraints(loose)))
         tight = instantiate_model(arbitrage_network(limited), OptimalPowerFlowProblem,
                                   LPFFormulation)
         @test haskey(_NMB.registered_constraints(tight), (1, :cstr_stor_cycle, 3))
+        @test haskey(_NMB.registered_constraints(tight), (2, :cstr_stor_cycle, 3))
+
+        # a row reads the steps up to its own that fit in 24 hours: eight steps of six hours
+        dim  = Dimension(:time => [Dict{Symbol,Any}(:duration => 6.0) for _ in 1:8])
+        nm   = instantiate_model(price_network(fill(10.0, 8); dim,
+                                               extra = Dict{Int,AbstractUnit}(3 => limited)),
+                                 OptimalPowerFlowProblem, LPFFormulation)
+        terms(n) = length(last(_NMB.registered_constraints(nm)[(n, :cstr_stor_cycle, 3)]).func.terms)
+        @test [terms(n) for n in 1:8] == [2, 4, 6, 8, 8, 8, 8, 8]
     end
 
-    @testset "the periods are what a cycle limit is per" begin
-        # four steps, cheap-dear in each half, grouped into two days: the battery
-        # gets its 0.1 pu·h of discharge in each of them rather than once
-        limited = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
-                          p_chg_max = 0.2, p_dch_max = 0.2,
-                          k_cycl_max = 0.2)
-        data = price_network([10.0, 100.0, 10.0, 100.0];
-                             extra = Dict{Int,AbstractUnit}(3 => limited))
-        dim_meta(dimension(data), :time)[:period_length] = 2
+    @testset "the 24 hours are not the periods" begin
+        # four steps of twelve hours, dear-cheap-dear-cheap: the unit charges in the second and
+        # sells in the third, which are 24 hours but not a day. It may count 0.4 pu·h in them, which is
+        # 6 p_chg + 6 p_dch, whereas a limit per block of two steps would not have seen them together
+        dim     = Dimension(:time => [Dict{Symbol,Any}(:duration => 12.0) for _ in 1:4])
+        battery(; kw...) = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
+                                   p_chg_max = 0.05, p_dch_max = 0.05, kw...)
+        solved(st; days = nothing) = begin
+            data = price_network([100.0, 10.0, 100.0, 10.0]; dim = deepcopy(dim),
+                                 extra = Dict{Int,AbstractUnit}(3 => st))
+            days === nothing || (dim_meta(dimension(data), :time)[:period_length] = days)
+            quiet(() -> solve_model(data, OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
+        end
+        # what it holds at the most, which charging and discharging at once, free at no loss, cannot move
+        energy(result) = maximum(storage_path(result, 1:4)[3])
 
-        result = quiet(() -> solve_model(data, OptimalPowerFlowProblem, LPFFormulation,
-                                         OPTIMIZER))
-        psd = storage_path(result, 1:4)[2]
-        @test sum(psd[1:2]) ≈ 0.1 atol = 1e-6
-        @test sum(psd[3:4]) ≈ 0.1 atol = 1e-6
+        @test energy(solved(battery())) ≈ 0.5 atol = 1e-6
+        @test energy(solved(battery(k_cycl_max = 0.8))) ≈ 0.4 atol = 1e-6
 
-        # ungrouped, the same data is one period and the halves share one limit
-        loose = quiet(() -> solve_model(
-            price_network([10.0, 100.0, 10.0, 100.0];
-                          extra = Dict{Int,AbstractUnit}(3 => limited)),
-            OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
-        @test sum(storage_path(loose, 1:4)[2]) ≈ 0.1 atol = 1e-6
+        # and grouping the steps into days changes nothing: it is a window of hours, not a calendar
+        @test energy(solved(battery(k_cycl_max = 0.8); days = 2)) ≈ 0.4 atol = 1e-6
+    end
+
+    @testset "a cycle counts the energy into the store and the energy out of it" begin
+        # 0.9 of what is charged is stored and 0.9 of what is stored is delivered, so a charge of c
+        # is a delivery of 0.81 c, and the count of the pair is (0.9 c + 0.81 c / 0.9) / 2 = 0.9 c
+        lossy = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
+                        p_chg_max = 0.2, p_dch_max = 0.2, η_chg = 0.9, η_dch = 0.9,
+                        k_cycl_max = 0.2)
+        result = quiet(() -> solve_model(arbitrage_network(lossy), OptimalPowerFlowProblem,
+                                         LPFFormulation, OPTIMIZER))
+        chg, dch, _ = storage_path(result, 1:2)
+        @test sum(chg) ≈ 0.1 / 0.9 atol = 1e-6
+        @test sum(dch) ≈ 0.81 * 0.1 / 0.9 atol = 1e-6
+    end
+
+    @testset "the cycles a unit has already turned count against its limit" begin
+        # a unit that starts full sells at 100 in the one step, as much as 0.1 pu·h of count lets it:
+        # 0.2 of discharge, which counts half of it
+        battery(; kw...) = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.5,
+                                   p_chg_max = 0.4, p_dch_max = 0.4, k_cycl_max = 0.2, kw...)
+        sold(st) = only(storage_path(quiet(() -> solve_model(
+            price_network([100.0]; extra = Dict{Int,AbstractUnit}(3 => st)),
+            OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER)), 1:1)[2])
+
+        @test sold(battery()) ≈ 0.2 atol = 1e-6
+
+        # 0.06 turned in the hour before leaves 0.04, which is 0.08 of discharge
+        @test sold(battery(e_cycl_init = [(1.0, 0.06)])) ≈ 0.08 atol = 1e-6
+
+        # and what is turned more than 24 hours ago does not count, with the step in the 24 hours
+        @test sold(battery(e_cycl_init = [(23.0, 0.06)])) ≈ 0.08 atol = 1e-6
+        @test sold(battery(e_cycl_init = [(23.5, 0.06)])) ≈ 0.2 atol = 1e-6
+        @test sold(battery(e_cycl_init = [(30.0, 0.06)])) ≈ 0.2 atol = 1e-6
+        @test sold(battery(e_cycl_init = [(22.0, 0.06), (1.0, 0.03)])) ≈ 0.02 atol = 1e-6
+        @test sold(battery(e_cycl_init = [(23.0, 0.06), (1.0, 0.03)])) ≈ 0.14 atol = 1e-6
     end
 
     @testset "a storage unit says when the relaxation may let it charge and discharge at once" begin
@@ -757,7 +826,8 @@ const PRICES = [10.0, 100.0, 50.0]
         capped = network(dim4, [10.0, 100.0, 10.0, 100.0]; k_cycl_max = 0.2,
                          status = nw_vector(dim4, [false, true, true, true]))
         nm = instantiate_model(capped, OptimalPowerFlowProblem, LPFFormulation)
-        @test haskey(_NMB.registered_constraints(nm), (1, :cstr_stor_cycle, 3))
+        @test !haskey(_NMB.registered_constraints(nm), (1, :cstr_stor_cycle, 3))
+        @test haskey(_NMB.registered_constraints(nm), (2, :cstr_stor_cycle, 3))
         limited = solved(capped)
         @test sum(nw_solution(limited, n)["unit"]["3"]["p_dch"] for n in 2:4) <= 0.2 * 0.5 + 1e-6
 

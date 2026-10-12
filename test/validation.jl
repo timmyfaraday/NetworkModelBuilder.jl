@@ -16,6 +16,8 @@
 # v0.15.3 - exact keeps charging and discharging at once out                   #
 # v0.15.4 - a branch's and a transformer's s_max is positive                   #
 # v0.15.4 - the end of a storage unit's horizon is a list of conditions        #
+# v0.15.6 - a switch's and a dc link's s_max is positive                       #
+# v0.15.6 - a roll carries the cycles used and the energy of a period          #
 ################################################################################
 
 # An impossible value used to travel on to the solver, which answered
@@ -92,6 +94,8 @@ end
         @test_throws ArgumentError Generator(; id = 1, node = 1, c = [NaN])
         @test_throws ArgumentError Generator(; id = 1, node = 1, c = [0.0, Inf])
         @test_throws ArgumentError Generator(; id = 1, node = 1, e_per_max = -1.0)
+        @test_throws ArgumentError Generator(; id = 1, node = 1, e_per_init = -1.0)
+        @test_throws ArgumentError Generator(; id = 1, node = 1, e_per_init = NaN)
 
         # a profile is refused at the one network index that breaks it
         dim = Dimension(:time => 3)
@@ -106,6 +110,7 @@ end
 
         # an unbounded limit, a pinned one and the default price are not refused
         @test Generator(; id = 1, node = 1).p_max == Inf
+        @test Generator(; id = 1, node = 1).e_per_init == 0.0
         @test Generator(; id = 1, node = 1).q_min == -Inf
         @test Generator(; id = 1, node = 1, p_min = 0.4, p_max = 0.4).p_min == 0.4
         @test isnan(Generator(; id = 1, node = 1).c_up)
@@ -151,6 +156,9 @@ end
         @test_throws ArgumentError Storage(; id = 1, node = 1, c_chg = NaN)
         @test_throws ArgumentError Storage(; id = 1, node = 1, c_dch = Inf)
         @test_throws ArgumentError Storage(; id = 1, node = 1, c_cycl = Inf)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, e_cycl_init = [(1.0, -0.1)])
+        @test_throws ArgumentError Storage(; id = 1, node = 1, e_cycl_init = [(0.0, 0.1)])
+        @test_throws ArgumentError Storage(; id = 1, node = 1, e_cycl_init = [(1.0, NaN)])
         @test_throws ArgumentError Storage(; id = 1, node = 1, c_up = NaN)
         @test_throws ArgumentError Storage(; id = 1, node = 1, c_dn = Inf)
 
@@ -186,6 +194,7 @@ end
         @test Storage(; id = 1, node = 1, e_max = 0.5, e_init = 0.6).e_init == 0.6
         @test Storage(; id = 1, node = 1, e_init = -1e-12).e_init == -1e-12    # what a solver hands the next window
         @test Storage(; id = 1, node = 1).e_min == 0.0
+        @test Storage(; id = 1, node = 1).e_cycl_init == Tuple{Float64,Float64}[]
         @test Storage(; id = 1, node = 1).s_max == Inf          # no converter limit unless given
         @test Storage(; id = 1, node = 1, s_max = 0.2).s_max == 0.2
 
@@ -485,6 +494,35 @@ end
         err = refusal(() -> tf(s_max = 0.0))
         @test err isa ArgumentError
         @test occursin("transformer 5", err.msg) && occursin("status", err.msg)
+    end
+
+    @testset "a switch's and a dc link's rating" begin
+        sw(; kwargs...) = Switch(; id = 6, terminals = [1, 2], kwargs...)
+        dl(; kwargs...) = DCLink(; id = 7, terminals = [1, 2], kwargs...)
+
+        @test sw().s_max == Inf && dl().s_max == Inf
+        @test sw(s_max = 0.5).s_max == 0.5 && dl(s_max = 0.5).s_max == 0.5
+
+        @test_throws ArgumentError sw(s_max = 0.0)
+        @test_throws ArgumentError sw(s_max = -0.5)
+        @test_throws ArgumentError sw(s_max = NaN)
+        @test_throws ArgumentError dl(s_max = 0.0)
+        @test_throws ArgumentError dl(s_max = -0.5)
+        @test_throws ArgumentError dl(s_max = NaN)
+
+        # a profile is refused at the one network index that breaks it
+        dim = Dimension(:time => 3)
+        @test_throws ArgumentError sw(s_max = nw_vector(dim, [0.5, 0.0, 0.5]))
+        @test_throws ArgumentError dl(s_max = nw_vector(dim, [0.5, 0.0, 0.5]))
+        @test_throws ArgumentError dl(s_max = nw_vector(dim, [0.5, -0.5, 0.5]))
+
+        # an asset that cannot carry is out of service, and `status` says so
+        err = refusal(() -> sw(s_max = 0.0))
+        @test err isa ArgumentError
+        @test occursin("switch 6", err.msg) && occursin("status", err.msg)
+        err = refusal(() -> dl(s_max = 0.0))
+        @test err isa ArgumentError
+        @test occursin("dc link 7", err.msg) && occursin("status", err.msg)
     end
 
 end

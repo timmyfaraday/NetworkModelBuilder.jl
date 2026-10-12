@@ -38,7 +38,7 @@ Two things follow, and both are why such a link gets built in the first place:
 |:-------|:------|:------------|:-----|
 | | `id`, `name` | identifier and label | |
 | ``(i, j)`` | `terminals` | the from and to node, flow positive from ``i`` to ``j`` | |
-| ``s^{\text{max}}_{e}`` | `s_max` | transfer rating | pu |
+| ``s^{\text{max}}_{e}`` | `s_max` | transfer rating, positive, `Inf` when unlimited | pu |
 | ``\ell^{0}_{e}`` | `p_loss_fix` | no-load loss of the stations | pu |
 | ``\ell^{1}_{e}`` | `p_loss_prop` | loss per unit transferred, below one | |
 | | `reverse` | whether it may carry from ``j`` to ``i`` | |

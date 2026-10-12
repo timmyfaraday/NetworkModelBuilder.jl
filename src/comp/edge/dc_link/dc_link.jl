@@ -14,6 +14,7 @@
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.15.0 - constraint keys and ids follow the nomenclature                    #
 # v0.15.0 - functions that write rows, duals and letters follow the map        #
+# v0.15.6 - a switch's and a dc link's s_max is positive                       #
 ################################################################################
 
 export AbstractDCLink, DCLink, transfer_loss, transfer_limits
@@ -60,11 +61,12 @@ back, at a flow the problem chooses.
 - `id`, `name`: the identifier and a human readable label.
 - `terminals`: `[i, j]`, the from and to node. The flow is positive from `i` to
   `j`.
-- `s_max`: the transfer rating [pu], `Inf` when unlimited. Unlike the rating of
+- `s_max`: the transfer rating [pu], positive, `Inf` when unlimited. Unlike the rating of
   a branch this is an equipment limit rather than a congestion limit — a
   converter cannot transfer more than it is built for — so it is enforced
   whatever the problem watches, and it is not something an
-  [`OverloadPrice`](@ref) can relax.
+  [`OverloadPrice`](@ref) can relax. A link that cannot carry is out of service, which
+  `status` says.
 - `p_loss_fix`, `p_loss_prop`: the loss the link takes as `p_loss_fix +
   p_loss_prop · t`, with `t` the power **sent** into it [pu], from whichever end
   is sending. `p_loss_fix` is the no-load loss of the stations, which an
@@ -118,8 +120,8 @@ Base.@kwdef struct DCLink <: AbstractDCLink
                     p_set, c, status, ext)
         length(terminals) == 2 ||
             throw(ArgumentError("dc link $id has $(length(terminals)) terminals, a dc link has exactly two"))
-        all_nw(>=(0), s_max) ||
-            throw(ArgumentError("dc link $id has a negative rating"))
+        all_nw(>(0), s_max) ||
+            throw(ArgumentError("dc link $id has a rating `s_max` that is not positive; a dc link that cannot carry is out of service, which `status` says"))
         all_nw(>=(0), p_loss_fix) ||
             throw(ArgumentError("dc link $id has a negative fixed loss"))
         all_nw(x -> 0 <= x < 1, p_loss_prop) ||

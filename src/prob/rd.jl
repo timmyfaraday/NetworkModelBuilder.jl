@@ -19,6 +19,8 @@
 # v0.15.0 - functions that write rows, duals and letters follow the map        #
 # v0.15.1 - a roll checks the schedule of its storage over the whole           #
 # v0.15.3 - exact keeps charging and discharging at once out                   #
+# v0.15.6 - a preventive unit lost in a contingency is refused                 #
+# v0.15.6 - the roll hands on the cycles and the energy of a period            #
 ################################################################################
 
 ################################################################################
@@ -114,8 +116,13 @@ contingency because it is only ever applied in the state it was chosen for. See
 
 A no-op in a problem without a `:contingency` dimension, or with one that has a
 single coordinate: there is then only one state, and nothing to be preventive
-about. A measure at a network index where the component is out of service is
-skipped, so a generator that is itself the contingency constrains nothing.
+about. A measure of an edge at a network index where the edge is out of service
+is skipped, there being no winding to hold.
+
+A **unit** that is preventive, in service in the base case and out of service in
+another state is refused: the setting it takes in the base case is one it cannot
+take there, so the problem would ask of it what it cannot do. A corrective unit
+may be lost; say so with an `exception`, see [`Redispatch`](@ref).
 
 A measure that belongs to one terminal of an edge, such as the ratio of one
 winding of a transformer, is registered under an [`Arc`](@ref) rather than under
@@ -136,6 +143,7 @@ function fnct_rd_control(nm::NetworkModel)
         for (family, types) in ((:edge, edge_types()), (:unit, unit_types())), T in types
             controls = redispatch_controls(nm, T)
             isempty(controls) && continue
+            family === :unit && _refuse_lost_preventive(nm, T, n, base)
 
             for id in ids(nm, T; nw = n)
                 is_held(nm, family, id; nw = n) || continue
@@ -149,6 +157,29 @@ function fnct_rd_control(nm::NetworkModel)
                 end
             end
         end
+    end
+
+    return nothing
+end
+
+"""
+    _refuse_lost_preventive(nm, T, n, base)
+
+Refuse a unit of type `T` that is preventive, in service at the network index `base` and
+out of service at `n`, which is the same time step in another state of the world.
+"""
+function _refuse_lost_preventive(nm::NetworkModel, ::Type{T}, n::Int, base::Int) where {T}
+    here = ids(nm, T; nw = n)
+
+    for id in ids(nm, T; nw = base)
+        id in here && continue
+        is_preventive(nm, :unit, id) || continue
+
+        throw(ArgumentError(
+            "unit $id is preventive and in service in the base case, but out of service at network " *
+            "index $n, coordinate $(coordinates(nm, n).contingency) of `:contingency`; a preventive measure takes one " *
+            "setting that serves every contingency, which a unit that is lost cannot take there; pose it " *
+            "corrective with `Redispatch(; exception = Dict((:unit, $id) => :corrective))`"))
     end
 
     return nothing
@@ -496,8 +527,9 @@ one problem over the whole of it, and return a single solution covering every
 time step.
 
 Each window looks `horizon` steps ahead, **commits** the first `step` of them,
-and hands whatever its components carry — the state of charge of a
-[`Storage`](@ref) unit, and nothing else in this package, see
+and hands whatever its components carry — the state of charge and the cycles
+counted of a [`Storage`](@ref) unit, the energy a [`Generator`](@ref) has produced
+of the period a window cut, and nothing else in this package, see
 [`initial_state`](@ref) — to the next window, which starts `step` steps later.
 The windows at the end of the problem see less than `horizon` ahead, because
 there is less future left for them to see. With

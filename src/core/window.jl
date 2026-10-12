@@ -14,6 +14,7 @@
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.15.0 - functions that write rows, duals and letters follow the map        #
 # v0.15.4 - terminal, the end of the horizon as a list of conditions           #
+# v0.15.6 - a roll carries the cycles used and the energy of a period          #
 ################################################################################
 
 ################################################################################
@@ -201,8 +202,10 @@ windows read from the solved model `nm` at network index `n`.
 
 Returned unchanged unless the type says otherwise, which is what makes this the
 one thing a rolling horizon needs from a component. A [`Storage`](@ref) unit
-carries its state of charge and has a method; nothing else in the package
-carries anything, and neither does an extension type until it is given one.
+carries its state of charge and the cycles it has counted in the last 24 hours, a
+[`Generator`](@ref) with an energy limit what it has produced of the period it is in;
+nothing else in the package carries anything, and neither does an extension type until
+it is given one.
 
 The distinction it draws is between a *decision*, which each window makes afresh
 over its own horizon, and a *state*, which the previous window has already fixed

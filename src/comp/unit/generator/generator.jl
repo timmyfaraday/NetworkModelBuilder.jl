@@ -17,6 +17,7 @@
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.15.0 - constraint keys and ids follow the nomenclature                    #
 # v0.15.0 - functions that write rows, duals and letters follow the map        #
+# v0.15.6 - a roll carries the energy of the period a window cut               #
 ################################################################################
 
 export AbstractGenerator, Generator
@@ -55,6 +56,9 @@ A unit `(u, i)` that injects active and reactive power into its node.
 - `e_per_max`: the most energy the generator may produce in one
   period [pu·h], see [`period_ids`](@ref). `Inf`, the default, leaves it bounded
   only by `p_max` at each step.
+- `e_per_init`: the energy already produced [pu·h] in the period the first step belongs to, `0` by
+  default. A rolling horizon fills it from the window before, which cut that period, see
+  [`initial_state`](@ref); a problem that starts part way through a period gives it.
 - `c`: the coefficients of the generation cost polynomial in **ascending**
   order and in per unit, so that the cost is
   `sum(cost[k] * pg^(k-1) for k in eachindex(cost))` [currency/h].
@@ -65,16 +69,16 @@ A unit `(u, i)` that injects active and reactive power into its node.
 - `status`: whether the generator is in service.
 - `ext`: free-form storage.
 
-Every field but `id`, `name`, `node`, `e_per_max` and `ext` may be
+Every field but `id`, `name`, `node`, `e_per_max`, `e_per_init` and `ext` may be
 given as a [`NetworkVector`](@ref). The energy limit is one number per period
-rather than one per network index, so it is not among them. Note that a network dependent `c` is a
+rather than one per network index, so it is not among them, and neither is what has been produced of it. Note that a network dependent `c` is a
 `NetworkVector{Vector{Float64}}`: the plain `Vector{Float64}` is the polynomial,
 not a profile.
 
 A generator with `p_min` above `p_max` or `q_min` above `q_max`, a limit that is NaN,
 a setpoint or a cost coefficient that is not finite, or a negative energy limit
-is refused: no model can use it. A limit of `-Inf` or `Inf` is how a bound is left
-out, and `c_up` and `c_dn` may be NaN.
+is refused, as is an energy already produced that is negative or not finite: no model can
+use it. A limit of `-Inf` or `Inf` is how a bound is left out, and `c_up` and `c_dn` may be NaN.
 """
 Base.@kwdef struct Generator <: AbstractGenerator
     id        ::Int
@@ -88,6 +92,7 @@ Base.@kwdef struct Generator <: AbstractGenerator
     q_max     ::NetworkQuantity{Float64}         = Inf
     v_magn_set::NetworkQuantity{Float64}         = 1.0
     e_per_max ::Float64                          = Inf
+    e_per_init::Float64                          = 0.0
     c         ::NetworkQuantity{Vector{Float64}} = [0.0]
     c_up      ::NetworkQuantity{Float64}         = NaN
     c_dn      ::NetworkQuantity{Float64}         = NaN
@@ -95,16 +100,20 @@ Base.@kwdef struct Generator <: AbstractGenerator
     ext       ::Dict{Symbol,Any}                 = Dict{Symbol,Any}()
 
     function Generator(id, name, node, p_set, q_set, p_min, p_max, q_min, q_max, v_magn_set,
-                       e_per_max, c, c_up, c_dn, status, ext)
-        _check_generator(id, p_set, q_set, p_min, p_max, q_min, q_max, v_magn_set, e_per_max, c)
+                       e_per_max, e_per_init, c, c_up, c_dn, status, ext)
+        _check_generator(id, p_set, q_set, p_min, p_max, q_min, q_max, v_magn_set, e_per_max,
+                         e_per_init, c)
         return new(id, name, node, p_set, q_set, p_min, p_max, q_min, q_max, v_magn_set,
-                   e_per_max, c, c_up, c_dn, status, ext)
+                   e_per_max, e_per_init, c, c_up, c_dn, status, ext)
     end
 end
 
-function _check_generator(id, p_set, q_set, p_min, p_max, q_min, q_max, v_magn_set, e_per_max, c)
+function _check_generator(id, p_set, q_set, p_min, p_max, q_min, q_max, v_magn_set, e_per_max,
+                          e_per_init, c)
     e_per_max >= 0 ||
         throw(ArgumentError("generator $id has a negative energy limit"))
+    isfinite(e_per_init) && e_per_init >= 0 ||
+        throw(ArgumentError("generator $id has an energy already produced that is negative or not finite"))
     all_nw(isfinite, p_set) && all_nw(isfinite, q_set) && all_nw(isfinite, v_magn_set) ||
         throw(ArgumentError("generator $id has a setpoint that is not finite"))
     all(x -> all_nw(!isnan, x), (p_min, p_max, q_min, q_max)) ||
@@ -285,6 +294,9 @@ other twenty has the same `p_max` as one that may run all day.
 The sum is over the net output, so a generator with a negative `p_min` has what it
 absorbs counted against what it produced. A limit of infinity — the default — is
 the absence of a row rather than a row with an infinite right hand side.
+
+The first period of a problem is held to what is left of the limit after `e_per_init`, which is what
+a rolling horizon hands to a window that cuts a period, see [`initial_state`](@ref).
 """
 function fnct_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
                                  ) where {P<:AbstractDispatchProblem,F<:AbstractFormulationType,
@@ -301,14 +313,80 @@ function fnct_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
             g = unit(nm, u; nw = n)::T
             isfinite(g.e_per_max) || continue
 
+            left = is_first_id(nm, n, :time) ? g.e_per_max - g.e_per_init : g.e_per_max
             constrain!(nm, :cstr_gen_energy, u, JuMP.@build_constraint(
                 sum(time_step(nm, m) * var(nm, :p_gen, u; nw = m)
                     for m in window if haskey(var(nm, :p_gen; nw = m), u); init = 0.0) <=
-                g.e_per_max); nw = n)
+                max(left, 0.0)); nw = n)
         end
     end
 
     return nothing
+end
+
+################################################################################
+# Generator — across windows                                                   #
+################################################################################
+
+"""
+    _with(g; kwargs...)
+
+The generator `g` with the fields in `kwargs` replaced and every other field copied by name.
+"""
+function _with(g::Generator; kwargs...)
+    names  = fieldnames(Generator)
+    fields = NamedTuple{names}(Tuple(getfield(g, f) for f in names))
+
+    return Generator(; merge(fields, NamedTuple(kwargs))...)
+end
+
+"""
+    initial_state(g, nm, n)
+
+The generator `g` starting from the energy it has produced in the period of network index `n` of the
+solved model `nm`, up to `n`.
+
+A window that is cut in the middle of a period would otherwise hand the next one the whole of the limit
+again, and a generator allowed `e_per_max` over a day would be allowed it again at every cut. What
+carries over is the energy of the steps of that period in `nm` up to `n`, with what `nm` itself started
+the period with: whether the next window continues the period is for the window to say, see
+[`window`](@ref), which starts a period of its own with nothing produced. A generator with no
+limit, and a model that is not a dispatch problem, carry nothing.
+"""
+function initial_state(g::Generator, nm::NetworkModel, n::Int)
+    isfinite(g.e_per_max) && nm isa NetworkModel{<:AbstractDispatchProblem} || return g
+
+    here  = period_id(nm, n, :time)
+    first = similar_id(nm, n; time = 1)
+    made  = 0.0
+    for k in 1:coordinates(nm, n).time
+        m = similar_id(nm, n; time = k)
+        period_id(nm, m, :time) == here || continue
+        p = get(var(nm; nw = m), :p_gen, nothing)
+        p === nothing && continue
+        haskey(p, g.id) && (made += time_step(nm, m) * JuMP.value(p[g.id]))
+    end
+    before = period_id(nm, first, :time) == here ? unit(nm, g.id; nw = first).e_per_init : 0.0
+
+    return _with(g; e_per_init = before + made)
+end
+
+"""
+    _slice(g, dim, indices)
+
+The generator `g` over the network indices `indices` of `dim`, for [`window`](@ref): a window that starts
+at the first step of a period of its own starts it with nothing produced, and one that starts part way
+through a period keeps what was produced of it.
+"""
+function _slice(g::Generator, dim::Dimension, indices::Vector{Int})
+    sliced = invoke(_slice, Tuple{AbstractComponent,Dimension,Vector{Int}}, g, dim, indices)
+    iszero(g.e_per_init) && return sliced
+    has_dim(dim, :time) || return sliced
+
+    n = first(indices)
+    (coordinates(dim, n).time > 1 && is_first_period_id(dim, n, :time)) || return sliced
+
+    return _with(sliced; e_per_init = 0.0)
 end
 
 ################################################################################

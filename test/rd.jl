@@ -25,6 +25,8 @@
 # v0.15.3 - exact keeps charging and discharging at once out                   #
 # v0.15.4 - the end of a storage unit's horizon is a list of conditions        #
 # v0.15.5 - an outage of a storage unit is its status                          #
+# v0.15.6 - a preventive unit lost in a contingency is refused                 #
+# v0.15.6 - a roll carries the cycles used and the energy of a period          #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The
@@ -317,6 +319,66 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["p_gen_
         end
     end
 
+    @testset "a preventive unit that is lost in a contingency is refused" begin
+        dim     = Dimension(:time => 2, :contingency => 2)
+        battery = Storage(; id = 4, node = 2, e_max = 0.5, e_init = 0.25, p_chg_max = 0.5, p_dch_max = 0.5,
+                          status = nw_vector(dim, (n, c) -> c.contingency == 1))
+        stored  = radial_network(; dim, extra = Dict{Int,AbstractUnit}(4 => battery))
+
+        # preventive is the default, and a unit that is out of service where it cannot take the setting
+        # is not a unit that constrains nothing
+        err = try
+            instantiate_model(stored, RedispatchProblem, LPFFormulation)
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("unit 4", err.msg) && occursin("preventive", err.msg)
+        @test occursin("`:contingency`", err.msg) && occursin("corrective", err.msg)
+        @test_throws ArgumentError quiet(() -> solve_rd(stored, LPFFormulation, OPTIMIZER))
+
+        # a generator is a measure too
+        gen   = radial_network(; dim, extra = Dict{Int,AbstractUnit}(2 => Generator(;
+                    id = 2, node = 2, p_max = 5.0, q_min = -5.0, q_max = 5.0, p_set = 0.0,
+                    c = [0.0, 100.0], status = nw_vector(dim, (n, c) -> c.contingency == 1))))
+        err = try
+            instantiate_model(gen, RedispatchProblem, LPFFormulation)
+        catch e
+            e
+        end
+        @test err isa ArgumentError && occursin("unit 2", err.msg)
+
+        # the way out is to say that it is corrective, for it or for everything
+        for setup in (Redispatch(; exception = Dict((:unit, 4) => :corrective)),
+                      Redispatch(; control = :corrective))
+            @test instantiate_model(stored, RedispatchProblem, LPFFormulation;
+                                    ext = Dict{Symbol,Any}(:redispatch => setup)) isa NetworkModel
+        end
+
+        # a unit that is out of service in the base case as well was never preventive there, and a
+        # problem with no state of the world to be preventive about asks nothing
+        away = Storage(; id = 4, node = 2, e_max = 0.5, e_init = 0.25, p_chg_max = 0.5, p_dch_max = 0.5,
+                       status = false)
+        @test instantiate_model(radial_network(; dim, extra = Dict{Int,AbstractUnit}(4 => away)),
+                                RedispatchProblem, LPFFormulation) isa NetworkModel
+        @test instantiate_model(stored, OptimalPowerFlowProblem, LPFFormulation) isa NetworkModel
+    end
+
+    @testset "a preventive unit counts its cycles once, a corrective one in every contingency" begin
+        dim     = Dimension(:time => 2, :contingency => 2)
+        battery = Storage(; id = 4, node = 2, e_max = 0.5, e_init = 0.25, p_chg_max = 0.5, p_dch_max = 0.5,
+                          k_cycl_max = 0.4)
+        data    = radial_network(; dim, extra = Dict{Int,AbstractUnit}(4 => battery))
+        rows(setup) = count(k -> k[2] === :cstr_stor_cycle,
+                            keys(_NMB.registered_constraints(instantiate_model(
+                                data, RedispatchProblem, LPFFormulation;
+                                ext = Dict{Symbol,Any}(:redispatch => setup)))))
+
+        # the rows of a held unit are the base case's, a row per step; a corrective unit has them in each state
+        @test rows(Redispatch()) == 2
+        @test rows(Redispatch(; control = :corrective)) == 4
+    end
+
     @testset "a redispatch can ask a unit to leave the energy its schedule leaves" begin
         dim = Dimension(:time => 2)
         battery(; kw...) = Storage(; id = 4, node = 2, e_max = 0.5, e_init = 0.25,
@@ -369,6 +431,10 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["p_gen_
 
         # nothing is charged in this run, so a price on the way in changes nothing
         @test solved(battery(c_chg = 10.0))["objective"] ≈ 85.0 atol = 1e-4
+
+        # a price per cycle is paid on the same count, half of what goes in and what comes out over the
+        # capacity: 0.25 out of the store is 0.125 over 0.5, a quarter of a cycle
+        @test solved(battery(c_cycl = 20.0))["objective"] ≈ 85.0 + 20.0 * 0.25 atol = 1e-4
 
         # each price is on its own volume, whatever the reason the energy moved
         nm = instantiate_model(network(battery(c_chg = 3.0, c_dch = 7.0)),
@@ -1338,6 +1404,106 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
 
         # and the battery never gave more than it held
         @test sum(discharge(result, 1:4)) ≤ 0.4 + 1e-6
+    end
+
+    @testset "the cycles a unit has turned are carried across the windows" begin
+        # a full unit sells at 100 in the first step, as much as 0.1 pu·h of count lets it: 0.2 of
+        # discharge. A window that forgets what the last one used sells another 0.2 at 90
+        battery = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.5, p_chg_max = 0.4, p_dch_max = 0.4,
+                          k_cycl_max = 0.2)
+        data    = price_network([100.0, 10.0, 90.0, 10.0]; extra = Dict{Int,AbstractUnit}(3 => battery))
+        path(result) = [nw_solution(result, n)["unit"]["3"] for n in 1:4]
+
+        for (horizon, step) in ((4, 4), (2, 2), (4, 2), (2, 1), (3, 1))
+            result = quiet(() -> solve_rolling_horizon(data, OptimalPowerFlowProblem, LPFFormulation,
+                                                       OPTIMIZER; horizon, step))
+            units = path(result)
+            @test sum(u["p_dch"] for u in units) ≈ 0.2 atol = 1e-5
+            @test units[1]["p_dch"] ≈ 0.2 atol = 1e-5
+
+            # whatever the cut, no 24 hours count more than the limit allows
+            counted = [(u["p_chg"] + u["p_dch"]) / 2 for u in units]
+            @test all(cumsum(counted) .<= 0.1 + 1e-5)
+        end
+    end
+
+    @testset "initial_state hands on the cycles of the last 24 hours" begin
+        battery = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.5, p_chg_max = 0.4, p_dch_max = 0.4,
+                          k_cycl_max = 0.2)
+        data    = price_network([100.0, 10.0, 90.0, 10.0]; extra = Dict{Int,AbstractUnit}(3 => battery))
+        nm      = instantiate_model(window(data, :time, 1:2), OptimalPowerFlowProblem, LPFFormulation)
+        quiet(() -> optimize_model!(nm, OPTIMIZER))
+
+        # one entry per step it saw, the hours of the step and what it counted, oldest first
+        carried = initial_state(battery, nm, 2)
+        @test first.(carried.e_cycl_init) == [1.0, 1.0]
+        @test last.(carried.e_cycl_init) ≈ [0.1, 0.0] atol = 1e-5
+
+        # only the last 24 hours are kept: three steps of twelve hours hand on two of them
+        dim  = Dimension(:time => [Dict{Symbol,Any}(:duration => 12.0) for _ in 1:3])
+        slow = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.25, p_chg_max = 0.05, p_dch_max = 0.05,
+                       k_cycl_max = 0.8)
+        nm   = instantiate_model(price_network([100.0, 10.0, 100.0]; dim, extra = Dict{Int,AbstractUnit}(3 => slow)),
+                                 OptimalPowerFlowProblem, LPFFormulation)
+        quiet(() -> optimize_model!(nm, OPTIMIZER))
+        @test first.(initial_state(slow, nm, 3).e_cycl_init) == [12.0, 12.0]
+
+        # a unit that has no limit has nothing to count, and carries only what it did
+        free = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.25, p_chg_max = 0.05, p_dch_max = 0.05)
+        @test isempty(initial_state(free, nm, 3).e_cycl_init)
+
+        # what was carried into a window is carried on with what the window counted
+        again = initial_state(Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.25, p_chg_max = 0.05,
+                                      p_dch_max = 0.05, k_cycl_max = 0.8, e_cycl_init = [(24.0, 0.3)]), nm, 2)
+        @test first.(again.e_cycl_init) == [12.0, 12.0]
+    end
+
+    @testset "the energy a generator has produced in a period is carried across the windows" begin
+        roll(data, horizon, step) = quiet(() -> solve_rolling_horizon(
+            data, OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER; horizon, step))
+        produced(result) = [nw_solution(result, n)["unit"]["1"]["p_gen"] for n in 1:4]
+        whole(data) = quiet(() -> solve_model(data, OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
+
+        # 0.3 pu·h of the cheap generator a period out of a demand of 0.2 an hour, the dear one taking
+        # the rest. Two days of two steps cost 0.3 * 10 + 0.1 * 200 each
+        days = allocation_network(fill(10.0, 4), 0.3; period = 2)
+        @test whole(days)["objective"] ≈ 2 * (0.3 * 10 + 0.1 * 200) atol = 1e-4
+
+        # a window that cuts a day starts what is left of it, not the whole allowance again
+        for (horizon, step) in ((2, 2), (3, 1), (4, 1), (3, 2), (2, 1))
+            result = roll(days, horizon, step)
+            @test result["objective"] ≈ whole(days)["objective"] atol = 1e-4
+            p = produced(result)
+            @test sum(p[1:2]) ≤ 0.3 + 1e-5
+            @test sum(p[3:4]) ≤ 0.3 + 1e-5
+        end
+
+        # with no days the horizon is one period, however it is cut
+        single = allocation_network(fill(10.0, 4), 0.3)
+        @test whole(single)["objective"] ≈ 0.3 * 10 + 0.5 * 200 atol = 1e-4
+        for (horizon, step) in ((2, 2), (4, 1), (2, 1))
+            @test roll(single, horizon, step)["objective"] ≈ whole(single)["objective"] atol = 1e-4
+        end
+
+        # what a unit has produced is handed on as a state of the generator, and nothing else about it
+        nm = instantiate_model(window(days, :time, 1:3), OptimalPowerFlowProblem, LPFFormulation)
+        quiet(() -> optimize_model!(nm, OPTIMIZER))
+        g       = units(network(days))[1]::Generator
+        carried = initial_state(g, nm, 1)
+        @test 0.0 <= carried.e_per_init <= 0.2 + 1e-6
+        @test carried.e_per_max == g.e_per_max && carried.p_max == g.p_max
+        @test initial_state(g, nm, 2).e_per_init ≈ 0.3 atol = 1e-5      # the whole day, produced
+        @test initial_state(units(network(days))[2], nm, 1) === units(network(days))[2]
+
+        # a window that carries on a day keeps what was produced of it, one that starts the next day starts
+        # it with nothing, and a problem that starts part way through a day keeps what it was given
+        U = merge(units(network(days)), Dict{Int,AbstractUnit}(1 => _NMB._with(g; e_per_init = 0.3)))
+        given = NetworkData(Network(nodes(network(days)), edges(network(days)), U; dim = dimension(days));
+                            name = "given", s_base_mva = 100.0)
+        carries(coords) = units(network(window(given, :time, coords)))[1].e_per_init
+        @test carries(1:4) == 0.3
+        @test carries(2:4) == 0.3
+        @test carries(3:4) == 0.0
     end
 
     @testset "initial_state is what a component carries, and only that" begin

@@ -4,7 +4,7 @@ The rules that still constrain NMB. Read the section for the area you are touchi
 changing it.
 
 How to use this file:
-- A new decision gets the next free id (**D87**), goes in the Log at the bottom, and is written by
+- A new decision gets the next free id (**D89**), goes in the Log at the bottom, and is written by
   the `record-decision` skill. `Decided by` is a person's username, never an agent.
 - A decision that changes a rule below edits the rule in place and cites the new id. The old
   wording goes to the archive line of the id it came from.
@@ -236,6 +236,8 @@ How to use this file:
 - **`c_cycl` is charged per index on the same count, with no period, and `Generator.e_per_max` carries its calendar-period allowance across the windows of a roll through `initial_state`** (D82).
 - **The `c_up` and `c_dn` of a storage unit are each finite and sum to at least 0 at every index; `check_storage(data)` refuses a market schedule whose own energy, `e_n = e_{n-1} + Δt(η_chg max(-p_set, 0) - max(p_set, 0)/η_dch)` from `e_init`, leaves `[e_min, e_max]`; the exported `scheduled_energy(data, u)` returns that trajectory and may be the target of `Pin`, `Soft` and `Quad`** (D83, D84, D85).
 - **A corrective storage unit may carry a curative holding time `h_cur` [h], 0 by default: its net power over the contingency coordinates, the base case included, spans at most `e_max/h_cur` at every step; a preventive unit gets no row** (D86).
+- **The `Storage` constructor does not compare `e_init` or `e_fin` with the bounds; `check_storage(data)` does, at the first and the last index, within 1e-5** (D87).
+- **A rolling horizon checks the market schedule of its storage once, over the whole problem; its windows do not, `schedule = false`** (D88).
 
 ## Zorba pipeline (`scripts/`)
 
@@ -792,3 +794,13 @@ Changes: same rule as D84; no new terminal type, D72's list stands.
 Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
 Why: Lindner et al. keep a booster's curative set points over the contingencies in one band of width `e_max` over the holding time, so that one pre-positioned state serves whichever contingency occurs; a corrective unit here has a trajectory per contingency, which is more freedom (objective 6.0 against 7.0 at a range of 0.25). Tom asked for it; the name `h_cur`, and the symbol `h` and the word `cur` it needs in the vocabulary, are proposed with it and stand unless Tom objects at the plan review.
 Changes: new rule in Component model; B40.
+
+### D87 — A start and a target are checked against the bounds by `check_storage`, not by the constructor
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: a constructor runs again at every network index with that index's values, and a window starts from what a solver returned, a digit outside its bounds. The first version refused an `e_init` below zero and four rolling-horizon tests failed. D75 and D84 stand; the check of a start and a target moves.
+Changes: new rule in Component model; the `e_min <= e_init` and `e_fin` rows of plan item 1 are in `check_storage`, within 1e-5.
+
+### D88 — A roll checks the market schedule of its storage once, over the whole problem
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: from the second window a unit starts from the energy the roll left it, and a schedule written for the start of the problem was refused there (-0.1 at network index 1). A redispatch is entitled to move a unit away from its schedule and to pay for what is left of it.
+Changes: new rule in Component model; `instantiate_model` takes `schedule = true` and a window is built with `schedule = false`; D84 stands for a problem built whole.

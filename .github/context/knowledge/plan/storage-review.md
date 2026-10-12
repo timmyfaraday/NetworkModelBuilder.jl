@@ -1,6 +1,6 @@
 # Storage: a review against the literature, and the changes it asks for
 
-Status: B33 built on `b33-storage-fields` (v0.15.1, suite 3788, not merged), the rest ready to implement, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D86 (next free after: D87)
+Status: B33 built on `b33-storage-fields` (v0.15.1, suite 3788, not merged), the rest ready to implement, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D88 (next free after: D89)
 Priority: P1 · Effort: Large. Open: Q11 (what Zorba's throughput cap counts). Backlog B33-B38 and B40, B39 later.
 
 Literature: knowledge-base nodes Storage Models in OPF (14 sources that model storage, raw PDFs re-read) and Redispatch and
@@ -35,7 +35,7 @@ Measured with HiGHS; the scripts are `%LOCALAPPDATA%\Temp\nmb_storage_review\*.j
   A `status` over `:contingency` is the same `KeyError: key :p_chg not found` as over `:time`. `c_up` 10 with `c_dn` -30, no congestion: objective -20.0 (up 0.737, dn 1.0), 0 at `c_dn` 10.
   A balanced schedule discharging 0.3 for three steps from a full 0.5 (η 1, no congestion) is repaired silently, unit -0.4 and generator 1 +0.4, cost 24.0; at 0.1 it costs 0.
 
-## 1. Fields and validation (B33, D74, D75, D83, D84, v0.15.1)
+## 1. Fields and validation (B33, D74, D75, D83, D84, D87, D88, v0.15.1)
 
 - **Fix.** `_with(st; kwargs...)` replaces the two field lists of `interior_state` and `initial_state`. `_check_storage` in the constructor, as
   `_check_branch`, with `all_nw`: ratings at least 0, `0 <= e_min <= e_max`, `c_chg`, `c_dch` and `c_cycl` finite and at least 0, `c_up` and `c_dn` finite with `c_up + c_dn >= 0`,

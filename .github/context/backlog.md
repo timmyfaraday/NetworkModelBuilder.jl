@@ -75,7 +75,7 @@ older ones: git has them). Next id: **B41**.
 
 ## Done
 
-- [x] B33 · Storage fields and validation: `_check_storage`, `check_storage` before the build, `e_min`, `c_chg` and `c_dch` in place of `c_thru`, `c_up + c_dn >= 0`, a market schedule inside the energy bounds, `scheduled_energy` (D74, D75, D83, D84) · Tom · 2026-10-12
+- [x] B33 · Storage fields and validation: `_check_storage`, `check_storage` before the build, `e_min`, `c_chg` and `c_dch` in place of `c_thru`, `c_up + c_dn >= 0`, a market schedule inside the energy bounds, `scheduled_energy` (D74, D75, D83, D84, D87, D88) · Tom · 2026-10-12
   - v0.15.1 on `b33-storage-fields`, not merged; plan item 1. Red then green: 31 of the 130 tests of `validation.jl` failed on v0.15.0; suite 3788 (3686 at v0.15.0), `docs/make.jl` clean. A hard removal of `c_thru`.
   - Left to know: the constructor does not compare `e_init` or `e_fin` with the bounds (`check_storage` does, within 1e-5); a roll checks the schedule once and its windows skip it (`schedule = false`); the schedule checks read a plain `Storage` only. The Zorba pipeline excludes its storage, so none of it is read there.
 

@@ -1,6 +1,6 @@
 # STATE
 
-Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-12 by Tom Van Acker (storage review merged into main: B33 to B38 and B40, v0.15.7).
+Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-12 by Tom Van Acker (full year on main v0.15.7: 17.1 min against 23.9 min).
 
 ## Where NMB stands
 
@@ -62,6 +62,8 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-12 by Tom Va
   STEP_CB/HORIZON_BE/STEP_BE`, defaults 8/8 and 1/1). Awaiting Tom: keep 8/8 and 1/1 (recommended).
 - Run it with processes, not threads: 7 threads in one process give 224 s per 24 h chunk, 7 processes 125 s (week 1,
   B25; recipe in the header of `scripts/run_year_redispatch.jl`). NMB's own per-window work is ~85 % of a chunk.
+- Full year on v0.15.7 (`runs/_year_v0157`, 73 processes) against `_year_b6`: 17.1 min against 23.9 min (-28.5 %), chunk mean 177 s against 237 s
+  (-25.3 %; step 3 -27.7 %, step 2 -11.8 %), peak 3.5 GB (7.3), 365 of 365 sound, results identical; one run each, no same-day control. Page: `docs/src/manual/performance.md` (v0.15.8, `docs-performance-history`).
 
 ## Next
 

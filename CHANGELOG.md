@@ -8,6 +8,17 @@ Versions before 0.9.1 were never tagged in git; the version numbers and dates
 below are reconstructed from `Project.toml`'s own history, cross-referenced
 against the per-file changelog comments the source already carries.
 
+## [0.15.8] - 2026-10-12
+
+Documentation only; nothing under `src/` changed.
+
+### Added
+
+- `docs/src/manual/performance.md`, a manual page that lists, version by version from 0.12.0 to 0.15.7, what was changed to make a
+  rolling-horizon redispatch faster and what each change was measured to do: a year of the three-step pipeline took 52 minutes
+  with 0.12.0, 24 with 0.12.3 and 17.1 with 0.15.7, with identical results between the last two. It also says how the figures were
+  measured, where the time goes now, and which settings did not help.
+
 ## [0.15.7] - 2026-10-12
 
 ### Added

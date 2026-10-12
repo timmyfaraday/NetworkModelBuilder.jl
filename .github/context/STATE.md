@@ -17,7 +17,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-12 by Tom Va
   on 2026-10-07, all of `test-zorba-run`: `scripts/` (the Zorba pipeline), B9, B10, B12, B6, B8 (v0.12.4);
   on 2026-10-09 B21 (v0.12.5), the Julia guide review and B22 (v0.12.6); on 2026-10-10 B25 (v0.12.7), B23 (v0.12.8), B24 (v0.12.9);
   on 2026-10-11 B30 (v0.13.0), B31 (v0.14.0) and B32 (v0.15.0).
-- `test-zorba-run` and the branches `b21-topology-lookup` to `b32-constraint-names` are merged and kept (`b5`, `b11` merged and deleted). Next free decision id: **D90**.
+- `test-zorba-run` and the branches `b21-topology-lookup` to `b32-constraint-names` are merged and kept (`b5`, `b11` merged and deleted). Next free decision id: **D91**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
 
@@ -38,7 +38,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-12 by Tom Va
 - Julia guide review (`knowledge/plan/julia-guide-review.md`, B21-B28, Q7-Q9): B21-B25 done and tagged v0.12.5-v0.12.9 (D45-D49): topology lookup
   (chunk -10.7 %), a roll builds the committed indices (-12.3 %, peak 5.0 to 2.9 GB; Q9 stop rule at its line, B29), guard rails (7 threads 224 s
   against 7 processes 125 s a chunk), constructors refuse impossible input, typed registers (`lessons.md`, `validation.md`).
-- Storage review (`knowledge/plan/storage-review.md`, B33-B40, D71-D89, Q11): decided; B33 to B35 built on `b33-storage-fields` (v0.15.3, suite 3868, not merged). `exact` (B35, opt-in) keeps the relaxation honest (393.00 against
+- Storage review (`knowledge/plan/storage-review.md`, B33-B40, D71-D89, Q11): decided; B33 to B35 built on `b33-storage-fields` (v0.15.3, suite 3868, not merged), B36 under way (v0.15.4). `exact` (B35, opt-in) keeps the relaxation honest (393.00 against
   426.54), a roll drains a unit before a peak, and a cycle limit is not carried across windows (0.2 against 0.1 pu·h a period).
 - B30 done (v0.13.0, D50-D54, tagged): one `Branch`, shared fragments in `edge.jl`; suite 3351, chunk byte-identical (`one-branch-terminals.md`).
 - B31 done (v0.14.0, D55-D62, tagged): one nomenclature for fields, variable keys, solution keys, keywords and a node's `ext` start keys

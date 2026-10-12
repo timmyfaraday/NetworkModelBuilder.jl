@@ -4,7 +4,7 @@ The rules that still constrain NMB. Read the section for the area you are touchi
 changing it.
 
 How to use this file:
-- A new decision gets the next free id (**D90**), goes in the Log at the bottom, and is written by
+- A new decision gets the next free id (**D91**), goes in the Log at the bottom, and is written by
   the `record-decision` skill. `Decided by` is a person's username, never an agent.
 - A decision that changes a rule below edits the rule in place and cites the new id. The old
   wording goes to the archive line of the id it came from.
@@ -73,7 +73,7 @@ How to use this file:
   the defect it is meant to catch.
 - **A constructor refuses input a model cannot use, in service or not** (D48): `Node`, `Generator`,
   `FixedLoad`, `Shunt` and the branch family check ordered limits, finite setpoints and impedances,
-  `r² + x² > 0`, `s_max >= 0` and an `l_km` that is NaN (unknown) or `>= 0` (D50), with `all_nw` so that a `NetworkVector` is checked at
+  `r² + x² > 0`, `s_max > 0` (D90) and an `l_km` that is NaN (unknown) or `>= 0` (D50), with `all_nw` so that a `NetworkVector` is checked at
   every index, and raise an `ArgumentError` naming the component. `v_base_kv` may be 0, which means
   unknown. The signs of `r` and `x`, and `pg` against its limits, are not checked.
 - **The package's own state is fields, not keys of `nm.ext`, and a key is not reused** (D49):
@@ -239,6 +239,7 @@ How to use this file:
 - **The `Storage` constructor does not compare `e_init` or `e_fin` with the bounds; `check_storage(data)` does, at the first and the last index, within 1e-5** (D87).
 - **A rolling horizon checks the market schedule of its storage once, over the whole problem; its windows do not, `schedule = false`** (D88).
 - **The `s_max` of a storage unit is positive, never zero; a unit that cannot inject is out of service, which its `status` says** (D89).
+- **The `s_max` of a branch or a transformer is positive, never zero, at every terminal; an edge that cannot carry is out of service, which its `status` says** (D90). A `Switch` and a `DCLink` still accept zero.
 
 ## Zorba pipeline (`scripts/`)
 
@@ -810,3 +811,8 @@ Changes: new rule in Component model; `instantiate_model` takes `schedule = true
 Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
 Why: a rating of zero is a unit that cannot inject, which is what an outage is, and an outage is `status`. In the current based formulation it would also be a degenerate circle, `p² + q² <= 0`.
 Changes: new rule in Component model; D73 stands, its `s_max >= 0` is `> 0`; `_check_storage` refuses zero at any index; v0.15.3.
+
+### D90 — The `s_max` of a branch and of a transformer is positive
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: Tom extended D89 to the edges: a rating of zero is an edge that cannot carry, which is what an outage is, and an outage is `status`. A `Transformer` had no check on its rating at all.
+Changes: D50's `s_max >= 0` is `> 0` for a `Branch` and now holds for a `Transformer`, at every terminal and every network index; a Matpower rating of 0 is still read as unlimited; the Zorba reader names the link; `Switch` and `DCLink` are not asked and keep `>= 0`; v0.15.4.

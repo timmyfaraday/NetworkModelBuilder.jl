@@ -1,6 +1,6 @@
 # Storage: a review against the literature, and the changes it asks for
 
-Status: B33 to B37 built on `b33-storage-fields` (v0.15.5, suite 4019, not merged), the rest ready to implement, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D90 (next free after: D91)
+Status: B33 to B38 built on `b33-storage-fields` (v0.15.6, suite 4118, not merged), the rest ready to implement, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D92 (next free after: D93)
 Priority: P1 · Effort: Large. Open: Q11 (what Zorba's throughput cap counts). Backlog B33-B38 and B40, B39 later.
 
 Literature: knowledge-base nodes Storage Models in OPF (14 sources that model storage, raw PDFs re-read) and Redispatch and
@@ -107,17 +107,18 @@ Measured with HiGHS; the scripts are `%LOCALAPPDATA%\Temp\nmb_storage_review\*.j
 - **Verification.** A `status` outage over steps 2-3 reproduces the zero-rating run above: objective 28.216, e_stor 0.0205 across the gap, also
   when a roll boundary falls inside the gap.
 
-## 6. Cycles (B38, D79 to D82, v0.15.6)
+## 6. Cycles (B38, D79 to D82, D91, D92, v0.15.6, built)
 
 - **Today.** A cycle is the energy a unit delivers (`p_dch·Δt`) over `e_max`; `k_cycl_max` is one row per calendar period of `period_ids`; `c_cycl` prices
   the same quantity (`storage.jl:394`, `:422`, `:524`). The row is not carried across the windows of a roll (Evidence), and `Generator.e_per_max` has the same defect.
 - **Fix, storage.** The count covers both sides (D81): `d_n = Δt_n·(η_chg·p_chg,n + p_dch,n/η_dch)/2`, the energy into the store and the energy drawn from it, over `e_max`; a lossless full cycle counts 1. `k_cycl_max` holds over any sliding 24 h window: for every
   index `n` of a unit with a finite limit, the `d_m` of the steps in the 24 h up to the end of `n` sum to at most `k_cycl_max·e_max` (read at `n`), per contingency.
-  Either 24 h/`Δt` terms a row or a running sum with two terms a row: pick by a timing on a year of 15-minute steps. A roll hands on the trailing 24 h of `d`
-  through `initial_state`, a vector in step order (zeros at the start of a problem), which the rows of the first indices of a window read as constants.
+  Built as 24 h/`Δt` terms a row: 35040 quarter-hour rows add no measurable build time (110.8 s against 114.8 s without, B42) and 5000 steps solve in 2.3 s against 1.5-2.9 s. A roll hands on the trailing 24 h
+  through `initial_state` as `e_cycl_init`, `(hours, d)` per step (a vector of `d` alone loses the step lengths), which the rows of the first indices of a window read as constants.
 - **Decided (D82).** `c_cycl` is linear in the same count and needs no period, so it is charged per index and `storage_cycles` and the storage `period_cost`
   go (the horizon-term test of `test/hierarchy.jl` changes). `Generator.e_per_max` keeps its calendar period and carries the energy used in the period of the
-  first index of the next window through `initial_state`; the sliding window is for storage only.
+  last committed step through `initial_state` as `e_per_init`; `_slice` starts a window that begins a period of its own with nothing, since a window that ends on the commit boundary
+  cannot see the next step. The sliding window is for storage only.
 - **Control mode.** A held (preventive) unit writes the sliding rows at the base case only, as `fnct_rd_control` says of every row that only restricts a held measure
   (3 rows for 1 needed today, Evidence); a corrective unit writes them at every contingency. The carried vector is the base case's: `_carry_state!` reads the base case at the
   last committed step, corrective units included, since a contingency has not happened.
@@ -125,6 +126,8 @@ Measured with HiGHS; the scripts are `%LOCALAPPDATA%\Temp\nmb_storage_review\*.j
 - **Verification.** Eight steps of 6 h, prices alternating, `k_cycl_max` 0.2, `e_max` 0.5, η 1 (0.1 pu·h counted per 24 h): the largest count over any four
   consecutive steps is at most 0.1 in one problem and in rolls of horizon 2 step 2, horizon 4 step 2 and horizon 2 step 1 (0.2 against 0.1 a period before); at η 0.9 the count, not the delivered energy, stays within it; a
   generator with `e_per_max` 0.3: 0.6 in total at horizon 2 step 2 (1.2 before); a market schedule over the budget is refused before the build, naming the unit.
+- **Folded in (D91, D92).** `s_max > 0` for a `Switch` and a `DCLink`; a preventive unit in service in the base case and out in a contingency is an error of `fnct_rd_control`, naming the
+  unit and the `exception` that poses it corrective (it used to be skipped, and a pin that makes a storage unit move was infeasible).
 
 ## 7. Corrective range (B40, D86, v0.15.7)
 

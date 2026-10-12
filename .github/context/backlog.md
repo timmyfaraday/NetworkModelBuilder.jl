@@ -2,19 +2,20 @@
 
 One line per item: `- [ ] B<n> · <what> · owner · added YYYY-MM-DD` plus an optional indented note.
 Move items between sections; tick and move to Done when finished (keep the last ~10 done, delete
-older ones: git has them). Next id: **B42**.
+older ones: git has them). Next id: **B43**.
 
 ## Now
 
 ## Next
 
-- [ ] B38 · Cycle limit of `Storage`: energy into and out of the store over any sliding 24 h window, carried across the windows of a roll, `c_cycl` per index; the same carry for `Generator.e_per_max` (D79-D82) · Tom · 2026-10-12
-  - Plan item 6, v0.15.6. A roll that does not start and end on period boundaries lets a unit turn up to the window count times its limit: 0.2 against 0.1 pu·h a period, a generator 1.2 against 0.6. What Zorba's cap counts is Q11.
 - [ ] B40 · Curative range of `Storage`: `h_cur`, the net power of a corrective unit within one band over the contingencies (D86) · Tom · 2026-10-12
   - Plan item 7, v0.15.7; last of the storage items. Acceptance: 6.0 without the row, 7.0 at a range of 0.25, on the one-step three-contingency network.
 
 - [ ] B41 · `print_summary` fails on a linearized result: it reads `q_unit`, which `LPFFormulation` does not write (`KeyError`) · Tom · 2026-10-12
   - Found by a B35 test; the docs only print current based results. Either skip the column or write a zero.
+
+- [ ] B42 · Building a model is not linear in the time steps: 2000 quarter-hour steps take 1.1 s, 35040 take 111 s, with a cycle limit or without one · Tom · 2026-10-12
+  - Found timing B38 (`%LOCALAPPDATA%\Temp\nmb_b33\time_cycle.jl`, `instantiate_model` of one battery, one generator, one load over a year of 15-minute steps). The cycle rows are not the cause (110.8 s with them, 114.8 s without). Profile `instantiate_model` on it before guessing: `energy_at`, `_serves`, `ids` per step and `topology` are the suspects.
 
 ## Later
 
@@ -70,6 +71,10 @@ older ones: git has them). Next id: **B42**.
 
 ## Done
 
+- [x] B38 · Cycle limit of `Storage`: both sides of the store over any sliding 24 h window, carried across the windows of a roll, `c_cycl` per index; the same carry for `Generator.e_per_max`; Switch and DCLink `s_max > 0`; a preventive unit lost in a contingency is an error (D79-D82, D91, D92) · Tom · 2026-10-12
+  - v0.15.6 on `b33-storage-fields`, not merged; plan item 6 with D91 and D92 folded in. Suite 4118 (4019 at v0.15.5), `docs/make.jl` clean. A full unit with `k_cycl_max` 0.2 on `e_max` 0.5 sells 0.2 at 100 in the first of prices (100, 10, 90, 10) whole and rolled at horizon/step 2/2, 4/2, 2/1, 3/1; a unit with 0.06 counted in the hour before sells 0.08, one with 0.06 counted 23.5 h before 0.2 (the entry no longer fits with the step). At η 0.9 a charge of 0.1/0.9 delivers 0.09; four steps of 12 h prices (100, 10, 100, 10) hold 0.4 pu·h of energy at `k_cycl_max` 0.8 (0.5 without), also grouped into days. A generator with `e_per_max` 0.3 over two-step days costs 46.0 in a roll of any shape as whole (103.0 with no days: 0.3 over all four). Redispatch: 90.0 with `c_cycl` 20 against 85.0; 2 cycle rows preventive, 4 corrective over two contingencies.
+  - Built as 24 h/`Δt` terms a row, not a running sum: 35040 quarter-hour rows added no measurable build time (110.8 s against 114.8 s without, both dominated by B42) and 5000 steps solved in 2.3 s against 1.5-2.9 s without the limit. A roll carries `e_cycl_init`, the `(hours, energy)` of every step of the last 24 h (the plan's vector of `d` lost the step lengths); `e_per_init` on `Generator` is the energy of the period of the last committed step and `_slice` starts a window that begins a period of its own with nothing (a window that ends on the commit boundary cannot see the next step, so the decision is the window's, not `initial_state`'s).
+  - Left to know: a right hand side already used up is taken as zero, so an inconsistent `e_cycl_init` blocks the unit until it ages out and is not refused. Rows are written at every index in service, also where an earlier row already implies them (no redundancy removal). Independent chunks of the pipeline start with nothing counted; the Zorba cap (Q11) is not counted by any of this. `period_cost` has no user in the package now and stays as the hook; the market-schedule check still ignores `e_cycl_init`. With η 1 and no price difference, charging and discharging at once is free and an interior point solver (Ipopt) returns it, so a test reads the state of charge and not the sum of `p_dch`.
 - [x] B37 · Outage support for `Storage`: a unit out of service holds its energy, `energy_at`, the end conditions and `initial_state` read through it, a status over `:contingency` too (D76) · Tom · 2026-10-12
   - v0.15.5 on `b33-storage-fields`, not merged; plan item 5. Suite 4019 (3984 at v0.15.4), `docs/make.jl` clean. Five steps: an outage over steps 2-3 gives 28.216 against 10.432 in service, equal to ratings of zero to 1e-6 with the same energy at the steps it is in service, also in a roll of horizon 3 whose boundary falls in the gap. An end condition on a unit out at the last step reads what it holds (`Pin(0.4)` 34.0, `Value(150)` -31.0), and a unit out for a whole contingency is asked nothing.
   - Left to know: a preventive unit that is lost in a contingency cannot serve what it does at the base case (the redispatch with a pin that makes it move is infeasible), so the test poses it corrective. The storage `period_cost` (`c_cycl`) is still written at the first step of a period for units in service there, and goes with B38. The price warning reads the lowest price and the lowest prices of the unit over every index, which is conservative. The `status` of other components over `:contingency` is unchanged.

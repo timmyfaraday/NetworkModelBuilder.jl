@@ -281,3 +281,10 @@ again get retired.
 - **An edit script that anchors on a line starting with spaces matches inside a line indented deeper.** In B34 a
   `str.index("        rated(m) = count")` found the 12-space line of another testset and cut the wrong span, so the script
   duplicated a block. Anchor on a word of the line, or on the whole line with its newline, and print the match count. (unconfirmed)
+- **A carry that depends on what comes next cannot live in `initial_state`.** A window that ends on the commit boundary (`horizon = step`) holds no next step, so
+  `initial_state` could not tell whether the period went on and a generator got its allowance back at every cut (46.0 against 103.0). Carry what is known (the energy of the period of
+  the last committed step) and let the window decide, in `_slice`, where it starts a period of its own. (unconfirmed)
+- **At η 1 charging and discharging at once is free, and an interior point solver returns it.** A test that summed `p_dch` read 1.157 pu·h for a battery that could move 0.5, the
+  rest being throughput that nets to nothing. Read the state of charge, or the net, and give the unit a loss where the sum is what is being tested. (unconfirmed)
+- **Test a history entry on a horizon of one step.** A carried `(23.0, 0.06)` counts at the first step and not at the second, so a two-step test saw the discharge move to the second
+  step and read as if the entry had been ignored. (unconfirmed)

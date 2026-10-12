@@ -17,6 +17,7 @@
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.15.0 - constraint keys and ids follow the nomenclature                    #
 # v0.15.0 - functions that write rows, duals and letters follow the map        #
+# v0.15.1 - a roll checks the schedule of its storage over the whole           #
 ################################################################################
 
 ################################################################################
@@ -523,6 +524,11 @@ through [`network_cost`](@ref); a window's own objective, which prices its
 lookahead too, is under `"horizon"`, along with what each window covered and
 committed.
 
+The market schedule of a storage unit is checked once, over the whole problem, see
+[`check_storage`](@ref), and not again by the windows: from the second on a unit
+starts from the energy the roll left it, which a schedule written for its own
+start need not suit, and a redispatch is entitled to pay for that.
+
 # Arguments
 - `horizon`: how many time steps a window sees. Must be at least `step`.
 - `step`: how many of them it commits, one by default.
@@ -665,6 +671,8 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
     horizon <= steps ||
         throw(ArgumentError("`horizon = $horizon` reaches past the $steps time step(s) of this problem"))
 
+    check_storage(data; dispatch = P <: AbstractDispatchProblem, schedule = P <: RedispatchProblem)
+
     state    = _rolling_state(data)
     solution = Dict{String,Any}()
     windows  = Vector{Dict{String,Any}}()
@@ -687,7 +695,7 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
         nm = reuse && held !== nothing && _same_shape(state, before, kept) ?
              update_model!(held, w) :
              (rebuilt += 1;
-              instantiate_model(w, P, F; jump_model = new_model(), kwargs...))
+              instantiate_model(w, P, F; jump_model = new_model(), schedule = false, kwargs...))
         held, before = nm, kept
         warm_start && !reuse && _warm_start!(nm, previous, kept)
 

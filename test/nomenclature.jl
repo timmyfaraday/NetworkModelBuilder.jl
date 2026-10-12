@@ -9,6 +9,7 @@
 # v0.14.0 - initial implementation                                             #
 # v0.15.0 - constraints, functions and duals follow a grammar                  #
 # v0.15.0 - the duals follow the grammar of constraints                        #
+# v0.15.1 - c_thru is retired for c_dch                                        #
 ################################################################################
 
 # The names of fields, variable keys and solution keys follow one grammar
@@ -58,7 +59,7 @@ const NOM_FIELDS = [
     "ps" => "p_set", "qs" => "q_set", "energy_capacity" => "e_max", "energy_initial" => "e_init",
     "energy_final" => "e_fin", "charge_rating" => "p_chg_max", "discharge_rating" => "p_dch_max",
     "charge_efficiency" => "η_chg", "discharge_efficiency" => "η_dch",
-    "max_cycles_per_period" => "k_cycl_max", "cost_throughput" => "c_thru", "cost_cycle" => "c_cycl",
+    "max_cycles_per_period" => "k_cycl_max", "cost_throughput" => "c_dch", "c_thru" => "c_dch", "cost_cycle" => "c_cycl",
     "rate_a" => "s_max", "loss_fixed" => "p_loss_fix", "loss_prop" => "p_loss_prop", "pdc" => "p_set",
     "angmin" => "v_angl_min", "angmax" => "v_angl_max",
     "g_sh" => "g_shnt", "b_sh" => "b_shnt", "length_km" => "l_km",

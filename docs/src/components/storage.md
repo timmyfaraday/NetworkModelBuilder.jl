@@ -17,6 +17,7 @@ Storage
 | | `id`, `name`, `node` | identifier, label, node | |
 | ``p^{\text{s,set}}_{u}``, ``q^{\text{s,set}}_{u}`` | `p_set`, `q_set` | injection setpoint, used by a power flow | pu |
 | ``e^{\text{max}}_{u}`` | `e_max` | usable energy capacity | pu·h |
+| ``e^{\text{min}}_{u}`` | `e_min` | energy kept in reserve, the lower bound of the state of charge | pu·h |
 | ``e^{0}_{u}`` | `e_init` | energy held before the first step | pu·h |
 | ``e^{\text{f}}_{u}`` | `e_fin` | energy required after the last step, or `NaN` | pu·h |
 | ``p^{\text{sc,max}}_{u}`` | `p_chg_max` | charge power limit | pu |
@@ -24,10 +25,11 @@ Storage
 | ``\eta^{\text{c}}_{u}`` | `η_chg` | one-way charge efficiency, in ``(0,1]`` | |
 | ``\eta^{\text{d}}_{u}`` | `η_dch` | one-way discharge efficiency, in ``(0,1]`` | |
 | ``k^{\text{max}}_{u}`` | `k_cycl_max` | equivalent full cycles allowed per period | |
-| ``c^{\text{tp}}_{u}`` | `c_thru` | price of one per unit discharged | currency/pu/h |
+| ``c^{\text{c}}_{u}`` | `c_chg` | price of one per unit charged | currency/pu/h |
+| ``c^{\text{d}}_{u}`` | `c_dch` | price of one per unit discharged | currency/pu/h |
 | ``c^{\text{cyc}}_{u}`` | `c_cycl` | price of one equivalent full cycle | currency/cycle |
 | ``q^{\text{min}}_{u}``, ``q^{\text{max}}_{u}`` | `q_min`, `q_max` | reactive power limits | pu |
-| ``c^{\uparrow}_{u}``, ``c^{\downarrow}_{u}`` | `c_up`, `c_dn` | price of injecting one per unit more and less than the market schedule in a redispatch | currency/pu/h |
+| ``c^{\uparrow}_{u}``, ``c^{\downarrow}_{u}`` | `c_up`, `c_dn` | price of injecting one per unit more and less than the market schedule in a redispatch, each finite and the pair summing to at least zero | currency/pu/h |
 | | `status` | in service | |
 | | `ext` | free-form storage, carried along and never read | |
 
@@ -40,7 +42,7 @@ Storage
 | ``i^{\text{r}}_{u}``, ``i^{\text{i}}_{u}`` | `:i_unit_real`, `:i_unit_imag` | unit | injected current | pu |
 | ``p^{\text{sc}}_{u}`` | `:p_chg` | unit | charge power, ``\ge 0`` | pu |
 | ``p^{\text{sd}}_{u}`` | `:p_dch` | unit | discharge power, ``\ge 0`` | pu |
-| ``e_{u}`` | `:e_stor` | unit | state of charge | pu·h |
+| ``e_{u}`` | `:e_stor` | unit | state of charge, from `e_min` to `e_max` | pu·h |
 | ``q^{\text{s}}_{u}`` | `:q_stor` | unit | reactive power | pu |
 | ``p^{\uparrow}_{u}``, ``p^{\downarrow}_{u}`` | `:p_stor_up`, `:p_stor_dn` | unit | moved up and down from the market schedule, redispatch only | pu |
 
@@ -154,11 +156,30 @@ fnct_stor_cycle!
     solver rather than an answer. The package warns when it finds that
     combination. Give the unit a limit or a price; either settles it.
 
+### Before the build
+
+A constructor refuses what is wrong with a unit on its own: a negative rating, an
+energy floor above the capacity, a price that is negative or not finite, a pair
+`c_up`, `c_dn` that sums below zero. What needs the dimension is checked before a
+model builds, at the network index the energy is read at: the start against the
+bounds at the first time step, the target against them at the last, and, in a
+redispatch, whether the market schedule `p_set` can be followed at all.
+
+A schedule that discharges more than the unit holds is not infeasible to a
+redispatch. It moves the unit away from it at the price of its volumes, and the
+bill shows as redispatch cost with no congestion behind it, which is why it is
+refused instead.
+
+```@docs
+check_storage
+scheduled_energy
+```
+
 ## Cost
 
 | what | code name | where it is paid |
 |:-----|:------|:-----------------|
-| moving energy | `c_thru` | [`dispatch_cost`](@ref), once per network index |
+| moving energy | `c_chg`, `c_dch` | [`dispatch_cost`](@ref), once per network index |
 | turning a cycle | `c_cycl` | [`period_cost`](@ref), once per period |
 | leaving a market schedule | `c_up`, `c_dn` | [`redispatch_cost`](@ref), once per network index |
 
@@ -179,3 +200,15 @@ much as one following a schedule, and `c_up` and `c_dn` price the
 !!! note "It needs a time dimension"
     Like a [`FlexibleLoad`](@ref), a storage unit couples network indices along
     `:time` and says so when the problem has no such dimension.
+
+!!! note "What a battery is not here"
+    A battery is a constant efficiency on each side of one energy balance, priced
+    by `c_chg`, `c_dch` and `c_cycl`. A loss that depends on the power, a rate
+    capacity at short time steps and a degradation map convexified in power and
+    energy are what [Fortenbacher2017](@citet) put inside the model, and a
+    self-discharge rate is not here either.
+
+```@bibliography
+Pages = [@__FILE__]
+Canonical = false
+```

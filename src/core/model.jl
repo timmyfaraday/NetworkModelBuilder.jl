@@ -17,6 +17,7 @@
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.15.0 - debug_mode names variables and constraints, off by default         #
+# v0.15.1 - a model checks its storage before it builds                        #
 ################################################################################
 
 ################################################################################
@@ -210,7 +211,8 @@ _value(x) = JuMP.value(x)
 
 """
     instantiate_model(data, P, F; jump_model = JuMP.Model(), build = true,
-                      ext = Dict{Symbol,Any}(), islanding = :error, debug_mode = false)
+                      ext = Dict{Symbol,Any}(), islanding = :error, schedule = true,
+                      debug_mode = false)
 
 Create a [`NetworkModel`](@ref) for problem type `P` and formulation type `F`,
 and build it unless `build = false`.
@@ -221,7 +223,11 @@ and build it unless `build = false`.
 Before it builds, the model refuses a network it cannot pose a sensible problem
 over, see [`check_islands`](@ref): an island that has load but nothing to supply
 it, and, unless `islanding = :allow`, a free switch whose opening would split an
-island. A network with none of that is built as before.
+island. It refuses storage that holds more than it can, see
+[`check_storage`](@ref), and, in a redispatch, a market schedule the unit cannot
+follow; `schedule = false` leaves the schedule unchecked, as a window of a
+rolling horizon does, which starts from what the window before it left and not
+from where the schedule starts. A network with none of that is built as before.
 
 `ext` is **copied**, not held: a model may write into its own, as an extension
 does, and two models handed the same dictionary would write over each other.
@@ -248,9 +254,12 @@ function instantiate_model(data::NetworkData, ::Type{P}, ::Type{F};
                            build::Bool = true,
                            ext::Dict{Symbol,Any} = Dict{Symbol,Any}(),
                            islanding::Symbol = :error,
+                           schedule::Bool = true,
                            debug_mode::Bool = false
                           ) where {P<:AbstractProblemType,F<:AbstractFormulationType}
     build && check_islands(data; islanding, decide = _decides(P))
+    build && check_storage(data; dispatch = P <: AbstractDispatchProblem,
+                           schedule = schedule && P <: RedispatchProblem)
     JuMP.set_string_names_on_creation(jump_model, debug_mode)
 
     nws = nw_ids(data)

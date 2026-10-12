@@ -50,7 +50,7 @@ grammar as code.
 | `FixedLoad` | `pd` `p_set`, `qd` `q_set` |
 | `FlexibleLoad` | `pd_nominal` `p_nom`, `qd_nominal` `q_nom`, `pd_min` `p_min`, `pd_max` `p_max`, `energy` `e_set` |
 | `Shunt` | `gs` `g`, `bs` `b` |
-| `Storage` | `ps` `p_set`, `qs` `q_set`, `qmin` `q_min`, `qmax` `q_max`, `energy_capacity` `e_max`, `energy_initial` `e_init`, `energy_final` `e_fin`, `charge_rating` `p_chg_max`, `discharge_rating` `p_dch_max`, `charge_efficiency` `η_chg`, `discharge_efficiency` `η_dch`, `max_cycles_per_period` `k_cycl_max`, `cost_throughput` `c_thru`, `cost_cycle` `c_cycl`, `cost_up` `c_up`, `cost_dn` `c_dn` |
+| `Storage` | `ps` `p_set`, `qs` `q_set`, `qmin` `q_min`, `qmax` `q_max`, `energy_capacity` `e_max`, `energy_initial` `e_init`, `energy_final` `e_fin`, `charge_rating` `p_chg_max`, `discharge_rating` `p_dch_max`, `charge_efficiency` `η_chg`, `discharge_efficiency` `η_dch`, `max_cycles_per_period` `k_cycl_max`, `cost_throughput` `c_dch`, `c_thru` `c_dch`, `cost_cycle` `c_cycl`, `cost_up` `c_up`, `cost_dn` `c_dn` |
 | `EnergyNotServed`, `Spill` | `pmax` `p_max`, `cost` `c` |
 | `DCLink` | `rate_a` `s_max`, `loss_fixed` `p_loss_fix`, `loss_prop` `p_loss_prop`, `pdc` `p_set`, `cost` `c` |
 | `Switch` | `rate_a` `s_max`, `angmin` `v_angl_min`, `angmax` `v_angl_max` |

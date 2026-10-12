@@ -8,6 +8,33 @@ Versions before 0.9.1 were never tagged in git; the version numbers and dates
 below are reconstructed from `Project.toml`'s own history, cross-referenced
 against the per-file changelog comments the source already carries.
 
+## [0.15.1] - 2026-10-12
+
+### Added
+
+- `e_min` on `Storage`, the energy a unit keeps in reserve: the lower bound of its state of charge, `0` by
+  default.
+- `c_chg` and `c_dch`, a price on what a storage unit charges and on what it discharges, each at its own
+  price and both paid in a dispatch and in a redispatch.
+- `check_storage(data)`, run by every model before it builds. It refuses, with an `ArgumentError` that
+  names the unit and the network index, an `e_init` or an `e_fin` outside `[e_min, e_max]` at the index it is
+  read at, and, in a redispatch, a market schedule whose own energy leaves the bounds or whose cycles
+  exceed `k_cycl_max` over any 24 hours. A cycle counts half of what goes into the store and what comes out
+  of it. `scheduled_energy(data, u)` returns the energy a schedule leaves, a `NetworkVector` over `:time`.
+- The `Storage` constructor refuses a negative or undefined rating, a negative energy before the first step,
+  a price that is negative or not finite, an `e_min` above `e_max`, and a pair `c_up`, `c_dn` that sums
+  below zero, which would pay the solver to raise both volumes by the same amount.
+- A note in the storage page on what a battery is not here, with the reference it leaves out.
+
+### Changed
+
+- **Breaking.** `c_thru` is replaced by `c_chg` and `c_dch`, with no alias and no hint: a `c_thru` of `x` is
+  a `c_dch` of `x`. In a redispatch the throughput is charged on both sides, where it was charged on the
+  discharge only. A subtype of `AbstractStorage` carries `e_min`, `c_chg` and `c_dch` in place of `c_thru`.
+- The state of charge of a unit is bounded below by `e_min`, not by zero.
+- `interior_state` and `initial_state` copy a storage unit by field name, so that a field added to `Storage`
+  travels through a rolling horizon without a list being changed.
+
 ## [0.15.0] - 2026-10-11
 
 ### Added

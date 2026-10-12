@@ -13,6 +13,7 @@
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.15.0 - constraint keys follow the nomenclature                            #
+# v0.15.1 - e_min, c_chg and c_dch replace c_thru                              #
 ################################################################################
 
 "case5 with edge 5, which has a turns ratio, rebuilt as a transformer carrying `extra`"
@@ -189,6 +190,7 @@ Base.@kwdef struct InflowStorage <: AbstractStorage
     p_set                   ::NetworkQuantity{Float64} = 0.0
     q_set                   ::NetworkQuantity{Float64} = 0.0
     e_max      ::NetworkQuantity{Float64} = 0.0
+    e_min      ::NetworkQuantity{Float64} = 0.0
     e_init       ::Float64                  = 0.0
     e_fin         ::Float64                  = NaN
     p_chg_max        ::NetworkQuantity{Float64} = 0.0
@@ -196,7 +198,8 @@ Base.@kwdef struct InflowStorage <: AbstractStorage
     η_chg    ::Float64                  = 1.0
     η_dch ::Float64                  = 1.0
     k_cycl_max::Float64                  = Inf
-    c_thru      ::NetworkQuantity{Float64} = 0.0
+    c_chg      ::NetworkQuantity{Float64} = 0.0
+    c_dch      ::NetworkQuantity{Float64} = 0.0
     c_cycl           ::Float64                  = 0.0
     net_inflow           ::NetworkQuantity{Float64} = 0.0
     q_min                 ::NetworkQuantity{Float64} = 0.0
@@ -369,7 +372,7 @@ const PRICES = [10.0, 100.0, 50.0]
         # a throughput price below 90 per pu leaves the arbitrage worth doing and
         # simply charges for it
         cheap = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
-                        p_chg_max = 0.2, p_dch_max = 0.2, c_thru = 50.0)
+                        p_chg_max = 0.2, p_dch_max = 0.2, c_dch = 50.0)
         result = quiet(() -> solve_model(arbitrage_network(cheap), OptimalPowerFlowProblem,
                                          LPFFormulation, OPTIMIZER))
         @test storage_path(result, 1:2)[2][2] ≈ 0.2 atol = 1e-6
@@ -377,10 +380,28 @@ const PRICES = [10.0, 100.0, 50.0]
 
         # above it the battery is better off doing nothing at all
         dear = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
-                       p_chg_max = 0.2, p_dch_max = 0.2, c_thru = 100.0)
+                       p_chg_max = 0.2, p_dch_max = 0.2, c_dch = 100.0)
         idle = quiet(() -> solve_model(arbitrage_network(dear), OptimalPowerFlowProblem,
                                        LPFFormulation, OPTIMIZER))
         @test storage_path(idle, 1:2)[2][2] < 1e-6
+        @test idle["objective"] ≈ 22.0 atol = 1e-4
+    end
+
+    # The same 90 per pu against a price on each side. The battery buys 0.2 and
+    # sells 0.2, so a price on one side costs it 0.2 times that price and a price
+    # on both of them twice that.
+    @testset "a battery pays on the way in as well as on the way out" begin
+        priced(; kw...) = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
+                                  p_chg_max = 0.2, p_dch_max = 0.2, kw...)
+        solved(st) = quiet(() -> solve_model(arbitrage_network(st), OptimalPowerFlowProblem,
+                                             LPFFormulation, OPTIMIZER))
+
+        @test solved(priced(c_chg = 40.0))["objective"] ≈ 4.0 + 40.0 * 0.2 atol = 1e-4
+        @test solved(priced(c_chg = 40.0, c_dch = 40.0))["objective"] ≈ 4.0 + 80.0 * 0.2 atol = 1e-4
+
+        # 50 and 50 are worth 100 per pu, more than the 90 the arbitrage is
+        idle = solved(priced(c_chg = 50.0, c_dch = 50.0))
+        @test storage_path(idle, 1:2)[1][1] < 1e-6
         @test idle["objective"] ≈ 22.0 atol = 1e-4
     end
 
@@ -481,7 +502,10 @@ const PRICES = [10.0, 100.0, 50.0]
                                k_cycl_max = 1.0),
                        Storage(; id = 3, node = 2, e_max = 0.5,
                                p_chg_max = 0.2, p_dch_max = 0.2,
-                               c_thru = 1.0),
+                               c_chg = 1.0),
+                       Storage(; id = 3, node = 2, e_max = 0.5,
+                               p_chg_max = 0.2, p_dch_max = 0.2,
+                               c_dch = 1.0),
                        Storage(; id = 3, node = 2, e_max = 0.5,
                                p_chg_max = 0.2, p_dch_max = 0.2,
                                c_cycl = 1.0))
@@ -517,6 +541,21 @@ const PRICES = [10.0, 100.0, 50.0]
         @test sum(psd) ≈ 3 * 0.05 atol = 1e-6
     end
 
+
+    @testset "a battery keeps a floor of energy" begin
+        # without a floor the unit sells down to empty in the last step, with 0.1
+        # held back that step is 0.1 short and the generator makes it at 50
+        reserve = Storage(; id = 3, node = 2, e_max = 0.5, e_min = 0.1, e_init = 0.2,
+                          p_chg_max = 0.2, p_dch_max = 0.2)
+        data    = price_network(PRICES; extra = Dict{Int,AbstractUnit}(3 => reserve))
+        held    = quiet(() -> solve_model(data, OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
+
+        @test storage_path(held, 1:3)[3] ≈ [0.4, 0.2, 0.1] atol = 1e-6
+        @test held["objective"] ≈ 4.0 + 0.1 * 50.0 atol = 1e-4
+
+        nm = instantiate_model(data, OptimalPowerFlowProblem, LPFFormulation)
+        @test JuMP.lower_bound(_NMB.var(nm, :e_stor, 3; nw = 1)) == 0.1
+    end
 
     @testset "a horizon can be asked to end where it started" begin
         # the battery starts on 0.2 and may end wherever it likes: it charges in

@@ -19,6 +19,8 @@
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.15.0 - constraint keys follow the nomenclature                            #
+# v0.15.1 - the throughput of a storage unit is paid in a redispatch           #
+# v0.15.1 - a roll checks the schedule of its storage over the whole           #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The
@@ -284,6 +286,27 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["p_gen_
                                     LPFFormulation, OPTIMIZER))
         @test sum(nw_solution(idle, n)["unit"]["4"]["p_stor_up"] for n in 1:2) ≈ 0.0 atol = 1e-5
         @test idle["objective"] ≈ 1.0 * 100.0 + 1.0 * 10.0 atol = 1e-3
+    end
+
+    @testset "a storage unit pays for what it moves in a redispatch too" begin
+        dim = Dimension(:time => 2)
+        battery(; kw...) = Storage(; id = 4, node = 2, e_max = 0.5, e_init = 0.25,
+                                   p_chg_max = 0.5, p_dch_max = 0.5, η_chg = 1.0, η_dch = 1.0, kw...)
+        network(st) = radial_network(; dim, extra = Dict{Int,AbstractUnit}(4 => st))
+        solved(st)  = quiet(() -> solve_rd(network(st), LPFFormulation, OPTIMIZER))
+
+        # the battery gives the 0.25 it holds, and what it gives is paid for on the way out
+        @test solved(battery())["objective"] ≈ 85.0 atol = 1e-4
+        @test solved(battery(c_dch = 10.0))["objective"] ≈ 85.0 + 10.0 * 0.25 atol = 1e-4
+
+        # nothing is charged in this run, so a price on the way in changes nothing
+        @test solved(battery(c_chg = 10.0))["objective"] ≈ 85.0 atol = 1e-4
+
+        # each price is on its own volume, whatever the reason the energy moved
+        nm = instantiate_model(network(battery(c_chg = 3.0, c_dch = 7.0)),
+                               RedispatchProblem, LPFFormulation)
+        @test JuMP.coefficient(network_cost(nm, 1), _NMB.var(nm, :p_chg, 4; nw = 1)) ≈ 3.0
+        @test JuMP.coefficient(network_cost(nm, 1), _NMB.var(nm, :p_dch, 4; nw = 1)) ≈ 7.0
     end
 
     @testset "a preventive measure serves every contingency" begin
@@ -1119,6 +1142,39 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
                 @test sort(collect(keys(held(kept, n, family)))) == sort(collect(keys(held(full, n, family))))
             end
         end
+    end
+
+    @testset "a roll does not refuse a schedule the redispatch has moved the unit away from" begin
+        base = rolling_network()
+        net  = network(base)
+        dim  = dimension(base)
+        st   = units(net)[4]
+        U    = Dict{Int,AbstractUnit}(units(net))
+        U[4] = Storage(; (f => getfield(st, f) for f in fieldnames(Storage))...,
+                       p_set = nw_vector(dim, :time, fill(0.1, 4)))
+        data = NetworkData(Network(nodes(net), edges(net), U; dim); name = "scheduled", s_base_mva = 100.0)
+
+        # as a whole the schedule is one the unit can follow: 0.4 held, 0.1 out every step
+        @test scheduled_energy(data, 4).data ≈ [0.3, 0.2, 0.1, 0.0]
+        @test check_storage(data) === nothing
+
+        # a window that sees one step spends the battery in the first. The schedule that
+        # is left is not one the unit can follow from what it holds, and the roll goes on
+        # and pays for it as redispatch instead of refusing it
+        result = quiet(() -> solve_rolling_horizon(data, RedispatchProblem, LPFFormulation,
+                                                   OPTIMIZER; horizon = 1, step = 1))
+        @test result["termination_status"] == JuMP.LOCALLY_SOLVED
+        @test sort(parse.(Int, collect(keys(result["solution"]["nw"])))) == [1, 2, 3, 4]
+        @test discharge(result, 1:4)[1] > 0.3
+
+        # a schedule the whole problem cannot follow is refused before the first window
+        over = NetworkData(Network(nodes(net), edges(net),
+                                   merge(U, Dict{Int,AbstractUnit}(4 => Storage(;
+                                       (f => getfield(st, f) for f in fieldnames(Storage))...,
+                                       p_set = nw_vector(dim, :time, fill(0.3, 4))))); dim);
+                           name = "over", s_base_mva = 100.0)
+        @test_throws ArgumentError solve_rolling_horizon(over, RedispatchProblem, LPFFormulation,
+                                                         OPTIMIZER; horizon = 2, step = 1)
     end
 
     @testset "the lookahead is what stops a window from being myopic" begin

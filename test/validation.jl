@@ -10,6 +10,7 @@
 # v0.13.0 - the length of a branch may be NaN, and is by default               #
 # v0.13.0 - a branch has one entry per terminal, and two or more terminals     #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.1 - a storage unit is refused what it cannot use, and checked          #
 ################################################################################
 
 # An impossible value used to travel on to the solver, which answered
@@ -26,6 +27,23 @@ function refusal(f)
     end
 
     return nothing
+end
+
+"""
+A two node network over `dim` with a generator at the reference node, a load, and
+`storage` at the load node as unit 3: the smallest data a storage check runs over.
+"""
+function bounded_network(dim::Dimension, storage::AbstractStorage)
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0),
+                               2 => Node(; id = 2))
+    E = Dict{Int,AbstractEdge}(1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.01))
+    U = Dict{Int,AbstractUnit}(
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                       c = [0.0, 10.0]),
+        2 => FixedLoad(; id = 2, node = 2, p_set = 0.2, q_set = 0.0),
+        3 => storage)
+
+    return NetworkData(Network(I, E, U; dim); name = "bounded", s_base_mva = 100.0)
 end
 
 @testset "validation" begin
@@ -108,6 +126,159 @@ end
         # a negative demand is a load that injects, a negative susceptance an inductor: neither is refused
         @test FixedLoad(; id = 1, node = 1, p_set = -0.3).p_set == -0.3
         @test Shunt(; id = 1, node = 1, b = -0.19).b == -0.19
+    end
+
+    @testset "a storage unit" begin
+        @test_throws ArgumentError Storage(; id = 1, node = 1, p_chg_max = -0.1)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, p_dch_max = -0.1)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, p_chg_max = NaN)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, e_max = -0.5)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, e_min = -0.1, e_max = 0.5)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, e_min = 0.6, e_max = 0.5)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, e_init = NaN)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, η_chg = 0.0)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, η_dch = 1.1)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, c_chg = -1.0)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, c_dch = -1.0)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, c_chg = NaN)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, c_dch = Inf)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, c_cycl = Inf)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, c_up = NaN)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, c_dn = Inf)
+
+        # the pair is what is refused: a sum below zero pays the solver to move the unit
+        @test_throws ArgumentError Storage(; id = 1, node = 1, c_up = 10.0, c_dn = -30.0)
+
+        # a profile is refused at the one network index that breaks it
+        dim = Dimension(:time => 3)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, e_max = nw_vector(dim, [0.5, 0.5, -0.1]))
+        @test_throws ArgumentError Storage(; id = 1, node = 1, e_min = nw_vector(dim, [0.0, 0.6, 0.0]), e_max = 0.5)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, p_dch_max = nw_vector(dim, [0.2, -0.2, 0.2]))
+        @test_throws ArgumentError Storage(; id = 1, node = 1, c_dch = nw_vector(dim, [1.0, -1.0, 1.0]))
+        @test_throws ArgumentError Storage(; id = 1, node = 1, c_up = 10.0,
+                                           c_dn = nw_vector(dim, [10.0, -30.0, 10.0]))
+
+        err = refusal(() -> Storage(; id = 7, node = 1, c_up = 10.0, c_dn = -30.0))
+        @test err isa ArgumentError
+        @test occursin("storage 7", err.msg) && occursin("c_up", err.msg)
+
+        # a payback on one side is a price, and an energy held above the capacity is
+        # for `check_storage` to see, at the index it is held
+        @test Storage(; id = 1, node = 1, c_up = 10.0, c_dn = -5.0).c_dn == -5.0
+        @test Storage(; id = 1, node = 1, c_up = -3.0, c_dn = 3.0).c_up == -3.0
+        @test Storage(; id = 1, node = 1, e_max = 0.5, e_init = 0.6).e_init == 0.6
+        @test Storage(; id = 1, node = 1, e_init = -1e-12).e_init == -1e-12    # what a solver hands the next window
+        @test Storage(; id = 1, node = 1).e_min == 0.0
+
+        # a price on each side replaces the one price on the discharge, and the old
+        # name is gone
+        @test Storage(; id = 1, node = 1, c_chg = 2.0, c_dch = 3.0).c_chg == 2.0
+        @test_throws MethodError Storage(; id = 1, node = 1, c_thru = 1.0)
+    end
+
+    @testset "a storage unit is checked against its bounds before the build" begin
+        dim = Dimension(:time => 3)
+        data(st) = bounded_network(dim, st)
+        battery(; kw...) = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.2,
+                                   p_chg_max = 0.2, p_dch_max = 0.2, kw...)
+
+        @test check_storage(data(battery(e_fin = 0.3))) === nothing
+        @test check_storage(data(battery())) === nothing
+
+        # held or asked for above the capacity, or below the floor
+        for bad in (battery(e_init = 0.6), battery(e_init = -0.1), battery(e_fin = 0.6),
+                    battery(e_min = 0.1, e_init = 0.05), battery(e_min = 0.1, e_fin = 0.05))
+            @test_throws ArgumentError check_storage(data(bad))
+            @test_throws ArgumentError instantiate_model(data(bad), OptimalPowerFlowProblem, LPFFormulation)
+            @test_throws ArgumentError instantiate_model(data(bad), RedispatchProblem, LPFFormulation)
+        end
+
+        # a load flow holds the setpoint and has no state of charge to bound
+        @test instantiate_model(data(battery(e_init = 0.6)), LoadFlowProblem, LPFFormulation) isa NetworkModel
+
+        # it says which unit, which quantity and where
+        err = refusal(() -> check_storage(data(battery(e_fin = 0.6))))
+        @test err isa ArgumentError
+        @test occursin("storage 3", err.msg) && occursin("e_fin", err.msg) && occursin("network index 3", err.msg)
+
+        # the bound is the one at the index the energy is read at: the start is read
+        # at the first, the target at the last
+        @test check_storage(data(battery(e_max = nw_vector(dim, [0.5, 0.3, 0.5]), e_fin = 0.4))) === nothing
+        @test_throws ArgumentError check_storage(data(battery(e_max = nw_vector(dim, [0.5, 0.5, 0.3]), e_fin = 0.4)))
+        @test check_storage(data(battery(e_max = nw_vector(dim, [0.3, 0.5, 0.5])))) === nothing
+        @test_throws ArgumentError check_storage(data(battery(e_max = nw_vector(dim, [0.1, 0.5, 0.5]))))
+
+        # what a solver hands back is not refused for the digits it carries
+        @test check_storage(data(battery(e_init = 0.5 + 1e-9))) === nothing
+        @test check_storage(data(battery(e_init = -1e-9))) === nothing
+
+        # without a `:time` dimension nothing couples, and there is nothing to check
+        @test check_storage(bounded_network(Dimension(), battery(e_init = 0.6))) === nothing
+    end
+
+    @testset "a market schedule is checked against the energy and the cycle budget" begin
+        dim = Dimension(:time => 3)
+        scheduled(p; dim = dim, kw...) = bounded_network(dim, Storage(;
+            id = 3, node = 2, e_max = 0.5, e_init = 0.5, p_chg_max = 0.5, p_dch_max = 0.5,
+            η_chg = 1.0, η_dch = 1.0, p_set = p, kw...))
+
+        # 0.3 discharged for three steps from a full 0.5 runs out in the second
+        over = scheduled(0.3)
+        @test scheduled_energy(over, 3) isa NetworkVector
+        @test scheduled_energy(over, 3).data ≈ [0.2, -0.1, -0.4]
+        @test scheduled_energy(scheduled(0.1), 3).data ≈ [0.4, 0.3, 0.2]
+
+        @test check_storage(scheduled(0.1)) === nothing
+        err = refusal(() -> check_storage(over))
+        @test err isa ArgumentError
+        @test occursin("storage 3", err.msg) && occursin("network index 2", err.msg)
+        @test check_storage(over; schedule = false) === nothing
+
+        # only a redispatch reads `p_set` as a schedule: an optimal power flow
+        # chooses the dispatch and a load flow holds it
+        @test_throws ArgumentError instantiate_model(over, RedispatchProblem, LPFFormulation)
+        @test instantiate_model(over, RedispatchProblem, LPFFormulation; schedule = false) isa NetworkModel
+        @test instantiate_model(over, OptimalPowerFlowProblem, LPFFormulation) isa NetworkModel
+        @test instantiate_model(over, LoadFlowProblem, LPFFormulation) isa NetworkModel
+
+        # the losses are in the energy: 0.1 out of the unit costs 0.2 of the store
+        lossy = scheduled(0.1; η_dch = 0.5)
+        @test scheduled_energy(lossy, 3).data ≈ [0.3, 0.1, -0.1]
+        @test_throws ArgumentError check_storage(lossy)
+        charging = scheduled(-0.1; η_chg = 0.5, e_init = 0.0)
+        @test scheduled_energy(charging, 3).data ≈ [0.05, 0.10, 0.15]
+
+        # a step of a quarter of an hour moves a quarter of the energy
+        quarter = Dimension(:time => [Dict{Symbol,Any}(:duration => 0.25) for _ in 1:4])
+        @test scheduled_energy(scheduled(0.4; dim = quarter), 3).data ≈ [0.4, 0.3, 0.2, 0.1]
+
+        # a unit out of service holds what it has
+        away = scheduled(0.1; status = nw_vector(dim, [true, false, true]))
+        @test scheduled_energy(away, 3).data ≈ [0.4, 0.4, 0.3]
+
+        # what it can be asked of is a unit that exists and stores
+        @test_throws ArgumentError scheduled_energy(over, 1)
+        @test_throws ArgumentError scheduled_energy(over, 99)
+        @test_throws ArgumentError scheduled_energy(scheduled(0.1; dim = Dimension()), 3)
+
+        # the cycle budget: a cycle counts half of what goes in and what comes out of
+        # the store, and the budget holds over any 24 hours, not only a calendar day
+        hourly = Dimension(:time => 48)
+        swing(k, active) = bounded_network(hourly, Storage(;
+            id = 3, node = 2, e_max = 0.5, e_init = 0.2, p_chg_max = 0.5, p_dch_max = 0.5,
+            η_chg = 1.0, η_dch = 1.0, k_cycl_max = k,
+            p_set = nw_vector(hourly, [n in active ? (isodd(n) ? 0.2 : -0.2) : 0.0 for n in 1:48])))
+
+        # 24 hours of swinging 0.2 up and down count 24 * 0.1 = 2.4 pu·h
+        @test check_storage(swing(5.0, 1:48)) === nothing            # budget 5 * 0.5 = 2.5
+        @test_throws ArgumentError check_storage(swing(4.0, 1:48))   # budget 2.0
+        @test check_storage(swing(Inf, 1:48)) === nothing
+
+        # eight steps across midnight count 0.8, 0.4 on each side of it
+        @test_throws ArgumentError check_storage(swing(1.0, 21:28))  # budget 0.5
+        @test check_storage(swing(1.6, 21:28)) === nothing           # budget 0.8
+        err = refusal(() -> check_storage(swing(1.0, 21:28)))
+        @test occursin("storage 3", err.msg) && occursin("k_cycl_max", err.msg)
     end
 
     @testset "a branch" begin

@@ -28,7 +28,7 @@ and entry ``k`` belongs to the section that starts at terminal ``k``.
 | ``x_{e,k}`` | `x` | series reactance of section ``k`` | pu |
 | ``g^{\text{sh}}_{e,k}`` | `g_shnt` | shunt conductance of section ``k``, half at each end | pu |
 | ``b^{\text{sh}}_{e,k}`` | `b_shnt` | shunt susceptance of section ``k``, half at each end | pu |
-| ``s^{\text{max}}_{e,k}`` | `s_max` | apparent power rating at terminal ``k`` | pu |
+| ``s^{\text{max}}_{e,k}`` | `s_max` | apparent power rating at terminal ``k``, positive | pu |
 | ``\theta^{\text{min}}_{e}`` | `v_angl_min` | lower angle difference limit, two terminals only | rad |
 | ``\theta^{\text{max}}_{e}`` | `v_angl_max` | upper angle difference limit, two terminals only | rad |
 | | `l_km` | route length, `NaN` where it is not known | km |

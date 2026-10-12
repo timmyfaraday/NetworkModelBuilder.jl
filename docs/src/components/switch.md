@@ -38,7 +38,7 @@ SwitchLock
 | ``(i, j)`` | `terminals` | the two nodes it connects, exactly two | |
 | | `lock` | [`LOCKED`](@ref SwitchLock) or [`FREE`](@ref SwitchLock) | |
 | ``z^{0}_{e}`` | `position` | `0` for open, `1` for closed | |
-| ``s^{\text{max}}_{e}`` | `s_max` | the rating, `Inf` when unlimited; a free switch needs a finite one | pu |
+| ``s^{\text{max}}_{e}`` | `s_max` | the rating, positive, `Inf` when unlimited; a free switch needs a finite one | pu |
 | ``\theta^{\text{min}}_{e}``, ``\theta^{\text{max}}_{e}`` | `v_angl_min`, `v_angl_max` | the angle difference allowed across it while open | rad |
 | | `status` | in service | |
 | | `ext` | free-form storage, carried along and never read | |

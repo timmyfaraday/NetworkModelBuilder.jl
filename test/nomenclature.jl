@@ -9,6 +9,9 @@
 # v0.14.0 - initial implementation                                             #
 # v0.15.0 - constraints, functions and duals follow a grammar                  #
 # v0.15.0 - the duals follow the grammar of constraints                        #
+# v0.15.1 - c_thru is retired for c_dch                                        #
+# v0.15.3 - exact is a word, exclusion a role, chg and dch id parts            #
+# v0.15.7 - the curative range of a corrective storage unit                    #
 ################################################################################
 
 # The names of fields, variable keys and solution keys follow one grammar
@@ -19,12 +22,12 @@
 # builds follows it, and no old name is left anywhere a reader would look.
 
 "a quantity: one letter, `η` the only one that is not ASCII"
-const NOM_SYMBOLS = Set(["v", "i", "p", "q", "s", "r", "x", "g", "b", "e", "t", "c", "l", "z", "k", "η"])
+const NOM_SYMBOLS = Set(["v", "i", "p", "q", "s", "r", "x", "g", "b", "e", "t", "c", "l", "z", "k", "h", "η"])
 
 "what a quantity belongs to: a location, an owner or a role"
 const NOM_WHAT = Set(["term", "ser", "shnt", "mgnt", "star", "pnt", "wind",
                       "gen", "stor", "flex", "slk", "dcl", "sw", "unit",
-                      "chg", "dch", "loss", "base", "ovl", "cycl", "per"])
+                      "chg", "dch", "loss", "base", "ovl", "cycl", "per", "cur"])
 
 "which part of a complex or polar quantity"
 const NOM_PART = Set(["real", "imag", "magn", "angl"])
@@ -39,7 +42,7 @@ const NOM_UNIT = Set(["kv", "mva", "km"])
 "what is not a quantity stays a plain word"
 const NOM_WORDS = Set(["id", "name", "node", "terminals", "status", "ext", "type", "area", "zone",
                        "lock", "position", "reverse", "oltc", "pst", "net",
-                       "terminal", "tap"])
+                       "terminal", "tap", "exact"])
 
 "an old name that is also a word elsewhere, so only the grammar check looks for it"
 const NOM_SHARED = Set(["step"])
@@ -58,7 +61,7 @@ const NOM_FIELDS = [
     "ps" => "p_set", "qs" => "q_set", "energy_capacity" => "e_max", "energy_initial" => "e_init",
     "energy_final" => "e_fin", "charge_rating" => "p_chg_max", "discharge_rating" => "p_dch_max",
     "charge_efficiency" => "η_chg", "discharge_efficiency" => "η_dch",
-    "max_cycles_per_period" => "k_cycl_max", "cost_throughput" => "c_thru", "cost_cycle" => "c_cycl",
+    "max_cycles_per_period" => "k_cycl_max", "cost_throughput" => "c_dch", "c_thru" => "c_dch", "cost_cycle" => "c_cycl",
     "rate_a" => "s_max", "loss_fixed" => "p_loss_fix", "loss_prop" => "p_loss_prop", "pdc" => "p_set",
     "angmin" => "v_angl_min", "angmax" => "v_angl_max",
     "g_sh" => "g_shnt", "b_sh" => "b_shnt", "length_km" => "l_km",
@@ -290,11 +293,12 @@ const CST_OWNERS = Set(["node", "edge", "unit", "br", "tf", "dcl", "sw", "gen", 
 const CST_WORDS = Set(["balance", "reference", "setpoint", "anchor", "limit", "range", "rating", "overload",
                        "peak", "angle", "difference", "voltage", "current", "flow", "power", "injection",
                        "energy", "final", "cycle", "redispatch", "control", "equation", "open", "loop",
-                       "winding", "ratio", "tap", "step", "setting", "star", "pi", "section", "point"])
+                       "winding", "ratio", "tap", "step", "setting", "star", "pi", "section", "point",
+                       "exclusion"])
 
 "a part of the id of a row, after the id of its component"
 const CST_IDS = Set(["real", "imag", "magn", "angl", "min", "max", "fr", "to", "ser", "set", "loss",
-                     "forward", "reverse", "pos", "neg", "side", "p", "q"])
+                     "forward", "reverse", "pos", "neg", "side", "p", "q", "chg", "dch"])
 
 "a key `con` publishes that bundles the rows of several keys, so no row is registered under it"
 const CST_BUNDLES = Set(["cstr_br_equation", "cstr_edge_limit", "cstr_sw_equation"])
@@ -325,7 +329,7 @@ const CST_KEYS = [
     "flexible_energy" => "cstr_flex_energy", "shunt_current" => "cstr_shnt_current",
     "storage_balance" => "cstr_stor_balance", "storage_final" => "cstr_stor_final_energy",
     "storage_cycles" => "cstr_stor_cycle", "storage_redispatch" => "cstr_stor_redispatch",
-    "redispatch_control" => "cstr_rd_control"]
+    "storage_range" => "cstr_stor_range", "redispatch_control" => "cstr_rd_control"]
 
 "a key of `con`, old and new; the four unit keys hold `cstr_unit_injection` in the linearized formulation"
 const CST_CON = [
@@ -357,6 +361,7 @@ const CST_FUNCTIONS = [
     "constraint_pi_section" => "fnct_br_pi_section", "constraint_overload_peak" => "fnct_edge_overload_peak",
     "constraint_redispatch_control" => "fnct_rd_control",
     "constraint_storage_final_energy" => "fnct_stor_final_energy", "constraint_storage_cycles" => "fnct_stor_cycle",
+    "constraint_storage_range" => "fnct_stor_range",
     "constraint_unit" => "fnct_unit", "constraint_unit_coupling" => "fnct_unit_coupling",
     "constraint_unit_power" => "fnct_unit_power", "constraint_unit_injection" => "fnct_unit_injection"]
 

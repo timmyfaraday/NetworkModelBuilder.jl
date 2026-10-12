@@ -91,6 +91,7 @@ instantiate_model
 build_model!
 update_model!
 optimize_model!
+refine!
 solve_model
 problem_type
 formulation_type
@@ -102,6 +103,7 @@ network_cost
 minimize_network_cost
 dispatch_cost
 horizon_cost
+terminal_cost
 period_cost
 component_period_cost
 network_weight

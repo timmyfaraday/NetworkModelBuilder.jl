@@ -22,6 +22,8 @@
 # v0.12.0 - exports is_held                                                    #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.15.0 - functions that write rows, duals and letters follow the map        #
+# v0.15.3 - exact keeps charging and discharging at once out                   #
+# v0.15.4 - terminal, the end of the horizon as a list of conditions           #
 ################################################################################
 
 module NetworkModelBuilder
@@ -125,13 +127,14 @@ module NetworkModelBuilder
     export registered_constraints
     export NetworkModel, problem_type, formulation_type
     export instantiate_model, build_model!, update_model!, optimize_model!, solve_model
+    export refine!
     export check_islands
     export register_model!, implemented_models
 
     # export — objective
     export objective, objective_generation_cost, network_weight, default_weight
     export network_cost, minimize_network_cost, dispatch_cost
-    export horizon_cost, period_cost, component_period_cost, period_weight
+    export horizon_cost, period_cost, component_period_cost, period_weight, terminal_cost
     export objective_redispatch_cost
 
     # export — solution

@@ -284,9 +284,11 @@ is_held
 ```
 
 The first `:contingency` coordinate is the base case, and every preventive
-measure is tied back to it. A measure at a network index where its component is
-out of service is skipped, so a generator that is itself the contingency
-constrains nothing. Where a measure is held, its component does not write again
+measure is tied back to it. A measure of an edge at a network index where the edge is
+out of service is skipped. A **unit** that is preventive, in service in the base case and
+out of service in another state is refused, since the setting it takes in the base
+case is one it cannot take there; say that it is corrective with an `exception`.
+Where a measure is held, its component does not write again
 the rows that only restrict it, since the base case's imply them.
 
 Every network index enters the objective, contingencies included, so the
@@ -355,8 +357,10 @@ every component and re-deriving the topology, so a window is an ordinary
 [Cutting a window out](@ref). [`initial_state`](@ref) is what survives the cut:
 it draws the line between a
 *decision*, which each window makes afresh, and a *state*, which the previous
-window already fixed. A [`Storage`](@ref) unit carries its state of charge and
-has a method; nothing else in the package carries anything.
+window already fixed. A [`Storage`](@ref) unit carries its state of charge and the
+cycles it has counted in the last 24 hours, and a [`Generator`](@ref) with an energy
+limit what it has produced of the period it is in; nothing else in the package
+carries anything.
 
 ### What the lookahead buys
 

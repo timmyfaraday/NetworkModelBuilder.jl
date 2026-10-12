@@ -13,6 +13,8 @@
 # v0.13.0 - the docstring names the linearized ratings, not the limits         #
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.15.0 - functions that write rows, duals and letters follow the map        #
+# v0.15.4 - terminal, the end of the horizon as a list of conditions           #
+# v0.15.6 - a roll carries the cycles used and the energy of a period          #
 ################################################################################
 
 ################################################################################
@@ -164,17 +166,28 @@ identical ones, and the network it belongs to is back on the single-topology
 fast path rather than deriving one per index.
 """
 function _slice(c::T, dim::Dimension, indices::Vector{Int}) where {T<:AbstractComponent}
-    has_nw_data(c) || return c
+    has_nw_data(c) || _carries_profile(c) || return c
 
-    fields = map(1:fieldcount(T)) do k
-        f = getfield(c, k)
-        f isa NetworkVector || return f
+    return T(map(k -> _sliced(getfield(c, k), dim, indices), 1:fieldcount(T))...)
+end
 
-        sliced = [nw_value(dim, f, n) for n in indices]
-        return allequal(sliced) ? first(sliced) : NetworkVector(sliced)
-    end
+"whether a component holds a profile over the network index that `has_nw_data` cannot see, in a field that is not one"
+_carries_profile(::AbstractComponent) = false
 
-    return T(fields...)
+"""
+    _sliced(x, dim, indices)
+
+The field `x` of a component over the network indices `indices` of `dim`: a
+[`NetworkVector`](@ref) is sliced, and collapsed to a plain value where the slice no longer
+varies, and anything else is returned as it is. A type whose fields hold more data over the
+network index, as the end conditions of a storage unit do, adds a method.
+"""
+_sliced(x, ::Dimension, ::Vector{Int}) = x
+
+function _sliced(x::NetworkVector, dim::Dimension, indices::Vector{Int})
+    sliced = [nw_value(dim, x, n) for n in indices]
+
+    return allequal(sliced) ? first(sliced) : NetworkVector(sliced)
 end
 
 ################################################################################
@@ -189,8 +202,10 @@ windows read from the solved model `nm` at network index `n`.
 
 Returned unchanged unless the type says otherwise, which is what makes this the
 one thing a rolling horizon needs from a component. A [`Storage`](@ref) unit
-carries its state of charge and has a method; nothing else in the package
-carries anything, and neither does an extension type until it is given one.
+carries its state of charge and the cycles it has counted in the last 24 hours, a
+[`Generator`](@ref) with an energy limit what it has produced of the period it is in;
+nothing else in the package carries anything, and neither does an extension type until
+it is given one.
 
 The distinction it draws is between a *decision*, which each window makes afresh
 over its own horizon, and a *state*, which the previous window has already fixed

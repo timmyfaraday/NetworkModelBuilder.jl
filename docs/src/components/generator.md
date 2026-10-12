@@ -22,6 +22,7 @@ Generator
 | ``q^{\text{min}}_{u}``, ``q^{\text{max}}_{u}`` | `q_min`, `q_max` | reactive power limits | pu |
 | | `v_magn_set` | voltage setpoint carried from the input data | pu |
 | ``E^{\text{max}}_{u}`` | `e_per_max` | most energy produced in one period | pu·h |
+| ``E^{0}_{u}`` | `e_per_init` | energy already produced in the period of the first step, which a rolling horizon fills; zero by default | pu·h |
 | ``c_{u,k}`` | `c` | cost polynomial, ascending, per unit | currency/h |
 | ``c^{\uparrow}_{u}``, ``c^{\downarrow}_{u}`` | `c_up`, `c_dn` | price of moving one per unit up and down from the market schedule in a redispatch; `NaN` is the marginal cost at the market dispatch | currency/pu/h |
 | | `status` | in service | |
@@ -111,6 +112,12 @@ the **absence** of a row rather than a row with an infinite right hand side, and
 a generator that carries a finite one turns its problem into one that couples
 network indices, so it says so where there is no `:time` dimension to couple
 along.
+
+A rolling horizon cuts a period where a window ends part way through it, and the next window would
+have the whole of the limit again. What was produced of the period is carried through
+[`initial_state`](@ref) in `e_per_init`, and the first period of a window is held to
+``E^{\text{max}}_{u} - E^{0}_{u}``; a window that starts a period of its own starts it with nothing
+produced. A problem that starts part way through a period gives `e_per_init` itself.
 
 ## Objective
 

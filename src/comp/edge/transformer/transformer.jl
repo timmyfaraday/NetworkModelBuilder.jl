@@ -22,6 +22,7 @@
 # v0.14.0 - the docstrings follow the nomenclature                             #
 # v0.15.0 - constraint keys and ids follow the nomenclature                    #
 # v0.15.0 - functions that write rows, duals and letters follow the map        #
+# v0.15.4 - a branch's and a transformer's s_max is positive                   #
 ################################################################################
 
 export AbstractTransformer, Transformer, TapMode, FIXED, CONTINUOUS, STEPPED
@@ -96,7 +97,8 @@ Every field with an entry per winding is indexed by terminal position.
 - `t_magn_step`, `t_angl_step`: the distance between the positions of a winding that is
   `STEPPED`, which run from `t_magn_min` to `t_magn_max` and from `t_angl_min` to `t_angl_max`;
   `0.0125` and one degree by default.
-- `s_max`: the apparent power rating at each terminal [pu], `Inf` when unlimited.
+- `s_max`: the apparent power rating at each terminal [pu], positive, `Inf` when unlimited.
+  A transformer that cannot carry is out of service, which `status` says.
 - `v_angl_min`, `v_angl_max`: the limits on the voltage angle difference between the two
   terminals of a two-winding transformer [rad]. A transformer with more windings
   has none.
@@ -186,7 +188,7 @@ Base.@kwdef struct Transformer <: AbstractTransformer
         pst   = _tap_modes(pst,  n, id, :pst)
 
         _check_transformer(id, t_magn, t_angl, t_magn_min, t_magn_max, t_angl_min, t_angl_max,
-                           t_magn_step, t_angl_step, oltc, pst, v_angl_min, v_angl_max)
+                           t_magn_step, t_angl_step, oltc, pst, s_max, v_angl_min, v_angl_max)
 
         return new(id, name, terminals, r, x, g_shnt, b_shnt, g_mgnt, b_mgnt, t_magn, t_angl, oltc, pst,
                    t_magn_min, t_magn_max, t_angl_min, t_angl_max, t_magn_step, t_angl_step, s_max,
@@ -218,7 +220,7 @@ function _tap_modes(x, n::Int, id, field::Symbol)
 end
 
 function _check_transformer(id, t_magn, t_angl, t_magn_min, t_magn_max, t_angl_min, t_angl_max,
-                            t_magn_step, t_angl_step, oltc, pst, v_angl_min, v_angl_max)
+                            t_magn_step, t_angl_step, oltc, pst, s_max, v_angl_min, v_angl_max)
     all_nw(w -> all(>(0), w), t_magn) ||
         throw(ArgumentError("transformer $id has a non-positive tap magnitude"))
     all_nw(w -> all(>(0), w), t_magn_min) ||
@@ -232,6 +234,8 @@ function _check_transformer(id, t_magn, t_angl, t_magn_min, t_magn_max, t_angl_m
         throw(ArgumentError("transformer $id has a ratio angle limit outside (-π/2, π/2)"))
     all_nw(w -> all(>(0), w), t_magn_step) && all_nw(w -> all(>(0), w), t_angl_step) ||
         throw(ArgumentError("transformer $id has a step that is not positive"))
+    all_nw(w -> all(>(0), w), s_max) ||
+        throw(ArgumentError("transformer $id has a rating `s_max` that is not positive; a transformer that cannot carry is out of service, which `status` says"))
     all_nw(<=, v_angl_min, v_angl_max) ||
         throw(ArgumentError("transformer $id has v_angl_min above v_angl_max"))
 

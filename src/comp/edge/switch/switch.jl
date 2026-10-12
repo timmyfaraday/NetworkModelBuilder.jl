@@ -13,6 +13,7 @@
 # v0.14.0 - the docstrings follow the nomenclature                             #
 # v0.15.0 - constraint keys and ids follow the nomenclature                    #
 # v0.15.0 - functions that write rows, duals and letters follow the map        #
+# v0.15.6 - a switch's and a dc link's s_max is positive                       #
 ################################################################################
 
 export AbstractSwitch, Switch, SwitchLock, FREE, LOCKED
@@ -65,9 +66,10 @@ A two-terminal edge `(e, i, j)` that is either closed or open.
   locked this is the position; where it is free it is the position the problem
   starts from. An integer rather than a flag so that a switch with more terminals
   can take it further than two values.
-- `s_max`: the rating [pu], `Inf` when unlimited. An equipment limit, so a
+- `s_max`: the rating [pu], positive, `Inf` when unlimited. An equipment limit, so a
   dispatch problem enforces it whether or not the switch is monitored for
-  congestion. A free switch needs a finite one.
+  congestion. A free switch needs a finite one. A switch that cannot carry is out of
+  service, which `status` says.
 - `v_angl_min`, `v_angl_max`: the angle difference allowed across the switch while it is
   open [rad]. A closed switch has none by construction, so `v_angl_min ≤ 0 ≤ v_angl_max`.
 - `status`: whether the switch is in service. Out of service it is absent from
@@ -109,8 +111,8 @@ function _check_switch(id, terminals, position, s_max, v_angl_min, v_angl_max)
         throw(ArgumentError("switch $id has $(length(terminals)) terminals, a switch has exactly two"))
     all_nw(p -> p == 0 || p == 1, position) ||
         throw(ArgumentError("switch $id has a position other than 0 (open) or 1 (closed)"))
-    all_nw(>=(0), s_max) ||
-        throw(ArgumentError("switch $id has a negative rating"))
+    all_nw(>(0), s_max) ||
+        throw(ArgumentError("switch $id has a rating `s_max` that is not positive; a switch that cannot carry is out of service, which `status` says"))
     all_nw(<=(0), v_angl_min) && all_nw(>=(0), v_angl_max) ||
         throw(ArgumentError("switch $id has an open angle range that leaves out zero, " *
                             "which is what a closed switch has: v_angl_min must be at most 0 " *

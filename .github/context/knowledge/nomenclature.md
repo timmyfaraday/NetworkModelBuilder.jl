@@ -16,14 +16,14 @@ grammar as code.
 
 - **Symbol:** the quantity, one letter. `v` voltage, `i` current, `p` active power, `q` reactive power, `s` apparent power,
   `r` resistance, `x` reactance, `g` conductance, `b` susceptance, `e` energy, `t` ratio of a winding, `c` cost or price,
-  `l` length, `z` a binary decision, `k` a count, `η` efficiency (D56). An index letter (`i e u a n k t`) is never a quantity,
+  `l` length, `z` a binary decision, `k` a count, `h` a holding time (D86), `η` efficiency (D56). An index letter (`i e u a n k t`) is never a quantity,
   so a symbol may share its letter: `i_term_real` is a current, `i` in `for i in I` is a node.
 - **Primary:** what, or which part. A location `term ser shnt mgnt star pnt wind`; an owner `gen stor flex slk dcl sw unit`; a role
-  `chg dch loss base ovl cycl per`; or, where nothing says what, a part `real imag magn angl`.
+  `chg dch loss base ovl cycl per cur`; or, where nothing says what, a part `real imag magn angl`.
 - **Secondary:** after a what, a part; otherwise a qualifier. A bound `min max`; a reference `set init fin nom mkt`; a direction
   `up dn`; a kind `fix prop thru peak step ener`.
 - **Unit:** last slot, only where the quantity is not in pu or rad: `kv mva km`.
-- **Words:** what is not a quantity stays a plain word: `id name node terminals status ext type area zone lock position reverse oltc pst`.
+- **Words:** what is not a quantity stays a plain word: `id name node terminals status ext type area zone lock position reverse oltc pst exact`.
 
 ## Fields and keys (D57, D58)
 
@@ -50,7 +50,7 @@ grammar as code.
 | `FixedLoad` | `pd` `p_set`, `qd` `q_set` |
 | `FlexibleLoad` | `pd_nominal` `p_nom`, `qd_nominal` `q_nom`, `pd_min` `p_min`, `pd_max` `p_max`, `energy` `e_set` |
 | `Shunt` | `gs` `g`, `bs` `b` |
-| `Storage` | `ps` `p_set`, `qs` `q_set`, `qmin` `q_min`, `qmax` `q_max`, `energy_capacity` `e_max`, `energy_initial` `e_init`, `energy_final` `e_fin`, `charge_rating` `p_chg_max`, `discharge_rating` `p_dch_max`, `charge_efficiency` `η_chg`, `discharge_efficiency` `η_dch`, `max_cycles_per_period` `k_cycl_max`, `cost_throughput` `c_thru`, `cost_cycle` `c_cycl`, `cost_up` `c_up`, `cost_dn` `c_dn` |
+| `Storage` | `ps` `p_set`, `qs` `q_set`, `qmin` `q_min`, `qmax` `q_max`, `energy_capacity` `e_max`, `energy_initial` `e_init`, `energy_final` `e_fin`, `charge_rating` `p_chg_max`, `discharge_rating` `p_dch_max`, `charge_efficiency` `η_chg`, `discharge_efficiency` `η_dch`, `max_cycles_per_period` `k_cycl_max`, `cost_throughput` `c_dch`, `c_thru` `c_dch`, `cost_cycle` `c_cycl`, `cost_up` `c_up`, `cost_dn` `c_dn` |
 | `EnergyNotServed`, `Spill` | `pmax` `p_max`, `cost` `c` |
 | `DCLink` | `rate_a` `s_max`, `loss_fixed` `p_loss_fix`, `loss_prop` `p_loss_prop`, `pdc` `p_set`, `cost` `c` |
 | `Switch` | `rate_a` `s_max`, `angmin` `v_angl_min`, `angmax` `v_angl_max` |
@@ -100,10 +100,10 @@ function `fnct_<stem>`, the dual `dual_<stem>`, as in `cstr_node_balance`, `fnct
 - **Owner:** who writes the row: a family `node edge unit`, a type `br tf dcl sw gen stor flex shnt` (the descriptors of the quantities where there is
   one, the component locals `br tf` where not), or the problem `rd`. The family where several types write the row (D51), the type where one does.
 - **Role:** what the row states, one or two of `balance reference setpoint anchor limit range rating overload peak angle difference voltage current
-  flow power injection energy final cycle redispatch control equation open loop winding ratio tap step setting star pi section point`.
+  flow power injection energy final cycle redispatch control equation open loop winding ratio tap step setting star pi section point exclusion`.
 - **No formulation in a key**, as `:p_term` has none: `cstr_edge_rating` is the rating in IVR and in LPF, with the id shape of its formulation. A function
   written for the linearized formulation only keeps `linear`: `fnct_edge_rating_linear`.
-- **Id:** the component's id, or `(id, part...)`, a part one of `real imag magn angl min max fr to ser set loss forward reverse pos neg side p q`.
+- **Id:** the component's id, or `(id, part...)`, a part one of `real imag magn angl min max fr to ser set loss forward reverse pos neg side p q chg dch`.
   A nested tuple of edges names a loop, `(family, sub, key)` a control. One shape per key within a formulation: an IVR row carries the phasor part where
   an LPF row has none, and a row that is two-sided in one is a single row in the other (D70).
 - **`con`** takes the register's key where an entry holds the rows of one key; a bundle of several takes an owner and `equation` or `limit`
@@ -123,6 +123,8 @@ New keys are `cstr_` and the stem shown; old keys are as written in `src/` today
 `con` keys that are not a register key: `branch` `br_equation`, `switch` `sw_equation`, `edge_limits` `edge_limit`, `switch_limits` `sw_rating`, `switch_loop_free` `sw_cycle`,
 `generator_power`, `load_power`, `slack_power`, `storage_power` `unit_power` (`unit_injection` in LPF), `node_balance_real`, `node_balance_imag` `node_balance`,
 `node_voltage_limits` `node_voltage_limit`; `edge_angle_difference`, `node_voltage_*` and the rest keep their stem.
+
+A key written after the rename has no old name: `cstr_stor_range` and `cstr_stor_range_limit` (D86). `test/nomenclature.jl` maps `storage_range` to the first so that `fnct_stor_range` has a stem.
 
 Ids that change: `:pi_section` `(e, :cr_fr)`, `:ci_fr`, `:cr_to`, `:ci_to`, `:v_real`, `:v_imag` become `(e, :fr, :real)`, `(e, :fr, :imag)`, `(e, :to, :real)`, `(e, :to, :imag)`,
 `(e, :ser, :real)`, `(e, :ser, :imag)`; `:tap_setting` `:magnitude_max`, `:magnitude_min`, `:magnitude`, `:max`, `:min` become `(a, :magn, :max)`, `(a, :magn, :min)`, `(a, :magn, :set)`, `(a, :angl, :max)`,

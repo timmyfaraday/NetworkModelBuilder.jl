@@ -45,6 +45,7 @@ a name that reads the same in the code and in the docs needs no translation.
 | `l` | length |
 | `z` | a binary decision |
 | `k` | a count |
+| `h` | a holding time |
 | `η` | efficiency |
 
 An index letter is never a quantity, so a symbol may share its letter with one:
@@ -66,7 +67,7 @@ A **what** says where a quantity is, or whose it is:
 | `gen`, `stor`, `flex`, `slk`, `unit` | a generator, a storage unit, a flexible load, a slack unit, any unit |
 | `dcl`, `sw` | a DC link, a switch |
 | `chg`, `dch` | charging, discharging |
-| `loss`, `base`, `ovl`, `cycl`, `per` | a loss, a base, an overload, a cycle, a period |
+| `loss`, `base`, `ovl`, `cycl`, `per`, `cur` | a loss, a base, an overload, a cycle, a period, a curative one |
 
 A **part** says which part of a complex or polar quantity: `real`, `imag`,
 `magn` for the magnitude and `angl` for the angle. Where nothing says what, the
@@ -85,7 +86,7 @@ A **unit** is `kv`, `mva` or `km`.
 
 **Words** are not quantities and are not built from the grammar: `id`, `name`,
 `node`, `terminals`, `status`, `ext`, `type`, `area`, `zone`, `lock`,
-`position`, `reverse`, `oltc` and `pst`.
+`position`, `reverse`, `oltc`, `pst` and `exact`.
 
 ## Fields and keys
 
@@ -157,7 +158,7 @@ A row is registered under its key and an **id**: the identifier of its component
 a tuple of it and its parts, `(i, :real)`, `(e, :fr, :imag)`, `(a, :magn, :max)`. A
 part is `real`, `imag`, `magn` or `angl`; a bound, `min` or `max`; a side, `fr` or
 `to`; `ser` for the series element and `set` for a setpoint; or one of `loss`,
-`forward`, `reverse`, `pos`, `neg`, `side`, `p` and `q`. The current based
+`forward`, `reverse`, `pos`, `neg`, `side`, `p`, `q`, `chg` and `dch`. The current based
 formulation writes a row for each part where the linearized one writes one, so an id
 has one shape per key within a formulation, not across the two.
 

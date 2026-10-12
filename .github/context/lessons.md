@@ -109,7 +109,9 @@ again get retired.
   reads UTF-8 as ANSI and `Set-Content -Encoding utf8` writes a BOM, so one `.Replace` on
   `test/multinetwork.jl` turned every `∈`, `∉` and `≈` into mojibake and added a BOM; `git diff --stat`
   showed 14 deletions where 0 were expected. `git checkout -- <file>` and the edit tool put it right. A
-  one-line change of a test goes through the edit tool, however small. (unconfirmed)
+  one-line change of a test goes through the edit tool, however small. It happened again in B34 through a scratch edit script
+  (`Get-Content -Raw` without `-Encoding UTF8`, then `Set-Content`): `≈` and `η` in three test files, found by a `ParseError`.
+  Write an edit script once with `create_file`; if it needs a patch, patch it with `[IO.File]` and `UTF8Encoding($false)`. (unconfirmed)
 - **A multi-line anchor in a Julia `"""` string loses its common indentation.** Two edit scripts of B32 matched 0 times on
   an anchor whose first line had no indent and whose others had two; the exact-once check wrote nothing. Spell such an anchor with `\n` in a
   plain string, or read it from a file. (unconfirmed)
@@ -250,3 +252,41 @@ again get retired.
   they reach, `summarysize(nm.model)`, is 49.2 MB, so deleting the first saved 7.3 MB (243.6 to 236.3 MB for the whole
   `NetworkModel`). Size a holder by `summarysize` of the whole object before and after the change, never by the sum of
   its parts, and say what the number follows. The decision D49 had quoted the 56.5 MB. (unconfirmed)
+- **A constructor runs again at every network index, with that index's values, and a window starts from a solver value.** B33
+  first refused an `e_init` below zero in `Storage`; four testsets of the rolling horizon failed with "storage 4 holds a negative
+  ... energy", the energy a solver handed on being a digit below 0. A check that compares a start or a target with a bound that
+  varies over the index belongs to a function that reads both at the index they matter at, with a tolerance (`check_storage`,
+  1e-5), never to the constructor. (unconfirmed)
+- **A check that reads a schedule from the state it starts in is wrong for every window of a roll but the first.** The first
+  version of `check_storage` ran in each window, from the energy the roll left the unit, and refused the schedule at the second
+  (-0.1 at network index 1): a redispatch is entitled to move a unit away from its schedule and pay for the rest. A regression
+  test with a one-step window reproduced it before the fix; a roll now checks once, over the whole. (unconfirmed)
+- **A limit on a net injection is tested on the net.** The first B34 tests read the charge and the discharge of the unit against
+  `s_max` and failed with 0.15 against 0.1: with efficiencies of one the solver charges 0.15 and discharges 0.05 in the same step at no
+  cost, so only the difference is bound. The objective (13.0) was right all along. A maximised objective over `p_dch` alone does the
+  same: maximise the net. (unconfirmed)
+- **Read the solution before writing to the model that holds it.** The first `refine!` added a binary the moment it found a
+  violating step, and the next `JuMP.value` raised `OptimizeNotCalled`: a model that has been written to has no solution
+  any more. It now collects every violating step first and writes after. (unconfirmed)
+- **A rolling horizon with equal-cost optima gives other numbers under another solver.** The plan's extra costs of a roll with no
+  price on the end, 26.2, 10.1 and 8.4 at horizons 2 to 4, are HiGHS's: Ipopt, which returns the middle of a face where a
+  simplex returns a vertex, gives 26.2, 16.3 and 4.4 on the same data. A test of a number like that names its solver. (unconfirmed)
+- **A price equal to what the unit would get for the energy is a tie, and the solver keeps the energy.** `Value(95.0)` against
+  a last price of 100 and losses of 0.95 left 0.5 pu·h in the store at the end of the problem, 47.5 above perfect foresight, where
+  `Value(90.0)` left none. Test a price on either side of the line and never on it. (unconfirmed)
+- **A container of variables is missing at a network index where no unit of its type is in service.** `var(nm, :p_chg; nw)` raised
+  `KeyError: key :p_chg not found` for a storage unit out over `:time`, three places in the builders and the first of them
+  an early `return` that read the first index only. Read a container through `get(var(nm; nw), key, nothing)` wherever a
+  status can vary, and test the unit out at the first step, the last and in the middle. (unconfirmed)
+- **An edit script that anchors on a line starting with spaces matches inside a line indented deeper.** In B34 a
+  `str.index("        rated(m) = count")` found the 12-space line of another testset and cut the wrong span, so the script
+  duplicated a block. Anchor on a word of the line, or on the whole line with its newline, and print the match count. (unconfirmed)
+- **A carry that depends on what comes next cannot live in `initial_state`.** A window that ends on the commit boundary (`horizon = step`) holds no next step, so
+  `initial_state` could not tell whether the period went on and a generator got its allowance back at every cut (46.0 against 103.0). Carry what is known (the energy of the period of
+  the last committed step) and let the window decide, in `_slice`, where it starts a period of its own. (unconfirmed)
+- **At η 1 charging and discharging at once is free, and an interior point solver returns it.** A test that summed `p_dch` read 1.157 pu·h for a battery that could move 0.5, the
+  rest being throughput that nets to nothing. Read the state of charge, or the net, and give the unit a loss where the sum is what is being tested. (unconfirmed)
+- **Test a history entry on a horizon of one step.** A carried `(23.0, 0.06)` counts at the first step and not at the second, so a two-step test saw the discharge move to the second
+  step and read as if the entry had been ignored. (unconfirmed)
+- **A new `fnct_*` function needs an entry in `CST_FUNCTIONS`, and the map wants an old name.** `test/nomenclature.jl` compares the `fnct_*` names `src/` defines with the values of that map, and
+  checks the stem of each against `CST_KEYS`. A function that never had an old name gets an invented one (`constraint_storage_range`), which no file may contain. (unconfirmed)

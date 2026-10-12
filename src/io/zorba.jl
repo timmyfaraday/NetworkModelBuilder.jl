@@ -10,6 +10,7 @@
 # v0.12.0 - a phase shift range moves a winding, pst_cost is deprecated        #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.4 - a branch's and a transformer's s_max is positive                   #
 ################################################################################
 
 ################################################################################
@@ -388,6 +389,9 @@ function _zorba_edges(grid, hvdc, nodes::Vector{String}, dim::Dimension,
         nm   = String(id[r])
         i, j = _zorba_node(at, from[r], nm), _zorba_node(at, to[r], nm)
         rate = cap === nothing || _blank(cap[r]) ? Inf : Float64(cap[r]) / base
+        rate > 0 ||
+            throw(ArgumentError("link $nm has a capacity that is not positive; a link that cannot " *
+                                "carry is out of service, which the `outage` table says"))
         deg  = shift === nothing || _blank(shift[r]) ? 0.0 : Float64(shift[r])
         deg < 90 ||
             throw(ArgumentError("link $nm has a phase shift range of $deg degrees, and a " *

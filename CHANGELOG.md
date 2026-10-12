@@ -8,6 +8,167 @@ Versions before 0.9.1 were never tagged in git; the version numbers and dates
 below are reconstructed from `Project.toml`'s own history, cross-referenced
 against the per-file changelog comments the source already carries.
 
+## [0.15.7] - 2026-10-12
+
+### Added
+
+- `h_cur` on `Storage`, the curative holding time of a corrective unit [h]: in a redispatch with more than one
+  `:contingency` coordinate its net power over the contingencies, the base case included, spans at most
+  `e_max / h_cur` at every time step, so that one position taken in advance serves whichever contingency occurs. It is two
+  free variables per time step, `:p_stor_max` and `:p_stor_min`, and the rows `cstr_stor_range` and `cstr_stor_range_limit`,
+  written by `fnct_stor_range!`. `0`, the default, and a preventive unit write nothing. On three contingencies that need 0, 0.2
+  and 0.6 of relief a free unit of 0.5 pu·h costs 6.0 with no band, 7.0 at `h_cur` 2 and 6.3333 at `h_cur` 2 with an `e_max` of 0.8.
+- The symbol `h` and the word `cur` of the nomenclature, a holding time and a curative one.
+
+## [0.15.6] - 2026-10-12
+
+### Added
+
+- `e_cycl_init` on `Storage`, what the unit counted toward its cycle limit in the 24 hours before the first step, as
+  `(hours, energy)` per step, oldest first. A rolling horizon fills it from the window before through
+  `initial_state`, so a unit no longer gets its allowance back at every window; on a full unit with a limit of
+  0.1 pu·h that sells at 100 in the first of four steps, a roll of two steps at a time sells 0.2 in all, as the whole
+  problem does.
+- `e_per_init` on `Generator`, the energy already produced in the period of the first step. A rolling horizon carries
+  it through `initial_state`, and a window that starts a period of its own starts it with nothing produced, so an
+  `e_per_max` is no longer a limit per window where a window cuts a period.
+
+### Changed
+
+- **Breaking.** The `s_max` of a `Switch` and of a `DCLink` is positive: a rating of zero is refused at any network
+  index, with `status` named as the way to take the edge out of service. Every rating of the package is now
+  positive or `Inf`.
+- **Breaking.** `k_cycl_max` holds over any 24 hours with a row at every network index, not once per period, and a
+  period grouping of `:time` no longer applies to it. A step counts half of what goes into the store and half of
+  what comes out of it, `Δt (η_chg p_chg + p_dch / η_dch) / 2`, over `e_max`, so a lossless full cycle counts one and
+  charging and discharging in the same step spends the allowance twice. A held unit of a redispatch has the rows of the
+  base case only, a corrective one has them in every contingency.
+- **Breaking.** `c_cycl` is charged at every network index on the same count, by `dispatch_cost` and by
+  `redispatch_cost`, and no longer once per period through `period_cost`.
+- **Breaking.** A redispatch refuses a unit that is preventive, in service in the base case and out of service in
+  another contingency, which it used to skip; the error names the unit and the exception that poses it corrective.
+
+### Removed
+
+- `storage_cycles` and the `period_cost` of `Storage`.
+
+## [0.15.5] - 2026-10-12
+
+### Added
+
+- A `Storage` unit may be out of service over `:time` or over `:contingency`, which was a `KeyError`: it has
+  no variables, rows or entry in the solution where it is out, and holds the energy it had at the last step it
+  was in service, with no self-discharge. `energy_at(nm, u, n)` returns that energy, the state of charge
+  variable or `e_init` where the unit has none at or before `n`. An outage is a `status`, and what it does is what
+  ratings of zero do: 28.216 against 10.432 in service on the five-step case.
+
+### Changed
+
+- The balance of the step after a gap, a `Pin`, `Floor`, `Soft`, `Value` or `Quad` on the end, and `initial_state`
+  read the energy through `energy_at`. A unit out at the last step of a horizon ends on the energy it holds, and a
+  unit out for a whole contingency is asked nothing there. A roll carries the held energy across a window
+  boundary instead of refilling the unit from its original `e_init`.
+- The cycle limit of a period is written for every unit that is in service at some step of it, not only at its
+  first.
+- The warning for a `RELAXED` unit whose prices fall below `(1 / η_dch - η_chg) |λ|` reads the lowest price and the
+  lowest prices of the unit over every network index, which makes it conservative where the two never meet in time.
+
+## [0.15.4] - 2026-10-12
+
+### Added
+
+- `terminal` on `Storage`, what the end of the horizon asks: one condition or a list of `Pin(e)`, `Cyclic()`,
+  `Floor(e)`, `Value(c)`, `Soft(e; c_up, c_dn)` and `Quad(e; weight)`, all subtypes of `AbstractTerminal`, which a
+  type of your own can be as well by adding `fnct_stor_final_energy!`, `variable_stor_terminal!` and
+  `terminal_cost` for it. `e_fin` stays and is a `Pin`; `Cyclic` is a `Pin` on `e_init` taken when the unit is
+  made. A unit has at most one end and at most one price on it, and a target is a number or a profile, which
+  `scheduled_energy` is one of. A `Floor` is the row `:cstr_stor_final_limit`, a `Soft` end the row
+  `:cstr_stor_final_balance` and the variables `:e_stor_up` and `:e_stor_dn`.
+- `terminal_cost(nm)`, the objective's share of what the units leave at the end of the horizon. It is in the
+  objective of a problem solved whole and not in what a rolling horizon reports.
+- `check_storage` refuses a target of a condition outside the bounds, a `Floor` above the capacity and a `Floor`
+  above the pin.
+
+### Changed
+
+- `interior_state` releases a `Pin`, a `Cyclic` end and a `Floor` and keeps a price on the end, `Value`,
+  `Soft` or `Quad`: a roll that cannot see past its window is told what the energy left at its end is worth.
+- `window` slices the profile target of an end condition to the network indices of its window.
+- **Breaking.** The `s_max` of a `Branch` and of a `Transformer` is positive: a rating of zero is refused at any
+  terminal and any network index, with `status` named as the way to take the edge out of service. A
+  `Transformer` had no check on its rating at all, so a negative or undefined one is refused too. A Matpower
+  branch with a rating of zero is still unlimited, as Matpower reads it, and a Zorba link with a capacity that is
+  not positive is refused by name.
+
+## [0.15.3] - 2026-10-12
+
+### Added
+
+- `exact` on `Storage`, an `Exclusion`: `RELAXED` (the default), `EXACT` or `FROZEN`, and a `Bool`, `true` being
+  `EXACT`. It says how a unit is kept from charging and discharging at once, which the relaxation allows and, with
+  losses, pays for where a node pays to have a unit taken off the network: 393.00 against 426.54 on three steps of
+  a must-run surplus against a spill at 500. `EXACT` gives each step that did it a binary `:z_stor` and two rows
+  `:cstr_stor_exclusion`, and solves again until none is left, so the model is mixed-integer with no duals and,
+  in the current based formulation, needs a solver for nonconvex mixed-integer programs. `FROZEN` fixes the
+  smaller side of each such step to zero and solves again, which is feasible, not optimal, and keeps the duals.
+  `EXACT` and `FROZEN` need finite ratings.
+- `refine!(nm)`, which `optimize_model!` calls after every solve and repeats while the model changes, at most
+  eight times; a type with something to tighten after the solve adds `refine!(nm, T)`. The solution has a
+  `"relaxation_gap"` where it was refined, and `print_summary` shows it.
+
+### Changed
+
+- **Breaking.** The `s_max` of a `Storage` is positive: the constructor refuses zero, at any network index, and
+  names `status` as the way to take a unit out of service.
+- The warning for a storage unit that is free to cycle is replaced by one for a `RELAXED` unit whose prices
+  `η_chg c_dch + c_chg / η_dch` fall below `(1 / η_dch - η_chg) |λ|`, with `λ` the lowest price a generator or a
+  slack unit sets. A cycle limit no longer settles it; it bounds the artefact and does not remove it.
+- A rolling horizon with `reuse` builds the window after a refined one again.
+- The documentation no longer says that charging and discharging at once is never worth doing.
+
+## [0.15.2] - 2026-10-12
+
+### Added
+
+- `s_max` on `Storage`, the rating of the converter the unit sits behind, `Inf` by default. Where it is
+  finite, `IVRFormulation` keeps the net injection and the reactive power inside the circle
+  `(p^sd - p^sc)^2 + q^2 <= s_max^2`, and `LPFFormulation`, which has no reactive power, limits the net
+  active power to `[-s_max, s_max]`. The rows are `:cstr_stor_rating`. A redispatch with a preventive
+  setup writes the linearized rows at the base case only.
+- The `Storage` constructor refuses a negative or undefined `s_max`.
+
+### Changed
+
+- A subtype of `AbstractStorage` carries an `s_max`, and `structure_gates` of a storage unit is `(:s_max,)`:
+  a rating that is finite at one network index and `Inf` at another is a change of shape.
+
+## [0.15.1] - 2026-10-12
+
+### Added
+
+- `e_min` on `Storage`, the energy a unit keeps in reserve: the lower bound of its state of charge, `0` by
+  default.
+- `c_chg` and `c_dch`, a price on what a storage unit charges and on what it discharges, each at its own
+  price and both paid in a dispatch and in a redispatch.
+- `check_storage(data)`, run by every model before it builds. It refuses, with an `ArgumentError` that
+  names the unit and the network index, an `e_init` or an `e_fin` outside `[e_min, e_max]` at the index it is
+  read at, and, in a redispatch, a market schedule whose own energy leaves the bounds or whose cycles
+  exceed `k_cycl_max` over any 24 hours. A cycle counts half of what goes into the store and what comes out
+  of it. `scheduled_energy(data, u)` returns the energy a schedule leaves, a `NetworkVector` over `:time`.
+- The `Storage` constructor refuses a negative or undefined rating, a negative energy before the first step,
+  a price that is negative or not finite, an `e_min` above `e_max`, and a pair `c_up`, `c_dn` that sums
+  below zero, which would pay the solver to raise both volumes by the same amount.
+- A note in the storage page on what a battery is not here, with the reference it leaves out.
+
+### Changed
+
+- **Breaking.** `c_thru` is replaced by `c_chg` and `c_dch`, with no alias and no hint: a `c_thru` of `x` is
+  a `c_dch` of `x`. In a redispatch the throughput is charged on both sides, where it was charged on the
+  discharge only. A subtype of `AbstractStorage` carries `e_min`, `c_chg` and `c_dch` in place of `c_thru`.
+- The state of charge of a unit is bounded below by `e_min`, not by zero.
+- `interior_state` and `initial_state` copy a storage unit by field name, so that a field added to `Storage`
+  travels through a rolling horizon without a list being changed.
+
 ## [0.15.0] - 2026-10-11
 
 ### Added

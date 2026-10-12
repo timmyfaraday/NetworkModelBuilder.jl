@@ -1,6 +1,6 @@
 # Storage: a review against the literature, and the changes it asks for
 
-Status: B33 and B34 built on `b33-storage-fields` (v0.15.2, suite 3813, not merged), the rest ready to implement, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D88 (next free after: D89)
+Status: B33 and B34 built on `b33-storage-fields` (v0.15.2, suite 3813, not merged), the rest ready to implement, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D89 (next free after: D90)
 Priority: P1 · Effort: Large. Open: Q11 (what Zorba's throughput cap counts). Backlog B33-B38 and B40, B39 later.
 
 Literature: knowledge-base nodes Storage Models in OPF (14 sources that model storage, raw PDFs re-read) and Redispatch and
@@ -54,7 +54,7 @@ Measured with HiGHS; the scripts are `%LOCALAPPDATA%\Temp\nmb_storage_review\*.j
 
 ## 2. Converter limit (B34, D73, v0.15.2, built)
 
-- **Fix.** `s_max` (default `Inf`, no row). IVR, dispatch and redispatch: `cstr_stor_rating`, `(p_dch - p_chg)^2 + q_stor^2 <= s_max^2`, a nonconvex
+- **Fix.** `s_max` (default `Inf`, no row; positive, D89). IVR, dispatch and redispatch: `cstr_stor_rating`, `(p_dch - p_chg)^2 + q_stor^2 <= s_max^2`, a nonconvex
   quadratic row in a formulation that already is one. LPF: `|p_dch - p_chg| <= s_max`, two linear rows. The box `q_min`, `q_max` stays. A linear
   formulation with reactive power, when it exists: the box only, the circle would make it a second-order cone program.
 - **Literature.** Net circle: Zafar et al. 2020 Eq. 13g, Barrera-Singana et al. 2026 Eq. 24. Separate cones: Wang et al. 2023 Eq. 23-24, Liang et

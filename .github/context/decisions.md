@@ -4,7 +4,7 @@ The rules that still constrain NMB. Read the section for the area you are touchi
 changing it.
 
 How to use this file:
-- A new decision gets the next free id (**D89**), goes in the Log at the bottom, and is written by
+- A new decision gets the next free id (**D90**), goes in the Log at the bottom, and is written by
   the `record-decision` skill. `Decided by` is a person's username, never an agent.
 - A decision that changes a rule below edits the rule in place and cites the new id. The old
   wording goes to the archive line of the id it came from.
@@ -238,6 +238,7 @@ How to use this file:
 - **A corrective storage unit may carry a curative holding time `h_cur` [h], 0 by default: its net power over the contingency coordinates, the base case included, spans at most `e_max/h_cur` at every step; a preventive unit gets no row** (D86).
 - **The `Storage` constructor does not compare `e_init` or `e_fin` with the bounds; `check_storage(data)` does, at the first and the last index, within 1e-5** (D87).
 - **A rolling horizon checks the market schedule of its storage once, over the whole problem; its windows do not, `schedule = false`** (D88).
+- **The `s_max` of a storage unit is positive, never zero; a unit that cannot inject is out of service, which its `status` says** (D89).
 
 ## Zorba pipeline (`scripts/`)
 
@@ -804,3 +805,8 @@ Changes: new rule in Component model; the `e_min <= e_init` and `e_fin` rows of 
 Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
 Why: from the second window a unit starts from the energy the roll left it, and a schedule written for the start of the problem was refused there (-0.1 at network index 1). A redispatch is entitled to move a unit away from its schedule and to pay for what is left of it.
 Changes: new rule in Component model; `instantiate_model` takes `schedule = true` and a window is built with `schedule = false`; D84 stands for a problem built whole.
+
+### D89 — The `s_max` of a storage unit is positive
+Date: 2026-10-12 · Decided by: Tom Van Acker · Area: Component model
+Why: a rating of zero is a unit that cannot inject, which is what an outage is, and an outage is `status`. In the current based formulation it would also be a degenerate circle, `p² + q² <= 0`.
+Changes: new rule in Component model; D73 stands, its `s_max >= 0` is `> 0`; `_check_storage` refuses zero at any index; v0.15.3.

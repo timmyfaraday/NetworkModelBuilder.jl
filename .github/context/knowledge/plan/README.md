@@ -32,4 +32,4 @@ Verification per item — the shape `GAP_CLOSURE_PLAN.md` already uses).
 | `one-branch-terminals.md` | implemented, merged and tagged `v0.13.0`: a branch of two or more terminals, n π-sections at a point | D53, D54 |
 | `naming.md` | implemented, merged and tagged `v0.14.0`: `symbol_primary_secondary` names, `set_string_name` | D55-D62 |
 | `naming-constraints.md` | implemented, merged and tagged `v0.15.0` (B32): `cstr_`, `fnct_`, `dual_` names, `debug_mode`, constraint names in JuMP | D63-D70 |
-| `storage-review.md` | decided 2026-10-12, B33 and B34 built, the rest to implement (B33-B40, Q11): `exact`, `terminal`, `s_max`, `c_chg`/`c_dch`, `e_min`, outages, a sliding cycle limit over both sides, a corrective range | D71-D88 |
+| `storage-review.md` | decided 2026-10-12, B33 and B34 built, the rest to implement (B33-B40, Q11): `exact`, `terminal`, `s_max`, `c_chg`/`c_dch`, `e_min`, outages, a sliding cycle limit over both sides, a corrective range | D71-D89 |

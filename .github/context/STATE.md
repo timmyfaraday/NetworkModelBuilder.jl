@@ -9,14 +9,14 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-12 by Tom Va
   v0.11.0 (D13, D15-D27): the `Switch` edge. v0.10.2 (D11): `solution_tables`,
   `docs/src/manual/concepts.md`. v0.10.1 (D10): `src/comp/` is walked, not listed, each file exports its names.
 - Gap-closure items #1-9 of `context/knowledge/plan/GAP_CLOSURE_PLAN.md` are closed; #10-11 are open
-  (`backlog.md`). Tags: `v0.6.0`, `v0.9.1`-`v0.9.7`, `v0.12.0`, `v0.12.5`-`v0.12.9`, `v0.13.0`, `v0.14.0`, `v0.15.0`, `v0.15.7`; not v0.10.x, v0.11.0, v0.12.1-4, v0.15.1-6.
+  (`backlog.md`). Tags: `v0.6.0`, `v0.9.1`-`v0.9.7`, `v0.12.0`, `v0.12.5`-`v0.12.9`, `v0.13.0`, `v0.14.0`, `v0.15.0`, `v0.15.7`, `v0.15.8`; not v0.10.x, v0.11.0, v0.12.1-4, v0.15.1-6.
 
 ## Branches
 
 - `main` carries B5 and B11 (`--no-ff`), tagged `v0.12.0`, the setup commits D37-D41 and, merged `--no-ff`
   on 2026-10-07, all of `test-zorba-run`: `scripts/` (the Zorba pipeline), B9, B10, B12, B6, B8 (v0.12.4);
   on 2026-10-09 B21 (v0.12.5), the Julia guide review and B22 (v0.12.6); on 2026-10-10 B25 (v0.12.7), B23 (v0.12.8), B24 (v0.12.9);
-  on 2026-10-11 B30 (v0.13.0), B31 (v0.14.0) and B32 (v0.15.0); on 2026-10-12 B33 to B38 and B40 (v0.15.1-v0.15.7, tagged v0.15.7).
+  on 2026-10-11 B30 (v0.13.0), B31 (v0.14.0) and B32 (v0.15.0); on 2026-10-12 B33 to B38 and B40 (v0.15.1-v0.15.7, tagged v0.15.7), then the performance page (v0.15.8, tagged, pushed).
 - `test-zorba-run` and the branches `b21-topology-lookup` to `b33-storage-fields` are merged and kept (`b5`, `b11` merged and deleted). Next free decision id: **D93**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
@@ -63,7 +63,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-12 by Tom Va
 - Run it with processes, not threads: 7 threads in one process give 224 s per 24 h chunk, 7 processes 125 s (week 1,
   B25; recipe in the header of `scripts/run_year_redispatch.jl`). NMB's own per-window work is ~85 % of a chunk.
 - Full year on v0.15.7 (`runs/_year_v0157`, 73 processes) against `_year_b6`: 17.1 min against 23.9 min (-28.5 %), chunk mean 177 s against 237 s
-  (-25.3 %; step 3 -27.7 %, step 2 -11.8 %), peak 3.5 GB (7.3), 365 of 365 sound, results identical; one run each, no same-day control. Page: `docs/src/manual/performance.md` (v0.15.8, `docs-performance-history`).
+  (-25.3 %; step 3 -27.7 %, step 2 -11.8 %), peak 3.5 GB (7.3), 365 of 365 sound, results identical; one run each, no same-day control. Page: `docs/src/manual/performance.md` (v0.15.8).
 
 ## Next
 

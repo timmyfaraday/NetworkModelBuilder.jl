@@ -15,6 +15,7 @@
 # v0.15.0 - constraint keys follow the nomenclature                            #
 # v0.15.1 - e_min, c_chg and c_dch replace c_thru                              #
 # v0.15.2 - a storage unit's converter rating                                  #
+# v0.15.3 - exact keeps charging and discharging at once out                   #
 ################################################################################
 
 "case5 with edge 5, which has a turns ratio, rebuilt as a transformer carrying `extra`"
@@ -198,6 +199,7 @@ Base.@kwdef struct InflowStorage <: AbstractStorage
     p_dch_max     ::NetworkQuantity{Float64} = 0.0
     η_chg    ::Float64                  = 1.0
     η_dch ::Float64                  = 1.0
+    exact       ::Exclusion                = RELAXED
     k_cycl_max::Float64                  = Inf
     c_chg      ::NetworkQuantity{Float64} = 0.0
     c_dch      ::NetworkQuantity{Float64} = 0.0
@@ -227,6 +229,31 @@ storage_path(result, steps) =
     ([nw_solution(result, n)["unit"]["3"]["p_chg"] for n in steps],
      [nw_solution(result, n)["unit"]["3"]["p_dch"] for n in steps],
      [nw_solution(result, n)["unit"]["3"]["e_stor"]  for n in steps])
+
+"""
+Three steps of a must-run surplus at a node that charges 500 to spill it. A full
+battery with losses is paid to burn energy there, by charging and discharging in
+the same step, unless something keeps it from.
+"""
+function surplus_network(battery; steps = 3)
+    dim = Dimension(:time => steps)
+
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0),
+                               2 => Node(; id = 2))
+    E = Dict{Int,AbstractEdge}(1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.01))
+    U = Dict{Int,AbstractUnit}(
+        1 => Generator(; id = 1, node = 1, p_min = 0.5, p_max = 0.5, q_min = -5.0, q_max = 5.0,
+                       c = [0.0, 0.0]),
+        2 => FixedLoad(; id = 2, node = 2, p_set = 0.2, q_set = 0.05),
+        3 => battery,
+        4 => Spill(; id = 4, node = 2))
+
+    return NetworkData(Network(I, E, U; dim); name = "surplus", s_base_mva = 100.0)
+end
+
+"a full battery with losses of ten per cent each way, for `surplus_network`"
+surplus_battery(; kw...) = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.5,
+                                   p_chg_max = 0.2, p_dch_max = 0.2, η_chg = 0.9, η_dch = 0.9, kw...)
 
 """
 A two node network whose cheap generator carries an energy limit, with an
@@ -530,36 +557,140 @@ const PRICES = [10.0, 100.0, 50.0]
         @test sum(storage_path(loose, 1:4)[2]) ≈ 0.1 atol = 1e-6
     end
 
-    @testset "a storage unit says when it is free to cycle against negative prices" begin
-        plain = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
-                        p_chg_max = 0.2, p_dch_max = 0.2)
+    @testset "a storage unit says when the relaxation may let it charge and discharge at once" begin
+        lossy(; kw...) = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0,
+                                 p_chg_max = 0.2, p_dch_max = 0.2, η_chg = 0.9, η_dch = 0.9, kw...)
+        built(st, prices) = instantiate_model(
+            price_network(prices; extra = Dict{Int,AbstractUnit}(3 => st)),
+            OptimalPowerFlowProblem, LPFFormulation)
 
         # nothing is priced below zero, so nothing is said
-        @test_logs min_level = Logging.Warn instantiate_model(
-            arbitrage_network(plain), OptimalPowerFlowProblem, LPFFormulation)
+        @test_logs min_level = Logging.Warn built(lossy(), [10.0, 100.0])
 
-        # a generator that pays to run, and a battery that pays nothing to cycle
-        paid = price_network([-10.0, 100.0]; extra = Dict{Int,AbstractUnit}(3 => plain))
-        @test_logs (:warn,) match_mode = :any instantiate_model(
-            paid, OptimalPowerFlowProblem, LPFFormulation)
+        # without losses a cycle at once moves no energy away, so there is nothing to say
+        plain = Storage(; id = 3, node = 2, e_max = 0.5, p_chg_max = 0.2, p_dch_max = 0.2)
+        @test_logs min_level = Logging.Warn built(plain, [-10.0, 100.0])
 
-        # a cycle limit, a throughput price or a cycle price each settle it
-        for priced in (Storage(; id = 3, node = 2, e_max = 0.5,
-                               p_chg_max = 0.2, p_dch_max = 0.2,
-                               k_cycl_max = 1.0),
-                       Storage(; id = 3, node = 2, e_max = 0.5,
-                               p_chg_max = 0.2, p_dch_max = 0.2,
-                               c_chg = 1.0),
-                       Storage(; id = 3, node = 2, e_max = 0.5,
-                               p_chg_max = 0.2, p_dch_max = 0.2,
-                               c_dch = 1.0),
-                       Storage(; id = 3, node = 2, e_max = 0.5,
-                               p_chg_max = 0.2, p_dch_max = 0.2,
-                               c_cycl = 1.0))
-            @test_logs min_level = Logging.Warn instantiate_model(
-                price_network([-10.0, 100.0]; extra = Dict{Int,AbstractUnit}(3 => priced)),
-                OptimalPowerFlowProblem, LPFFormulation)
+        # a generator that pays to run, and a lossy battery that pays nothing to cycle
+        @test_logs (:warn, r"storage 3") match_mode = :any built(lossy(), [-10.0, 100.0])
+
+        # what settles it is the price on the unit itself: with losses of ten per cent a price
+        # of 0.9 c_dch + c_chg / 0.9 must reach 0.2111 times the 10 the node pays to take a unit
+        for priced in (lossy(c_dch = 3.0), lossy(c_chg = 3.0), lossy(exact = EXACT), lossy(exact = FROZEN))
+            @test_logs min_level = Logging.Warn built(priced, [-10.0, 100.0])
         end
+
+        # a price below that, a cycle price, or a cycle limit does not
+        for unsettled in (lossy(c_dch = 2.0), lossy(c_cycl = 1.0), lossy(k_cycl_max = 1.0))
+            @test_logs (:warn, r"storage 3") match_mode = :any built(unsettled, [-10.0, 100.0])
+        end
+        @test_logs (:warn, r"cycle limit") match_mode = :any built(lossy(k_cycl_max = 1.0), [-10.0, 100.0])
+
+        # the price is a Spill's too: 500 to spill it puts the line at 0.2111 times 500 = 105.6
+        function warns(st)
+            logs, _ = Test.collect_test_logs() do
+                instantiate_model(surplus_network(st), OptimalPowerFlowProblem, LPFFormulation)
+            end
+            return any(l -> l.level == Logging.Warn, logs)
+        end
+        @test warns(surplus_battery(c_dch = 100.0))
+        @test !warns(surplus_battery(c_dch = 120.0))
+        @test !warns(surplus_battery(c_dch = 100.0, exact = EXACT))
+    end
+
+    @testset "a storage unit can be kept from charging and discharging at once" begin
+        highs = JuMP.optimizer_with_attributes(HiGHS.Optimizer, "output_flag" => false)
+        solved(st) = quiet(() -> solve_model(surplus_network(st), OptimalPowerFlowProblem,
+                                             LPFFormulation, highs))
+        overlap(result) = (path = storage_path(result, 1:3); maximum(path[1] .* path[2]) / 0.2^2)
+        binaries(nm) = JuMP.num_constraints(nm.model, JuMP.VariableRef, JuMP.MOI.ZeroOne)
+        rows(nm) = count(k -> k[2] === :cstr_stor_exclusion, keys(_NMB.registered_constraints(nm)))
+
+        # relaxed, the full battery is paid to burn what it holds: 393.00 where 426.54 is the most it can earn
+        relaxed = solved(surplus_battery())
+        @test relaxed["objective"] ≈ 393.00 atol = 5e-3
+        @test overlap(relaxed) > 1e-5
+        @test !haskey(relaxed, "relaxation_gap")
+
+        exact = solved(surplus_battery(exact = EXACT))
+        @test exact["objective"] ≈ 426.54 atol = 5e-3
+        @test overlap(exact) < 1e-5
+        @test exact["relaxation_gap"] ≈ exact["objective"] - relaxed["objective"] atol = 1e-6
+        @test exact["dual_status"] == JuMP.NO_SOLUTION                  # it is mixed-integer now
+        @test solved(surplus_battery(exact = true))["objective"] ≈ exact["objective"] atol = 1e-9
+
+        # the binaries only where the relaxation violated are the binaries everywhere
+        every = instantiate_model(surplus_network(surplus_battery()), OptimalPowerFlowProblem, LPFFormulation)
+        for n in nw_ids(every)
+            z = JuMP.@variable(every.model, binary = true)
+            JuMP.@constraint(every.model, _NMB.var(every, :p_chg, 3; nw = n) <= 0.2 * z)
+            JuMP.@constraint(every.model, _NMB.var(every, :p_dch, 3; nw = n) <= 0.2 * (1 - z))
+        end
+        quiet(() -> optimize_model!(every, highs))
+        @test JuMP.objective_value(every.model) ≈ exact["objective"] atol = 1e-6
+
+        # and it adds binaries only where it must, two rows each
+        nm = instantiate_model(surplus_network(surplus_battery(exact = EXACT)),
+                               OptimalPowerFlowProblem, LPFFormulation)
+        quiet(() -> optimize_model!(nm, highs))
+        @test 1 <= binaries(nm) <= 3
+        @test rows(nm) == 2 * binaries(nm)
+        @test !JuMP.has_duals(nm.model)
+
+        # the line is the unit's own price: 100 leaves the gap, 130 closes it
+        for (c_dch, free, tight) in ((100.0, 441.60, 446.54), (130.0, 450.0, 450.0))
+            @test solved(surplus_battery(; c_dch))["objective"] ≈ free atol = 5e-3
+            @test solved(surplus_battery(; c_dch, exact = EXACT))["objective"] ≈ tight atol = 5e-3
+        end
+
+        # where the relaxation is exact the model stays a linear program
+        settled = instantiate_model(surplus_network(surplus_battery(c_dch = 130.0, exact = EXACT)),
+                                    OptimalPowerFlowProblem, LPFFormulation)
+        quiet(() -> optimize_model!(settled, highs))
+        @test binaries(settled) == 0 && rows(settled) == 0
+        @test JuMP.has_duals(settled.model)
+        @test !haskey(settled.sol, "relaxation_gap")
+
+        # the third value fixes the direction of each violating step: feasible, not optimal, still linear
+        frozen = solved(surplus_battery(exact = FROZEN))
+        @test overlap(frozen) < 1e-5
+        @test exact["objective"] - 1e-6 <= frozen["objective"] <= 450.0 + 1e-6
+        @test frozen["dual_status"] == JuMP.FEASIBLE_POINT
+        @test frozen["relaxation_gap"] >= exact["relaxation_gap"] - 1e-6
+    end
+
+    @testset "an exact storage unit is exact in current too" begin
+        juniper = JuMP.optimizer_with_attributes(
+            Juniper.Optimizer, "log_levels" => Symbol[],
+            "nl_solver" => JuMP.optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 0,
+                                                           "sb" => "yes"))
+        overlap(result) = (path = storage_path(result, 1:3); maximum(path[1] .* path[2]) / 0.2^2)
+
+        result = quiet(() -> solve_model(surplus_network(surplus_battery(exact = EXACT)),
+                                         OptimalPowerFlowProblem, IVRFormulation, juniper))
+        @test result["termination_status"] in (JuMP.OPTIMAL, JuMP.LOCALLY_SOLVED)
+        @test overlap(result) < 1e-5
+        @test result["objective"] ≈ 426.54 atol = 0.05
+
+        # the gap is in the summary of a result that has one
+        @test occursin("relaxation gap", sprint(print_summary, result))
+        unrefined = quiet(() -> solve_model(surplus_network(surplus_battery()),
+                                            OptimalPowerFlowProblem, IVRFormulation, OPTIMIZER))
+        @test !occursin("relaxation gap", sprint(print_summary, unrefined))
+    end
+
+    @testset "a roll builds a window again when the one before it refined" begin
+        highs = JuMP.optimizer_with_attributes(HiGHS.Optimizer, "output_flag" => false)
+        roll(st) = quiet(() -> solve_rolling_horizon(surplus_network(st; steps = 4), OptimalPowerFlowProblem,
+                                                     LPFFormulation, highs; horizon = 2, step = 1,
+                                                     reuse = true))
+
+        # a model that refined holds binaries and rows its successor would not have written
+        relaxed = roll(surplus_battery())
+        refined = roll(surplus_battery(exact = EXACT))
+        @test refined["horizon"]["built"] > relaxed["horizon"]["built"]
+        @test any(haskey(w, "relaxation_gap") for w in refined["horizon"]["window"])
+        @test !any(haskey(w, "relaxation_gap") for w in relaxed["horizon"]["window"])
     end
 
     @testset "energy may arrive from outside the model" begin

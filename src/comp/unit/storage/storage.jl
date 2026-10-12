@@ -19,9 +19,11 @@
 # v0.15.1 - e_min, c_chg and c_dch, the checks made before the build           #
 # v0.15.2 - s_max, the converter rating of a storage unit                      #
 # v0.15.3 - s_max is positive, never zero                                      #
+# v0.15.3 - exact keeps charging and discharging at once out                   #
 ################################################################################
 
 export AbstractStorage, Storage, inflow, storage_cycles
+export Exclusion, RELAXED, EXACT, FROZEN
 export check_storage, scheduled_energy
 export variable_storage_active!, variable_storage_reactive!
 export fnct_stor_cycle!, fnct_stor_final_energy!
@@ -56,6 +58,7 @@ and the rolling horizon by declaring them:
 | `e_max`, `e_min`, `e_init`, `e_fin` | the state of charge, its bounds and its ends |
 | `p_chg_max`, `p_dch_max` | the bounds on the charge and discharge |
 | `η_chg`, `η_dch` | the balance |
+| `exact` | [`refine!`](@ref), which keeps charging and discharging at once out |
 | `k_cycl_max` | [`fnct_stor_cycle!`](@ref) |
 | `c_chg`, `c_dch`, `c_cycl` | [`dispatch_cost`](@ref), [`period_cost`](@ref) |
 | `c_up`, `c_dn` | [`redispatch_cost`](@ref) |
@@ -69,6 +72,39 @@ model.
 abstract type AbstractStorage <: AbstractUnit end
 
 """
+    Exclusion
+
+How a [`Storage`](@ref) unit is kept from charging and discharging at once, which
+nothing in its constraints forbids:
+
+- `RELAXED`: not at all, and no integers. This is exact where the unit's own prices
+  cover what a node pays to take a unit off the network, `η_chg c_dch + c_chg / η_dch >=
+  (1 / η_dch - η_chg) |λ|`, and a unit that falls short of it is warned about.
+- `EXACT`: the optimum. The model is solved, every unit-step that charges and
+  discharges at once gets a binary `z_stor` and two rows, `p_chg <= p_chg_max z`
+  and `p_dch <= p_dch_max (1 - z)`, and it is solved again, until none is left.
+  A model that did this is mixed-integer: it has no duals, and in the current based
+  formulation it needs a solver for nonconvex mixed-integer programs.
+- `FROZEN`: feasible, not optimal. The direction of each such unit-step is fixed, the
+  smaller of the two sides to zero, and the model is solved again, until none is left.
+  It is the same kind of problem as before and keeps its duals.
+
+A `Bool` is accepted where an `Exclusion` is, as it is for a [`TapMode`](@ref):
+`false` is `RELAXED` and `true` is `EXACT`. `EXACT` and `FROZEN` need finite ratings,
+which what is excluded is measured against.
+
+What is solved is a problem with losses on both sides and a price on moving energy: with
+losses, a unit in a step that charges and discharges at once burns what it holds, and
+where a node pays to have a unit taken — a [`Spill`](@ref) that charges for spilling,
+a generator that pays to run — the relaxation is paid to do it.
+"""
+@enum Exclusion RELAXED EXACT FROZEN
+
+"a `Bool` or an `Exclusion` as an `Exclusion`"
+_exclusion(x::Exclusion) = x
+_exclusion(b::Bool) = b ? EXACT : RELAXED
+
+"""
     Storage <: AbstractStorage
 
 A unit `(u, i)` that charges and discharges within a rating and an energy
@@ -79,9 +115,10 @@ decisions, and the state of charge follows them from step to step. In a power
 flow there is nothing to decide and the unit holds the setpoint `p_set`, `q_set`.
 
 Charging and discharging are separate non-negative variables, so a round trip
-loses energy through both efficiencies. Nothing forbids the two from being
-non-zero at once; where the efficiencies are below one that is never worth doing,
-and forbidding it outright would need a binary.
+loses energy through both efficiencies. Nothing in the constraints forbids the two
+from being non-zero at once, and where a node pays to take energy off the network a
+unit with losses is paid to do it, by burning what it holds. `exact` says what is
+done about that, see [`Exclusion`](@ref).
 
 What a constructor cannot see is [`check_storage`](@ref)'s: an energy held above
 the capacity at the first time step, a target outside the bounds at the last, a
@@ -102,6 +139,9 @@ market schedule that runs the unit out. A model runs it before it builds.
 - `p_chg_max`, `p_dch_max`: the power limits [pu].
 - `η_chg`, `η_dch`: the one-way efficiencies, in
   `(0, 1]`.
+- `exact`: an [`Exclusion`](@ref), how charging and discharging at once is kept out,
+  or a `Bool`, `true` being `EXACT`. `RELAXED` by default. `EXACT` and `FROZEN` need
+  finite `p_chg_max` and `p_dch_max`.
 - `k_cycl_max`: the equivalent full cycles the unit may turn in one
   period [-], see [`storage_cycles`](@ref). `Inf`, the default, leaves it free to
   cycle as often as the ratings allow.
@@ -113,7 +153,8 @@ market schedule that runs the unit out. A model runs it before it builds.
   indices, see [`period_cost`](@ref).
 - `q_min`, `q_max`: the reactive power limits [pu].
 - `s_max`: the rating of the converter the unit sits behind [pu], positive. `Inf`, the
-  default, writes no row; a unit that cannot inject is out of service, which `status` says. A current based formulation keeps the net injection
+  default, writes no row; a unit that cannot inject is out of service, which `status`
+  says. A current based formulation keeps the net injection
   and the reactive power inside a circle, `(p^{sd} - p^{sc})^2 + q^2 <= s_max^2`;
   a linearized one, which has no reactive power, limits the net active
   injection, `|p^{sd} - p^{sc}| <= s_max`. The charge and discharge ratings still
@@ -144,6 +185,7 @@ Base.@kwdef struct Storage <: AbstractStorage
     p_dch_max ::NetworkQuantity{Float64} = 0.0
     η_chg     ::Float64                  = 1.0
     η_dch     ::Float64                  = 1.0
+    exact     ::Exclusion                = RELAXED
     k_cycl_max::Float64                  = Inf
     c_chg     ::NetworkQuantity{Float64} = 0.0
     c_dch     ::NetworkQuantity{Float64} = 0.0
@@ -157,13 +199,14 @@ Base.@kwdef struct Storage <: AbstractStorage
     ext       ::Dict{Symbol,Any}         = Dict{Symbol,Any}()
 
     function Storage(id, name, node, p_set, q_set, e_max, e_min, e_init, e_fin,
-                     p_chg_max, p_dch_max, η_chg, η_dch, k_cycl_max, c_chg, c_dch,
+                     p_chg_max, p_dch_max, η_chg, η_dch, exact, k_cycl_max, c_chg, c_dch,
                      c_cycl, q_min, q_max, s_max, c_up, c_dn, status, ext)
+        exact = _exclusion(exact)
         _check_storage(id, e_max, e_min, e_init, e_fin, p_chg_max, p_dch_max, η_chg,
-                       η_dch, k_cycl_max, c_chg, c_dch, c_cycl, q_min, q_max, s_max, c_up, c_dn)
+                       η_dch, exact, k_cycl_max, c_chg, c_dch, c_cycl, q_min, q_max, s_max, c_up, c_dn)
 
         return new(id, name, node, p_set, q_set, e_max, e_min, e_init, e_fin,
-                   p_chg_max, p_dch_max, η_chg, η_dch, k_cycl_max, c_chg, c_dch,
+                   p_chg_max, p_dch_max, η_chg, η_dch, exact, k_cycl_max, c_chg, c_dch,
                    c_cycl, q_min, q_max, s_max, c_up, c_dn, status, ext)
     end
 end
@@ -173,13 +216,15 @@ end
 # compared with its bounds in `check_storage`, at the first and the last index only.
 # A window starts from what a solver returned, a digit below zero included, so `e_init` is not refused here.
 function _check_storage(id, e_max, e_min, e_init, e_fin, p_chg_max, p_dch_max, η_chg, η_dch,
-                        k_cycl_max, c_chg, c_dch, c_cycl, q_min, q_max, s_max, c_up, c_dn)
+                        exact, k_cycl_max, c_chg, c_dch, c_cycl, q_min, q_max, s_max, c_up, c_dn)
     0 < η_chg <= 1 ||
         throw(ArgumentError("storage $id has a charge efficiency outside (0, 1]"))
     0 < η_dch <= 1 ||
         throw(ArgumentError("storage $id has a discharge efficiency outside (0, 1]"))
     all_nw(>=(0), p_chg_max) && all_nw(>=(0), p_dch_max) ||
         throw(ArgumentError("storage $id has a negative or undefined charge or discharge rating"))
+    exact === RELAXED || all_nw(isfinite, p_chg_max) && all_nw(isfinite, p_dch_max) ||
+        throw(ArgumentError("storage $id has an `exact` of $exact and a charge or discharge rating that is not finite, which what it excludes is measured against"))
     all_nw(>=(0), e_max) ||
         throw(ArgumentError("storage $id has a negative energy capacity"))
     all_nw(>=(0), e_min) ||
@@ -561,7 +606,7 @@ function fnct_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
 
     fnct_stor_cycle!(nm, T)
     fnct_stor_final_energy!(nm, T)
-    _warn_free_cycling(nm, T)
+    _warn_inexact_relaxation(nm, T)
 
     return nothing
 end
@@ -685,51 +730,121 @@ function fnct_stor_cycle!(nm::NetworkModel, ::Type{T}) where {T<:AbstractStorage
 end
 
 """
-    _warn_free_cycling(nm, T)
+    _warn_inexact_relaxation(nm, T)
 
-Warn where a storage unit may cycle for nothing.
+Warn where the relaxation may let a storage unit charge and discharge at once.
 
-SmaLoadFlow makes a cycle limit mandatory as soon as negative prices are enabled,
-and it is right to: a unit that pays nothing to move energy, in a problem where
-some generation is cheaper than free, will charge and discharge as often as its
-ratings allow, and the trajectory it returns is then an artefact of the solver
-rather than an answer. The guard is a warning here rather than an error because
-the model is still well posed — the cycling is bounded by the ratings — and
-because what counts as a negative price is a property of the data, which the
-package does not otherwise legislate about.
+With losses, a unit that charges and discharges at once burns `x (1 / η_dch - η_chg)` of
+what it holds for every `x` it moves each way. Where a node pays to have a unit taken off
+the network, by what a [`Spill`](@ref) charges for spilling or by a generator that pays to
+run, the burn is worth that price to the problem, and a unit whose own prices fall below it,
 
-The scan over the generation costs runs only where a free-cycling unit was found
-first, so a problem that priced its storage pays nothing for this.
+```math
+\\eta_{c} c^{\\text{d}} + c^{\\text{c}} / \\eta_{d} < (1 / \\eta_{d} - \\eta_{c}) |\\lambda| ,
+```
+
+is paid to do it. A cycle limit bounds how often and does not remove it. What is
+warned about is a unit that leaves it `RELAXED`; `EXACT` and `FROZEN` are the ways out, and a price at
+the line is the third. The price of the node is read at the first network index.
+
+A warning rather than an error because the model is well posed, and because what
+counts as a price below zero is a property of the data, which the package does not
+otherwise legislate about.
 """
-function _warn_free_cycling(nm::NetworkModel, ::Type{T}) where {T<:AbstractStorage}
-    n = nw_id_default(nm)
-    free = any(ids(nm, T; nw = n)) do u
-        st = unit(nm, u; nw = n)::T
-        return !isfinite(st.k_cycl_max) && iszero(st.c_cycl) &&
-               all_nw(iszero, st.c_chg) && all_nw(iszero, st.c_dch)
-    end
-    free && _has_negative_price(nm, n) || return nothing
+function _warn_inexact_relaxation(nm::NetworkModel, ::Type{T}) where {T<:AbstractStorage}
+    n    = nw_id_default(nm)
+    open = [u for u in ids(nm, T; nw = n) if (unit(nm, u; nw = n)::T).exact === RELAXED]
+    isempty(open) && return nothing
 
-    @warn "a storage unit is free to cycle — no `k_cycl_max`, no " *
-          "`c_chg`, no `c_dch` and no `c_cycl` — in a problem where some generation is " *
-          "priced below zero, so nothing stops it from charging and discharging as often " *
-          "as its ratings allow; give it a cycle limit or a price"
+    lowest = _price_floor(nm, n)
+    lowest < 0 || return nothing
+
+    for u in open
+        st    = unit(nm, u; nw = n)::T
+        burn  = (1 / st.η_dch - st.η_chg) * abs(lowest)
+        price = st.η_chg * st.c_dch + st.c_chg / st.η_dch
+        price >= burn - 1e-9 && continue
+
+        @warn "storage $u may charge and discharge at once: its prices come to " *
+              "$(round(price; digits = 4)), and a node that pays $(abs(lowest)) to take a unit " *
+              "off the network makes burning energy worth $(round(burn; digits = 4)). Give it " *
+              "`exact`, or a price that reaches that; a cycle limit bounds the artefact and " *
+              "does not remove it"
+    end
 
     return nothing
 end
 
-"whether any generator of `nm` carries a negative cost coefficient"
-function _has_negative_price(nm::NetworkModel, n::Int)
-    for T in unit_types()
-        T <: AbstractGenerator || continue
-        for u in ids(nm, T; nw = n)
-            g = unit(nm, u; nw = n)::T
-            all_nw(c -> all(>=(0), @view c[2:end]), g.c) || return true
+"the lowest price a generator or a slack unit sets at network index `n`, or zero"
+function _price_floor(nm::NetworkModel, n::Int)
+    lowest = 0.0
+    for T in unit_types(), u in ids(nm, T; nw = n)
+        if T <: AbstractGenerator
+            c     = (unit(nm, u; nw = n)::T).c
+            lowest = min(lowest, minimum(@view c[2:end]; init = 0.0))
+        elseif T <: AbstractSlackUnit
+            lowest = min(lowest, (unit(nm, u; nw = n)::T).c)
         end
     end
 
-    return false
+    return lowest
 end
+
+################################################################################
+# Storage — keeping charging and discharging at once out                       #
+################################################################################
+
+"""
+    refine!(nm, T)
+
+Where a storage unit of type `T` charges and discharges at once in the solution of
+`nm` and asks not to, `exact`, keep it from doing so, and return whether `nm`
+changed. See [`Exclusion`](@ref) and [`refine!`](@ref).
+
+A step counts when `p^{sc} p^{sd} / (p^{sc}_{max} p^{sd}_{max})` is above `1e-5`: a solver
+leaves a few digits on a side that is meant to be zero. `EXACT` adds a binary and two rows
+to each such step of the unit; `FROZEN` fixes the smaller side to zero.
+"""
+function refine!(nm::NetworkModel{P}, ::Type{T}
+                ) where {P<:AbstractDispatchProblem,T<:AbstractStorage}
+    asked = [u for (u, c) in units(network(nm.data)) if c isa T && c.exact !== RELAXED]
+    isempty(asked) && return false
+
+    # read every step before writing to the model: a model that has been written to has no solution
+    found = Tuple{Int,Int,Float64,Float64}[]
+    for n in nw_ids(nm)
+        p_chg, p_dch = var(nm, :p_chg; nw = n), var(nm, :p_dch; nw = n)
+
+        for u in asked
+            haskey(p_chg, u) || continue
+            chg, dch = JuMP.value(p_chg[u]), JuMP.value(p_dch[u])
+            _both(unit(nm, u; nw = n)::T, chg, dch) && push!(found, (n, u, chg, dch))
+        end
+    end
+    isempty(found) && return false
+
+    for (n, u, chg, dch) in found
+        st           = unit(nm, u; nw = n)::T
+        p_chg, p_dch = var(nm, :p_chg; nw = n), var(nm, :p_dch; nw = n)
+
+        if st.exact === EXACT
+            z = variable!(nm, :z_stor, u; nw = n, start = chg > dch ? 1.0 : 0.0, binary = true)
+            constrain!(nm, :cstr_stor_exclusion, (u, :chg),
+                       JuMP.@build_constraint(p_chg[u] <= st.p_chg_max * z); nw = n)
+            constrain!(nm, :cstr_stor_exclusion, (u, :dch),
+                       JuMP.@build_constraint(p_dch[u] <= st.p_dch_max * (1 - z)); nw = n)
+        else
+            bound!(chg > dch ? p_dch[u] : p_chg[u]; fix = 0.0)
+        end
+    end
+    nm.ext[:refined] = true
+
+    return true
+end
+
+"whether a storage unit with these two sides charges and discharges at once, which a rating of zero rules out"
+_both(st::AbstractStorage, chg, dch) =
+    st.p_chg_max > 0 && st.p_dch_max > 0 && chg * dch / (st.p_chg_max * st.p_dch_max) > 1e-5
 
 ################################################################################
 # Storage — cost                                                               #

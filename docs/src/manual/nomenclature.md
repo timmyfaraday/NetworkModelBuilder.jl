@@ -85,7 +85,7 @@ A **unit** is `kv`, `mva` or `km`.
 
 **Words** are not quantities and are not built from the grammar: `id`, `name`,
 `node`, `terminals`, `status`, `ext`, `type`, `area`, `zone`, `lock`,
-`position`, `reverse`, `oltc` and `pst`.
+`position`, `reverse`, `oltc`, `pst` and `exact`.
 
 ## Fields and keys
 
@@ -157,7 +157,7 @@ A row is registered under its key and an **id**: the identifier of its component
 a tuple of it and its parts, `(i, :real)`, `(e, :fr, :imag)`, `(a, :magn, :max)`. A
 part is `real`, `imag`, `magn` or `angl`; a bound, `min` or `max`; a side, `fr` or
 `to`; `ser` for the series element and `set` for a setpoint; or one of `loss`,
-`forward`, `reverse`, `pos`, `neg`, `side`, `p` and `q`. The current based
+`forward`, `reverse`, `pos`, `neg`, `side`, `p`, `q`, `chg` and `dch`. The current based
 formulation writes a row for each part where the linearized one writes one, so an id
 has one shape per key within a formulation, not across the two.
 

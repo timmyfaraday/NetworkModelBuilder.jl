@@ -10,10 +10,29 @@ against the per-file changelog comments the source already carries.
 
 ## [0.15.3] - 2026-10-12
 
+### Added
+
+- `exact` on `Storage`, an `Exclusion`: `RELAXED` (the default), `EXACT` or `FROZEN`, and a `Bool`, `true` being
+  `EXACT`. It says how a unit is kept from charging and discharging at once, which the relaxation allows and, with
+  losses, pays for where a node pays to have a unit taken off the network: 393.00 against 426.54 on three steps of
+  a must-run surplus against a spill at 500. `EXACT` gives each step that did it a binary `:z_stor` and two rows
+  `:cstr_stor_exclusion`, and solves again until none is left, so the model is mixed-integer with no duals and,
+  in the current based formulation, needs a solver for nonconvex mixed-integer programs. `FROZEN` fixes the
+  smaller side of each such step to zero and solves again, which is feasible, not optimal, and keeps the duals.
+  `EXACT` and `FROZEN` need finite ratings.
+- `refine!(nm)`, which `optimize_model!` calls after every solve and repeats while the model changes, at most
+  eight times; a type with something to tighten after the solve adds `refine!(nm, T)`. The solution has a
+  `"relaxation_gap"` where it was refined, and `print_summary` shows it.
+
 ### Changed
 
 - **Breaking.** The `s_max` of a `Storage` is positive: the constructor refuses zero, at any network index, and
   names `status` as the way to take a unit out of service.
+- The warning for a storage unit that is free to cycle is replaced by one for a `RELAXED` unit whose prices
+  `η_chg c_dch + c_chg / η_dch` fall below `(1 / η_dch - η_chg) |λ|`, with `λ` the lowest price a generator or a
+  slack unit sets. A cycle limit no longer settles it; it bounds the artefact and does not remove it.
+- A rolling horizon with `reuse` builds the window after a refined one again.
+- The documentation no longer says that charging and discharging at once is never worth doing.
 
 ## [0.15.2] - 2026-10-12
 

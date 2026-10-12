@@ -13,6 +13,7 @@
 # v0.15.1 - a storage unit is refused what it cannot use, and checked          #
 # v0.15.2 - a storage unit's converter rating                                  #
 # v0.15.3 - a storage unit's s_max is positive, never zero                     #
+# v0.15.3 - exact keeps charging and discharging at once out                   #
 ################################################################################
 
 # An impossible value used to travel on to the solver, which answered
@@ -159,6 +160,8 @@ end
         @test_throws ArgumentError Storage(; id = 1, node = 1, e_max = nw_vector(dim, [0.5, 0.5, -0.1]))
         @test_throws ArgumentError Storage(; id = 1, node = 1, s_max = nw_vector(dim, [0.2, -0.2, 0.2]))
         @test_throws ArgumentError Storage(; id = 1, node = 1, s_max = nw_vector(dim, [0.2, 0.0, 0.2]))
+        @test_throws ArgumentError Storage(; id = 1, node = 1, exact = EXACT,
+                                           p_dch_max = nw_vector(dim, [0.2, Inf, 0.2]))
         @test_throws ArgumentError Storage(; id = 1, node = 1, e_min = nw_vector(dim, [0.0, 0.6, 0.0]), e_max = 0.5)
         @test_throws ArgumentError Storage(; id = 1, node = 1, p_dch_max = nw_vector(dim, [0.2, -0.2, 0.2]))
         @test_throws ArgumentError Storage(; id = 1, node = 1, c_dch = nw_vector(dim, [1.0, -1.0, 1.0]))
@@ -183,6 +186,19 @@ end
         @test Storage(; id = 1, node = 1).e_min == 0.0
         @test Storage(; id = 1, node = 1).s_max == Inf          # no converter limit unless given
         @test Storage(; id = 1, node = 1, s_max = 0.2).s_max == 0.2
+
+        # `exact` says how charging and discharging at once is kept out, and takes a Bool as `pst` does
+        @test Storage(; id = 1, node = 1).exact === RELAXED
+        @test Storage(; id = 1, node = 1, exact = true).exact === EXACT
+        @test Storage(; id = 1, node = 1, exact = false).exact === RELAXED
+        @test Storage(; id = 1, node = 1, exact = FROZEN).exact === FROZEN
+
+        # what is excluded is measured against the ratings, and a binary row is big-M over them
+        @test Storage(; id = 1, node = 1, p_chg_max = Inf, p_dch_max = 0.2).exact === RELAXED
+        @test_throws ArgumentError Storage(; id = 1, node = 1, p_chg_max = Inf, p_dch_max = 0.2, exact = EXACT)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, p_chg_max = 0.2, p_dch_max = Inf, exact = FROZEN)
+        err = refusal(() -> Storage(; id = 7, node = 1, p_dch_max = Inf, exact = EXACT))
+        @test err isa ArgumentError && occursin("storage 7", err.msg) && occursin("exact", err.msg)
 
         # a price on each side replaces the one price on the discharge, and the old
         # name is gone

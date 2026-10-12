@@ -18,6 +18,7 @@
 # v0.15.0 - constraint keys and ids follow the nomenclature                    #
 # v0.15.0 - functions that write rows, duals and letters follow the map        #
 # v0.15.1 - a roll checks the schedule of its storage over the whole           #
+# v0.15.3 - exact keeps charging and discharging at once out                   #
 ################################################################################
 
 ################################################################################
@@ -533,8 +534,8 @@ start need not suit, and a redispatch is entitled to pay for that.
 - `horizon`: how many time steps a window sees. Must be at least `step`.
 - `step`: how many of them it commits, one by default.
 - `reuse`: keep one model across the windows, updating it in place instead of
-  building it again, wherever the two windows have the same shape. Off by
-  default. See the note below.
+  building it again, wherever the two windows have the same shape and the model
+  was not refined, see [`refine!`](@ref). Off by default. See the note below.
 - `warm_start`: hand each window the previous one's answer as a starting point.
   Off by default, and see the warning below for why. With `reuse` the hand-over
   is a shift within the one model, and without it a carry between two; the first
@@ -692,7 +693,8 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
         w         = window(state, :time, first:last)
         last < steps && _open_window_end!(w)
 
-        nm = reuse && held !== nothing && _same_shape(state, before, kept) ?
+        nm = reuse && held !== nothing && !haskey(held.ext, :refined) &&
+             _same_shape(state, before, kept) ?
              update_model!(held, w) :
              (rebuilt += 1;
               instantiate_model(w, P, F; jump_model = new_model(), schedule = false, kwargs...))
@@ -719,6 +721,7 @@ function solve_rolling_horizon(data::NetworkData, ::Type{P}, ::Type{F}, optimize
         end
 
         record["objective"] = nm.sol["objective"]
+        haskey(nm.sol, "relaxation_gap") && (record["relaxation_gap"] = nm.sol["relaxation_gap"])
         push!(windows, record)
 
         # a roll is as priced as its least priced window: a committed step whose

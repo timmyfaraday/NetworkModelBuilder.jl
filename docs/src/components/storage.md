@@ -24,6 +24,7 @@ Storage
 | ``p^{\text{sd,max}}_{u}`` | `p_dch_max` | discharge power limit | pu |
 | ``\eta^{\text{c}}_{u}`` | `η_chg` | one-way charge efficiency, in ``(0,1]`` | |
 | ``\eta^{\text{d}}_{u}`` | `η_dch` | one-way discharge efficiency, in ``(0,1]`` | |
+| | `exact` | how charging and discharging at once is kept out, an [`Exclusion`](@ref) or a `Bool`; `EXACT` and `FROZEN` need finite ratings | |
 | ``k^{\text{max}}_{u}`` | `k_cycl_max` | equivalent full cycles allowed per period | |
 | ``c^{\text{c}}_{u}`` | `c_chg` | price of one per unit charged | currency/pu/h |
 | ``c^{\text{d}}_{u}`` | `c_dch` | price of one per unit discharged | currency/pu/h |
@@ -45,6 +46,7 @@ Storage
 | ``p^{\text{sd}}_{u}`` | `:p_dch` | unit | discharge power, ``\ge 0`` | pu |
 | ``e_{u}`` | `:e_stor` | unit | state of charge, from `e_min` to `e_max` | pu·h |
 | ``q^{\text{s}}_{u}`` | `:q_stor` | unit | reactive power | pu |
+| ``z^{\text{s}}_{u}`` | `:z_stor` | unit | 1 where the unit charges, 0 where it discharges: a binary, written only for a step that charged and discharged at once and has `exact` set to `EXACT` | |
 | ``p^{\uparrow}_{u}``, ``p^{\downarrow}_{u}`` | `:p_stor_up`, `:p_stor_dn` | unit | moved up and down from the market schedule, redispatch only | pu |
 
 A power flow creates none of these: there the unit holds its setpoint.
@@ -121,6 +123,61 @@ duplicated to add one term is a coupling constraint that will drift.
 inflow
 ```
 
+### Charging and discharging at once
+
+Charging and discharging are two non-negative variables, and nothing in the
+constraints forbids both from being non-zero in the same step. With losses that is
+not harmless: a unit that charges and discharges ``x`` at once burns
+``x \left( 1 / \eta^{\text{d}}_{u} - \eta^{\text{c}}_{u} \right)`` of what it holds.
+Where a node pays to have a unit taken off the network — a [`Spill`](@ref) that
+charges for spilling, a generator that pays to run — the relaxation is paid to burn
+energy, and a unit that is meant to hold it does not.
+
+On three steps of a must-run surplus at a node that charges 500 to spill, a full
+battery with losses of ten per cent each way earns 393.00 relaxed, where 426.54 is the
+most it can earn and 450.00 is what the network pays without it. The relaxation is
+exact where the unit's own prices reach what burning is worth,
+
+```math
+\eta^{\text{c}}_{u} c^{\text{d}}_{u} + c^{\text{c}}_{u} / \eta^{\text{d}}_{u}
+\ge \left( 1 / \eta^{\text{d}}_{u} - \eta^{\text{c}}_{u} \right) \left| \lambda \right| ,
+```
+
+with ``\lambda`` the lowest price a generator or a slack unit sets, 500 there and the
+right hand side 105.6: a ``c^{\text{d}}_{u}`` of 100 leaves the gap and one of 130 closes
+it. A unit that falls short of it is warned about when the model is built. A cycle limit
+does not settle it, since it bounds how often the unit burns and does not stop it.
+
+`exact` says what is done about it, an [`Exclusion`](@ref):
+
+| value | what it does | the model afterwards |
+|:------|:-------------|:---------------------|
+| `RELAXED` | nothing | linear, with duals |
+| `EXACT` | a binary for each step that did it, then solved again | mixed-integer, no duals |
+| `FROZEN` | the smaller side of each such step fixed to zero, then solved again | linear, with duals; feasible, not optimal |
+
+`EXACT` writes, for each step ``n`` that the solution charged and discharged in at once,
+a variable ``z^{\text{s}}_{u,n} \in \{0, 1\}`` and
+
+```math
+p^{\text{sc}}_{u,n} \le p^{\text{sc,max}}_{u,n} \, z^{\text{s}}_{u,n} , \qquad
+p^{\text{sd}}_{u,n} \le p^{\text{sd,max}}_{u,n} \left( 1 - z^{\text{s}}_{u,n} \right) ,
+```
+
+and solves again until no step is left, at most eight rounds. Only the steps that need
+a binary get one: where the relaxation is exact there are none and the model stays a
+linear program. In the current based formulation the model needs a solver for nonconvex
+mixed-integer programs, as a free switch does.
+
+[`optimize_model!`](@ref) does this through [`refine!`](@ref), reports what the refined
+objective is above the first one as `"relaxation_gap"`, and [`print_summary`](@ref)
+shows it. [`solve_rolling_horizon`](@ref) builds the window after a refined one again
+rather than updating it.
+
+```@docs
+Exclusion
+```
+
 ### The end of the horizon
 
 A unit that carries an `e_fin` is pinned at the last `:time` coordinate:
@@ -179,12 +236,11 @@ fnct_stor_cycle!
     would count every cycle twice. This is also the definition a warranty is
     written in, and the one that makes the count independent of the capacity.
 
-!!! warning "A battery that is free to cycle"
-    A unit with no cycle limit and no price on what it moves, in a problem where
-    some generation is priced below zero, will charge and discharge as often as
-    its ratings allow — and the trajectory it returns is then an artefact of the
-    solver rather than an answer. The package warns when it finds that
-    combination. Give the unit a limit or a price; either settles it.
+!!! warning "A cycle limit does not stop charging and discharging at once"
+    Where a node pays to have energy taken off the network, a unit with losses is
+    paid to burn what it holds by charging and discharging at once. A cycle limit
+    bounds how often it does so and does not stop it; see
+    [Charging and discharging at once](@ref).
 
 ### Before the build
 
@@ -220,12 +276,6 @@ throughput price is also in `redispatch_cost`, because degradation does not care
 why the energy moved — a battery asked to relieve a congestion wears exactly as
 much as one following a schedule, and `c_up` and `c_dn` price the
 *deviation* rather than the movement.
-
-!!! note "Charging and discharging at once"
-    Nothing forbids ``p^{\text{sc}}_{u}`` and ``p^{\text{sd}}_{u}`` from both
-    being non-zero. Where the efficiencies are below one that is never worth
-    doing, and forbidding it outright would need a binary variable and hence a
-    different class of solver.
 
 !!! note "It needs a time dimension"
     Like a [`FlexibleLoad`](@ref), a storage unit couples network indices along

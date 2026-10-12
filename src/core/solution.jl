@@ -11,6 +11,7 @@
 # v0.12.6 - a solution holds the indices and components asked for              #
 # v0.14.0 - variable and solution keys follow the nomenclature                 #
 # v0.14.0 - the fields follow the nomenclature                                 #
+# v0.15.3 - exact keeps charging and discharging at once out                   #
 ################################################################################
 
 ################################################################################
@@ -301,6 +302,8 @@ function print_summary(io::IO, result::Dict{String,Any}; nw::Int = 1)
                    result["problem_type"], result["formulation_type"])
     Printf.@printf(io, "status %s", result["termination_status"])
     haskey(result, "objective") && Printf.@printf(io, ", objective %.6f", result["objective"])
+    haskey(result, "relaxation_gap") &&
+        Printf.@printf(io, ", relaxation gap %.6f", result["relaxation_gap"])
     Printf.@printf(io, "\n\nnode        vm [pu]     va [deg]\n")
     for i in sort(collect(keys(sol["node"])), by = x -> parse(Int, x))
         Printf.@printf(io, "%-8s %10.5f %12.5f\n", i, sol["node"][i]["v_magn"],

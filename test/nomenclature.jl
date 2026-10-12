@@ -10,6 +10,7 @@
 # v0.15.0 - constraints, functions and duals follow a grammar                  #
 # v0.15.0 - the duals follow the grammar of constraints                        #
 # v0.15.1 - c_thru is retired for c_dch                                        #
+# v0.15.3 - exact is a word, exclusion a role, chg and dch id parts            #
 ################################################################################
 
 # The names of fields, variable keys and solution keys follow one grammar
@@ -40,7 +41,7 @@ const NOM_UNIT = Set(["kv", "mva", "km"])
 "what is not a quantity stays a plain word"
 const NOM_WORDS = Set(["id", "name", "node", "terminals", "status", "ext", "type", "area", "zone",
                        "lock", "position", "reverse", "oltc", "pst", "net",
-                       "terminal", "tap"])
+                       "terminal", "tap", "exact"])
 
 "an old name that is also a word elsewhere, so only the grammar check looks for it"
 const NOM_SHARED = Set(["step"])
@@ -291,11 +292,12 @@ const CST_OWNERS = Set(["node", "edge", "unit", "br", "tf", "dcl", "sw", "gen", 
 const CST_WORDS = Set(["balance", "reference", "setpoint", "anchor", "limit", "range", "rating", "overload",
                        "peak", "angle", "difference", "voltage", "current", "flow", "power", "injection",
                        "energy", "final", "cycle", "redispatch", "control", "equation", "open", "loop",
-                       "winding", "ratio", "tap", "step", "setting", "star", "pi", "section", "point"])
+                       "winding", "ratio", "tap", "step", "setting", "star", "pi", "section", "point",
+                       "exclusion"])
 
 "a part of the id of a row, after the id of its component"
 const CST_IDS = Set(["real", "imag", "magn", "angl", "min", "max", "fr", "to", "ser", "set", "loss",
-                     "forward", "reverse", "pos", "neg", "side", "p", "q"])
+                     "forward", "reverse", "pos", "neg", "side", "p", "q", "chg", "dch"])
 
 "a key `con` publishes that bundles the rows of several keys, so no row is registered under it"
 const CST_BUNDLES = Set(["cstr_br_equation", "cstr_edge_limit", "cstr_sw_equation"])

@@ -22,6 +22,7 @@
 # v0.15.1 - the throughput of a storage unit is paid in a redispatch           #
 # v0.15.1 - a roll checks the schedule of its storage over the whole           #
 # v0.15.2 - a storage unit's converter rating                                  #
+# v0.15.3 - exact keeps charging and discharging at once out                   #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The
@@ -287,6 +288,21 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["p_gen_
                                     LPFFormulation, OPTIMIZER))
         @test sum(nw_solution(idle, n)["unit"]["4"]["p_stor_up"] for n in 1:2) ≈ 0.0 atol = 1e-5
         @test idle["objective"] ≈ 1.0 * 100.0 + 1.0 * 10.0 atol = 1e-3
+    end
+
+    @testset "an exact storage unit is a measure over the time window too" begin
+        highs   = JuMP.optimizer_with_attributes(HiGHS.Optimizer, "output_flag" => false)
+        dim     = Dimension(:time => 2)
+        battery = Storage(; id = 4, node = 2, e_max = 0.5, e_init = 0.25,
+                          p_chg_max = 0.5, p_dch_max = 0.5, η_chg = 1.0, η_dch = 1.0, exact = EXACT)
+        data    = radial_network(; dim, extra = Dict{Int,AbstractUnit}(4 => battery))
+
+        # the same 85.0 as the relaxed unit, with no step in which it does both
+        result = quiet(() -> solve_rd(data, LPFFormulation, highs))
+        @test result["termination_status"] == JuMP.OPTIMAL
+        @test result["objective"] ≈ 85.0 atol = 1e-4
+        @test all(nw_solution(result, n)["unit"]["4"]["p_chg"] *
+                  nw_solution(result, n)["unit"]["4"]["p_dch"] < 1e-5 for n in 1:2)
     end
 
     @testset "a storage unit pays for what it moves in a redispatch too" begin

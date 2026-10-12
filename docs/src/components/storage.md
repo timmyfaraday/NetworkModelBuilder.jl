@@ -29,7 +29,7 @@ Storage
 | ``c^{\text{d}}_{u}`` | `c_dch` | price of one per unit discharged | currency/pu/h |
 | ``c^{\text{cyc}}_{u}`` | `c_cycl` | price of one equivalent full cycle | currency/cycle |
 | ``q^{\text{min}}_{u}``, ``q^{\text{max}}_{u}`` | `q_min`, `q_max` | reactive power limits | pu |
-| ``s^{\text{max}}_{u}`` | `s_max` | rating of the converter the unit sits behind, `Inf` for none | pu |
+| ``s^{\text{max}}_{u}`` | `s_max` | rating of the converter the unit sits behind, positive, `Inf` for none | pu |
 | ``c^{\uparrow}_{u}``, ``c^{\downarrow}_{u}`` | `c_up`, `c_dn` | price of injecting one per unit more and less than the market schedule in a redispatch, each finite and the pair summing to at least zero | currency/pu/h |
 | | `status` | in service | |
 | | `ext` | free-form storage, carried along and never read | |
@@ -86,6 +86,7 @@ and the `LPFFormulation`, which has no reactive power, limits the active power a
 ```
 
 The default `Inf` writes neither, and the two power ratings are then the whole limit.
+A rating is positive: a unit that cannot inject is out of service, and `status` says so.
 The limit is on the net, not on each side: where the efficiencies are one the unit may
 charge and discharge at once, so either side can exceed ``s^{\text{max}}_{u}`` as long as
 the difference does not. A rating that is finite at some network indices and `Inf` at

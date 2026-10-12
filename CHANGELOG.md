@@ -8,6 +8,13 @@ Versions before 0.9.1 were never tagged in git; the version numbers and dates
 below are reconstructed from `Project.toml`'s own history, cross-referenced
 against the per-file changelog comments the source already carries.
 
+## [0.15.3] - 2026-10-12
+
+### Changed
+
+- **Breaking.** The `s_max` of a `Storage` is positive: the constructor refuses zero, at any network index, and
+  names `status` as the way to take a unit out of service.
+
 ## [0.15.2] - 2026-10-12
 
 ### Added

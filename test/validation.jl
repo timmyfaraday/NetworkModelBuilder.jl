@@ -12,6 +12,7 @@
 # v0.14.0 - the fields follow the nomenclature                                 #
 # v0.15.1 - a storage unit is refused what it cannot use, and checked          #
 # v0.15.2 - a storage unit's converter rating                                  #
+# v0.15.3 - a storage unit's s_max is positive, never zero                     #
 ################################################################################
 
 # An impossible value used to travel on to the solver, which answered
@@ -134,6 +135,7 @@ end
         @test_throws ArgumentError Storage(; id = 1, node = 1, p_dch_max = -0.1)
         @test_throws ArgumentError Storage(; id = 1, node = 1, p_chg_max = NaN)
         @test_throws ArgumentError Storage(; id = 1, node = 1, s_max = -0.1)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, s_max = 0.0)
         @test_throws ArgumentError Storage(; id = 1, node = 1, s_max = NaN)
         @test_throws ArgumentError Storage(; id = 1, node = 1, e_max = -0.5)
         @test_throws ArgumentError Storage(; id = 1, node = 1, e_min = -0.1, e_max = 0.5)
@@ -156,11 +158,17 @@ end
         dim = Dimension(:time => 3)
         @test_throws ArgumentError Storage(; id = 1, node = 1, e_max = nw_vector(dim, [0.5, 0.5, -0.1]))
         @test_throws ArgumentError Storage(; id = 1, node = 1, s_max = nw_vector(dim, [0.2, -0.2, 0.2]))
+        @test_throws ArgumentError Storage(; id = 1, node = 1, s_max = nw_vector(dim, [0.2, 0.0, 0.2]))
         @test_throws ArgumentError Storage(; id = 1, node = 1, e_min = nw_vector(dim, [0.0, 0.6, 0.0]), e_max = 0.5)
         @test_throws ArgumentError Storage(; id = 1, node = 1, p_dch_max = nw_vector(dim, [0.2, -0.2, 0.2]))
         @test_throws ArgumentError Storage(; id = 1, node = 1, c_dch = nw_vector(dim, [1.0, -1.0, 1.0]))
         @test_throws ArgumentError Storage(; id = 1, node = 1, c_up = 10.0,
                                            c_dn = nw_vector(dim, [10.0, -30.0, 10.0]))
+
+        # a unit that cannot inject is out of service, and `status` says so
+        err = refusal(() -> Storage(; id = 7, node = 1, s_max = 0.0))
+        @test err isa ArgumentError
+        @test occursin("storage 7", err.msg) && occursin("status", err.msg)
 
         err = refusal(() -> Storage(; id = 7, node = 1, c_up = 10.0, c_dn = -30.0))
         @test err isa ArgumentError

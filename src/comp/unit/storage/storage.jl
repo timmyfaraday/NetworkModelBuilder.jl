@@ -18,6 +18,7 @@
 # v0.15.0 - functions that write rows, duals and letters follow the map        #
 # v0.15.1 - e_min, c_chg and c_dch, the checks made before the build           #
 # v0.15.2 - s_max, the converter rating of a storage unit                      #
+# v0.15.3 - s_max is positive, never zero                                      #
 ################################################################################
 
 export AbstractStorage, Storage, inflow, storage_cycles
@@ -111,8 +112,8 @@ market schedule that runs the unit out. A model runs it before it builds.
   once per period rather than once per network index â€” a cost that spans network
   indices, see [`period_cost`](@ref).
 - `q_min`, `q_max`: the reactive power limits [pu].
-- `s_max`: the rating of the converter the unit sits behind [pu]. `Inf`, the
-  default, writes no row. A current based formulation keeps the net injection
+- `s_max`: the rating of the converter the unit sits behind [pu], positive. `Inf`, the
+  default, writes no row; a unit that cannot inject is out of service, which `status` says. A current based formulation keeps the net injection
   and the reactive power inside a circle, `(p^{sd} - p^{sc})^2 + q^2 <= s_max^2`;
   a linearized one, which has no reactive power, limits the net active
   injection, `|p^{sd} - p^{sc}| <= s_max`. The charge and discharge ratings still
@@ -199,8 +200,8 @@ function _check_storage(id, e_max, e_min, e_init, e_fin, p_chg_max, p_dch_max, Î
         throw(ArgumentError("storage $id has a cycle cost that is negative or not finite, which pays the problem to cycle it"))
     all_nw(<=, q_min, q_max) ||
         throw(ArgumentError("storage $id has q_min above q_max"))
-    all_nw(>=(0), s_max) ||
-        throw(ArgumentError("storage $id has a negative or undefined converter rating `s_max`"))
+    all_nw(>(0), s_max) ||
+        throw(ArgumentError("storage $id has a converter rating `s_max` that is not positive; a unit that cannot inject is out of service, which `status` says"))
     all_nw(isfinite, c_up) && all_nw(isfinite, c_dn) ||
         throw(ArgumentError("storage $id has a `c_up` or a `c_dn` that is not finite"))
     all_nw((up, dn) -> up + dn >= 0, c_up, c_dn) ||

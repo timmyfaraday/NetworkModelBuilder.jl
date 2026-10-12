@@ -27,6 +27,7 @@
 # v0.15.5 - an outage of a storage unit is its status                          #
 # v0.15.6 - a preventive unit lost in a contingency is refused                 #
 # v0.15.6 - a roll carries the cycles used and the energy of a period          #
+# v0.15.7 - the curative range of a corrective storage unit                    #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The
@@ -87,6 +88,29 @@ function meshed_network(; dim::Dimension = Dimension(), rate::Float64 = 0.5,
         3 => FixedLoad(; id = 3, node = 3, p_set = 1.0, q_set = 0.0))
 
     return NetworkData(Network(I, E, U; dim); name = "meshed", s_base_mva = 100.0)
+end
+
+"""
+Three parallel branches of 0.4 into a load of 1.0 that a generator of the market serves from the
+other end, a dear generator at the load, and `behind` at the load as unit 4, over one step and
+three contingencies: none, branch 3 out, branches 2 and 3 out. A state needs 0, 0.2 and 0.6 of
+relief, which what comes down at the far end is paid 10 for and what comes up at the load 100.
+"""
+function parallel_network(behind::AbstractStorage; dim::Dimension = Dimension(:time => 1, :contingency => 3))
+    I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0), 2 => Node(; id = 2))
+    E = Dict{Int,AbstractEdge}(
+        1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.1, s_max = 0.4),
+        2 => Branch(; id = 2, terminals = [1, 2], r = 0.0, x = 0.1, s_max = 0.4,
+                    status = nw_vector(dim, (n, c) -> c.contingency != 3)),
+        3 => Branch(; id = 3, terminals = [1, 2], r = 0.0, x = 0.1, s_max = 0.4,
+                    status = nw_vector(dim, (n, c) -> c.contingency == 1)))
+    U = Dict{Int,AbstractUnit}(
+        1 => Generator(; id = 1, node = 1, p_max = 5.0, q_min = -5.0, q_max = 5.0, p_set = 1.0, c = [0.0, 10.0]),
+        2 => Generator(; id = 2, node = 2, p_max = 5.0, q_min = -5.0, q_max = 5.0, p_set = 0.0, c = [0.0, 100.0]),
+        3 => FixedLoad(; id = 3, node = 2, p_set = 1.0, q_set = 0.0),
+        4 => behind)
+
+    return NetworkData(Network(I, E, U; dim); name = "parallel", s_base_mva = 100.0)
 end
 
 "the tap of the phase shifter, edge 2, at network index `n`"
@@ -377,6 +401,60 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["p_gen_
         # the rows of a held unit are the base case's, a row per step; a corrective unit has them in each state
         @test rows(Redispatch()) == 2
         @test rows(Redispatch(; control = :corrective)) == 4
+    end
+
+    @testset "a corrective storage unit may be held to a curative range" begin
+        # a state needs 0, 0.2 and 0.6 of relief. A free unit of 0.5 behind the constraint gives what it
+        # can in each, and what it gives comes off the generator at the far end whether it is needed or not:
+        # no row, 10(0.2) + 10(0.6) + 100(0.1) = 18, over three equal states
+        battery(; kw...) = Storage(; id = 4, node = 2, e_max = 0.5, e_init = 0.5,
+                                p_chg_max = 0.5, p_dch_max = 0.5, kw...)
+        corrective(; kw...) = quiet(() -> solve_rd(parallel_network(battery(; kw...)), LPFFormulation, OPTIMIZER;
+                                                   redispatch = Redispatch(; control = :corrective)))
+        net(result) = [nw_solution(result, n)["unit"]["4"]["p_dch"] - nw_solution(result, n)["unit"]["4"]["p_chg"]
+                       for n in 1:3]
+
+        free = corrective()
+        @test free["termination_status"] == JuMP.LOCALLY_SOLVED
+        @test free["objective"] ≈ 6.0 atol = 1e-4
+        @test net(free) ≈ [0.0, 0.2, 0.5] atol = 1e-5
+
+        # a holding time of 2 h puts the net power in one band of 0.5 / 2 = 0.25, which the base case is in:
+        # the unit gives 0.25 in the first two states, 10(0.25) + 10(0.25) + 160 = 21
+        banded = corrective(h_cur = 2.0)
+        @test banded["objective"] ≈ 7.0 atol = 1e-4
+        @test net(banded) ≈ [0.25, 0.25, 0.5] atol = 1e-5
+
+        # a band as wide as the states are apart is no band, and a larger capacity is a wider one: 0.8 / 2 = 0.4
+        @test corrective(h_cur = 1.0)["objective"] ≈ 6.0 atol = 1e-4
+        wide = corrective(e_max = 0.8, h_cur = 2.0)
+        @test wide["objective"] ≈ 19 / 3 atol = 1e-4
+        @test net(wide) ≈ [0.1, 0.2, 0.5] atol = 1e-5
+
+        # the rows: a pair for every state the unit is in, and the width once, at the first of them
+        rows(st; setup = Redispatch(; control = :corrective), data = parallel_network(st)) =
+            Dict(key => count(k -> k[2] === key, keys(_NMB.registered_constraints(instantiate_model(
+                     data, RedispatchProblem, LPFFormulation; ext = Dict{Symbol,Any}(:redispatch => setup)))))
+                 for key in (:cstr_stor_range, :cstr_stor_range_limit))
+        @test rows(battery(h_cur = 2.0)) == Dict(:cstr_stor_range => 6, :cstr_stor_range_limit => 1)
+
+        # none for a unit with no holding time, for a preventive one, whose net power is the same in every
+        # state, for a problem with one state, and for the states a unit is lost in
+        @test rows(battery()) == Dict(:cstr_stor_range => 0, :cstr_stor_range_limit => 0)
+        @test rows(battery(h_cur = 2.0); setup = Redispatch()) == Dict(:cstr_stor_range => 0, :cstr_stor_range_limit => 0)
+        single = Dimension(:time => 1, :contingency => 1)
+        @test rows(battery(h_cur = 2.0); data = parallel_network(battery(h_cur = 2.0); dim = single)) ==
+              Dict(:cstr_stor_range => 0, :cstr_stor_range_limit => 0)
+        away = battery(h_cur = 2.0, status = nw_vector(Dimension(:time => 1, :contingency => 3), (n, c) -> c.contingency != 3))
+        @test rows(away) == Dict(:cstr_stor_range => 4, :cstr_stor_range_limit => 1)
+
+        # the range is a row and two variables of the redispatch only
+        opf = instantiate_model(parallel_network(battery(h_cur = 2.0)), OptimalPowerFlowProblem, LPFFormulation)
+        @test !any(k -> k[2] in (:cstr_stor_range, :cstr_stor_range_limit), keys(_NMB.registered_constraints(opf)))
+        nm = instantiate_model(parallel_network(battery(h_cur = 2.0)), RedispatchProblem, LPFFormulation;
+                               ext = Dict{Symbol,Any}(:redispatch => Redispatch(; control = :corrective)))
+        @test haskey(_NMB.var(nm; nw = 1), :p_stor_max) && haskey(_NMB.var(nm; nw = 1), :p_stor_min)
+        @test !haskey(_NMB.var(nm; nw = 2), :p_stor_max)
     end
 
     @testset "a redispatch can ask a unit to leave the energy its schedule leaves" begin

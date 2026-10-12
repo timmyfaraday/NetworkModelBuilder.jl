@@ -23,6 +23,7 @@
 # v0.15.4 - terminal, the end of the horizon as a list of conditions           #
 # v0.15.5 - a storage unit out of service holds its energy                     #
 # v0.15.6 - the cycle limit is a sliding 24 h window on both sides of the store#
+# v0.15.7 - h_cur, the curative range of a corrective storage unit             #
 ################################################################################
 
 export AbstractStorage, Storage, inflow
@@ -30,7 +31,7 @@ export Exclusion, RELAXED, EXACT, FROZEN
 export AbstractTerminal, Pin, Cyclic, Floor, Value, Soft, Quad
 export check_storage, scheduled_energy, energy_at
 export variable_storage_active!, variable_storage_reactive!, variable_stor_terminal!
-export fnct_stor_cycle!, fnct_stor_final_energy!
+export fnct_stor_cycle!, fnct_stor_final_energy!, fnct_stor_range!
 
 ################################################################################
 # Storage — data                                                               #
@@ -67,6 +68,7 @@ and the rolling horizon by declaring them:
 | `k_cycl_max`, `e_cycl_init` | [`fnct_stor_cycle!`](@ref), [`initial_state`](@ref) |
 | `c_chg`, `c_dch`, `c_cycl` | [`dispatch_cost`](@ref), [`redispatch_cost`](@ref) |
 | `c_up`, `c_dn` | [`redispatch_cost`](@ref) |
+| `h_cur` | [`fnct_stor_range!`](@ref) |
 | `q_min`, `q_max` | the reactive power, where the formulation has any |
 | `s_max` | the converter limit, a row where it is finite |
 
@@ -346,6 +348,10 @@ market schedule that runs the unit out. A model runs it before it builds.
   of a free measure as `psup - psdn` rather than as either one. Either price may
   be negative, a payback, but a pair that sums below zero is refused: it would
   pay the solver to raise both volumes by the same amount.
+- `h_cur`: the curative holding time of a corrective unit [h]. The net power it takes over the
+  contingencies, the base case included, spans at most `e_max / h_cur` at every time step, so that one
+  position serves whichever of them occurs, see [`fnct_stor_range!`](@ref). `0`, the default,
+  writes no row, and a preventive unit has the same net power in every state and none.
 - `status`: whether the storage is in service.
 - `ext`: free-form storage.
 """
@@ -375,21 +381,22 @@ Base.@kwdef struct Storage <: AbstractStorage
     s_max     ::NetworkQuantity{Float64} = Inf
     c_up      ::NetworkQuantity{Float64} = 0.0
     c_dn      ::NetworkQuantity{Float64} = 0.0
+    h_cur     ::Float64                  = 0.0
     status    ::NetworkQuantity{Bool}    = true
     ext       ::Dict{Symbol,Any}         = Dict{Symbol,Any}()
 
     function Storage(id, name, node, p_set, q_set, e_max, e_min, e_init, e_fin, terminal,
                      p_chg_max, p_dch_max, η_chg, η_dch, exact, k_cycl_max, e_cycl_init, c_chg,
-                     c_dch, c_cycl, q_min, q_max, s_max, c_up, c_dn, status, ext)
+                     c_dch, c_cycl, q_min, q_max, s_max, c_up, c_dn, h_cur, status, ext)
         exact    = _exclusion(exact)
         terminal = _terminals(id, terminal, e_init, e_fin)
         _check_storage(id, e_max, e_min, e_init, e_fin, p_chg_max, p_dch_max, η_chg,
                        η_dch, exact, k_cycl_max, e_cycl_init, c_chg, c_dch, c_cycl, q_min, q_max,
-                       s_max, c_up, c_dn)
+                       s_max, c_up, c_dn, h_cur)
 
         return new(id, name, node, p_set, q_set, e_max, e_min, e_init, e_fin, terminal,
                    p_chg_max, p_dch_max, η_chg, η_dch, exact, k_cycl_max, e_cycl_init, c_chg,
-                   c_dch, c_cycl, q_min, q_max, s_max, c_up, c_dn, status, ext)
+                   c_dch, c_cycl, q_min, q_max, s_max, c_up, c_dn, h_cur, status, ext)
     end
 end
 
@@ -399,7 +406,7 @@ end
 # A window starts from what a solver returned, a digit below zero included, so `e_init` is not refused here.
 function _check_storage(id, e_max, e_min, e_init, e_fin, p_chg_max, p_dch_max, η_chg, η_dch,
                         exact, k_cycl_max, e_cycl_init, c_chg, c_dch, c_cycl, q_min, q_max, s_max,
-                        c_up, c_dn)
+                        c_up, c_dn, h_cur)
     0 < η_chg <= 1 ||
         throw(ArgumentError("storage $id has a charge efficiency outside (0, 1]"))
     0 < η_dch <= 1 ||
@@ -436,6 +443,8 @@ function _check_storage(id, e_max, e_min, e_init, e_fin, p_chg_max, p_dch_max, �
         throw(ArgumentError("storage $id has a `c_up` or a `c_dn` that is not finite"))
     all_nw((up, dn) -> up + dn >= 0, c_up, c_dn) ||
         throw(ArgumentError("storage $id has a `c_up` and a `c_dn` that sum below zero, which pays the problem to move it up and down at once"))
+    isfinite(h_cur) && h_cur >= 0 ||
+        throw(ArgumentError("storage $id has a curative holding time `h_cur` that is negative or not finite"))
 
     return nothing
 end
@@ -857,7 +866,8 @@ fixed, so a problem with a contingency dimension gives each contingency its own
 trajectory from the same starting energy.
 
 The cycle limit of every unit that carries one is written here too, over any 24
-hours, see [`fnct_stor_cycle!`](@ref).
+hours, see [`fnct_stor_cycle!`](@ref), and so is the curative range of a corrective
+unit that carries one, see [`fnct_stor_range!`](@ref).
 """
 function fnct_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
                                  ) where {P<:AbstractDispatchProblem,F<:AbstractFormulationType,
@@ -883,6 +893,7 @@ function fnct_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
     end
 
     fnct_stor_cycle!(nm, T)
+    fnct_stor_range!(nm, T)
     fnct_stor_final_energy!(nm, T)
     _warn_inexact_relaxation(nm, T)
 
@@ -1098,6 +1109,64 @@ function _counted(history, room::Float64)
     end
 
     return used
+end
+
+"""
+    fnct_stor_range!(nm, T)
+
+Hold the net power of every corrective storage unit that carries a curative holding time in one band over
+the states of the world, at every time step,
+
+```math
+p^{\\text{min}}_{u,n} \\le p^{\\text{sd}}_{u,m} - p^{\\text{sc}}_{u,m} \\le p^{\\text{max}}_{u,n}
+\\quad \\forall m \\in \\mathcal{C}_{n}, \\qquad
+p^{\\text{max}}_{u,n} - p^{\\text{min}}_{u,n} \\le e^{\\text{max}}_{u,n} / h^{\\text{cur}}_{u} ,
+```
+
+with `𝒞` the `:contingency` coordinates of the time step the unit is in service at, the base case among
+them, and `n` the first of them. The band is two free variables per unit and time step, `:p_stor_max` and
+`:p_stor_min`, registered at `n`; the unit is free to centre it by moving its output in the base case, and its
+trajectory in each state stays its own. What the band says is that one position taken in advance serves
+whichever contingency occurs, which a unit that takes `h_cur` hours to reach another one has to be held to.
+
+Written for a [`RedispatchProblem`](@ref) with more than one coordinate of `:contingency` only, and for a
+unit whose `h_cur` is positive and whose control mode is corrective: a preventive unit has the same net power
+in every state, and a unit that is in service in one state has nothing to be held with. `e_min` is another
+thing, a floor on the energy in every state.
+"""
+fnct_stor_range!(::NetworkModel, ::Type{T}) where {T<:AbstractStorage} = nothing
+
+function fnct_stor_range!(nm::NetworkModel{P}, ::Type{T}
+                         ) where {P<:RedispatchProblem,T<:AbstractStorage}
+    has_dim(nm, :contingency) && dim_length(nm, :contingency) > 1 || return nothing
+    any(c -> c isa T && c.h_cur > 0, values(units(network(nm)))) || return nothing
+
+    for n in nw_ids(nm)
+        is_first_id(nm, n, :contingency) || continue
+        states = similar_ids(nm, n; contingency = 1:dim_length(nm, :contingency))
+
+        for u in _present(nm, T)
+            units(network(nm))[u].h_cur > 0 && is_corrective(nm, :unit, u) || continue
+
+            serving = [m for m in states if _held(nm, :p_dch, u, m) !== nothing]
+            length(serving) > 1 || continue
+
+            owner = first(serving)
+            st    = unit(nm, u; nw = owner)::T
+            top   = variable!(nm, :p_stor_max, u; nw = owner, start = 0.0)
+            bot   = variable!(nm, :p_stor_min, u; nw = owner, start = 0.0)
+
+            for m in serving
+                net = JuMP.@expression(nm.model, var(nm, :p_dch, u; nw = m) - var(nm, :p_chg, u; nw = m))
+                constrain!(nm, :cstr_stor_range, (u, :min), JuMP.@build_constraint(bot <= net); nw = m)
+                constrain!(nm, :cstr_stor_range, (u, :max), JuMP.@build_constraint(net <= top); nw = m)
+            end
+            constrain!(nm, :cstr_stor_range_limit, u, JuMP.@build_constraint(
+                top - bot <= nw_value(nm, st.e_max, owner) / st.h_cur); nw = owner)
+        end
+    end
+
+    return nothing
 end
 
 """

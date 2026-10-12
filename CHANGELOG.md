@@ -8,6 +8,18 @@ Versions before 0.9.1 were never tagged in git; the version numbers and dates
 below are reconstructed from `Project.toml`'s own history, cross-referenced
 against the per-file changelog comments the source already carries.
 
+## [0.15.7] - 2026-10-12
+
+### Added
+
+- `h_cur` on `Storage`, the curative holding time of a corrective unit [h]: in a redispatch with more than one
+  `:contingency` coordinate its net power over the contingencies, the base case included, spans at most
+  `e_max / h_cur` at every time step, so that one position taken in advance serves whichever contingency occurs. It is two
+  free variables per time step, `:p_stor_max` and `:p_stor_min`, and the rows `cstr_stor_range` and `cstr_stor_range_limit`,
+  written by `fnct_stor_range!`. `0`, the default, and a preventive unit write nothing. On three contingencies that need 0, 0.2
+  and 0.6 of relief a free unit of 0.5 pu·h costs 6.0 with no band, 7.0 at `h_cur` 2 and 6.3333 at `h_cur` 2 with an `e_max` of 0.8.
+- The symbol `h` and the word `cur` of the nomenclature, a holding time and a curative one.
+
 ## [0.15.6] - 2026-10-12
 
 ### Added

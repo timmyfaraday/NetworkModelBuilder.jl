@@ -19,6 +19,7 @@
 # v0.15.4 - the end of a storage unit's horizon is a list of conditions        #
 # v0.15.5 - an outage of a storage unit is its status                          #
 # v0.15.6 - the cycle limit is a sliding 24 h window on both sides of the store#
+# v0.15.7 - the curative range of a corrective storage unit                    #
 ################################################################################
 
 "case5 with edge 5, which has a turns ratio, rebuilt as a transformer carrying `extra`"
@@ -215,6 +216,7 @@ Base.@kwdef struct InflowStorage <: AbstractStorage
     s_max                 ::NetworkQuantity{Float64} = Inf
     c_up              ::NetworkQuantity{Float64} = 0.0
     c_dn              ::NetworkQuantity{Float64} = 0.0
+    h_cur             ::Float64                  = 0.0
     status               ::NetworkQuantity{Bool}    = true
     ext                  ::Dict{Symbol,Any}         = Dict{Symbol,Any}()
 end

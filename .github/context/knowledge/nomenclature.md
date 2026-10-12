@@ -16,10 +16,10 @@ grammar as code.
 
 - **Symbol:** the quantity, one letter. `v` voltage, `i` current, `p` active power, `q` reactive power, `s` apparent power,
   `r` resistance, `x` reactance, `g` conductance, `b` susceptance, `e` energy, `t` ratio of a winding, `c` cost or price,
-  `l` length, `z` a binary decision, `k` a count, `η` efficiency (D56). An index letter (`i e u a n k t`) is never a quantity,
+  `l` length, `z` a binary decision, `k` a count, `h` a holding time (D86), `η` efficiency (D56). An index letter (`i e u a n k t`) is never a quantity,
   so a symbol may share its letter: `i_term_real` is a current, `i` in `for i in I` is a node.
 - **Primary:** what, or which part. A location `term ser shnt mgnt star pnt wind`; an owner `gen stor flex slk dcl sw unit`; a role
-  `chg dch loss base ovl cycl per`; or, where nothing says what, a part `real imag magn angl`.
+  `chg dch loss base ovl cycl per cur`; or, where nothing says what, a part `real imag magn angl`.
 - **Secondary:** after a what, a part; otherwise a qualifier. A bound `min max`; a reference `set init fin nom mkt`; a direction
   `up dn`; a kind `fix prop thru peak step ener`.
 - **Unit:** last slot, only where the quantity is not in pu or rad: `kv mva km`.
@@ -123,6 +123,8 @@ New keys are `cstr_` and the stem shown; old keys are as written in `src/` today
 `con` keys that are not a register key: `branch` `br_equation`, `switch` `sw_equation`, `edge_limits` `edge_limit`, `switch_limits` `sw_rating`, `switch_loop_free` `sw_cycle`,
 `generator_power`, `load_power`, `slack_power`, `storage_power` `unit_power` (`unit_injection` in LPF), `node_balance_real`, `node_balance_imag` `node_balance`,
 `node_voltage_limits` `node_voltage_limit`; `edge_angle_difference`, `node_voltage_*` and the rest keep their stem.
+
+A key written after the rename has no old name: `cstr_stor_range` and `cstr_stor_range_limit` (D86). `test/nomenclature.jl` maps `storage_range` to the first so that `fnct_stor_range` has a stem.
 
 Ids that change: `:pi_section` `(e, :cr_fr)`, `:ci_fr`, `:cr_to`, `:ci_to`, `:v_real`, `:v_imag` become `(e, :fr, :real)`, `(e, :fr, :imag)`, `(e, :to, :real)`, `(e, :to, :imag)`,
 `(e, :ser, :real)`, `(e, :ser, :imag)`; `:tap_setting` `:magnitude_max`, `:magnitude_min`, `:magnitude`, `:max`, `:min` become `(a, :magn, :max)`, `(a, :magn, :min)`, `(a, :magn, :set)`, `(a, :angl, :max)`,

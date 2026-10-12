@@ -18,6 +18,7 @@
 # v0.15.4 - the end of a storage unit's horizon is a list of conditions        #
 # v0.15.6 - a switch's and a dc link's s_max is positive                       #
 # v0.15.6 - a roll carries the cycles used and the energy of a period          #
+# v0.15.7 - the curative range of a corrective storage unit                    #
 ################################################################################
 
 # An impossible value used to travel on to the solver, which answered
@@ -156,6 +157,9 @@ end
         @test_throws ArgumentError Storage(; id = 1, node = 1, c_chg = NaN)
         @test_throws ArgumentError Storage(; id = 1, node = 1, c_dch = Inf)
         @test_throws ArgumentError Storage(; id = 1, node = 1, c_cycl = Inf)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, h_cur = -1.0)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, h_cur = NaN)
+        @test_throws ArgumentError Storage(; id = 1, node = 1, h_cur = Inf)
         @test_throws ArgumentError Storage(; id = 1, node = 1, e_cycl_init = [(1.0, -0.1)])
         @test_throws ArgumentError Storage(; id = 1, node = 1, e_cycl_init = [(0.0, 0.1)])
         @test_throws ArgumentError Storage(; id = 1, node = 1, e_cycl_init = [(1.0, NaN)])
@@ -194,6 +198,7 @@ end
         @test Storage(; id = 1, node = 1, e_max = 0.5, e_init = 0.6).e_init == 0.6
         @test Storage(; id = 1, node = 1, e_init = -1e-12).e_init == -1e-12    # what a solver hands the next window
         @test Storage(; id = 1, node = 1).e_min == 0.0
+        @test Storage(; id = 1, node = 1).h_cur == 0.0 && Storage(; id = 1, node = 1, h_cur = 2).h_cur == 2.0
         @test Storage(; id = 1, node = 1).e_cycl_init == Tuple{Float64,Float64}[]
         @test Storage(; id = 1, node = 1).s_max == Inf          # no converter limit unless given
         @test Storage(; id = 1, node = 1, s_max = 0.2).s_max == 0.2

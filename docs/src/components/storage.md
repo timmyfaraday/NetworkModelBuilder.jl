@@ -34,6 +34,7 @@ Storage
 | ``q^{\text{min}}_{u}``, ``q^{\text{max}}_{u}`` | `q_min`, `q_max` | reactive power limits | pu |
 | ``s^{\text{max}}_{u}`` | `s_max` | rating of the converter the unit sits behind, positive, `Inf` for none | pu |
 | ``c^{\uparrow}_{u}``, ``c^{\downarrow}_{u}`` | `c_up`, `c_dn` | price of injecting one per unit more and less than the market schedule in a redispatch, each finite and the pair summing to at least zero | currency/pu/h |
+| ``h^{\text{cur}}_{u}`` | `h_cur` | curative holding time of a corrective unit: its net power over the contingencies spans at most `e_max / h_cur`; `0` for no band | h |
 | | `status` | in service | |
 | | `ext` | free-form storage, carried along and never read | |
 
@@ -51,6 +52,7 @@ Storage
 | ``e^{\text{up}}_{u}``, ``e^{\text{dn}}_{u}`` | `:e_stor_up`, `:e_stor_dn` | unit | the energy above and below the target of a `Soft` end, ``\ge 0``, at the last step only | pu·h |
 | ``z^{\text{s}}_{u}`` | `:z_stor` | unit | 1 where the unit charges, 0 where it discharges: a binary, written only for a step that charged and discharged at once and has `exact` set to `EXACT` | |
 | ``p^{\uparrow}_{u}``, ``p^{\downarrow}_{u}`` | `:p_stor_up`, `:p_stor_dn` | unit | moved up and down from the market schedule, redispatch only | pu |
+| ``p^{\text{max}}_{u}``, ``p^{\text{min}}_{u}`` | `:p_stor_max`, `:p_stor_min` | unit | the highest and the lowest net power over the contingencies of a time step, at the first one the unit is in service at; redispatch only, for a corrective unit with an `h_cur` | pu |
 
 A power flow creates none of these: there the unit holds its setpoint.
 
@@ -340,6 +342,34 @@ fnct_stor_cycle!
     paid to burn what it holds by charging and discharging at once. A cycle limit
     bounds how often it does so and does not stop it; see
     [Charging and discharging at once](@ref).
+
+### The curative range
+
+A corrective unit is free to take another position in every contingency, which a unit that takes time to move
+is not: one position taken in advance has to serve whichever contingency occurs. A positive `h_cur`, the hours
+the unit takes to move across, holds its net power over the contingencies in one band at every time step,
+
+```math
+p^{\text{min}}_{u,n} \le p^{\text{sd}}_{u,m} - p^{\text{sc}}_{u,m} \le p^{\text{max}}_{u,n}
+\quad \forall m \in \mathcal{C}_{n}, \qquad
+p^{\text{max}}_{u,n} - p^{\text{min}}_{u,n} \le e^{\text{max}}_{u,n} / h^{\text{cur}}_{u} ,
+```
+
+with ``\mathcal{C}_{n}`` the `:contingency` coordinates of the time step the unit is in service at, the base case
+among them. The band is two free variables per time step, and the unit may centre it by moving its output in the
+base case; its trajectory in each state stays its own. A preventive unit has the same net power in every state and
+is given no row, nor is a unit with no `h_cur`, a problem with a single state or an optimal power flow. `e_min` is
+another thing, a floor on the energy in every state.
+
+On one step and three contingencies that need 0, 0.2 and 0.6 of relief, a free unit of 0.5 pu·h behind the
+constraint gives 0, 0.2 and 0.5 for an expected cost of 6.0. At an `h_cur` of 2 h its band is 0.25 wide and it
+gives 0.25, 0.25 and 0.5, at 7.0, since what it gives in the first two states comes off the generator at the
+far end whether it is needed or not; at an `e_max` of 0.8 the band is 0.4 and it gives 0.1, 0.2 and 0.5, at
+6.3333. At an `h_cur` of 1 h the band is as wide as the states are apart, and the cost is 6.0 again.
+
+```@docs
+fnct_stor_range!
+```
 
 ### Before the build
 

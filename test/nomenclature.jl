@@ -11,6 +11,7 @@
 # v0.15.0 - the duals follow the grammar of constraints                        #
 # v0.15.1 - c_thru is retired for c_dch                                        #
 # v0.15.3 - exact is a word, exclusion a role, chg and dch id parts            #
+# v0.15.7 - the curative range of a corrective storage unit                    #
 ################################################################################
 
 # The names of fields, variable keys and solution keys follow one grammar
@@ -21,12 +22,12 @@
 # builds follows it, and no old name is left anywhere a reader would look.
 
 "a quantity: one letter, `η` the only one that is not ASCII"
-const NOM_SYMBOLS = Set(["v", "i", "p", "q", "s", "r", "x", "g", "b", "e", "t", "c", "l", "z", "k", "η"])
+const NOM_SYMBOLS = Set(["v", "i", "p", "q", "s", "r", "x", "g", "b", "e", "t", "c", "l", "z", "k", "h", "η"])
 
 "what a quantity belongs to: a location, an owner or a role"
 const NOM_WHAT = Set(["term", "ser", "shnt", "mgnt", "star", "pnt", "wind",
                       "gen", "stor", "flex", "slk", "dcl", "sw", "unit",
-                      "chg", "dch", "loss", "base", "ovl", "cycl", "per"])
+                      "chg", "dch", "loss", "base", "ovl", "cycl", "per", "cur"])
 
 "which part of a complex or polar quantity"
 const NOM_PART = Set(["real", "imag", "magn", "angl"])
@@ -328,7 +329,7 @@ const CST_KEYS = [
     "flexible_energy" => "cstr_flex_energy", "shunt_current" => "cstr_shnt_current",
     "storage_balance" => "cstr_stor_balance", "storage_final" => "cstr_stor_final_energy",
     "storage_cycles" => "cstr_stor_cycle", "storage_redispatch" => "cstr_stor_redispatch",
-    "redispatch_control" => "cstr_rd_control"]
+    "storage_range" => "cstr_stor_range", "redispatch_control" => "cstr_rd_control"]
 
 "a key of `con`, old and new; the four unit keys hold `cstr_unit_injection` in the linearized formulation"
 const CST_CON = [
@@ -360,6 +361,7 @@ const CST_FUNCTIONS = [
     "constraint_pi_section" => "fnct_br_pi_section", "constraint_overload_peak" => "fnct_edge_overload_peak",
     "constraint_redispatch_control" => "fnct_rd_control",
     "constraint_storage_final_energy" => "fnct_stor_final_energy", "constraint_storage_cycles" => "fnct_stor_cycle",
+    "constraint_storage_range" => "fnct_stor_range",
     "constraint_unit" => "fnct_unit", "constraint_unit_coupling" => "fnct_unit_coupling",
     "constraint_unit_power" => "fnct_unit_power", "constraint_unit_injection" => "fnct_unit_injection"]
 

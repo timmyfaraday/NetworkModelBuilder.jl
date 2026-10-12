@@ -9,14 +9,14 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-12 by Tom Va
   v0.11.0 (D13, D15-D27): the `Switch` edge. v0.10.2 (D11): `solution_tables`,
   `docs/src/manual/concepts.md`. v0.10.1 (D10): `src/comp/` is walked, not listed, each file exports its names.
 - Gap-closure items #1-9 of `context/knowledge/plan/GAP_CLOSURE_PLAN.md` are closed; #10-11 are open
-  (`backlog.md`). Tags: `v0.6.0`, `v0.9.1`-`v0.9.7`, `v0.12.0`, `v0.12.5`-`v0.12.9`, `v0.13.0`, `v0.14.0`, `v0.15.0`; not v0.10.x, v0.11.0, v0.12.1-4.
+  (`backlog.md`). Tags: `v0.6.0`, `v0.9.1`-`v0.9.7`, `v0.12.0`, `v0.12.5`-`v0.12.9`, `v0.13.0`, `v0.14.0`, `v0.15.0`, `v0.15.7`; not v0.10.x, v0.11.0, v0.12.1-4, v0.15.1-6.
 
 ## Branches
 
 - `main` carries B5 and B11 (`--no-ff`), tagged `v0.12.0`, the setup commits D37-D41 and, merged `--no-ff`
   on 2026-10-07, all of `test-zorba-run`: `scripts/` (the Zorba pipeline), B9, B10, B12, B6, B8 (v0.12.4);
   on 2026-10-09 B21 (v0.12.5), the Julia guide review and B22 (v0.12.6); on 2026-10-10 B25 (v0.12.7), B23 (v0.12.8), B24 (v0.12.9);
-  on 2026-10-11 B30 (v0.13.0), B31 (v0.14.0) and B32 (v0.15.0); on 2026-10-12 B33 to B38 and B40 (v0.15.1-v0.15.7, not tagged).
+  on 2026-10-11 B30 (v0.13.0), B31 (v0.14.0) and B32 (v0.15.0); on 2026-10-12 B33 to B38 and B40 (v0.15.1-v0.15.7, tagged v0.15.7).
 - `test-zorba-run` and the branches `b21-topology-lookup` to `b33-storage-fields` are merged and kept (`b5`, `b11` merged and deleted). Next free decision id: **D93**.
 
 ## Done: B5, the `Switch` edge type (v0.11.0)
@@ -38,7 +38,7 @@ Overwrite, don't append. Keep under 80 lines. Last updated: 2026-10-12 by Tom Va
 - Julia guide review (`knowledge/plan/julia-guide-review.md`, B21-B28, Q7-Q9): B21-B25 done and tagged v0.12.5-v0.12.9 (D45-D49): topology lookup
   (chunk -10.7 %), a roll builds the committed indices (-12.3 %, peak 5.0 to 2.9 GB; Q9 stop rule at its line, B29), guard rails (7 threads 224 s
   against 7 processes 125 s a chunk), constructors refuse impossible input, typed registers (`lessons.md`, `validation.md`).
-- Storage review (`knowledge/plan/storage-review.md`, B33-B40, D71-D92, Q11): decided; B33 to B38 and B40 built on `b33-storage-fields` and merged into `main` (v0.15.7, suite 4140, not tagged). `exact` (B35, opt-in) keeps the relaxation honest (393.00 against
+- Storage review (`knowledge/plan/storage-review.md`, B33-B40, D71-D92, Q11): decided; B33 to B38 and B40 built on `b33-storage-fields` and merged into `main` (v0.15.7, suite 4140, tagged). `exact` (B35, opt-in) keeps the relaxation honest (393.00 against
   426.54), `terminal` (B36) stops a roll draining a unit before a peak, and the cycle limit (B38) is a sliding 24 h window on both sides of the store that a roll carries (`e_cycl_init`, `e_per_init`), and `h_cur` (B40) holds a corrective unit to one band over the contingencies.
 - B30 done (v0.13.0, D50-D54, tagged): one `Branch`, shared fragments in `edge.jl`; suite 3351, chunk byte-identical (`one-branch-terminals.md`).
 - B31 done (v0.14.0, D55-D62, tagged): one nomenclature for fields, variable keys, solution keys, keywords and a node's `ext` start keys

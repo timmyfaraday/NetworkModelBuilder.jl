@@ -1,6 +1,6 @@
 # Storage: a review against the literature, and the changes it asks for
 
-Status: B33 to B38 and B40 built on `b33-storage-fields` and merged into `main` (v0.15.7, suite 4140, not tagged), B39 later, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D92 (next free after: D93)
+Status: B33 to B38 and B40 built on `b33-storage-fields` and merged into `main` (v0.15.7, suite 4140, tagged), B39 later, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D92 (next free after: D93)
 Priority: P1 · Effort: Large. Open: Q11 (what Zorba's throughput cap counts). Backlog B33-B38 and B40, B39 later.
 
 Literature: knowledge-base nodes Storage Models in OPF (14 sources that model storage, raw PDFs re-read) and Redispatch and

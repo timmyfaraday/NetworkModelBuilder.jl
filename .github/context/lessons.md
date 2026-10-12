@@ -274,6 +274,10 @@ again get retired.
 - **A price equal to what the unit would get for the energy is a tie, and the solver keeps the energy.** `Value(95.0)` against
   a last price of 100 and losses of 0.95 left 0.5 pu·h in the store at the end of the problem, 47.5 above perfect foresight, where
   `Value(90.0)` left none. Test a price on either side of the line and never on it. (unconfirmed)
+- **A container of variables is missing at a network index where no unit of its type is in service.** `var(nm, :p_chg; nw)` raised
+  `KeyError: key :p_chg not found` for a storage unit out over `:time`, three places in the builders and the first of them
+  an early `return` that read the first index only. Read a container through `get(var(nm; nw), key, nothing)` wherever a
+  status can vary, and test the unit out at the first step, the last and in the middle. (unconfirmed)
 - **An edit script that anchors on a line starting with spaces matches inside a line indented deeper.** In B34 a
   `str.index("        rated(m) = count")` found the 12-space line of another testset and cut the wrong span, so the script
   duplicated a block. Anchor on a word of the line, or on the whole line with its newline, and print the match count. (unconfirmed)

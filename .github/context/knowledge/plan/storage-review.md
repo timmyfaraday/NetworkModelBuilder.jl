@@ -1,6 +1,6 @@
 # Storage: a review against the literature, and the changes it asks for
 
-Status: B33 to B36 built on `b33-storage-fields` (v0.15.4, suite 3984, not merged), the rest ready to implement, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D90 (next free after: D91)
+Status: B33 to B37 built on `b33-storage-fields` (v0.15.5, suite 4019, not merged), the rest ready to implement, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D90 (next free after: D91)
 Priority: P1 · Effort: Large. Open: Q11 (what Zorba's throughput cap counts). Backlog B33-B38 and B40, B39 later.
 
 Literature: knowledge-base nodes Storage Models in OPF (14 sources that model storage, raw PDFs re-read) and Redispatch and
@@ -95,7 +95,7 @@ Measured with HiGHS; the scripts are `%LOCALAPPDATA%\Temp\nmb_storage_review\*.j
   extra cost is 47.5, 0.5 pu·h at 95. The three-step network keeps its numbers ([0.4, 0.2, 0.0] free, 14.0 pinned at 0.2). The radial redispatch of `test/rd.jl` (2 steps, battery 0.25 pu·h
   from 0.25, free): 85.0 with no end condition (`e_stor` [0.25, 0.0]), 110.0 ending on the scheduled 0.25 ([0.25, 0.25]).
 
-## 5. Outages (B37, D76, v0.15.5)
+## 5. Outages (B37, D76, v0.15.5, built)
 
 - **Fix.** A unit out of service has no variables; `energy_at(nm, u, n)` returns the state at `n`, or at the last in-service index before it, or
   `e_init`; the balance, `Pin`, `Floor`, `Cyclic`, `Soft` and `initial_state` read through it. `_warn_free_cycling`'s replacement scans every index.

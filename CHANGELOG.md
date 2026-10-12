@@ -8,6 +8,27 @@ Versions before 0.9.1 were never tagged in git; the version numbers and dates
 below are reconstructed from `Project.toml`'s own history, cross-referenced
 against the per-file changelog comments the source already carries.
 
+## [0.15.5] - 2026-10-12
+
+### Added
+
+- A `Storage` unit may be out of service over `:time` or over `:contingency`, which was a `KeyError`: it has
+  no variables, rows or entry in the solution where it is out, and holds the energy it had at the last step it
+  was in service, with no self-discharge. `energy_at(nm, u, n)` returns that energy, the state of charge
+  variable or `e_init` where the unit has none at or before `n`. An outage is a `status`, and what it does is what
+  ratings of zero do: 28.216 against 10.432 in service on the five-step case.
+
+### Changed
+
+- The balance of the step after a gap, a `Pin`, `Floor`, `Soft`, `Value` or `Quad` on the end, and `initial_state`
+  read the energy through `energy_at`. A unit out at the last step of a horizon ends on the energy it holds, and a
+  unit out for a whole contingency is asked nothing there. A roll carries the held energy across a window
+  boundary instead of refilling the unit from its original `e_init`.
+- The cycle limit of a period is written for every unit that is in service at some step of it, not only at its
+  first.
+- The warning for a `RELAXED` unit whose prices fall below `(1 / η_dch - η_chg) |λ|` reads the lowest price and the
+  lowest prices of the unit over every network index, which makes it conservative where the two never meet in time.
+
 ## [0.15.4] - 2026-10-12
 
 ### Added

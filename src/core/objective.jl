@@ -9,6 +9,7 @@
 # v0.1.0 - initial implementation                                              #
 # v0.2.0 - network dependent data stored per component                         #
 # v0.15.4 - terminal, the end of the horizon as a list of conditions           #
+# v0.15.5 - a storage unit out of service holds its energy                     #
 ################################################################################
 
 ################################################################################
@@ -275,13 +276,16 @@ function terminal_cost(nm::NetworkModel)
         is_last_id(nm, n, :time) || continue
 
         w = period_weight(nm, n, :time)
-        for T in unit_types(), id in ids(nm, T; nw = n)
+        for T in unit_types(), id in _terminal_ids(nm, T, n)
             total += w * terminal_cost(nm, T, id; nw = n)
         end
     end
 
     return total
 end
+
+"the units of type `T` that are charged for the end at the last network index `n` along `:time`: those in service there"
+_terminal_ids(nm::NetworkModel, ::Type{T}, n::Int) where {T<:AbstractComponent} = ids(nm, T; nw = n)
 
 """
     terminal_cost(nm, T, id; nw)

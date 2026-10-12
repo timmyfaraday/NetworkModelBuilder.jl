@@ -145,7 +145,7 @@ exact where the unit's own prices reach what burning is worth,
 \ge \left( 1 / \eta^{\text{d}}_{u} - \eta^{\text{c}}_{u} \right) \left| \lambda \right| ,
 ```
 
-with ``\lambda`` the lowest price a generator or a slack unit sets, 500 there and the
+with ``\lambda`` the lowest price a generator or a slack unit sets at any network index, 500 there and the
 right hand side 105.6: a ``c^{\text{d}}_{u}`` of 100 leaves the gap and one of 130 closes
 it. A unit that falls short of it is warned about when the model is built. A cycle limit
 does not settle it, since it bounds how often the unit burns and does not stop it.
@@ -258,6 +258,36 @@ interior_state
     and not in what a rolling horizon reports, which is the cost of the steps it commits and of the
     periods it closes. A unit that keeps its energy at the end of a roll for a value is not credited
     for it. See [`terminal_cost`](@ref).
+
+### Out of service
+
+A storage unit is taken out of service with its `status`, which may vary over `:time` or over
+`:contingency`, and not with a rating of zero. A unit out of service at a network index has no
+variables, no rows and no entry in the solution there, and it holds the energy it had at the
+last step it was in service, with no self-discharge:
+
+```math
+e_{u,n} = e_{u,n-1}, \qquad e_{u,n} = e^{0}_{u} \;\; \text{before the first step it is in service}
+```
+
+[`energy_at`](@ref) reads that. The balance of the step after a gap starts from it, and so do the
+conditions on the end of the horizon, which are asked of the energy the unit holds at the last
+step whether it is in service there or not: a `Pin` on a unit that is out at the last step is a pin
+on what it left. A unit that is out for the whole of a trajectory, as when a contingency loses
+it, has no state of charge there and is asked nothing. The cycle limit holds over the steps a unit
+is in service for in its period, also when it is out at the first. A rolling horizon carries the
+energy a unit holds at the last step a window commits, in service or not, so that a unit that is out
+when a window ends is not refilled by the next.
+
+On five steps with prices 10, 10, 100, 10 and 100, a unit that is out at steps 2 and 3 costs 28.216
+against 10.432 in service, which is what ratings of zero over the two steps cost. A preventive unit
+that is lost in a contingency cannot serve what it does at the base case, since the volumes of the
+other preventive measures are tied across the states and the unit is not there to match them; a
+redispatch that loses a storage unit is posed with the unit corrective.
+
+```@docs
+energy_at
+```
 
 ### The cycle limit
 

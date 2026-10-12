@@ -21,12 +21,13 @@
 # v0.15.3 - s_max is positive, never zero                                      #
 # v0.15.3 - exact keeps charging and discharging at once out                   #
 # v0.15.4 - terminal, the end of the horizon as a list of conditions           #
+# v0.15.5 - a storage unit out of service holds its energy                     #
 ################################################################################
 
 export AbstractStorage, Storage, inflow, storage_cycles
 export Exclusion, RELAXED, EXACT, FROZEN
 export AbstractTerminal, Pin, Cyclic, Floor, Value, Soft, Quad
-export check_storage, scheduled_energy
+export check_storage, scheduled_energy, energy_at
 export variable_storage_active!, variable_storage_reactive!, variable_stor_terminal!
 export fnct_stor_cycle!, fnct_stor_final_energy!
 
@@ -657,6 +658,55 @@ function _check_budget(net::Network, dim::Dimension, u::Int)
 end
 
 ################################################################################
+# Storage — out of service                                                     #
+################################################################################
+
+"the container of variables `key` at network index `nw` holds for unit `u`, or `nothing` where the unit has none"
+function _held(nm::NetworkModel, key::Symbol, u::Int, nw::Int)
+    container = get(var(nm; nw), key, nothing)
+
+    return container === nothing ? nothing : get(container, u, nothing)
+end
+
+"the identifiers of the storage units of type `T` of `nm`, whatever their status"
+_present(nm::NetworkModel, ::Type{T}) where {T<:AbstractStorage} =
+    sort!([u for (u, c) in units(network(nm)) if c isa T])
+
+"the identifiers of the units of type `T` in service at some network index of `window`"
+_serving(nm::NetworkModel, ::Type{T}, window) where {T<:AbstractStorage} =
+    sort!(unique!(reduce(vcat, (ids(nm, T; nw = m) for m in window); init = Int[])))
+
+"whether unit `u` of type `T` is in service at some network index of the `:time` trajectory that ends at `n`"
+_serves(nm::NetworkModel, ::Type{T}, u::Int, n::Int) where {T<:AbstractStorage} =
+    any(m -> u in ids(nm, T; nw = m), similar_ids(nm, n; time = 1:dim_length(nm, :time)))
+
+_terminal_ids(nm::NetworkModel, ::Type{T}, n::Int) where {T<:AbstractStorage} =
+    [u for u in _present(nm, T) if _serves(nm, T, u, n)]
+
+"""
+    energy_at(nm, u, n)
+
+The energy storage unit `u` holds after network index `n`, along `:time` with every other
+coordinate held fixed, as the variable of the state of charge or, where the unit has none
+at or before `n`, the energy it started with.
+
+A unit out of service at `n` has no variables there and holds what it had at the last step
+it was in service, with no self-discharge; one out of service before its first step holds
+`e_init`, and one that is out for the whole of a contingency holds `e_init` there. The balance
+of the step after a gap, the end conditions and [`initial_state`](@ref) read the energy
+through this, which is what makes an outage a `status` and not a rating of zero.
+"""
+function energy_at(nm::NetworkModel, u::Int, n::Int)
+    while true
+        held = _held(nm, :e_stor, u, n)
+        held === nothing || return held
+        is_first_id(nm, n, :time) && return unit(nm, u; nw = n).e_init
+
+        n = prev_id(nm, n, :time)
+    end
+end
+
+################################################################################
 # Storage — variables                                                          #
 ################################################################################
 
@@ -673,22 +723,27 @@ variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
 
 "the charge, discharge and state of charge of every storage unit, in any formulation, and what its end conditions bring"
 function variable_storage_active!(nm::NetworkModel, ::Type{T}; nw::Int) where {T<:AbstractStorage}
-    isempty(ids(nm, T; nw)) && return nothing
-    require_time_dimension(nm, T)
+    if !isempty(ids(nm, T; nw))
+        require_time_dimension(nm, T)
 
-    variable_container!(nm, :p_chg, :p_dch, :e_stor; nw)
+        variable_container!(nm, :p_chg, :p_dch, :e_stor; nw)
 
-    for u in ids(nm, T; nw)
+        for u in ids(nm, T; nw)
+            st = unit(nm, u; nw)::T
+
+            variable!(nm, :p_chg, u; nw, start = 0.0,
+                      lower = 0.0, upper = st.p_chg_max)
+            variable!(nm, :p_dch, u; nw, start = 0.0,
+                      lower = 0.0, upper = st.p_dch_max)
+            variable!(nm, :e_stor, u; nw, start = st.e_init,
+                      lower = st.e_min, upper = st.e_max)
+        end
+    end
+
+    # a unit that is out at the last step still ends on the energy it holds
+    has_dim(nm, :time) && is_last_id(nm, nw, :time) || return nothing
+    for u in _terminal_ids(nm, T, nw)
         st = unit(nm, u; nw)::T
-
-        variable!(nm, :p_chg, u; nw, start = 0.0,
-                  lower = 0.0, upper = st.p_chg_max)
-        variable!(nm, :p_dch, u; nw, start = 0.0,
-                  lower = 0.0, upper = st.p_dch_max)
-        variable!(nm, :e_stor, u; nw, start = st.e_init,
-                  lower = st.e_min, upper = st.e_max)
-
-        is_last_id(nm, nw, :time) || continue
         for c in _conditions(st)
             variable_stor_terminal!(nm, c, st, u; nw)
         end
@@ -797,17 +852,18 @@ period, see [`fnct_stor_cycle!`](@ref).
 function fnct_unit_coupling(nm::NetworkModel{P,F}, ::Type{T}
                                  ) where {P<:AbstractDispatchProblem,F<:AbstractFormulationType,
                                           T<:AbstractStorage}
-    isempty(ids(nm, T; nw = nw_id_default(nm))) && return nothing
+    any(n -> !isempty(ids(nm, T; nw = n)), nw_ids(nm)) || return nothing
     require_time_dimension(nm, T)
 
     for n in nw_ids(nm)
+        isempty(ids(nm, T; nw = n)) && continue
         p_chg, p_dch, e_stor = var(nm, :p_chg; nw = n), var(nm, :p_dch; nw = n), var(nm, :e_stor; nw = n)
 
         for u in ids(nm, T; nw = n)
             st    = unit(nm, u; nw = n)::T
             dt    = time_step(nm, n)
             start = is_first_id(nm, n, :time) ? st.e_init :
-                                                var(nm, :e_stor, u; nw = prev_id(nm, n, :time))
+                                                energy_at(nm, u, prev_id(nm, n, :time))
 
             constrain!(nm, :cstr_stor_balance, u, JuMP.@build_constraint(
                 e_stor[u] == start + dt * (st.η_chg * p_chg[u] -
@@ -847,7 +903,7 @@ function fnct_stor_final_energy!(nm::NetworkModel, ::Type{T}) where {T<:Abstract
     for n in nw_ids(nm)
         is_last_id(nm, n, :time) || continue
 
-        for u in ids(nm, T; nw = n)
+        for u in _terminal_ids(nm, T, n)
             st = unit(nm, u; nw = n)::T
             for condition in _conditions(st)
                 fnct_stor_final_energy!(nm, condition, st, u; nw = n)
@@ -862,21 +918,21 @@ fnct_stor_final_energy!(::NetworkModel, ::AbstractTerminal, ::AbstractStorage, :
 
 function fnct_stor_final_energy!(nm::NetworkModel, c::Pin, ::AbstractStorage, u::Int; nw::Int)
     constrain!(nm, :cstr_stor_final_energy, u, JuMP.@build_constraint(
-        var(nm, :e_stor, u; nw) == nw_value(nm, c.e, nw)); nw)
+        energy_at(nm, u, nw) == nw_value(nm, c.e, nw)); nw)
 
     return nothing
 end
 
 function fnct_stor_final_energy!(nm::NetworkModel, c::Floor, ::AbstractStorage, u::Int; nw::Int)
     constrain!(nm, :cstr_stor_final_limit, u, JuMP.@build_constraint(
-        var(nm, :e_stor, u; nw) >= nw_value(nm, c.e, nw)); nw)
+        energy_at(nm, u, nw) >= nw_value(nm, c.e, nw)); nw)
 
     return nothing
 end
 
 function fnct_stor_final_energy!(nm::NetworkModel, c::Soft, ::AbstractStorage, u::Int; nw::Int)
     constrain!(nm, :cstr_stor_final_balance, u, JuMP.@build_constraint(
-        var(nm, :e_stor, u; nw) - nw_value(nm, c.e, nw) ==
+        energy_at(nm, u, nw) - nw_value(nm, c.e, nw) ==
         var(nm, :e_stor_up, u; nw) - var(nm, :e_stor_dn, u; nw)); nw)
 
     return nothing
@@ -921,13 +977,13 @@ end
 terminal_cost(::NetworkModel, ::AbstractTerminal, ::AbstractStorage, ::Int; nw::Int) = 0.0
 
 terminal_cost(nm::NetworkModel, c::Value, ::AbstractStorage, u::Int; nw::Int) =
-    -c.c * var(nm, :e_stor, u; nw)
+    -c.c * energy_at(nm, u, nw)
 
 terminal_cost(nm::NetworkModel, c::Soft, ::AbstractStorage, u::Int; nw::Int) =
     c.c_up * var(nm, :e_stor_up, u; nw) + c.c_dn * var(nm, :e_stor_dn, u; nw)
 
 terminal_cost(nm::NetworkModel, c::Quad, ::AbstractStorage, u::Int; nw::Int) =
-    c.weight * (var(nm, :e_stor, u; nw) - nw_value(nm, c.e, nw))^2
+    c.weight * (energy_at(nm, u, nw) - nw_value(nm, c.e, nw))^2
 
 """
     inflow(st, nm, n)
@@ -972,7 +1028,7 @@ function storage_cycles(nm::NetworkModel, st::AbstractStorage, u::Int, window)
 
     return JuMP.@expression(nm.model,
         sum(time_step(nm, m) * var(nm, :p_dch, u; nw = m)
-            for m in window if haskey(var(nm, :p_dch; nw = m), u); init = 0.0) / capacity)
+            for m in window if _held(nm, :p_dch, u, m) !== nothing; init = 0.0) / capacity)
 end
 
 """
@@ -999,14 +1055,14 @@ function fnct_stor_cycle!(nm::NetworkModel, ::Type{T}) where {T<:AbstractStorage
         is_first_period_id(nm, n, :time) || continue
         window = period_ids(nm, n, :time)
 
-        for u in ids(nm, T; nw = n)
+        for u in _serving(nm, T, window)
             st = unit(nm, u; nw = n)::T
             isfinite(st.k_cycl_max) || continue
 
             capacity = nw_value(nm, st.e_max, n)
             constrain!(nm, :cstr_stor_cycle, u, JuMP.@build_constraint(
                 sum(time_step(nm, m) * var(nm, :p_dch, u; nw = m)
-                    for m in window if haskey(var(nm, :p_dch; nw = m), u); init = 0.0) <=
+                    for m in window if _held(nm, :p_dch, u, m) !== nothing; init = 0.0) <=
                 st.k_cycl_max * capacity); nw = n)
         end
     end
@@ -1030,24 +1086,24 @@ run, the burn is worth that price to the problem, and a unit whose own prices fa
 
 is paid to do it. A cycle limit bounds how often and does not remove it. What is
 warned about is a unit that leaves it `RELAXED`; `EXACT` and `FROZEN` are the ways out, and a price at
-the line is the third. The price of the node is read at the first network index.
+the line is the third. Both sides of the line are the lowest the data holds at any network
+index, the price of the node and the prices of the unit, so the warning is conservative: it may
+come where the two never meet in time, and never stays away where they do.
 
 A warning rather than an error because the model is well posed, and because what
 counts as a price below zero is a property of the data, which the package does not
 otherwise legislate about.
 """
 function _warn_inexact_relaxation(nm::NetworkModel, ::Type{T}) where {T<:AbstractStorage}
-    n    = nw_id_default(nm)
-    open = [u for u in ids(nm, T; nw = n) if (unit(nm, u; nw = n)::T).exact === RELAXED]
+    open = sort!([(u, c) for (u, c) in units(network(nm)) if c isa T && c.exact === RELAXED]; by = first)
     isempty(open) && return nothing
 
-    lowest = _price_floor(nm, n)
+    lowest = _price_floor(nm)
     lowest < 0 || return nothing
 
-    for u in open
-        st    = unit(nm, u; nw = n)::T
+    for (u, st) in open
         burn  = (1 / st.η_dch - st.η_chg) * abs(lowest)
-        price = st.η_chg * st.c_dch + st.c_chg / st.η_dch
+        price = st.η_chg * _lowest(st.c_dch) + _lowest(st.c_chg) / st.η_dch
         price >= burn - 1e-9 && continue
 
         @warn "storage $u may charge and discharge at once: its prices come to " *
@@ -1060,20 +1116,27 @@ function _warn_inexact_relaxation(nm::NetworkModel, ::Type{T}) where {T<:Abstrac
     return nothing
 end
 
-"the lowest price a generator or a slack unit sets at network index `n`, or zero"
-function _price_floor(nm::NetworkModel, n::Int)
+"the lowest price a generator or a slack unit sets at any network index, or zero"
+function _price_floor(nm::NetworkModel)
     lowest = 0.0
-    for T in unit_types(), u in ids(nm, T; nw = n)
-        if T <: AbstractGenerator
-            c     = (unit(nm, u; nw = n)::T).c
-            lowest = min(lowest, minimum(@view c[2:end]; init = 0.0))
-        elseif T <: AbstractSlackUnit
-            lowest = min(lowest, (unit(nm, u; nw = n)::T).c)
+    for (_, c) in units(network(nm))
+        if c isa AbstractGenerator
+            lowest = min(lowest, _lowest_marginal(c.c))
+        elseif c isa AbstractSlackUnit
+            lowest = min(lowest, _lowest(c.c))
         end
     end
 
     return lowest
 end
+
+"the lowest value a quantity takes over the network index"
+_lowest(x::Real) = x
+_lowest(x::NetworkVector) = minimum(x.data)
+
+"the lowest marginal cost of a cost vector, `c[2:end]`, or of one per network index"
+_lowest_marginal(c::AbstractVector{<:Real}) = minimum(@view c[2:end]; init = 0.0)
+_lowest_marginal(c::NetworkVector) = minimum((_lowest_marginal(v) for v in c.data); init = 0.0)
 
 ################################################################################
 # Storage — keeping charging and discharging at once out                       #
@@ -1098,6 +1161,7 @@ function refine!(nm::NetworkModel{P}, ::Type{T}
     # read every step before writing to the model: a model that has been written to has no solution
     found = Tuple{Int,Int,Float64,Float64}[]
     for n in nw_ids(nm)
+        haskey(var(nm; nw = n), :p_chg) || continue
         p_chg, p_dch = var(nm, :p_chg; nw = n), var(nm, :p_dch; nw = n)
 
         for u in asked
@@ -1458,12 +1522,16 @@ committed step is a fact the next window inherits rather than a choice it makes.
 Without it each window would start from `e_init` again and the unit
 would appear to refill itself for free between them.
 
-The unit is returned untouched where the model has no state of charge to read,
-i.e. where it was built for a power flow rather than a dispatch problem.
+A unit out of service at `n` carries what it held there, see [`energy_at`](@ref), and not
+the energy it started the window with, which would refill it across the boundary. The unit is
+returned untouched where the model has no state of charge to read, i.e. where it was built for
+a power flow rather than a dispatch problem.
 """
 function initial_state(st::Storage, nm::NetworkModel, n::Int)
-    haskey(var(nm; nw = n), :e_stor) || return st
-    haskey(var(nm, :e_stor; nw = n), st.id) || return st
+    nm isa NetworkModel{<:AbstractPowerFlowProblem} && return st
 
-    return _with(st; e_init = JuMP.value(var(nm, :e_stor, st.id; nw = n)))
+    return _with(st; e_init = _energy_value(energy_at(nm, st.id, n)))
 end
+
+_energy_value(e::Real) = float(e)
+_energy_value(e::JuMP.VariableRef) = JuMP.value(e)

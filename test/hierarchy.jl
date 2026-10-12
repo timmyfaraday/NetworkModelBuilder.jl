@@ -17,6 +17,7 @@
 # v0.15.2 - a storage unit's converter rating                                  #
 # v0.15.3 - exact keeps charging and discharging at once out                   #
 # v0.15.4 - the end of a storage unit's horizon is a list of conditions        #
+# v0.15.5 - an outage of a storage unit is its status                          #
 ################################################################################
 
 "case5 with edge 5, which has a turns ratio, rebuilt as a transformer carrying `extra`"
@@ -576,6 +577,9 @@ const PRICES = [10.0, 100.0, 50.0]
         # a generator that pays to run, and a lossy battery that pays nothing to cycle
         @test_logs (:warn, r"storage 3") match_mode = :any built(lossy(), [-10.0, 100.0])
 
+        # at any step: a price below zero that comes after the first is just as paid
+        @test_logs (:warn, r"storage 3") match_mode = :any built(lossy(), [10.0, 100.0, -10.0])
+
         # what settles it is the price on the unit itself: with losses of ten per cent a price
         # of 0.9 c_dch + c_chg / 0.9 must reach 0.2111 times the 10 the node pays to take a unit
         for priced in (lossy(c_dch = 3.0), lossy(c_chg = 3.0), lossy(exact = EXACT), lossy(exact = FROZEN))
@@ -693,6 +697,108 @@ const PRICES = [10.0, 100.0, 50.0]
         @test refined["horizon"]["built"] > relaxed["horizon"]["built"]
         @test any(haskey(w, "relaxation_gap") for w in refined["horizon"]["window"])
         @test !any(haskey(w, "relaxation_gap") for w in relaxed["horizon"]["window"])
+    end
+
+    @testset "an outage of a storage unit is its status, and it holds its energy across the gap" begin
+        prices = [10.0, 10.0, 100.0, 10.0, 100.0]
+        dim    = Dimension(:time => 5)
+        highs  = JuMP.optimizer_with_attributes(HiGHS.Optimizer, "output_flag" => false)
+
+        function network(dim, prices; kw...)
+            I = Dict{Int,AbstractNode}(1 => Node(; id = 1, type = REF, v_magn_set = 1.0), 2 => Node(; id = 2))
+            E = Dict{Int,AbstractEdge}(1 => Branch(; id = 1, terminals = [1, 2], r = 0.0, x = 0.01))
+            U = Dict{Int,AbstractUnit}(
+                1 => Generator(; id = 1, node = 1, p_max = 5.0, q_min = -5.0, q_max = 5.0,
+                               c = nw_vector(dim, [[0.0, p] for p in prices])),
+                2 => FixedLoad(; id = 2, node = 2, p_set = 0.2, q_set = 0.0),
+                3 => Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.0, p_chg_max = 0.2,
+                             p_dch_max = 0.2, η_chg = 0.95, η_dch = 0.95, kw...))
+            return NetworkData(Network(I, E, U; dim); name = "outage", s_base_mva = 100.0)
+        end
+        solved(data) = quiet(() -> solve_model(data, OptimalPowerFlowProblem, LPFFormulation, highs))
+        energy(result, steps) = [nw_solution(result, n)["unit"]["3"]["e_stor"] for n in steps]
+
+        gone = nw_vector(dim, [true, false, false, true, true])
+        none = nw_vector(dim, [0.2, 0.0, 0.0, 0.2, 0.2])
+
+        # an outage is a status, and what it does is what ratings of zero do: hold the energy
+        served = solved(network(dim, prices))
+        out    = solved(network(dim, prices; status = gone))
+        held   = solved(network(dim, prices; p_chg_max = none, p_dch_max = none))
+        @test served["objective"] ≈ 10.432 atol = 5e-3
+        @test out["objective"] ≈ 28.216 atol = 5e-3
+        @test out["objective"] ≈ held["objective"] atol = 1e-6
+        @test energy(out, [1, 4, 5]) ≈ energy(held, [1, 4, 5]) atol = 1e-6
+        @test energy(held, 1:3) ≈ fill(energy(held, 1:1)[1], 3) atol = 1e-6
+
+        # a step out of service has no row in the solution
+        @test !haskey(nw_solution(out, 2)["unit"], "3") && !haskey(nw_solution(out, 3)["unit"], "3")
+        @test haskey(nw_solution(out, 4)["unit"], "3")
+
+        # the energy is read through the gap: what it started with before the first step it is in
+        # service at, what it left after
+        dim4 = Dimension(:time => 4)
+        nm   = instantiate_model(network(dim4, [10.0, 100.0, 10.0, 100.0]; e_init = 0.3,
+                                         status = nw_vector(dim4, [false, true, false, false])),
+                                 OptimalPowerFlowProblem, LPFFormulation)
+        @test energy_at(nm, 3, 1) == 0.3
+        @test energy_at(nm, 3, 2) === _NMB.var(nm, :e_stor, 3; nw = 2)
+        @test energy_at(nm, 3, 3) === energy_at(nm, 3, 2) && energy_at(nm, 3, 4) === energy_at(nm, 3, 2)
+
+        # a roll whose boundary falls inside the gap carries the energy it held, not the one it started with
+        roll(data) = quiet(() -> solve_rolling_horizon(data, OptimalPowerFlowProblem, LPFFormulation, highs;
+                                                       horizon = 3, step = 1))
+        rolled = roll(network(dim, prices; status = gone))
+        stalled = roll(network(dim, prices; p_chg_max = none, p_dch_max = none))
+        @test rolled["objective"] ≈ stalled["objective"] atol = 1e-6
+        @test energy(rolled, [1, 4, 5]) ≈ energy(stalled, [1, 4, 5]) atol = 1e-6
+
+        # the cycle limit holds over the steps it is in service for, also when it is out at the first
+        capped = network(dim4, [10.0, 100.0, 10.0, 100.0]; k_cycl_max = 0.2,
+                         status = nw_vector(dim4, [false, true, true, true]))
+        nm = instantiate_model(capped, OptimalPowerFlowProblem, LPFFormulation)
+        @test haskey(_NMB.registered_constraints(nm), (1, :cstr_stor_cycle, 3))
+        limited = solved(capped)
+        @test sum(nw_solution(limited, n)["unit"]["3"]["p_dch"] for n in 2:4) <= 0.2 * 0.5 + 1e-6
+
+        # a unit that asks for exactness is kept from charging and discharging at once across a gap too
+        surplus = surplus_network(surplus_battery(exact = EXACT, status = nw_vector(Dimension(:time => 3), [true, false, true])))
+        @test quiet(() -> solve_model(surplus, OptimalPowerFlowProblem, LPFFormulation, highs))["termination_status"] == JuMP.OPTIMAL
+    end
+
+    @testset "the end of a horizon is read through a gap" begin
+        three   = Dimension(:time => 3)
+        battery(; kw...) = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.2, p_chg_max = 0.2, p_dch_max = 0.2,
+                                   status = nw_vector(three, [true, true, false]), kw...)
+        solved(st) = quiet(() -> solve_model(price_network(PRICES; extra = Dict{Int,AbstractUnit}(3 => st)),
+                                             OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
+
+        # out at the last step the unit holds what the step before left, and the generator serves
+        # that step at 50: 2.0 for the first, the 0.2 it starts with sold at 100, 10.0 for the last
+        free = solved(battery())
+        @test free["objective"] ≈ 12.0 atol = 1e-4
+        @test nw_solution(free, 2)["unit"]["3"]["e_stor"] ≈ 0.0 atol = 1e-6
+        @test !haskey(nw_solution(free, 3)["unit"], "3")
+
+        # a pin is on what it holds: 0.4 is charged at 10 and not sold at 100, 4.0 and 20.0 and the last 10.0
+        pinned = solved(battery(terminal = Pin(0.4)))
+        @test pinned["objective"] ≈ 34.0 atol = 1e-3
+        @test nw_solution(pinned, 2)["unit"]["3"]["e_stor"] ≈ 0.4 atol = 1e-6
+        @test solved(battery(terminal = Floor(0.2)))["objective"] ≈ 14.0 atol = 1e-4
+
+        # a price on the energy it holds: 150 is worth more than the 100 for selling it, and more
+        # than charging at 100 costs, so it holds the 0.5 it can: 44 for the energy, 75 back
+        valued = solved(battery(terminal = Value(150.0)))
+        @test valued["objective"] ≈ -31.0 atol = 1e-3
+        @test nw_solution(valued, 2)["unit"]["3"]["e_stor"] ≈ 0.5 atol = 1e-6
+        @test solved(battery(terminal = Soft(0.4; c_dn = 1000.0)))["objective"] ≈ 34.0 atol = 1e-3
+
+        # a unit that is out all the time has nothing to end on, and is asked nothing
+        absent = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.2, p_chg_max = 0.2, p_dch_max = 0.2,
+                         status = false, terminal = [Pin(0.4)])
+        result = solved(absent)
+        @test result["termination_status"] == JuMP.LOCALLY_SOLVED
+        @test result["objective"] ≈ 0.2 * (10.0 + 100.0 + 50.0) atol = 1e-4
     end
 
     @testset "energy may arrive from outside the model" begin

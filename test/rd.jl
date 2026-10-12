@@ -24,6 +24,7 @@
 # v0.15.2 - a storage unit's converter rating                                  #
 # v0.15.3 - exact keeps charging and discharging at once out                   #
 # v0.15.4 - the end of a storage unit's horizon is a list of conditions        #
+# v0.15.5 - an outage of a storage unit is its status                          #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The
@@ -289,6 +290,31 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["p_gen_
                                     LPFFormulation, OPTIMIZER))
         @test sum(nw_solution(idle, n)["unit"]["4"]["p_stor_up"] for n in 1:2) ≈ 0.0 atol = 1e-5
         @test idle["objective"] ≈ 1.0 * 100.0 + 1.0 * 10.0 atol = 1e-3
+    end
+
+    @testset "a unit lost in a contingency has no variables there and ends nothing" begin
+        dim     = Dimension(:time => 2, :contingency => 2)
+        battery = Storage(; id = 4, node = 2, e_max = 0.5, e_init = 0.25, p_chg_max = 0.5, p_dch_max = 0.5,
+                          η_chg = 1.0, η_dch = 1.0, terminal = Pin(0.3),
+                          status = nw_vector(dim, (n, c) -> c.contingency == 1))
+        data    = radial_network(; dim, extra = Dict{Int,AbstractUnit}(4 => battery))
+        lost    = nw_ids(data; contingency = 2)
+        kept    = nw_ids(data; contingency = 1)
+
+        # the energy of the lost unit is what it started with for the whole contingency
+        nm = instantiate_model(data, OptimalPowerFlowProblem, LPFFormulation)
+        @test all(energy_at(nm, 4, n) == 0.25 for n in lost)
+        @test all(energy_at(nm, 4, n) isa JuMP.VariableRef for n in kept)
+
+        # and it is asked nothing there, where the other contingency is asked for its pin; a
+        # corrective unit, since a preventive one that is lost cannot serve what it does at the base case
+        corrective = Redispatch(; control = :corrective)
+        for result in (quiet(() -> solve_opf(data, LPFFormulation, OPTIMIZER)),
+                       quiet(() -> solve_rd(data, LPFFormulation, OPTIMIZER; redispatch = corrective)))
+            @test result["termination_status"] == JuMP.LOCALLY_SOLVED
+            @test all(!haskey(nw_solution(result, n)["unit"], "4") for n in lost)
+            @test nw_solution(result, last(kept))["unit"]["4"]["e_stor"] ≈ 0.3 atol = 1e-5
+        end
     end
 
     @testset "a redispatch can ask a unit to leave the energy its schedule leaves" begin

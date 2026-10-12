@@ -13,6 +13,7 @@
 # v0.11.0 - cites the literature through DocumenterCitations                   #
 # v0.12.0 - warns about a page over 150 KiB, not 100                           #
 # v0.14.0 - adds the nomenclature page                                         #
+# v0.15.8 - adds the performance history page                                  #
 ################################################################################
 
 using Documenter
@@ -47,6 +48,7 @@ makedocs(
             "The Zorba adapter"         => "manual/zorba.md",
             "Security screening output" => "manual/dashboard.md",
             "Extending the package"     => "manual/extending.md",
+            "Performance history"       => "manual/performance.md",
         ],
         "Problems" => [
             "Overview"           => "problems/overview.md",

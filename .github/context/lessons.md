@@ -268,6 +268,12 @@ again get retired.
 - **Read the solution before writing to the model that holds it.** The first `refine!` added a binary the moment it found a
   violating step, and the next `JuMP.value` raised `OptimizeNotCalled`: a model that has been written to has no solution
   any more. It now collects every violating step first and writes after. (unconfirmed)
+- **A rolling horizon with equal-cost optima gives other numbers under another solver.** The plan's extra costs of a roll with no
+  price on the end, 26.2, 10.1 and 8.4 at horizons 2 to 4, are HiGHS's: Ipopt, which returns the middle of a face where a
+  simplex returns a vertex, gives 26.2, 16.3 and 4.4 on the same data. A test of a number like that names its solver. (unconfirmed)
+- **A price equal to what the unit would get for the energy is a tie, and the solver keeps the energy.** `Value(95.0)` against
+  a last price of 100 and losses of 0.95 left 0.5 pu·h in the store at the end of the problem, 47.5 above perfect foresight, where
+  `Value(90.0)` left none. Test a price on either side of the line and never on it. (unconfirmed)
 - **An edit script that anchors on a line starting with spaces matches inside a line indented deeper.** In B34 a
   `str.index("        rated(m) = count")` found the 12-space line of another testset and cut the wrong span, so the script
   duplicated a block. Anchor on a word of the line, or on the whole line with its newline, and print the match count. (unconfirmed)

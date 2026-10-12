@@ -1,6 +1,6 @@
 # Storage: a review against the literature, and the changes it asks for
 
-Status: B33 to B35 built on `b33-storage-fields` (v0.15.3, suite 3868, not merged), the rest ready to implement, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D90 (next free after: D91)
+Status: B33 to B36 built on `b33-storage-fields` (v0.15.4, suite 3984, not merged), the rest ready to implement, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D90 (next free after: D91)
 Priority: P1 · Effort: Large. Open: Q11 (what Zorba's throughput cap counts). Backlog B33-B38 and B40, B39 later.
 
 Literature: knowledge-base nodes Storage Models in OPF (14 sources that model storage, raw PDFs re-read) and Redispatch and
@@ -78,11 +78,11 @@ Measured with HiGHS; the scripts are `%LOCALAPPDATA%\Temp\nmb_storage_review\*.j
 - **Verification.** The three-step network: 393.00 and 426.54 (RELAXED, EXACT), 441.60 and 446.54 at `c_dch` 100, 450.00 at 130; the chain
   instance: EXACT equals binaries on every unit-step to 1e-9 with 36 binaries, FROZEN is feasible and within 1 % of EXACT.
 
-## 4. Terminal conditions (B36, D72, D85, v0.15.4)
+## 4. Terminal conditions (B36, D72, D85, v0.15.4, built)
 
 - **API.** `terminal = [Floor(0.1), Value(90.0)]`: any combination of `Pin(e)`, `Cyclic()`, `Floor(e)`, `Value(c)`, `Soft(e; c_up, c_dn)`, `Quad(e;
   weight)`; `e_fin` stays as `Pin(e_fin)`. `Cyclic` is written as `Pin(e_init)` when built, since `initial_state` replaces `e_init` in each window.
-  `fnct_stor_terminal!` has one method per type, so an extension subtypes `AbstractTerminal`. Refused: `Pin` with `Cyclic`, a cost type with `Pin`,
+  `fnct_stor_final_energy!`, `variable_stor_terminal!` and `terminal_cost` have one method per type, so an extension subtypes `AbstractTerminal`. Refused: `Pin` with `Cyclic`, a cost type with `Pin`,
   two cost types, a floor above the pin.
 - **Roll.** `Pin`, `Cyclic` and `Floor` are about the end of the problem: `interior_state` drops them. `Value`, `Soft` and `Quad` apply at the end of
   every window, which is what stops the drain (Marley and Hiskens p.3); `e` may be a profile over `:time`, read at the last index of the window.
@@ -91,8 +91,8 @@ Measured with HiGHS; the scripts are `%LOCALAPPDATA%\Temp\nmb_storage_review\*.j
 - **Decided (D85).** The natural target of a redispatch is the energy the market schedule leaves (Dratsas et al. 2024 restores the scheduled state of charge by rule,
   p.4-5; Lindner et al. 2023 and Qin et al. 2025 state no end energy, p.4 and p.2): `scheduled_energy(data, u)` of item 1, a profile over `:time`, is accepted as the
   target of `Pin`, `Soft` and `Quad`; no new terminal type.
-- **Verification.** The roll above with `Value(95.0)`: extra cost about 0 at horizons 2 to 5; with `Value(500.0)` the unit holds its energy and the
-  extra cost is above 0. The three-step network keeps its numbers ([0.4, 0.2, 0.0] free, 14.0 pinned at 0.2). The radial redispatch of `test/rd.jl` (2 steps, battery 0.25 pu·h
+- **Verification.** The roll above with `Value(90.0)` (95 is the sale value after the losses, a tie): extra cost 0 at horizons 2 to 5; with `Value(500.0)` the unit holds its energy and the
+  extra cost is 47.5, 0.5 pu·h at 95. The three-step network keeps its numbers ([0.4, 0.2, 0.0] free, 14.0 pinned at 0.2). The radial redispatch of `test/rd.jl` (2 steps, battery 0.25 pu·h
   from 0.25, free): 85.0 with no end condition (`e_stor` [0.25, 0.0]), 110.0 ending on the scheduled 0.25 ([0.25, 0.25]).
 
 ## 5. Outages (B37, D76, v0.15.5)

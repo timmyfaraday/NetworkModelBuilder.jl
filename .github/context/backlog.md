@@ -8,8 +8,6 @@ older ones: git has them). Next id: **B42**.
 
 ## Next
 
-- [ ] B36 · Terminal conditions on `Storage`: `Pin`, `Cyclic`, `Floor`, `Value`, `Soft`, `Quad`, the scheduled energy as a target (D72, D85) · Tom · 2026-10-12
-  - Plan item 4, v0.15.4. A roll without a terminal value costs 26.2, 10.1, 8.4 extra at horizons 2, 3, 4.
 - [ ] B37 · Outage support for `Storage`: a unit out of service holds its energy (D76) · Tom · 2026-10-12
   - Plan item 5, v0.15.5. Acceptance: the zero-rating run, objective 28.216.
 - [ ] B38 · Cycle limit of `Storage`: energy into and out of the store over any sliding 24 h window, carried across the windows of a roll, `c_cycl` per index; the same carry for `Generator.e_per_max` (D79-D82) · Tom · 2026-10-12
@@ -74,6 +72,10 @@ older ones: git has them). Next id: **B42**.
 
 ## Done
 
+- [x] B36 · Terminal conditions on `Storage`: `Pin`, `Cyclic`, `Floor`, `Value`, `Soft`, `Quad` as a list `terminal`, the scheduled energy as a target, a price on the end kept in every window of a roll (D72, D85, D90) · Tom · 2026-10-12
+  - v0.15.4 on `b33-storage-fields`, not merged; plan item 4, with D90 folded in (`s_max > 0` for a branch and a transformer). Suite 3984 (3868 at v0.15.3), `docs/make.jl` clean. Three steps: `Pin`, `Cyclic`, `Floor(0.2)` 14.0, `Floor(0.1)` 9.0, `Value(40)` 4.0, `Value(60)` 0.0, `Soft(0.2; c_dn = 30)` 10.0 and 80 14.0, `Quad(0.2; weight = 200)` 10.875; the radial redispatch ended on its scheduled energy 110.0 against 85.0. Roll with HiGHS: 26.2, 10.1, 8.4, 0 above perfect foresight with no price, 0 with `Value(90)`, 47.5 with `Value(500)`.
+  - Left to know: the plan's `Value(95.0)` is the sale value after the losses (100 x 0.95), a tie at which the unit keeps its energy to the end of the problem (47.5), so the test uses 90. A price on the end is in the objective of a problem solved whole and not in what a roll reports, the last window's included, so energy kept at the end for a value is not credited. The plan's `fnct_stor_terminal!` is `fnct_stor_final_energy!` with a method per condition, since a new `fnct_` name needs an old one in the map. A table cell cannot give a `terminal`. Names standing unless Tom objects: `:e_stor_up`, `:e_stor_dn`, `:cstr_stor_final_limit`, `:cstr_stor_final_balance`, `variable_stor_terminal!`, `terminal_cost`.
+  - From D90: `scripts/SteeringPlanData.jl` builds a `Branch`, `Switch` and `Transformer` from the capacity of its CSV, so a capacity of 0 in that data is now refused for a branch and a transformer; a Zorba link with 0 is refused by name.
 - [x] B35 · `exact` on `Storage`: `Exclusion` (`RELAXED`, `EXACT`, `FROZEN`), `refine!` after every solve, the gap, the price guard, the docs correction (D71, D78, D89) · Tom · 2026-10-12
   - v0.15.3 on `b33-storage-fields`, not merged; plan item 3. Suite 3868 (3813 at v0.15.2), `docs/make.jl` clean. Three-step run: 393.00 relaxed, 426.54 `EXACT` and with a binary on every step; `c_dch` 100 gives 441.60 and 446.54, 130 gives 450.00 for both; in current through Juniper 426.54 too.
   - Left to know: no hull row is written, the two big-M rows imply it; `exact` is `RELAXED` by default, so existing models are unchanged; the guard reads the first network index (B37 widens it); `EXACT` and `FROZEN` need finite ratings; the 10-node chain of the plan (36 binaries, FROZEN within 1 %) is not run.

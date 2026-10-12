@@ -288,3 +288,5 @@ again get retired.
   rest being throughput that nets to nothing. Read the state of charge, or the net, and give the unit a loss where the sum is what is being tested. (unconfirmed)
 - **Test a history entry on a horizon of one step.** A carried `(23.0, 0.06)` counts at the first step and not at the second, so a two-step test saw the discharge move to the second
   step and read as if the entry had been ignored. (unconfirmed)
+- **A new `fnct_*` function needs an entry in `CST_FUNCTIONS`, and the map wants an old name.** `test/nomenclature.jl` compares the `fnct_*` names `src/` defines with the values of that map, and
+  checks the stem of each against `CST_KEYS`. A function that never had an old name gets an invented one (`constraint_storage_range`), which no file may contain. (unconfirmed)

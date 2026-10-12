@@ -1,6 +1,6 @@
 # Storage: a review against the literature, and the changes it asks for
 
-Status: B33 to B38 built on `b33-storage-fields` (v0.15.6, suite 4118, not merged), the rest ready to implement, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D92 (next free after: D93)
+Status: B33 to B38 and B40 built on `b33-storage-fields` (v0.15.7, suite 4140, not merged), B39 later, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D92 (next free after: D93)
 Priority: P1 · Effort: Large. Open: Q11 (what Zorba's throughput cap counts). Backlog B33-B38 and B40, B39 later.
 
 Literature: knowledge-base nodes Storage Models in OPF (14 sources that model storage, raw PDFs re-read) and Redispatch and
@@ -129,12 +129,12 @@ Measured with HiGHS; the scripts are `%LOCALAPPDATA%\Temp\nmb_storage_review\*.j
 - **Folded in (D91, D92).** `s_max > 0` for a `Switch` and a `DCLink`; a preventive unit in service in the base case and out in a contingency is an error of `fnct_rd_control`, naming the
   unit and the `exception` that poses it corrective (it used to be skipped, and a pin that makes a storage unit move was infeasible).
 
-## 7. Corrective range (B40, D86, v0.15.7)
+## 7. Corrective range (B40, D86, v0.15.7, built)
 
 - **Fix.** A field `h_cur` [h], default 0 (no row), at least 0; its name needs the symbol `h` and the word `cur` in `test/nomenclature.jl` and `docs/src/manual/nomenclature.md` first.
   For a corrective unit with `h_cur > 0` in a problem with more than one `:contingency` coordinate, `fnct_stor_range!` writes per time step two free variables `p_stor_max`,
   `p_stor_min` and, for every contingency coordinate with the base case, `p_stor_min <= p_dch - p_chg <= p_stor_max`, then `p_stor_max - p_stor_min <= e_max/h_cur` (`e_max` read
-  at the step), key `cstr_stor_range`. A preventive unit gets no row: its net power is the same in every state.
+  at the step): keys `cstr_stor_range` with ids `(u, :min)` and `(u, :max)`, and `cstr_stor_range_limit` with id `u` (one id shape a key), the variables registered at the first state the unit is in service at. A preventive unit gets no row: its net power is the same in every state.
 - **Meaning.** Lindner et al. 2023 (Eq. 40-42, p.8) hold a booster's curative set points in one band of width `W_max/t_GB`, so that one pre-positioned state of charge serves whichever
   contingency occurs. The base case is in the band, so the unit may centre it by moving its base-case output; the per-contingency trajectories stay untied. `e_min` is another thing, a floor in every state.
 - **Verification.** One step, three contingencies (three parallel branches of 0.4 into a load of 1.0, branch 3 out in the second, branches 2 and 3 in the third), a free unit of 0.5 pu·h

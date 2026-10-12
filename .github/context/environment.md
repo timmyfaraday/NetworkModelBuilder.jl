@@ -100,3 +100,8 @@ facts `(unverified)` and remove the marker once checked.
   rewritten copy of a test file (`–`, `≈`) is mojibake and Julia fails to parse it. Read with `-Encoding
   UTF8` and write with `[IO.File]::WriteAllText(path, text, (New-Object Text.UTF8Encoding($false)))`
   (found by Tom Van Acker, 2026-10-05, perturbing a helper to prove a test can fail).
+- A `python script.py` chained after another statement in one terminal call printed nothing and had not run (twice, 2026-10-12): run it
+  as the only command and read its own output lines · found in Tom Van Acker's session, 2026-10-12.
+- One test file at a time: a persistent environment with the repository `Pkg.develop`ed and the test packages added, built once
+  offline (`Pkg.offline(true)`), then `julia --project=<env> run_files.jl hierarchy.jl validation.jl` with a runner that copies the
+  header of `test/runtests.jl` and `include`s the files named (hierarchy.jl 241 tests in 43 s) · found in Tom Van Acker's session, 2026-10-12.

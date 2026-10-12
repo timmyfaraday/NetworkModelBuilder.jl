@@ -250,3 +250,12 @@ again get retired.
   they reach, `summarysize(nm.model)`, is 49.2 MB, so deleting the first saved 7.3 MB (243.6 to 236.3 MB for the whole
   `NetworkModel`). Size a holder by `summarysize` of the whole object before and after the change, never by the sum of
   its parts, and say what the number follows. The decision D49 had quoted the 56.5 MB. (unconfirmed)
+- **A constructor runs again at every network index, with that index's values, and a window starts from a solver value.** B33
+  first refused an `e_init` below zero in `Storage`; four testsets of the rolling horizon failed with "storage 4 holds a negative
+  ... energy", the energy a solver handed on being a digit below 0. A check that compares a start or a target with a bound that
+  varies over the index belongs to a function that reads both at the index they matter at, with a tolerance (`check_storage`,
+  1e-5), never to the constructor. (unconfirmed)
+- **A check that reads a schedule from the state it starts in is wrong for every window of a roll but the first.** The first
+  version of `check_storage` ran in each window, from the energy the roll left the unit, and refused the schedule at the second
+  (-0.1 at network index 1): a redispatch is entitled to move a unit away from its schedule and pay for the rest. A regression
+  test with a one-step window reproduced it before the fix; a roll now checks once, over the whole. (unconfirmed)

@@ -8,8 +8,6 @@ older ones: git has them). Next id: **B41**.
 
 ## Next
 
-- [ ] B33 · Storage fields and validation: `_check_storage`, `check_storage` before the build, `e_min`, `c_chg` and `c_dch` in place of `c_thru`, `c_up + c_dn >= 0`, a market schedule inside the energy bounds, `scheduled_energy` (D74, D75, D83, D84) · Tom · 2026-10-12
-  - Plan `knowledge/plan/storage-review.md` item 1, v0.15.1; first, the other items add fields and items 3, 4 and 7 use what this adds.
 - [ ] B34 · Converter limit `s_max` on `Storage`: the circle in IVR, a limit on the active power in LPF (D73) · Tom · 2026-10-12
   - Plan item 2, v0.15.2.
 - [ ] B35 · `exact` on `Storage`: relaxed, exact by lazy binaries, a third value `FROZEN` that fixes the direction; the gap, the price guard, the docs correction (D71, D78) · Tom · 2026-10-12
@@ -76,6 +74,10 @@ older ones: git has them). Next id: **B41**.
     chunks of `_year_b10` had a first violation of 0.
 
 ## Done
+
+- [x] B33 · Storage fields and validation: `_check_storage`, `check_storage` before the build, `e_min`, `c_chg` and `c_dch` in place of `c_thru`, `c_up + c_dn >= 0`, a market schedule inside the energy bounds, `scheduled_energy` (D74, D75, D83, D84) · Tom · 2026-10-12
+  - v0.15.1 on `b33-storage-fields`, not merged; plan item 1. Red then green: 31 of the 130 tests of `validation.jl` failed on v0.15.0; suite 3788 (3686 at v0.15.0), `docs/make.jl` clean. A hard removal of `c_thru`.
+  - Left to know: the constructor does not compare `e_init` or `e_fin` with the bounds (`check_storage` does, within 1e-5); a roll checks the schedule once and its windows skip it (`schedule = false`); the schedule checks read a plain `Storage` only. The Zorba pipeline excludes its storage, so none of it is read there.
 
 - [x] B32 · Name the constraints, the functions that write them and their duals: `cstr_<owner>_<role>` keys and ids, `fnct_*` functions, `dual_*` solution keys, names in JuMP behind `debug_mode`, the old letters B31 left (D63-D70) · Tom · 2026-10-11
   - v0.15.0, merged and tagged; spec `knowledge/plan/naming-constraints.md`, map `knowledge/nomenclature.md`, a hard removal. Red then green: the testset "constraint nomenclature" of `test/nomenclature.jl` (89 of 99 passed on v0.14.0, 680 old names written); suite 3,686; `debug_mode = false` builds the step-3 window in 1,707 ms and 764 MB, `true` in 2,401 ms and 1,372 MB; a 24 h chunk byte-identical to v0.12.7.

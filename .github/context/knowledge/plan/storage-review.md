@@ -1,6 +1,6 @@
 # Storage: a review against the literature, and the changes it asks for
 
-Status: ready to implement, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D86 (next free after: D87)
+Status: B33 built on `b33-storage-fields` (v0.15.1, suite 3788, not merged), the rest ready to implement, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D86 (next free after: D87)
 Priority: P1 · Effort: Large. Open: Q11 (what Zorba's throughput cap counts). Backlog B33-B38 and B40, B39 later.
 
 Literature: knowledge-base nodes Storage Models in OPF (14 sources that model storage, raw PDFs re-read) and Redispatch and
@@ -38,10 +38,10 @@ Measured with HiGHS; the scripts are `%LOCALAPPDATA%\Temp\nmb_storage_review\*.j
 ## 1. Fields and validation (B33, D74, D75, D83, D84, v0.15.1)
 
 - **Fix.** `_with(st; kwargs...)` replaces the two field lists of `interior_state` and `initial_state`. `_check_storage` in the constructor, as
-  `_check_branch`, with `all_nw`: ratings at least 0, `0 <= e_min <= e_max`, `e_min <= e_init`, `e_fin` inside `[e_min, e_max]`, `c_chg`, `c_dch` and `c_cycl` finite
-  and at least 0, `c_up` and `c_dn` finite with `c_up + c_dn >= 0` at every index, `η` as today. `check_storage(data)` before the build, as `check_islands`, for what needs the dimension: `e_init` against
-  `e_max` at the first index, `e_fin` at the last, and a market schedule inside the cycle budget (its count under D81, `max(p_set, 0)` as discharge and `max(-p_set, 0)` as charge, over any 24 h window at most
-  `k_cycl_max·e_max`), which a redispatch cannot otherwise meet.
+  `_check_branch`, with `all_nw`: ratings at least 0, `0 <= e_min <= e_max`, `c_chg`, `c_dch` and `c_cycl` finite and at least 0, `c_up` and `c_dn` finite with `c_up + c_dn >= 0`,
+  `η` as today; not `e_init` or `e_fin` against the bounds, since the constructor runs again at every index and a window starts from a solver value, a digit outside them.
+  `check_storage(data)` before the build, as `check_islands`, reads those at the index they matter at, within 1e-5: `e_init` at the first, `e_fin` at the last, and a market schedule
+  (its count under D81, `max(p_set, 0)` as discharge and `max(-p_set, 0)` as charge, at most `k_cycl_max·e_max` over any 24 h). A roll checks the schedule once and its windows skip it.
 - **Decided (D83, D84).** The pair `c_up + c_dn >= 0` is the guard, each price alone only finite: a sum below zero pays the solver to raise both volumes by the same
   amount (Evidence); the thesis keeps binaries on its up and down bids for prices that need not be ordered (Scarponi p.90, rows 4.12-4.14). `check_storage(data)` also refuses
   a market schedule whose own energy, `e_n = e_{n-1} + Δt(η_chg max(-p_set, 0) - max(p_set, 0)/η_dch)` from `e_init`, leaves `[e_min, e_max]`: a redispatch repairs it at its

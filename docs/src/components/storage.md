@@ -19,7 +19,8 @@ Storage
 | ``e^{\text{max}}_{u}`` | `e_max` | usable energy capacity | pu·h |
 | ``e^{\text{min}}_{u}`` | `e_min` | energy kept in reserve, the lower bound of the state of charge | pu·h |
 | ``e^{0}_{u}`` | `e_init` | energy held before the first step | pu·h |
-| ``e^{\text{f}}_{u}`` | `e_fin` | energy required after the last step, or `NaN` | pu·h |
+| ``e^{\text{f}}_{u}`` | `e_fin` | energy required after the last step, or `NaN`: a [`Pin`](@ref) | pu·h |
+| | `terminal` | what the end of the horizon asks: one [`AbstractTerminal`](@ref) or a list of them, none by default | |
 | ``p^{\text{sc,max}}_{u}`` | `p_chg_max` | charge power limit | pu |
 | ``p^{\text{sd,max}}_{u}`` | `p_dch_max` | discharge power limit | pu |
 | ``\eta^{\text{c}}_{u}`` | `η_chg` | one-way charge efficiency, in ``(0,1]`` | |
@@ -46,6 +47,7 @@ Storage
 | ``p^{\text{sd}}_{u}`` | `:p_dch` | unit | discharge power, ``\ge 0`` | pu |
 | ``e_{u}`` | `:e_stor` | unit | state of charge, from `e_min` to `e_max` | pu·h |
 | ``q^{\text{s}}_{u}`` | `:q_stor` | unit | reactive power | pu |
+| ``e^{\text{up}}_{u}``, ``e^{\text{dn}}_{u}`` | `:e_stor_up`, `:e_stor_dn` | unit | the energy above and below the target of a `Soft` end, ``\ge 0``, at the last step only | pu·h |
 | ``z^{\text{s}}_{u}`` | `:z_stor` | unit | 1 where the unit charges, 0 where it discharges: a binary, written only for a step that charged and discharged at once and has `exact` set to `EXACT` | |
 | ``p^{\uparrow}_{u}``, ``p^{\downarrow}_{u}`` | `:p_stor_up`, `:p_stor_dn` | unit | moved up and down from the market schedule, redispatch only | pu |
 
@@ -180,33 +182,82 @@ Exclusion
 
 ### The end of the horizon
 
-A unit that carries an `e_fin` is pinned at the last `:time` coordinate:
+Without a condition the horizon ends wherever the dispatch leaves a unit, which is empty
+where the last prices are dear. What a unit can be asked instead is a list, `terminal`, of
+conditions on its energy ``e_{u,n}`` after the last time step ``n``, along `:time` with every
+other coordinate held fixed, so a problem with a contingency dimension asks each contingency to
+arrive at the same place:
+
+| condition | what it asks | where it is written |
+|:----------|:-------------|:--------------------|
+| [`Pin`](@ref) | the energy is ``e`` | a row |
+| [`Cyclic`](@ref) | the energy is the one the unit started with | a row, as a `Pin` |
+| [`Floor`](@ref) | the energy is at least ``e`` | a row |
+| [`Value`](@ref) | each unit of energy left is worth ``c`` | the objective |
+| [`Soft`](@ref) | the energy is ``e``, or the miss is paid for | a row and the objective |
+| [`Quad`](@ref) | the squared miss from ``e`` is paid for | the objective |
 
 ```math
-e_{u,n} = e^{\text{f}}_{u} \quad \text{at the last } n \text{ along } \texttt{:time}
+e_{u,n} = e \;\; (\texttt{Pin}), \qquad e_{u,n} \ge e \;\; (\texttt{Floor}), \qquad
+e_{u,n} - e = e^{\text{up}}_{u,n} - e^{\text{dn}}_{u,n} \;\; (\texttt{Soft}),
 ```
 
-with every other coordinate held fixed, so a problem with a contingency
-dimension asks each contingency to arrive at the same place. It is a **pin**,
-not a floor: a target the ratings cannot reach makes the problem infeasible,
-which is the honest answer to a question that has none. `NaN`, the default, is
-the absence of a row rather than a row against `NaN`.
+```math
+-c \, e_{u,n} \;\; (\texttt{Value}), \qquad
+c^{\uparrow} e^{\text{up}}_{u,n} + c^{\downarrow} e^{\text{dn}}_{u,n} \;\; (\texttt{Soft}), \qquad
+w \left( e_{u,n} - e \right)^{2} \;\; (\texttt{Quad}).
+```
+
+A target ``e`` is a number or a profile over the network index, read at the last time step, and
+[`scheduled_energy`](@ref) is one: a redispatch that is asked to leave a unit where the market
+schedule leaves it ends on `Pin(scheduled_energy(data, u))`. `e_fin` is a `Pin` and stays as it was.
+A `Cyclic` end is a `Pin` on `e_init`, taken when the unit is made so that a window of a roll, which
+starts from another energy, does not move it. A unit has at most one end, `e_fin`, `Pin` or `Cyclic`,
+and at most one price on it, `Value`, `Soft` or `Quad`; a price on a pinned energy has nothing to
+price. A pin is a pin and not a floor: a target the ratings cannot reach makes the problem
+infeasible, which is the honest answer to a question that has none. A `Floor` costs nothing below what
+the unit would hold anyway. A condition that is not given writes nothing.
+
+On the three steps with prices 10, 100 and 50 that a unit starting on 0.2 pu·h of its 0.5 sells in
+the last two, the free unit ends empty at a cost of 4.0. A `Pin`, a `Cyclic` end or a `Floor` of 0.2
+holds it to 0.2 for 14.0, a `Floor` of 0.1 for 9.0. A `Value` of 40 changes nothing and one of 60
+keeps the 0.2 and charges 0.2 more at the price of 50, since it is worth more than it costs. A `Soft`
+end with a price of 30 below its target of 0.2 lets the unit sell it, at 10.0 with the price in it, and
+one of 80 does not, at 14.0.
 
 ```@docs
+AbstractTerminal
+Pin
+Cyclic
+Floor
+Value
+Soft
+Quad
 fnct_stor_final_energy!
+variable_stor_terminal!
 interior_state
 ```
 
 !!! note "What a rolling horizon does with it"
-    The last time step of a window is the last time step of the problem only for
-    the window that closes it, so a roll releases the target everywhere else, see
-    [`interior_state`](@ref). The alternative — asking every window to arrive at
-    the target — is stitching batches together by pinning both their ends to a
-    guessed profile, which is what `initial_state` exists so as not to need.
+    The last time step of a window is the last time step of the problem only for the window that
+    closes it, so a roll releases a `Pin`, a `Cyclic` end and a `Floor` everywhere else, see
+    [`interior_state`](@ref). Asking every window to arrive at one is stitching batches together
+    by pinning both their ends to a guessed profile, which is what `initial_state` exists so as
+    not to need.
 
-    The trade is real and worth knowing: a lookahead too short to see why the
-    energy is being kept will spend it, and the window that does carry the target
-    is then asked for energy that is gone. The fix is a longer `horizon`.
+    The trade is real: a lookahead too short to see why the energy is being kept will spend it.
+    Eight steps with ten five times and a hundred three times, a unit that charges at ten and sells
+    at a hundred, and a roll with no condition pay 26.2, 10.1 and 8.4 above perfect foresight at
+    horizons 2, 3 and 4, and nothing at 5. A price on the end stays in every window, which is what
+    it is for. Below what the peak pays after the losses it does not hold the unit back, and a
+    `Value` of 90 here costs nothing at any of the four. Above it the unit keeps its energy to the
+    end, and the roll pays for the steps it did not sell.
+
+!!! note "A price on the end is not a cost"
+    It shapes a decision and nobody pays it, so it is in the `"objective"` of a problem solved whole
+    and not in what a rolling horizon reports, which is the cost of the steps it commits and of the
+    periods it closes. A unit that keeps its energy at the end of a roll for a value is not credited
+    for it. See [`terminal_cost`](@ref).
 
 ### The cycle limit
 

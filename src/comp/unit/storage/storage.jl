@@ -20,12 +20,14 @@
 # v0.15.2 - s_max, the converter rating of a storage unit                      #
 # v0.15.3 - s_max is positive, never zero                                      #
 # v0.15.3 - exact keeps charging and discharging at once out                   #
+# v0.15.4 - terminal, the end of the horizon as a list of conditions           #
 ################################################################################
 
 export AbstractStorage, Storage, inflow, storage_cycles
 export Exclusion, RELAXED, EXACT, FROZEN
+export AbstractTerminal, Pin, Cyclic, Floor, Value, Soft, Quad
 export check_storage, scheduled_energy
-export variable_storage_active!, variable_storage_reactive!
+export variable_storage_active!, variable_storage_reactive!, variable_stor_terminal!
 export fnct_stor_cycle!, fnct_stor_final_energy!
 
 ################################################################################
@@ -56,6 +58,7 @@ and the rolling horizon by declaring them:
 | `id`, `name`, `node`, `status`, `ext` | every component |
 | `p_set`, `q_set` | the power flow setpoint and the market schedule |
 | `e_max`, `e_min`, `e_init`, `e_fin` | the state of charge, its bounds and its ends |
+| `terminal` | what the end of the horizon asks, see [`AbstractTerminal`](@ref) |
 | `p_chg_max`, `p_dch_max` | the bounds on the charge and discharge |
 | `η_chg`, `η_dch` | the balance |
 | `exact` | [`refine!`](@ref), which keeps charging and discharging at once out |
@@ -105,6 +108,171 @@ _exclusion(x::Exclusion) = x
 _exclusion(b::Bool) = b ? EXACT : RELAXED
 
 """
+    AbstractTerminal
+
+A condition on the energy a [`Storage`](@ref) unit holds after the last time step.
+
+Without one the horizon ends wherever the dispatch leaves the unit, which is empty
+where the last prices are dear and a roll that cannot see past its window spends
+the energy before a peak. The conditions are what the end of a horizon can ask:
+
+| condition | what it asks | where it is written |
+|:----------|:-------------|:--------------------|
+| [`Pin`](@ref) | the energy is `e` | a row |
+| [`Cyclic`](@ref) | the energy is what the unit started with | a row, as a `Pin` |
+| [`Floor`](@ref) | the energy is at least `e` | a row |
+| [`Value`](@ref) | each unit of energy left is worth `c` | the objective |
+| [`Soft`](@ref) | the energy is `e`, or the miss is paid for | a row and the objective |
+| [`Quad`](@ref) | the squared miss from `e` is paid for | the objective |
+
+A `Pin`, a `Cyclic` end and a `Floor` are about the end of the problem. A price on the
+end, `Value`, `Soft` or `Quad`, is about the end of every window of a rolling horizon, which
+is what stops the drain; see [`interior_state`](@ref).
+
+A target `e` is a number or a profile over the network index, read at the last time step:
+[`scheduled_energy`](@ref) is one. A subtype adds what it needs of three methods,
+[`variable_stor_terminal!`](@ref) for the variables it brings, [`fnct_stor_final_energy!`](@ref)
+for its rows and [`terminal_cost`](@ref) for its price, each of which does nothing by default.
+"""
+abstract type AbstractTerminal end
+
+"a target as a `Float64` or a [`NetworkVector`](@ref) of them"
+_quantity(x::Real) = Float64(x)
+_quantity(x::NetworkVector{Float64}) = x
+
+"""
+    Pin(e)
+
+The energy a [`Storage`](@ref) unit holds after the last time step is `e` [pu·h], which may
+be a profile. It is a pin, not a floor: a target the ratings cannot reach has no answer.
+`e_fin` is a `Pin` that was there before the others.
+"""
+struct Pin <: AbstractTerminal
+    e::NetworkQuantity{Float64}
+    Pin(e) = new(_quantity(e))
+end
+
+"""
+    Cyclic()
+
+The unit ends on the energy it started with, `e_init`: a `Pin` on that energy, taken when
+the unit is made, so that a window of a roll that starts from another does not move it.
+"""
+struct Cyclic <: AbstractTerminal end
+
+"""
+    Floor(e)
+
+The energy the unit holds after the last time step is at least `e` [pu·h], which may be a
+profile. Below what it would hold anyway it costs nothing.
+"""
+struct Floor <: AbstractTerminal
+    e::NetworkQuantity{Float64}
+    Floor(e) = new(_quantity(e))
+end
+
+"""
+    Value(c)
+
+Each unit of energy left after the last time step is worth `c` [currency/pu·h], taken off
+the objective as `-c e`. The unit then sells what it has where the last price is above `c`
+and holds it, and charges more, where it is below.
+
+It is a price put on the end to shape a decision and not a cost anyone pays, so a rolling
+horizon leaves it out of what it reports and a problem solved whole counts it in its
+`"objective"`.
+"""
+struct Value <: AbstractTerminal
+    c::Float64
+    function Value(c)
+        isfinite(c) ||
+            throw(ArgumentError("`Value` is a price and has to be finite, not $c"))
+        return new(Float64(c))
+    end
+end
+
+"""
+    Soft(e; c_up = 0.0, c_dn = 0.0)
+
+The energy after the last time step is `e` [pu·h], which may be a profile, or the miss is
+paid for: `c_up` per pu·h above it and `c_dn` per pu·h below it [currency/pu·h]. The prices
+are not negative and not both zero.
+"""
+struct Soft <: AbstractTerminal
+    e   ::NetworkQuantity{Float64}
+    c_up::Float64
+    c_dn::Float64
+    function Soft(e; c_up = 0.0, c_dn = 0.0)
+        isfinite(c_up) && isfinite(c_dn) && c_up >= 0 && c_dn >= 0 ||
+            throw(ArgumentError("`Soft` prices a miss, so `c_up` and `c_dn` are finite and not negative"))
+        c_up > 0 || c_dn > 0 ||
+            throw(ArgumentError("`Soft` with no price on either side is no condition: give `c_up` or `c_dn`"))
+        return new(_quantity(e), Float64(c_up), Float64(c_dn))
+    end
+end
+
+"""
+    Quad(e; weight)
+
+The squared miss from `e` [pu·h], which may be a profile, is paid for at `weight`
+[currency/(pu·h)²]: `weight (e_{u,n} - e)^2`. It makes the objective quadratic.
+"""
+struct Quad <: AbstractTerminal
+    e     ::NetworkQuantity{Float64}
+    weight::Float64
+    function Quad(e; weight)
+        isfinite(weight) && weight > 0 ||
+            throw(ArgumentError("`Quad` needs a `weight` that is finite and positive, not $weight"))
+        return new(_quantity(e), Float64(weight))
+    end
+end
+
+"whether a condition prices the end rather than fixing it"
+_prices(c::AbstractTerminal) = c isa Union{Value,Soft,Quad}
+
+"whether a condition is about the end of the problem and not of every window of a roll"
+_closes(c::AbstractTerminal) = c isa Union{Pin,Floor}
+
+_condition(id, c::AbstractTerminal) = c
+_condition(id, c) =
+    throw(ArgumentError("storage $id has a `terminal` that holds $(repr(c)), which is not a " *
+                        "condition: `Pin`, `Cyclic`, `Floor`, `Value`, `Soft` or `Quad`"))
+
+"""
+    _terminals(id, terminal, e_init, e_fin)
+
+The conditions of a storage unit as a list, refused where they contradict one another, with
+`Cyclic` made the `Pin` on `e_init` it is. `e_fin` counts as a pin here, since it is one.
+"""
+function _terminals(id, terminal, e_init, e_fin)
+    if terminal isa Union{AbstractVector,Tuple} && isempty(terminal) && isnan(e_fin)
+        return terminal isa Vector{AbstractTerminal} ? terminal : AbstractTerminal[]
+    end
+
+    given = terminal isa Union{AbstractVector,Tuple} ? terminal : (terminal,)
+    list  = AbstractTerminal[_condition(id, c) for c in given]
+
+    pins = count(c -> c isa Union{Pin,Cyclic}, list) + !isnan(e_fin)
+    pins <= 1 ||
+        throw(ArgumentError("storage $id has more than one end in its `terminal`: `e_fin`, `Pin` and `Cyclic` each " *
+                            "say where the energy is after the last step"))
+    count(_prices, list) <= 1 ||
+        throw(ArgumentError("storage $id has more than one price on the end of its `terminal`: " *
+                            "`Value`, `Soft` and `Quad` are alternatives"))
+    any(_prices, list) && pins > 0 &&
+        throw(ArgumentError("storage $id has a price on the energy after the last step and a " *
+                            "pin on it, which leaves nothing to price"))
+    count(c -> c isa Floor, list) <= 1 ||
+        throw(ArgumentError("storage $id has two `Floor`s in its `terminal`"))
+
+    return AbstractTerminal[c isa Cyclic ? Pin(e_init) : c for c in list]
+end
+
+"the conditions on the end of a storage unit, `e_fin` included as the `Pin` it is"
+_conditions(st::AbstractStorage) =
+    isnan(st.e_fin) ? st.terminal : AbstractTerminal[st.terminal..., Pin(st.e_fin)]
+
+"""
     Storage <: AbstractStorage
 
 A unit `(u, i)` that charges and discharges within a rating and an energy
@@ -135,7 +303,11 @@ market schedule that runs the unit out. A model runs it before it builds.
 - `e_init`: the energy held before the first time step [pu·h].
 - `e_fin`: the energy the unit must hold after the last time step [pu·h].
   `NaN`, the default, means *no target*, and the horizon ends wherever the
-  dispatch leaves it.
+  dispatch leaves it. It is a [`Pin`](@ref).
+- `terminal`: what the end of the horizon asks, one [`AbstractTerminal`](@ref) or a list
+  of them, none by default: [`Pin`](@ref), [`Cyclic`](@ref), [`Floor`](@ref),
+  [`Value`](@ref), [`Soft`](@ref) and [`Quad`](@ref). At most one end, `e_fin`, `Pin` or
+  `Cyclic`, and at most one price on it, `Value`, `Soft` or `Quad`, which a pin has no use for.
 - `p_chg_max`, `p_dch_max`: the power limits [pu].
 - `η_chg`, `η_dch`: the one-way efficiencies, in
   `(0, 1]`.
@@ -181,6 +353,7 @@ Base.@kwdef struct Storage <: AbstractStorage
     e_min     ::NetworkQuantity{Float64} = 0.0
     e_init    ::Float64                  = 0.0
     e_fin     ::Float64                  = NaN
+    terminal  ::Vector{AbstractTerminal} = AbstractTerminal[]
     p_chg_max ::NetworkQuantity{Float64} = 0.0
     p_dch_max ::NetworkQuantity{Float64} = 0.0
     η_chg     ::Float64                  = 1.0
@@ -198,14 +371,15 @@ Base.@kwdef struct Storage <: AbstractStorage
     status    ::NetworkQuantity{Bool}    = true
     ext       ::Dict{Symbol,Any}         = Dict{Symbol,Any}()
 
-    function Storage(id, name, node, p_set, q_set, e_max, e_min, e_init, e_fin,
+    function Storage(id, name, node, p_set, q_set, e_max, e_min, e_init, e_fin, terminal,
                      p_chg_max, p_dch_max, η_chg, η_dch, exact, k_cycl_max, c_chg, c_dch,
                      c_cycl, q_min, q_max, s_max, c_up, c_dn, status, ext)
-        exact = _exclusion(exact)
+        exact    = _exclusion(exact)
+        terminal = _terminals(id, terminal, e_init, e_fin)
         _check_storage(id, e_max, e_min, e_init, e_fin, p_chg_max, p_dch_max, η_chg,
                        η_dch, exact, k_cycl_max, c_chg, c_dch, c_cycl, q_min, q_max, s_max, c_up, c_dn)
 
-        return new(id, name, node, p_set, q_set, e_max, e_min, e_init, e_fin,
+        return new(id, name, node, p_set, q_set, e_max, e_min, e_init, e_fin, terminal,
                    p_chg_max, p_dch_max, η_chg, η_dch, exact, k_cycl_max, c_chg, c_dch,
                    c_cycl, q_min, q_max, s_max, c_up, c_dn, status, ext)
     end
@@ -333,8 +507,9 @@ before it builds. What a constructor cannot see is read here, at the network
 index the energy is read at:
 
 - with `dispatch`, an `e_init` outside `[e_min, e_max]` at the first time step and
-  an `e_fin` outside it at the last, each against the bounds of that index. A
-  power flow holds a setpoint and has no state of charge to bound.
+  an `e_fin` outside it at the last, each against the bounds of that index, and so is a
+  target of a [`Pin`](@ref), [`Soft`](@ref) or [`Quad`](@ref), or a [`Floor`](@ref) above the
+  capacity or above the pin. A power flow holds a setpoint and has no state of charge to bound.
 - with `schedule`, a market schedule `p_set` that leaves the energy outside the
   bounds, see [`scheduled_energy`](@ref), or that counts more than the cycle limit
   allows over any 24 hours. A redispatch repairs such a schedule at the price of
@@ -385,7 +560,39 @@ function _check_energy(net::Network, dim::Dimension, u::Int)
                 "storage $u is asked for `e_fin` = $(st.e_fin) after the last step, at network index $n " *
                 "outside its bounds [$(st.e_min), $(st.e_max)]"))
         end
+        at_end && _check_terminal(u, n, dim, st)
     end
+
+    return nothing
+end
+
+"the targets of the conditions on the end of storage unit `u` at the last index `n`, against the bounds there"
+function _check_terminal(u::Int, n::Int, dim::Dimension, st)
+    tol   = _ENERGY_TOLERANCE
+    pin   = isnan(st.e_fin) ? nothing : st.e_fin
+    least = nothing
+
+    for c in st.terminal
+        hasproperty(c, :e) || continue
+        e    = nw_value(dim, c.e, n)
+        name = nameof(typeof(c))
+
+        if c isa Floor
+            e <= st.e_max + tol ||
+                throw(ArgumentError("storage $u is asked for a `Floor` of $e after the last step, at " *
+                                    "network index $n above its capacity $(st.e_max)"))
+            least = e
+        else
+            st.e_min - tol <= e <= st.e_max + tol ||
+                throw(ArgumentError("storage $u is asked for a `$name` of $e after the last step, at " *
+                                    "network index $n outside its bounds [$(st.e_min), $(st.e_max)]"))
+            c isa Pin && (pin = e)
+        end
+    end
+
+    pin === nothing || least === nothing || least <= pin + tol ||
+        throw(ArgumentError("storage $u is asked for a `Floor` of $least above its `Pin` of $pin after " *
+                            "the last step, at network index $n"))
 
     return nothing
 end
@@ -464,7 +671,7 @@ variable_unit(nm::NetworkModel{P,F}, ::Type{T}; nw::Int = nw_id_default(nm)
              ) where {P<:AbstractDispatchProblem,F<:AbstractFormulationType,T<:AbstractStorage} =
     variable_storage_active!(nm, T; nw)
 
-"the charge, discharge and state of charge of every storage unit, in any formulation"
+"the charge, discharge and state of charge of every storage unit, in any formulation, and what its end conditions bring"
 function variable_storage_active!(nm::NetworkModel, ::Type{T}; nw::Int) where {T<:AbstractStorage}
     isempty(ids(nm, T; nw)) && return nothing
     require_time_dimension(nm, T)
@@ -480,6 +687,11 @@ function variable_storage_active!(nm::NetworkModel, ::Type{T}; nw::Int) where {T
                   lower = 0.0, upper = st.p_dch_max)
         variable!(nm, :e_stor, u; nw, start = st.e_init,
                   lower = st.e_min, upper = st.e_max)
+
+        is_last_id(nm, nw, :time) || continue
+        for c in _conditions(st)
+            variable_stor_terminal!(nm, c, st, u; nw)
+        end
     end
 
     return nothing
@@ -613,20 +825,23 @@ end
 
 """
     fnct_stor_final_energy!(nm, T)
+    fnct_stor_final_energy!(nm, condition, st, u; nw)
 
-Pin every storage unit that carries an `e_fin` to it at the last `:time`
-coordinate,
+Write the rows of the conditions on the end of every storage unit of type `T`, at the last
+`:time` coordinate and with every other coordinate held fixed, so a problem with a
+contingency dimension asks each contingency to arrive at the same place. The second form is
+one condition of one unit, and a method of it is what a condition has to add to be written.
 
 ```math
-e_{u,n} = e^{\\text{f}}_{u} \\quad \\text{at the last } n \\text{ along } \\texttt{:time},
+e_{u,n} = e \\quad (\\texttt{Pin}), \\qquad e_{u,n} \\ge e \\quad (\\texttt{Floor}), \\qquad
+e_{u,n} - e = e^{\\text{up}}_{u,n} - e^{\\text{dn}}_{u,n} \\quad (\\texttt{Soft}),
 ```
 
-with every other coordinate held fixed, so a problem with a contingency
-dimension asks each contingency to arrive at the same place.
-
-It is a **pin**, not a floor: a target the ratings cannot reach makes the problem
-infeasible, which is the honest answer to a question that has none. A unit
-without a target — `NaN`, the default — gets no row.
+with the slack of a [`Soft`](@ref) end non-negative, and the price in
+[`terminal_cost`](@ref). A pin is a pin, not a floor: a target the ratings cannot reach makes
+the problem infeasible, which is the honest answer to a question that has none. A unit without
+a condition, `e_fin` included, gets no row, and neither does a [`Value`](@ref) or a
+[`Quad`](@ref), which are prices.
 """
 function fnct_stor_final_energy!(nm::NetworkModel, ::Type{T}) where {T<:AbstractStorage}
     for n in nw_ids(nm)
@@ -634,15 +849,85 @@ function fnct_stor_final_energy!(nm::NetworkModel, ::Type{T}) where {T<:Abstract
 
         for u in ids(nm, T; nw = n)
             st = unit(nm, u; nw = n)::T
-            isnan(st.e_fin) && continue
-
-            constrain!(nm, :cstr_stor_final_energy, u, JuMP.@build_constraint(
-                var(nm, :e_stor, u; nw = n) == st.e_fin); nw = n)
+            for condition in _conditions(st)
+                fnct_stor_final_energy!(nm, condition, st, u; nw = n)
+            end
         end
     end
 
     return nothing
 end
+
+fnct_stor_final_energy!(::NetworkModel, ::AbstractTerminal, ::AbstractStorage, ::Int; nw::Int) = nothing
+
+function fnct_stor_final_energy!(nm::NetworkModel, c::Pin, ::AbstractStorage, u::Int; nw::Int)
+    constrain!(nm, :cstr_stor_final_energy, u, JuMP.@build_constraint(
+        var(nm, :e_stor, u; nw) == nw_value(nm, c.e, nw)); nw)
+
+    return nothing
+end
+
+function fnct_stor_final_energy!(nm::NetworkModel, c::Floor, ::AbstractStorage, u::Int; nw::Int)
+    constrain!(nm, :cstr_stor_final_limit, u, JuMP.@build_constraint(
+        var(nm, :e_stor, u; nw) >= nw_value(nm, c.e, nw)); nw)
+
+    return nothing
+end
+
+function fnct_stor_final_energy!(nm::NetworkModel, c::Soft, ::AbstractStorage, u::Int; nw::Int)
+    constrain!(nm, :cstr_stor_final_balance, u, JuMP.@build_constraint(
+        var(nm, :e_stor, u; nw) - nw_value(nm, c.e, nw) ==
+        var(nm, :e_stor_up, u; nw) - var(nm, :e_stor_dn, u; nw)); nw)
+
+    return nothing
+end
+
+"""
+    variable_stor_terminal!(nm, condition, st, u; nw)
+
+The variables a condition on the end of storage unit `u` brings, at the last `:time`
+coordinate `nw`, and none by default. A [`Soft`](@ref) end brings the energy above its target
+`:e_stor_up` and the energy below it `:e_stor_dn`, both non-negative.
+"""
+variable_stor_terminal!(::NetworkModel, ::AbstractTerminal, ::AbstractStorage, ::Int; nw::Int) = nothing
+
+function variable_stor_terminal!(nm::NetworkModel, ::Soft, ::AbstractStorage, u::Int; nw::Int)
+    variable!(nm, :e_stor_up, u; nw, start = 0.0, lower = 0.0)
+    variable!(nm, :e_stor_dn, u; nw, start = 0.0, lower = 0.0)
+
+    return nothing
+end
+
+"""
+    terminal_cost(nm, T, u; nw)
+    terminal_cost(nm, condition, st, u; nw)
+
+What storage unit `u` charges for the energy it leaves at the last `:time` coordinate `nw`, as a
+JuMP expression or `0.0`: the sum over its conditions. The second form is one condition of one
+unit, and a method of it is what a price on the end has to add.
+
+```math
+-c \\, e_{u,n} \\quad (\\texttt{Value}), \\qquad
+c^{\\uparrow} e^{\\text{up}}_{u,n} + c^{\\downarrow} e^{\\text{dn}}_{u,n} \\quad (\\texttt{Soft}), \\qquad
+w \\left( e_{u,n} - e \\right)^{2} \\quad (\\texttt{Quad}).
+```
+"""
+function terminal_cost(nm::NetworkModel, ::Type{T}, u::Int; nw::Int) where {T<:AbstractStorage}
+    st = unit(nm, u; nw)::T
+
+    return sum(terminal_cost(nm, c, st, u; nw) for c in _conditions(st); init = 0.0)
+end
+
+terminal_cost(::NetworkModel, ::AbstractTerminal, ::AbstractStorage, ::Int; nw::Int) = 0.0
+
+terminal_cost(nm::NetworkModel, c::Value, ::AbstractStorage, u::Int; nw::Int) =
+    -c.c * var(nm, :e_stor, u; nw)
+
+terminal_cost(nm::NetworkModel, c::Soft, ::AbstractStorage, u::Int; nw::Int) =
+    c.c_up * var(nm, :e_stor_up, u; nw) + c.c_dn * var(nm, :e_stor_dn, u; nw)
+
+terminal_cost(nm::NetworkModel, c::Quad, ::AbstractStorage, u::Int; nw::Int) =
+    c.weight * (var(nm, :e_stor, u; nw) - nw_value(nm, c.e, nw))^2
 
 """
     inflow(st, nm, n)
@@ -1121,7 +1406,8 @@ end
 """
     interior_state(st)
 
-The storage unit `st` with its end-of-horizon target released.
+The storage unit `st` with what belongs to the end of the problem released: `e_fin`, a
+[`Pin`](@ref), a [`Cyclic`](@ref) end and a [`Floor`](@ref).
 
 The counterpart of [`initial_state`](@ref), and the two are what make a rolling
 horizon mean the same thing as the problem it is rolling. One carries the start
@@ -1133,8 +1419,32 @@ Without it every window would be asked to arrive at `e_fin`, which is
 for each batch because the batches do not talk to each other. They do talk here,
 through `initial_state`, so only the window that actually reaches the end of the
 horizon carries the target.
+
+A price on the end, [`Value`](@ref), [`Soft`](@ref) or [`Quad`](@ref), stays. It is not a
+target the batches have to agree on but what the energy left at the end of a window is worth,
+and a window that cannot see past its end needs exactly that to know not to spend it.
 """
-interior_state(st::Storage) = isnan(st.e_fin) ? st : _with(st; e_fin = NaN)
+function interior_state(st::Storage)
+    isnan(st.e_fin) && !any(_closes, st.terminal) && return st
+
+    return _with(st; e_fin = NaN, terminal = AbstractTerminal[c for c in st.terminal if !_closes(c)])
+end
+
+"""
+    _sliced(x, dim, indices)
+
+The field `x` of a component over the network indices `indices` of `dim`, for [`window`](@ref):
+the end conditions of a storage unit carry a profile that follows its window.
+"""
+_sliced(x::AbstractVector{<:AbstractTerminal}, dim::Dimension, indices::Vector{Int}) =
+    AbstractTerminal[_sliced(c, dim, indices) for c in x]
+_carries_profile(st::AbstractStorage) = any(c -> hasproperty(c, :e) && c.e isa NetworkVector, st.terminal)
+_sliced(c::Pin, dim::Dimension, indices::Vector{Int}) = Pin(_sliced(c.e, dim, indices))
+_sliced(c::Floor, dim::Dimension, indices::Vector{Int}) = Floor(_sliced(c.e, dim, indices))
+_sliced(c::Soft, dim::Dimension, indices::Vector{Int}) =
+    Soft(_sliced(c.e, dim, indices); c_up = c.c_up, c_dn = c.c_dn)
+_sliced(c::Quad, dim::Dimension, indices::Vector{Int}) =
+    Quad(_sliced(c.e, dim, indices); weight = c.weight)
 
 """
     initial_state(st, nm, n)

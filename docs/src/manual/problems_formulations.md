@@ -103,6 +103,7 @@ network_cost
 minimize_network_cost
 dispatch_cost
 horizon_cost
+terminal_cost
 period_cost
 component_period_cost
 network_weight

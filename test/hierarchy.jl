@@ -16,6 +16,7 @@
 # v0.15.1 - e_min, c_chg and c_dch replace c_thru                              #
 # v0.15.2 - a storage unit's converter rating                                  #
 # v0.15.3 - exact keeps charging and discharging at once out                   #
+# v0.15.4 - the end of a storage unit's horizon is a list of conditions        #
 ################################################################################
 
 "case5 with edge 5, which has a turns ratio, rebuilt as a transformer carrying `extra`"
@@ -195,6 +196,7 @@ Base.@kwdef struct InflowStorage <: AbstractStorage
     e_min      ::NetworkQuantity{Float64} = 0.0
     e_init       ::Float64                  = 0.0
     e_fin         ::Float64                  = NaN
+    terminal      ::Vector{AbstractTerminal} = AbstractTerminal[]
     p_chg_max        ::NetworkQuantity{Float64} = 0.0
     p_dch_max     ::NetworkQuantity{Float64} = 0.0
     η_chg    ::Float64                  = 1.0
@@ -767,6 +769,63 @@ const PRICES = [10.0, 100.0, 50.0]
         @test haskey(_NMB.registered_constraints(shut), (3, :cstr_stor_final_energy, 3))
     end
 
+    @testset "the end of a horizon is a list of conditions" begin
+        battery(; kw...) = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.2,
+                                   p_chg_max = 0.2, p_dch_max = 0.2, kw...)
+        network(st) = price_network(PRICES; extra = Dict{Int,AbstractUnit}(3 => st))
+        solved(st)  = quiet(() -> solve_model(network(st), OptimalPowerFlowProblem, LPFFormulation, OPTIMIZER))
+        final_keys(st) = Set(k[2] for k in keys(_NMB.registered_constraints(
+            instantiate_model(network(st), OptimalPowerFlowProblem, LPFFormulation)))
+                             if startswith(String(k[2]), "cstr_stor_final"))
+
+        # the free unit ends on 0, and a pin, a cyclic end or a floor of 0.2 hold it to 0.2: 14.0
+        for held in (battery(terminal = Pin(0.2)), battery(terminal = Cyclic()),
+                     battery(terminal = Floor(0.2)), battery(terminal = [Floor(0.1), Pin(0.2)]))
+            result = solved(held)
+            @test storage_path(result, 1:3)[3] ≈ [0.4, 0.2, 0.2] atol = 1e-6
+            @test result["objective"] ≈ 14.0 atol = 1e-4
+        end
+
+        # a floor is not a pin: below what the unit would hold it costs nothing, above it the unit holds it
+        floored = solved(battery(terminal = Floor(0.1)))
+        @test storage_path(floored, 1:3)[3] ≈ [0.4, 0.2, 0.1] atol = 1e-6
+        @test floored["objective"] ≈ 9.0 atol = 1e-4
+        @test solved(battery(terminal = Floor(0.0)))["objective"] ≈ 4.0 atol = 1e-4
+
+        # a value on the energy left: the last step sells at 50, so below it the unit sells
+        # what it has and above it holds that and charges more
+        sells = solved(battery(terminal = Value(40.0)))
+        @test storage_path(sells, 1:3)[3] ≈ [0.4, 0.2, 0.0] atol = 1e-6
+        @test sells["objective"] ≈ 4.0 atol = 1e-4
+        keeps = solved(battery(terminal = Value(60.0)))
+        @test storage_path(keeps, 1:3)[3] ≈ [0.4, 0.2, 0.4] atol = 1e-6
+        @test keeps["objective"] ≈ 0.0 atol = 1e-4
+
+        # a price on missing the target: 30 a pu·h short is cheaper than 50 for the energy, 80 is not
+        cheap = solved(battery(terminal = Soft(0.2; c_dn = 30.0)))
+        @test storage_path(cheap, 1:3)[3] ≈ [0.4, 0.2, 0.0] atol = 1e-6
+        @test cheap["objective"] ≈ 10.0 atol = 1e-4
+        for dear in (Soft(0.2; c_dn = 80.0), Soft(0.2; c_up = 1.0, c_dn = 80.0))
+            result = solved(battery(terminal = dear))
+            @test storage_path(result, 1:3)[3] ≈ [0.4, 0.2, 0.2] atol = 1e-6
+            @test result["objective"] ≈ 14.0 atol = 1e-4
+        end
+
+        # a quadratic price on the miss: 50 x + 200 x^2 is least at x = -0.125, so the unit ends on 0.075
+        bent = solved(battery(terminal = Quad(0.2; weight = 200.0)))
+        @test storage_path(bent, 1:3)[3][end] ≈ 0.075 atol = 1e-4
+        @test bent["objective"] ≈ 10.875 atol = 1e-3
+
+        # only what a condition needs is written: a price on the energy needs no row, a floor one of its own
+        @test isempty(final_keys(battery()))
+        @test final_keys(battery(terminal = Pin(0.2))) == Set([:cstr_stor_final_energy])
+        @test final_keys(battery(e_fin = 0.2)) == Set([:cstr_stor_final_energy])
+        @test final_keys(battery(terminal = Floor(0.2))) == Set([:cstr_stor_final_limit])
+        @test final_keys(battery(terminal = Soft(0.2; c_dn = 1.0))) == Set([:cstr_stor_final_balance])
+        @test isempty(final_keys(battery(terminal = Value(60.0))))
+        @test isempty(final_keys(battery(terminal = Quad(0.2; weight = 1.0))))
+    end
+
     @testset "a target the ratings cannot reach has no answer" begin
         # 0.5 asked of a unit that starts empty and may charge 0.2 a step, over
         # two steps: a pin is a pin, and the honest answer is that there is none
@@ -797,6 +856,44 @@ const PRICES = [10.0, 100.0, 50.0]
         loose = Storage(; id = 3, node = 2, e_max = 0.5)
         @test interior_state(loose) === loose
         @test interior_state(Node(; id = 1)) isa Node
+
+        # a pin, a cyclic end and a floor belong to the end of the problem; a price on the end
+        # belongs to the end of every window, which is what it is for
+        kept = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.2, p_chg_max = 0.2, p_dch_max = 0.2,
+                       terminal = [Floor(0.1), Value(90.0)])
+        @test only(interior_state(kept).terminal) isa Value
+        @test isempty(interior_state(Storage(; id = 3, node = 2, e_max = 0.5, terminal = Cyclic())).terminal)
+        @test isempty(interior_state(Storage(; id = 3, node = 2, e_max = 0.5, terminal = [Pin(0.2), Floor(0.1)])).terminal)
+        for priced in (Soft(0.2; c_dn = 1.0), Quad(0.2; weight = 1.0))
+            st = Storage(; id = 3, node = 2, e_max = 0.5, terminal = priced)
+            @test only(interior_state(st).terminal) isa typeof(priced)
+        end
+        @test interior_state(kept) !== kept
+    end
+
+    @testset "a price on the end of every window stops a roll from draining the unit" begin
+        prices = [10.0, 10.0, 10.0, 10.0, 10.0, 100.0, 100.0, 100.0]
+        drain(terminal) = price_network(prices; extra = Dict{Int,AbstractUnit}(3 => Storage(;
+            id = 3, node = 2, e_max = 0.5, e_init = 0.0, p_chg_max = 0.2, p_dch_max = 0.2,
+            η_chg = 0.95, η_dch = 0.95, terminal)))
+        # a simplex solver, which picks a vertex among equal costs where an interior point picks the middle
+        highs   = JuMP.optimizer_with_attributes(HiGHS.Optimizer, "output_flag" => false)
+        perfect = quiet(() -> solve_model(drain(AbstractTerminal[]), OptimalPowerFlowProblem,
+                                          LPFFormulation, highs))["objective"]
+        extra(h, terminal = AbstractTerminal[]) = quiet(() -> solve_rolling_horizon(
+            drain(terminal), OptimalPowerFlowProblem, LPFFormulation, highs;
+            horizon = h, step = 1))["objective"] - perfect
+
+        # with no price on the end a roll spends the energy before a peak it cannot see
+        @test perfect ≈ 27.763 atol = 5e-3
+        @test [extra(h) for h in 2:5] ≈ [26.2, 10.1, 8.4, 0.0] atol = 0.1
+
+        # priced below what the peak pays after the losses, 100 x 0.95 = 95, it does not
+        @test all(abs(extra(h, Value(90.0))) < 1e-6 for h in 2:5)
+
+        # priced above it the unit keeps its energy to the end and the roll pays for the steps it
+        # did not sell, 47.5 for 0.5 pu·h at 95; the value it keeps is not in what a roll reports
+        @test extra(3, Value(500.0)) ≈ 47.5 atol = 1e-3
     end
 
 

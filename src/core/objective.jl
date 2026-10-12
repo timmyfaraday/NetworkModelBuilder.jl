@@ -8,6 +8,7 @@
 # Changelog:                                                                   #
 # v0.1.0 - initial implementation                                              #
 # v0.2.0 - network dependent data stored per component                         #
+# v0.15.4 - terminal, the end of the horizon as a list of conditions           #
 ################################################################################
 
 ################################################################################
@@ -255,22 +256,59 @@ function component_period_cost(nm::NetworkModel, settled)
 end
 
 """
+    terminal_cost(nm)
+
+The objective contribution of what the units leave at the end of the horizon, as a JuMP
+expression or `0.0`: [`terminal_cost`](@ref) of every unit at the last network index along
+`:time`, weighted by the [`period_weight`](@ref) of the state of the world it sits in, and
+`0.0` for a problem with no `:time` dimension.
+
+It is a price put on the end to shape a decision and not a cost anyone pays, so it is in the
+objective and **not** in what a rolling horizon reports: that is [`network_cost`](@ref) of the
+steps it commits and [`horizon_cost`](@ref) of the periods it closes.
+"""
+function terminal_cost(nm::NetworkModel)
+    has_dim(nm, :time) || return 0.0
+
+    total = 0.0
+    for n in nw_ids(nm)
+        is_last_id(nm, n, :time) || continue
+
+        w = period_weight(nm, n, :time)
+        for T in unit_types(), id in ids(nm, T; nw = n)
+            total += w * terminal_cost(nm, T, id; nw = n)
+        end
+    end
+
+    return total
+end
+
+"""
+    terminal_cost(nm, T, id; nw)
+
+What component `id` of type `T` charges for what it leaves at the last network index along
+`:time`, as a JuMP expression or a number, and zero for anything that does not say otherwise.
+"""
+terminal_cost(::NetworkModel, ::Type{T}, ::Int; nw::Int) where {T<:AbstractComponent} = 0.0
+
+"""
     minimize_network_cost(nm)
 
 Set the objective to the weighted sum of [`network_cost`](@ref) over every
-network index, plus whatever [`horizon_cost`](@ref) spans them,
+network index, plus whatever [`horizon_cost`](@ref) spans them and what the units are
+charged for the end of the horizon, [`terminal_cost`](@ref),
 
 ```math
-\\min\\quad \\sum_{n \\in \\mathcal{N}} w_{n} \\, c_{n} + c^{\\text{h}} ,
+\\min\\quad \\sum_{n \\in \\mathcal{N}} w_{n} \\, c_{n} + c^{\\text{h}} + c^{\\text{t}} ,
 ```
 
 with `w_n` the weight of network index `n`, see [`network_weight`](@ref). The
-second term is zero for every problem that does not write one.
+last two terms are zero for every problem that does not write one.
 """
 minimize_network_cost(nm::NetworkModel) =
     JuMP.@objective(nm.model, Min,
         sum(network_weight(nm, n) * network_cost(nm, n) for n in nw_ids(nm); init = 0.0) +
-        horizon_cost(nm))
+        horizon_cost(nm) + terminal_cost(nm))
 
 """
     objective_generation_cost(nm)

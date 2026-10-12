@@ -10,8 +10,25 @@ against the per-file changelog comments the source already carries.
 
 ## [0.15.4] - 2026-10-12
 
+### Added
+
+- `terminal` on `Storage`, what the end of the horizon asks: one condition or a list of `Pin(e)`, `Cyclic()`,
+  `Floor(e)`, `Value(c)`, `Soft(e; c_up, c_dn)` and `Quad(e; weight)`, all subtypes of `AbstractTerminal`, which a
+  type of your own can be as well by adding `fnct_stor_final_energy!`, `variable_stor_terminal!` and
+  `terminal_cost` for it. `e_fin` stays and is a `Pin`; `Cyclic` is a `Pin` on `e_init` taken when the unit is
+  made. A unit has at most one end and at most one price on it, and a target is a number or a profile, which
+  `scheduled_energy` is one of. A `Floor` is the row `:cstr_stor_final_limit`, a `Soft` end the row
+  `:cstr_stor_final_balance` and the variables `:e_stor_up` and `:e_stor_dn`.
+- `terminal_cost(nm)`, the objective's share of what the units leave at the end of the horizon. It is in the
+  objective of a problem solved whole and not in what a rolling horizon reports.
+- `check_storage` refuses a target of a condition outside the bounds, a `Floor` above the capacity and a `Floor`
+  above the pin.
+
 ### Changed
 
+- `interior_state` releases a `Pin`, a `Cyclic` end and a `Floor` and keeps a price on the end, `Value`,
+  `Soft` or `Quad`: a roll that cannot see past its window is told what the energy left at its end is worth.
+- `window` slices the profile target of an end condition to the network indices of its window.
 - **Breaking.** The `s_max` of a `Branch` and of a `Transformer` is positive: a rating of zero is refused at any
   terminal and any network index, with `status` named as the way to take the edge out of service. A
   `Transformer` had no check on its rating at all, so a negative or undefined one is refused too. A Matpower

@@ -15,6 +15,7 @@
 # v0.15.3 - a storage unit's s_max is positive, never zero                     #
 # v0.15.3 - exact keeps charging and discharging at once out                   #
 # v0.15.4 - a branch's and a transformer's s_max is positive                   #
+# v0.15.4 - the end of a storage unit's horizon is a list of conditions        #
 ################################################################################
 
 # An impossible value used to travel on to the solver, which answered
@@ -239,6 +240,25 @@ end
         @test check_storage(data(battery(e_max = nw_vector(dim, [0.3, 0.5, 0.5])))) === nothing
         @test_throws ArgumentError check_storage(data(battery(e_max = nw_vector(dim, [0.1, 0.5, 0.5]))))
 
+        # a condition on the end is read at the last step like `e_fin`: a target outside the bounds is refused
+        for bad in (battery(terminal = Pin(0.6)), battery(terminal = Floor(0.6)),
+                    battery(terminal = Soft(0.6; c_dn = 1.0)), battery(terminal = Quad(0.6; weight = 1.0)),
+                    battery(e_min = 0.1, terminal = Pin(0.05)),
+                    battery(terminal = [Floor(0.4), Pin(0.3)]))
+            @test_throws ArgumentError check_storage(data(bad))
+            @test_throws ArgumentError instantiate_model(data(bad), OptimalPowerFlowProblem, LPFFormulation)
+        end
+        @test check_storage(data(battery(terminal = [Floor(0.1), Value(90.0)]))) === nothing
+        @test check_storage(data(battery(terminal = [Floor(0.3), Pin(0.4)]))) === nothing
+        @test check_storage(data(battery(terminal = Value(1000.0)))) === nothing      # a price has no bound
+        err = refusal(() -> check_storage(data(battery(terminal = Pin(0.6)))))
+        @test occursin("storage 3", err.msg) && occursin("Pin", err.msg) && occursin("network index 3", err.msg)
+
+        # and a profile at the index it is read at
+        pins(e) = battery(e_max = nw_vector(dim, [0.5, 0.5, 0.3]), terminal = Pin(nw_vector(dim, e)))
+        @test check_storage(data(pins([0.6, 0.6, 0.2]))) === nothing
+        @test_throws ArgumentError check_storage(data(pins([0.2, 0.2, 0.4])))
+
         # what a solver hands back is not refused for the digits it carries
         @test check_storage(data(battery(e_init = 0.5 + 1e-9))) === nothing
         @test check_storage(data(battery(e_init = -1e-9))) === nothing
@@ -310,6 +330,50 @@ end
         @test check_storage(swing(1.6, 21:28)) === nothing           # budget 0.8
         err = refusal(() -> check_storage(swing(1.0, 21:28)))
         @test occursin("storage 3", err.msg) && occursin("k_cycl_max", err.msg)
+    end
+
+    @testset "a terminal condition" begin
+        battery(; kwargs...) = Storage(; id = 3, node = 2, e_max = 0.5, e_init = 0.3,
+                                       p_chg_max = 0.2, p_dch_max = 0.2, kwargs...)
+
+        # a target is a number or a profile, a price is finite and not negative where it penalises
+        @test Pin(1).e == 1.0 && Floor(0.2).e == 0.2
+        @test Value(90).c == 90.0
+        @test Soft(0.2; c_dn = 5.0).c_dn == 5.0 && Soft(0.2; c_dn = 5.0).c_up == 0.0
+        @test Quad(0.2; weight = 3.0).weight == 3.0
+        @test_throws ArgumentError Value(NaN)
+        @test_throws ArgumentError Value(Inf)
+        @test_throws ArgumentError Soft(0.2)                       # a price on neither side is no condition
+        @test_throws ArgumentError Soft(0.2; c_dn = -1.0)
+        @test_throws ArgumentError Soft(0.2; c_up = Inf, c_dn = 1.0)
+        @test_throws ArgumentError Quad(0.2; weight = 0.0)
+        @test_throws ArgumentError Quad(0.2; weight = -1.0)
+
+        # none, one or a list; Cyclic is a Pin on the energy the unit starts with, taken when it is made
+        @test isempty(battery().terminal)
+        @test battery(terminal = Floor(0.1)).terminal isa Vector{AbstractTerminal}
+        @test length(battery(terminal = [Floor(0.1), Value(90.0)]).terminal) == 2
+        @test length(battery(terminal = (Floor(0.1), Value(90.0))).terminal) == 2
+        cyclic = battery(terminal = Cyclic())
+        @test only(cyclic.terminal) isa Pin && only(cyclic.terminal).e == 0.3
+
+        # two ends, a price on a pinned end, two prices and a condition twice are refused
+        @test_throws ArgumentError battery(terminal = [Pin(0.2), Cyclic()])
+        @test_throws ArgumentError battery(terminal = [Pin(0.2), Pin(0.3)])
+        @test_throws ArgumentError battery(e_fin = 0.2, terminal = Pin(0.3))
+        @test_throws ArgumentError battery(e_fin = 0.2, terminal = Cyclic())
+        @test_throws ArgumentError battery(terminal = [Pin(0.2), Value(90.0)])
+        @test_throws ArgumentError battery(e_fin = 0.2, terminal = Value(90.0))
+        @test_throws ArgumentError battery(terminal = [Cyclic(), Soft(0.2; c_dn = 1.0)])
+        @test_throws ArgumentError battery(terminal = [Value(90.0), Quad(0.2; weight = 1.0)])
+        @test_throws ArgumentError battery(terminal = [Floor(0.1), Floor(0.2)])
+        @test_throws ArgumentError battery(terminal = 0.2)            # a number is not a condition
+        err = refusal(() -> Storage(; id = 7, node = 2, terminal = [Pin(0.2), Cyclic()]))
+        @test err isa ArgumentError && occursin("storage 7", err.msg) && occursin("terminal", err.msg)
+
+        # what can stand together: a pin or a floor with nothing else, a floor with a price, a pin with a floor
+        @test length(battery(terminal = [Floor(0.1), Soft(0.2; c_dn = 1.0)]).terminal) == 2
+        @test length(battery(terminal = [Pin(0.3), Floor(0.1)]).terminal) == 2
     end
 
     @testset "a branch" begin

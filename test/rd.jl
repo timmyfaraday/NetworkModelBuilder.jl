@@ -23,6 +23,7 @@
 # v0.15.1 - a roll checks the schedule of its storage over the whole           #
 # v0.15.2 - a storage unit's converter rating                                  #
 # v0.15.3 - exact keeps charging and discharging at once out                   #
+# v0.15.4 - the end of a storage unit's horizon is a list of conditions        #
 ################################################################################
 
 # Every network below is built so that the answer can be worked out by hand. The
@@ -288,6 +289,30 @@ volumes(result, n = 1) = Dict(u => (nw_solution(result, n)["unit"]["$u"]["p_gen_
                                     LPFFormulation, OPTIMIZER))
         @test sum(nw_solution(idle, n)["unit"]["4"]["p_stor_up"] for n in 1:2) ≈ 0.0 atol = 1e-5
         @test idle["objective"] ≈ 1.0 * 100.0 + 1.0 * 10.0 atol = 1e-3
+    end
+
+    @testset "a redispatch can ask a unit to leave the energy its schedule leaves" begin
+        dim = Dimension(:time => 2)
+        battery(; kw...) = Storage(; id = 4, node = 2, e_max = 0.5, e_init = 0.25,
+                                   p_chg_max = 0.5, p_dch_max = 0.5, η_chg = 1.0, η_dch = 1.0, kw...)
+        network(st) = radial_network(; dim, extra = Dict{Int,AbstractUnit}(4 => st))
+        solved(st)  = quiet(() -> solve_rd(network(st), LPFFormulation, OPTIMIZER))
+        energy(result) = [nw_solution(result, n)["unit"]["4"]["e_stor"] for n in 1:2]
+
+        # left to itself the unit gives what it holds and ends empty: 85.0
+        free = solved(battery())
+        @test free["objective"] ≈ 85.0 atol = 1e-4
+        @test energy(free)[end] ≈ 0.0 atol = 1e-5
+
+        # the schedule has it hold 0.25, and ending there gives the expensive generator the whole
+        # 1.0 to supply: 110.0
+        target = scheduled_energy(network(battery()), 4)
+        @test target.data ≈ [0.25, 0.25]
+        for terminal in (Pin(target), Soft(target; c_up = 1000.0, c_dn = 1000.0))
+            held = solved(battery(; terminal))
+            @test held["objective"] ≈ 110.0 atol = 1e-3
+            @test energy(held)[end] ≈ 0.25 atol = 1e-5
+        end
     end
 
     @testset "an exact storage unit is a measure over the time window too" begin
@@ -987,6 +1012,26 @@ _NMB.structure_gates(::IntegerGate) = (:gate,)
         @test_throws ArgumentError window(data, :time, Int[])
         @test_throws ArgumentError window(data, :time, 3:5)
         @test_throws ArgumentError window(data, :time, 0:2)
+    end
+
+    @testset "a profile target follows its window" begin
+        dim     = Dimension(:time => 4)
+        profile = nw_vector(dim, [0.1, 0.2, 0.3, 0.4])
+        net     = network(rolling_network())
+        net.unit[4] = Storage(; id = 4, node = 2, e_max = 0.5, e_init = 0.1, p_chg_max = 0.0, p_dch_max = 0.5,
+                              terminal = [Pin(profile)])
+        data = NetworkData(Network(net.node, net.edge, net.unit; dim))
+
+        # the last window reads its own indices, not the first ones
+        sliced = units(network(window(data, :time, 3:4)))[4].terminal
+        @test only(sliced) isa Pin && only(sliced).e isa NetworkVector
+        @test only(sliced).e.data == [0.3, 0.4]
+        @test only(units(network(window(data, :time, 2:2)))[4].terminal).e == 0.2
+
+        # one that does not vary is left alone
+        net.unit[4] = Storage(; id = 4, node = 2, e_max = 0.5, p_dch_max = 0.5, terminal = [Pin(0.3), Floor(0.2)])
+        flat = NetworkData(Network(net.node, net.edge, net.unit; dim))
+        @test [t.e for t in units(network(window(flat, :time, 3:4)))[4].terminal] == [0.3, 0.2]
     end
 
     @testset "when two network indices give the same model" begin

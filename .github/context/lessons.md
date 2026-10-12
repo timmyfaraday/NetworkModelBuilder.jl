@@ -109,7 +109,9 @@ again get retired.
   reads UTF-8 as ANSI and `Set-Content -Encoding utf8` writes a BOM, so one `.Replace` on
   `test/multinetwork.jl` turned every `∈`, `∉` and `≈` into mojibake and added a BOM; `git diff --stat`
   showed 14 deletions where 0 were expected. `git checkout -- <file>` and the edit tool put it right. A
-  one-line change of a test goes through the edit tool, however small. (unconfirmed)
+  one-line change of a test goes through the edit tool, however small. It happened again in B34 through a scratch edit script
+  (`Get-Content -Raw` without `-Encoding UTF8`, then `Set-Content`): `≈` and `η` in three test files, found by a `ParseError`.
+  Write an edit script once with `create_file`; if it needs a patch, patch it with `[IO.File]` and `UTF8Encoding($false)`. (unconfirmed)
 - **A multi-line anchor in a Julia `"""` string loses its common indentation.** Two edit scripts of B32 matched 0 times on
   an anchor whose first line had no indent and whose others had two; the exact-once check wrote nothing. Spell such an anchor with `\n` in a
   plain string, or read it from a file. (unconfirmed)
@@ -259,3 +261,7 @@ again get retired.
   version of `check_storage` ran in each window, from the energy the roll left the unit, and refused the schedule at the second
   (-0.1 at network index 1): a redispatch is entitled to move a unit away from its schedule and pay for the rest. A regression
   test with a one-step window reproduced it before the fix; a roll now checks once, over the whole. (unconfirmed)
+- **A limit on a net injection is tested on the net.** The first B34 tests read the charge and the discharge of the unit against
+  `s_max` and failed with 0.15 against 0.1: with efficiencies of one the solver charges 0.15 and discharges 0.05 in the same step at no
+  cost, so only the difference is bound. The objective (13.0) was right all along. A maximised objective over `p_dch` alone does the
+  same: maximise the net. (unconfirmed)

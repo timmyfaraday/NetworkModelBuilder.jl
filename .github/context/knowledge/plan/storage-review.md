@@ -1,6 +1,6 @@
 # Storage: a review against the literature, and the changes it asks for
 
-Status: B33 built on `b33-storage-fields` (v0.15.1, suite 3788, not merged), the rest ready to implement, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D88 (next free after: D89)
+Status: B33 and B34 built on `b33-storage-fields` (v0.15.2, suite 3813, not merged), the rest ready to implement, decided by Tom 2026-10-12 · Author: Tom Van Acker (requested) · Date: 2026-10-12 · Decisions: D71-D88 (next free after: D89)
 Priority: P1 · Effort: Large. Open: Q11 (what Zorba's throughput cap counts). Backlog B33-B38 and B40, B39 later.
 
 Literature: knowledge-base nodes Storage Models in OPF (14 sources that model storage, raw PDFs re-read) and Redispatch and
@@ -52,7 +52,7 @@ Measured with HiGHS; the scripts are `%LOCALAPPDATA%\Temp\nmb_storage_review\*.j
   arbitrage network (spread 90 per pu, 0.2 pu, free objective 4.0): `c_chg = 40` gives 12.0, `c_chg = c_dch = 40` gives 20.0, 50 and 50 give 22.0 (idle).
   A schedule discharging 0.3 for three steps from 0.5 (η 1) is refused at step 2 (energy 0.2, -0.1, -0.4), 0.1 for three steps is accepted (0.4, 0.3, 0.2); `c_up` 10 with `c_dn` -30 is refused.
 
-## 2. Converter limit (B34, D73, v0.15.2)
+## 2. Converter limit (B34, D73, v0.15.2, built)
 
 - **Fix.** `s_max` (default `Inf`, no row). IVR, dispatch and redispatch: `cstr_stor_rating`, `(p_dch - p_chg)^2 + q_stor^2 <= s_max^2`, a nonconvex
   quadratic row in a formulation that already is one. LPF: `|p_dch - p_chg| <= s_max`, two linear rows. The box `q_min`, `q_max` stays. A linear

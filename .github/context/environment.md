@@ -105,3 +105,4 @@ facts `(unverified)` and remove the marker once checked.
 - One test file at a time: a persistent environment with the repository `Pkg.develop`ed and the test packages added, built once
   offline (`Pkg.offline(true)`), then `julia --project=<env> run_files.jl hierarchy.jl validation.jl` with a runner that copies the
   header of `test/runtests.jl` and `include`s the files named (hierarchy.jl 241 tests in 43 s) · found in Tom Van Acker's session, 2026-10-12.
+- Some test files read what an earlier one defines, in `runtests.jl` order: `registers.jl` needs `radial_network` from `rd.jl`, so name `rd.jl registers.jl`, not `registers.jl` alone.

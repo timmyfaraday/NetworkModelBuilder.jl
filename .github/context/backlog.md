@@ -8,8 +8,6 @@ older ones: git has them). Next id: **B41**.
 
 ## Next
 
-- [ ] B34 · Converter limit `s_max` on `Storage`: the circle in IVR, a limit on the active power in LPF (D73) · Tom · 2026-10-12
-  - Plan item 2, v0.15.2.
 - [ ] B35 · `exact` on `Storage`: relaxed, exact by lazy binaries, a third value `FROZEN` that fixes the direction; the gap, the price guard, the docs correction (D71, D78) · Tom · 2026-10-12
   - Plan item 3, v0.15.3. Relaxed 393.00 against exact 426.54 on the three-step run.
 - [ ] B36 · Terminal conditions on `Storage`: `Pin`, `Cyclic`, `Floor`, `Value`, `Soft`, `Quad`, the scheduled energy as a target (D72, D85) · Tom · 2026-10-12
@@ -74,6 +72,10 @@ older ones: git has them). Next id: **B41**.
     chunks of `_year_b10` had a first violation of 0.
 
 ## Done
+
+- [x] B34 · Converter limit `s_max` on `Storage`: the circle in IVR, a limit on the active power in LPF (D73) · Tom · 2026-10-12
+  - v0.15.2 on `b33-storage-fields`, stacked on B33, not merged; plan item 2. Red then green; suite 3813 (3788 at v0.15.1), `docs/make.jl` clean. Rows `:cstr_stor_rating`: id `u` in IVR, `(u, :max)` and `(u, :min)` in LPF, none at `Inf`.
+  - Left to know: the limit is on the net injection, so with efficiencies of one each side can exceed it; LPF skips a held unit (the base case's rows imply it), IVR writes a circle at every index since `q_stor` is not held; `structure_gates` of a storage unit is `(:s_max,)` (an existing `rd.jl` test said `()`); `s_max = 0` is accepted and gives a degenerate circle in IVR.
 
 - [x] B33 · Storage fields and validation: `_check_storage`, `check_storage` before the build, `e_min`, `c_chg` and `c_dch` in place of `c_thru`, `c_up + c_dn >= 0`, a market schedule inside the energy bounds, `scheduled_energy` (D74, D75, D83, D84, D87, D88) · Tom · 2026-10-12
   - v0.15.1 on `b33-storage-fields`, not merged; plan item 1. Red then green: 31 of the 130 tests of `validation.jl` failed on v0.15.0; suite 3788 (3686 at v0.15.0), `docs/make.jl` clean. A hard removal of `c_thru`.
